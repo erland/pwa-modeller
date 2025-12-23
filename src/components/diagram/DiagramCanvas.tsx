@@ -57,7 +57,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   // Basic drag handling
   const dragRef = useRef<{
     viewId: string;
-    nodeId: string;
+    elementId: string;
     startX: number;
     startY: number;
     origX: number;
@@ -70,7 +70,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       if (!d) return;
       const dx = ev.clientX - d.startX;
       const dy = ev.clientY - d.startY;
-      modelStore.updateViewNodePosition(d.viewId, d.nodeId, d.origX + dx, d.origY + dy);
+      modelStore.updateViewNodePosition(d.viewId, d.elementId, d.origX + dx, d.origY + dy);
     }
     function onUp() {
       dragRef.current = null;
@@ -170,9 +170,9 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
               if (!el) return null;
               return (
                 <div
-                  key={n.id}
+                  key={n.elementId}
                   className="diagramNode"
-                  style={{ left: n.x, top: n.y, width: n.w, height: n.h }}
+                  style={{ left: n.x, top: n.y, width: n.width ?? 120, height: n.height ?? 60 }}
                   role="button"
                   tabIndex={0}
                   aria-label={`Diagram node ${el.name || '(unnamed)'}`}
@@ -180,7 +180,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   onPointerDown={(ev) => {
                     dragRef.current = {
                       viewId: activeView.id,
-                      nodeId: n.id,
+                      elementId: n.elementId,
                       startX: ev.clientX,
                       startY: ev.clientY,
                       origX: n.x,

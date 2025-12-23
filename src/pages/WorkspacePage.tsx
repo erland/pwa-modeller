@@ -28,7 +28,7 @@ function WorkspaceMainPlaceholder({
 
   const currentViewpointTitle = useMemo(() => {
     if (!currentView) return null;
-    return VIEWPOINTS.find((v) => v.id === currentView.viewpointId)?.title ?? currentView.viewpointId;
+    return VIEWPOINTS.find((v) => v.id === currentView.viewpointId)?.name ?? currentView.viewpointId;
   }, [currentView]);
 
   return (

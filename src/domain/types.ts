@@ -115,6 +115,7 @@ export interface View {
   name: string;
   viewpointId: string;
   description?: string;
+  documentation?: string;
   stakeholders?: string[];
   layout?: ViewLayout;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { Element, ElementType, RelationshipType, View } from '../../domain';
+import type { Element, ElementType, RelationshipType } from '../../domain';
 import {
   ARCHIMATE_LAYERS,
   ELEMENT_TYPES,
@@ -551,7 +551,7 @@ export function ModelPalette({ onSelect }: Props) {
                               value={v.name}
                               style={{ width: 180, marginRight: 8 }}
                             />
-                            <span className="panelHint">({vp?.title ?? v.viewpointId})</span>
+                            <span className="panelHint">({vp?.name ?? v.viewpointId})</span>
                           </div>
                           <button
                             type="button"
@@ -723,7 +723,7 @@ export function ModelPalette({ onSelect }: Props) {
               >
                 {VIEWPOINTS.map((vp) => (
                   <option key={vp.id} value={vp.id}>
-                    {vp.title}
+                    {vp.name}
                   </option>
                 ))}
               </select>
@@ -779,7 +779,7 @@ export function ModelPalette({ onSelect }: Props) {
               >
                 {VIEWPOINTS.map((vp) => (
                   <option key={vp.id} value={vp.id}>
-                    {vp.title}
+                    {vp.name}
                   </option>
                 ))}
               </select>

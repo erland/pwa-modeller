@@ -46,6 +46,23 @@ export const ELEMENT_TYPES: ElementType[] = [
   'Gap'
 ];
 
+export const ELEMENT_TYPES_BY_LAYER: Record<ArchimateLayer, ElementType[]> = {
+  Strategy: ['Capability', 'CourseOfAction', 'Resource', 'Outcome'],
+  Motivation: ['Goal', 'Requirement'],
+  Business: [
+    'BusinessActor',
+    'BusinessRole',
+    'BusinessProcess',
+    'BusinessFunction',
+    'BusinessService',
+    'Product'
+  ],
+  Application: ['ApplicationComponent', 'ApplicationFunction', 'ApplicationService', 'DataObject'],
+  Technology: ['Node', 'Device', 'SystemSoftware', 'TechnologyService', 'Artifact'],
+  Physical: ['Facility', 'Equipment'],
+  ImplementationMigration: ['WorkPackage', 'Deliverable', 'Plateau', 'Gap']
+};
+
 export const RELATIONSHIP_TYPES: RelationshipType[] = [
   'Association',
   'Realization',

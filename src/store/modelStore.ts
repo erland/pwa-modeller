@@ -1,5 +1,5 @@
-import type { Element, Folder, Model, ModelMetadata, Relationship, View, ViewConnectionLayout, ViewNodeLayout } from '../domain';
-import { createEmptyModel, createId } from '../domain';
+import type { Element, Folder, Model, ModelMetadata, Relationship, View, ViewRelationshipLayout, ViewNodeLayout } from '../domain';
+import { createEmptyModel } from '../domain';
 
 export type ModelStoreState = {
   model: Model | null;
@@ -45,7 +45,7 @@ function getView(model: Model, viewId: string): View {
 
 function ensureViewLayout(view: View): View {
   if (view.layout) return view;
-  return { ...view, layout: { nodes: [], connections: [] } };
+  return { ...view, layout: { nodes: [], relationships: [] } };
 }
 
 function assertCanDeleteFolder(model: Model, folderId: string): void {
@@ -186,13 +186,13 @@ export class ModelStore {
       for (const view of Object.values(model.views)) {
         if (!view.layout) continue;
         const nextNodes = view.layout.nodes.filter((n) => n.elementId !== elementId);
-        const nextConnections = view.layout.connections.filter((c) => model.relationships[c.relationshipId]);
-        if (nextNodes.length !== view.layout.nodes.length || nextConnections.length !== view.layout.connections.length) {
+        const nextConnections = view.layout.relationships.filter((c) => model.relationships[c.relationshipId]);
+        if (nextNodes.length !== view.layout.nodes.length || nextConnections.length !== view.layout.relationships.length) {
           model.views[view.id] = {
             ...view,
             layout: {
               nodes: nextNodes,
-              connections: nextConnections
+              relationships: nextConnections
             }
           };
         }
@@ -228,13 +228,13 @@ export class ModelStore {
       // Remove from any view layout connections.
       for (const view of Object.values(model.views)) {
         if (!view.layout) continue;
-        const nextConnections = view.layout.connections.filter((c) => c.relationshipId !== relationshipId);
-        if (nextConnections.length !== view.layout.connections.length) {
+        const nextConnections = view.layout.relationships.filter((c) => c.relationshipId !== relationshipId);
+        if (nextConnections.length !== view.layout.relationships.length) {
           model.views[view.id] = {
             ...view,
             layout: {
               nodes: view.layout.nodes,
-              connections: nextConnections
+              relationships: nextConnections
             }
           };
         }
@@ -288,42 +288,32 @@ export class ModelStore {
   // -------------------------
 
   /** Adds an element to a view's layout as a positioned node (idempotent). */
-  addElementToView(viewId: string, elementId: string): string {
-    const nodeId = createId('node');
-    this.updateModel((model) => {
-      if (!model.elements[elementId]) throw new Error(`Element not found: ${elementId}`);
-      const view = getView(model, viewId);
-      const layout = view.layout ?? { nodes: [], connections: [] };
-      if (layout.nodes.some((n) => n.elementId === elementId)) return;
+addElementToView(viewId: string, elementId: string): string {
+  this.updateModel((model) => {
+    const view = model.views[viewId];
+    if (!view) throw new Error(`View not found: ${viewId}`);
+    const element = model.elements[elementId];
+    if (!element) throw new Error(`Element not found: ${elementId}`);
 
-      const idx = layout.nodes.length;
-      const cols = 4;
-      const cellW = 180;
-      const cellH = 110;
-      const margin = 24;
+    const viewWithLayout = ensureViewLayout(view);
+    const layout = viewWithLayout.layout!;
 
-      const x = margin + (idx % cols) * cellW;
-      const y = margin + Math.floor(idx / cols) * cellH;
+    if (layout.nodes.some((n) => n.elementId === elementId)) return;
 
-      const node: ViewNodeLayout = {
-        id: nodeId,
-        elementId,
-        x,
-        y,
-        w: 140,
-        h: 70
-      };
+    const i = layout.nodes.length;
+    const cols = 4;
+    const x = 24 + (i % cols) * 160;
+    const y = 24 + Math.floor(i / cols) * 110;
 
-      model.views[viewId] = {
-        ...view,
-        layout: {
-          nodes: [...layout.nodes, node],
-          connections: layout.connections
-        }
-      };
-    });
-    return nodeId;
-  }
+    const node: ViewNodeLayout = { elementId, x, y, width: 140, height: 70 };
+    model.views[viewId] = {
+      ...viewWithLayout,
+      layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
+    };
+  });
+
+  return elementId;
+}
 
   removeElementFromView(viewId: string, elementId: string): void {
     this.updateModel((model) => {
@@ -333,22 +323,22 @@ export class ModelStore {
       const nextNodes = layout.nodes.filter((n) => n.elementId !== elementId);
 
       // Drop any connections whose relationship no longer exists.
-      const nextConnections: ViewConnectionLayout[] = layout.connections.filter((c) => Boolean(model.relationships[c.relationshipId]));
+      const nextConnections: ViewRelationshipLayout[] = layout.relationships.filter((c) => Boolean(model.relationships[c.relationshipId]));
 
-      if (nextNodes.length === layout.nodes.length && nextConnections.length === layout.connections.length) return;
-      model.views[viewId] = { ...view, layout: { nodes: nextNodes, connections: nextConnections } };
+      if (nextNodes.length === layout.nodes.length && nextConnections.length === layout.relationships.length) return;
+      model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: nextConnections } };
     });
   }
 
-  updateViewNodePosition(viewId: string, nodeId: string, x: number, y: number): void {
+  updateViewNodePosition(viewId: string, elementId: string, x: number, y: number): void {
     this.updateModel((model) => {
       const view = getView(model, viewId);
       if (!view.layout) return;
       const layout = view.layout;
-      const node = layout.nodes.find((n) => n.id === nodeId);
+      const node = layout.nodes.find((n) => n.elementId === elementId);
       if (!node) return;
-      const nextNodes = layout.nodes.map((n) => (n.id === nodeId ? { ...n, x, y } : n));
-      model.views[viewId] = { ...view, layout: { nodes: nextNodes, connections: layout.connections } };
+      const nextNodes = layout.nodes.map((n) => (n.elementId === elementId ? { ...n, x, y } : n));
+      model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
     });
   }
 

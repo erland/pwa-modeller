@@ -29,5 +29,5 @@ export function deserializeModel(json: string): Model {
   if (!isRecord(parsed.elements) || !isRecord(parsed.relationships) || !isRecord(parsed.views) || !isRecord(parsed.folders)) {
     throw new Error('Invalid model file (missing collections)');
   }
-  return parsed as Model;
+  return parsed as unknown as Model;
 }

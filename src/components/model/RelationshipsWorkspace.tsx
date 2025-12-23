@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { Element, ElementType, RelationshipType } from '../../domain';
-import { RELATIONSHIP_TYPES, createRelationship, getAllowedRelationshipTypes, validateRelationship } from '../../domain';
+import type { Element, RelationshipType } from '../../domain';
+import { RELATIONSHIP_TYPES, createRelationship, validateRelationship } from '../../domain';
 import { modelStore, useModelStore } from '../../store';
 import { Dialog } from '../dialog/Dialog';
 import type { Selection } from './selection';
@@ -36,19 +36,8 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
 
-  const typeOptions = useMemo(() => {
-    if (!model) return RELATIONSHIP_TYPES;
-    const s = model.elements[sourceId];
-    const t = model.elements[targetId];
-    if (!s || !t) return RELATIONSHIP_TYPES;
-    return getAllowedRelationshipTypes(s.type, t.type);
-  }, [model, sourceId, targetId]);
+  const typeOptions = useMemo(() => RELATIONSHIP_TYPES, []);
 
-  function pickFirstAvailableIfNeeded(nextOptions: RelationshipType[]) {
-    if (!nextOptions.includes(type)) {
-      setType(nextOptions[0] ?? 'Association');
-    }
-  }
 
   // Initialize source/target defaults once we have at least 1-2 elements.
   useEffect(() => {
@@ -62,15 +51,6 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
     if (!targetId) setTargetId((elements[1] ?? elements[0]).id);
   }, [model, elements, sourceId, targetId]);
 
-  // Keep the relationship type valid when endpoints change.
-  useEffect(() => {
-    if (!model) return;
-    const s = model.elements[sourceId];
-    const t = model.elements[targetId];
-    if (!s || !t) return;
-    pickFirstAvailableIfNeeded(getAllowedRelationshipTypes(s.type, t.type));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, sourceId, targetId]);
 
   const relationships = useMemo(() => {
     if (!model) return [];
@@ -94,9 +74,14 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
       return;
     }
 
-    const validation = validateRelationship(source.type as ElementType, target.type as ElementType, type);
-    if (!validation.allowed) {
-      setError(validation.reason);
+    const validation = validateRelationship({
+      id: 'tmp',
+      type,
+      sourceElementId: source.id,
+      targetElementId: target.id
+    });
+    if (!validation.ok) {
+      setError(validation.errors[0] ?? 'Invalid relationship');
       return;
     }
 
@@ -164,9 +149,6 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
             onChange={(e) => {
               const next = e.target.value;
               setSourceId(next);
-              const s = model.elements[next];
-              const t = model.elements[targetId];
-              if (s && t) pickFirstAvailableIfNeeded(getAllowedRelationshipTypes(s.type, t.type));
             }}
           >
             {elements.map((el) => (
@@ -202,9 +184,6 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
             onChange={(e) => {
               const next = e.target.value;
               setTargetId(next);
-              const s = model.elements[sourceId];
-              const t = model.elements[next];
-              if (s && t) pickFirstAvailableIfNeeded(getAllowedRelationshipTypes(s.type, t.type));
             }}
           >
             {elements.map((el) => (

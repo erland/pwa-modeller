@@ -355,7 +355,7 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
     const view = model.views[selection.viewId];
     if (!view) return <p className="panelHint">View not found.</p>;
     const currentFolderId = findFolderContaining(model, 'view', view.id);
-    const viewpointLabel = (id: string) => VIEWPOINTS.find((v) => v.id === id)?.title ?? id;
+    const viewpointLabel = (id: string) => VIEWPOINTS.find((v) => v.id === id)?.name ?? id;
     return (
       <div>
         <p className="panelHint">View</p>
@@ -382,7 +382,7 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
               >
                 {VIEWPOINTS.map((vp) => (
                   <option key={vp.id} value={vp.id}>
-                    {vp.title}
+                    {vp.name}
                   </option>
                 ))}
               </select>

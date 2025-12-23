@@ -51,6 +51,13 @@ module.exports = [
         ecmaVersion: 2022,
         sourceType: 'module',
         ecmaFeatures: { jsx: true }
+      },
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        Blob: 'readonly',
+        URL: 'readonly',
+        File: 'readonly'
       }
     },
     plugins: {
@@ -64,6 +71,22 @@ module.exports = [
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off'
+    }
+  },
+
+  // Jest globals for tests.
+  {
+    files: ['**/__tests__/**/*.{ts,tsx}', '**/*.{test,spec}.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        jest: 'readonly'
+      }
     }
   },
   prettier

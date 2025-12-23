@@ -1,51 +1,33 @@
-import type { Model } from '../domain/types';
+import type { Model } from '../domain';
 
+/**
+ * Serialize a model to JSON.
+ *
+ * Keep this stable over time: future versions should be able to read older models.
+ */
 export function serializeModel(model: Model): string {
   return JSON.stringify(model, null, 2);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null;
 }
 
-export function deserializeModel(data: string): Model {
-  const parsed: unknown = JSON.parse(data);
-  if (!isRecord(parsed)) {
-    throw new Error('Invalid model: root is not an object');
+/**
+ * Deserialize a model from JSON.
+ * Performs lightweight validation to fail fast on invalid files.
+ */
+export function deserializeModel(json: string): Model {
+  const parsed: unknown = JSON.parse(json);
+  if (!isRecord(parsed)) throw new Error('Invalid model file (expected an object)');
+  if (typeof parsed.id !== 'string' || parsed.id.trim().length === 0) {
+    throw new Error('Invalid model file (missing id)');
   }
-
-  const id = parsed.id;
-  const metadata = parsed.metadata;
-  const elements = parsed.elements;
-  const relationships = parsed.relationships;
-  const views = parsed.views;
-  const folders = parsed.folders;
-  const schemaVersion = parsed.schemaVersion;
-
-  if (typeof id !== 'string' || id.trim().length === 0) {
-    throw new Error('Invalid model: id is missing');
+  if (!isRecord(parsed.metadata) || typeof parsed.metadata.name !== 'string') {
+    throw new Error('Invalid model file (missing metadata.name)');
   }
-  if (!isRecord(metadata) || typeof metadata.name !== 'string' || metadata.name.trim().length === 0) {
-    throw new Error('Invalid model: metadata.name is missing');
+  if (!isRecord(parsed.elements) || !isRecord(parsed.relationships) || !isRecord(parsed.views) || !isRecord(parsed.folders)) {
+    throw new Error('Invalid model file (missing collections)');
   }
-  if (!isRecord(elements)) throw new Error('Invalid model: elements must be an object');
-  if (!isRecord(relationships)) throw new Error('Invalid model: relationships must be an object');
-  if (!isRecord(views)) throw new Error('Invalid model: views must be an object');
-  if (!isRecord(folders)) throw new Error('Invalid model: folders must be an object');
-
-  return {
-    id,
-    metadata: {
-      name: metadata.name,
-      description: typeof metadata.description === 'string' ? metadata.description : undefined,
-      version: typeof metadata.version === 'string' ? metadata.version : undefined,
-      owner: typeof metadata.owner === 'string' ? metadata.owner : undefined
-    },
-    // Trust the payload for now; deeper validation/migrations can be added later.
-    elements: elements as Model['elements'],
-    relationships: relationships as Model['relationships'],
-    views: views as Model['views'],
-    folders: folders as Model['folders'],
-    schemaVersion: typeof schemaVersion === 'number' ? schemaVersion : 1
-  };
+  return parsed as Model;
 }

@@ -1,64 +1,11 @@
+import { useState } from 'react';
+
+import { ModelActions } from '../components/model/ModelActions';
+import { ModelNavigator } from '../components/model/ModelNavigator';
+import { ModelPropertiesDialog } from '../components/model/ModelPropertiesDialog';
+import { PropertiesPanel } from '../components/model/PropertiesPanel';
+import { noSelection, type Selection } from '../components/model/selection';
 import { AppShell } from '../components/shell/AppShell';
-
-function ModelNavigatorPlaceholder() {
-  return (
-    <div>
-      <p className="panelHint">
-        This is a placeholder for the model navigation tree (folders, elements, relationships, views).
-      </p>
-      <ul className="treeList" aria-label="Model tree placeholder">
-        <li>
-          <span className="treeNode">Model</span>
-          <ul>
-            <li>
-              <span className="treeNode">Elements</span>
-              <ul>
-                <li className="treeLeaf">(none yet)</li>
-              </ul>
-            </li>
-            <li>
-              <span className="treeNode">Relationships</span>
-              <ul>
-                <li className="treeLeaf">(none yet)</li>
-              </ul>
-            </li>
-            <li>
-              <span className="treeNode">Views</span>
-              <ul>
-                <li className="treeLeaf">(none yet)</li>
-              </ul>
-            </li>
-          </ul>
-        </li>
-      </ul>
-    </div>
-  );
-}
-
-function PropertiesPlaceholder() {
-  return (
-    <div>
-      <p className="panelHint">
-        This is a placeholder for the properties/details panel. In later steps it will show the selected element,
-        relationship, view, or model metadata.
-      </p>
-      <div className="propertiesGrid" aria-label="Properties placeholder">
-        <div className="propertiesRow">
-          <div className="propertiesKey">Selection</div>
-          <div className="propertiesValue">None</div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Type</div>
-          <div className="propertiesValue">—</div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Name</div>
-          <div className="propertiesValue">—</div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function WorkspaceMainPlaceholder() {
   return (
@@ -89,14 +36,22 @@ function WorkspaceMainPlaceholder() {
 }
 
 export default function WorkspacePage() {
+  const [selection, setSelection] = useState<Selection>(noSelection);
+  const [modelPropsOpen, setModelPropsOpen] = useState(false);
+
   return (
-    <AppShell
-      title="PWA Modeller"
-      subtitle="Enterprise Architecture Modeling PWA (ArchiMate® 3.2)"
-      leftSidebar={<ModelNavigatorPlaceholder />}
-      rightSidebar={<PropertiesPlaceholder />}
-    >
-      <WorkspaceMainPlaceholder />
-    </AppShell>
+    <>
+      <AppShell
+        title="PWA Modeller"
+        subtitle="Enterprise Architecture Modeling PWA (ArchiMate® 3.2)"
+        actions={<ModelActions onEditModelProps={() => setModelPropsOpen(true)} />}
+        leftSidebar={<ModelNavigator selection={selection} onSelect={setSelection} />}
+        rightSidebar={<PropertiesPanel selection={selection} onEditModelProps={() => setModelPropsOpen(true)} />}
+      >
+        <WorkspaceMainPlaceholder />
+      </AppShell>
+
+      <ModelPropertiesDialog isOpen={modelPropsOpen} onClose={() => setModelPropsOpen(false)} />
+    </>
   );
 }

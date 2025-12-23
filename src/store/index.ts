@@ -1,3 +1,4 @@
 export * from './modelStore';
 export * from './hooks';
 export * from './persistence';
+export * from './download';

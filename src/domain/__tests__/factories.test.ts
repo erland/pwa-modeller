@@ -1,5 +1,4 @@
 import { createElement, createRelationship, createEmptyModel } from '../factories';
-import type { Element } from '../types';
 
 describe('domain factories', () => {
   test('createElement creates an element with generated id and trimmed fields', () => {

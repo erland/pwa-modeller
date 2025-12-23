@@ -6,6 +6,7 @@ import '../../styles/shell.css';
 type AppShellProps = {
   title: string;
   subtitle?: string;
+  actions?: ReactNode;
   leftSidebar?: ReactNode;
   rightSidebar?: ReactNode;
   children: ReactNode;
@@ -25,7 +26,7 @@ function TopNavLink({ to, label }: { to: string; label: string }) {
   );
 }
 
-export function AppShell({ title, subtitle, leftSidebar, rightSidebar, children }: AppShellProps) {
+export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, children }: AppShellProps) {
   const hasLeft = Boolean(leftSidebar);
   const hasRight = Boolean(rightSidebar);
 
@@ -48,15 +49,19 @@ export function AppShell({ title, subtitle, leftSidebar, rightSidebar, children 
         </nav>
 
         <div className="shellActions" aria-label="Actions">
-          <button type="button" className="shellButton" disabled title="Coming in later steps">
-            New
-          </button>
-          <button type="button" className="shellButton" disabled title="Coming in later steps">
-            Open
-          </button>
-          <button type="button" className="shellButton" disabled title="Coming in later steps">
-            Save
-          </button>
+          {actions ?? (
+            <>
+              <button type="button" className="shellButton" disabled title="Coming in later steps">
+                New
+              </button>
+              <button type="button" className="shellButton" disabled title="Coming in later steps">
+                Open
+              </button>
+              <button type="button" className="shellButton" disabled title="Coming in later steps">
+                Save
+              </button>
+            </>
+          )}
 
           {hasLeft ? (
             <button

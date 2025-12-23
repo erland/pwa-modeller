@@ -1,0 +1,81 @@
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.dialogPanel {
+  width: min(560px, 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(15, 15, 18, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dialogTitle {
+  font-weight: 800;
+}
+
+.dialogBody {
+  padding: 14px;
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.formGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.formRow {
+  display: grid;
+  gap: 6px;
+}
+
+.formRow label {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.textInput,
+.textArea,
+.selectInput {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+}
+
+.textArea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.hintText {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+}

@@ -1,14 +1,12 @@
 import { useSyncExternalStore } from 'react';
-import type { ModelStore, ModelStoreState } from './modelStore';
-import { modelStore as defaultStore } from './modelStore';
 
-export function useModelStore<T>(
-  selector: (state: ModelStoreState) => T,
-  store: ModelStore = defaultStore
-): T {
+import { modelStore } from './modelStore';
+import type { ModelStoreState } from './modelStore';
+
+export function useModelStore<T>(selector: (state: ModelStoreState) => T): T {
   return useSyncExternalStore(
-    store.subscribe,
-    () => selector(store.getState()),
-    () => selector(store.getState())
+    (listener) => modelStore.subscribe(listener),
+    () => selector(modelStore.getState()),
+    () => selector(modelStore.getState())
   );
 }

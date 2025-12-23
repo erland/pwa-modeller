@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import type { Folder, Model, RelationshipType } from '../../domain';
-import { ARCHIMATE_LAYERS, ELEMENT_TYPES, RELATIONSHIP_TYPES } from '../../domain';
+import { ARCHIMATE_LAYERS, ELEMENT_TYPES, RELATIONSHIP_TYPES, VIEWPOINTS } from '../../domain';
 import { modelStore, useModelStore } from '../../store';
 import type { Selection } from './selection';
 
@@ -355,17 +355,63 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
     const view = model.views[selection.viewId];
     if (!view) return <p className="panelHint">View not found.</p>;
     const currentFolderId = findFolderContaining(model, 'view', view.id);
+    const viewpointLabel = (id: string) => VIEWPOINTS.find((v) => v.id === id)?.title ?? id;
     return (
       <div>
         <p className="panelHint">View</p>
         <div className="propertiesGrid">
           <div className="propertiesRow">
             <div className="propertiesKey">Name</div>
-            <div className="propertiesValue">{view.name}</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="View property name"
+                value={view.name}
+                onChange={(e) => modelStore.updateView(view.id, { name: e.target.value })}
+              />
+            </div>
           </div>
           <div className="propertiesRow">
             <div className="propertiesKey">Viewpoint</div>
-            <div className="propertiesValue">{view.viewpointId}</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="View property viewpoint"
+                value={view.viewpointId}
+                onChange={(e) => modelStore.updateView(view.id, { viewpointId: e.target.value })}
+              >
+                {VIEWPOINTS.map((vp) => (
+                  <option key={vp.id} value={vp.id}>
+                    {vp.title}
+                  </option>
+                ))}
+              </select>
+              <p className="panelHint" style={{ marginTop: 6 }}>
+                {viewpointLabel(view.viewpointId)}
+              </p>
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Description</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <textarea
+                className="textArea"
+                aria-label="View property description"
+                value={view.description ?? ''}
+                onChange={(e) => modelStore.updateView(view.id, { description: e.target.value || undefined })}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Docs</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <textarea
+                className="textArea"
+                aria-label="View property documentation"
+                value={view.documentation ?? ''}
+                onChange={(e) => modelStore.updateView(view.id, { documentation: e.target.value || undefined })}
+              />
+            </div>
           </div>
           <div className="propertiesRow">
             <div className="propertiesKey">Folder</div>
@@ -386,6 +432,20 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
               </select>
             </div>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              const ok = window.confirm('Delete this view?');
+              if (!ok) return;
+              modelStore.deleteView(view.id);
+            }}
+          >
+            Delete view
+          </button>
         </div>
       </div>
     );

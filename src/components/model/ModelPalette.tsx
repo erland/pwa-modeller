@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { Element, ElementType, RelationshipType } from '../../domain';
-import { ARCHIMATE_LAYERS, ELEMENT_TYPES, RELATIONSHIP_TYPES, createElement, createRelationship } from '../../domain';
+import type { Element, ElementType, RelationshipType, View } from '../../domain';
+import {
+  ARCHIMATE_LAYERS,
+  ELEMENT_TYPES,
+  RELATIONSHIP_TYPES,
+  VIEWPOINTS,
+  createElement,
+  createRelationship,
+  createView
+} from '../../domain';
 import { modelStore, useModelStore } from '../../store';
 import { Dialog } from '../dialog/Dialog';
 import type { Selection } from './selection';
@@ -34,11 +42,16 @@ export function ModelPalette({ onSelect }: Props) {
   const [quickSourceId, setQuickSourceId] = useState<string>('');
   const [quickTargetId, setQuickTargetId] = useState<string>('');
 
-  const [activeTab, setActiveTab] = useState<'elements' | 'relationships'>('elements');
+  const [activeTab, setActiveTab] = useState<'elements' | 'relationships' | 'views'>('elements');
 
   const [createElementOpen, setCreateElementOpen] = useState(false);
   const [editElementId, setEditElementId] = useState<string | null>(null);
   const [elementNameDraft, setElementNameDraft] = useState('');
+
+  const [createViewOpen, setCreateViewOpen] = useState(false);
+  const [editViewId, setEditViewId] = useState<string | null>(null);
+  const [viewNameDraft, setViewNameDraft] = useState('');
+  const [viewViewpointDraft, setViewViewpointDraft] = useState<string>(VIEWPOINTS[0]?.id ?? 'layered');
 
   const elementsById = useMemo(() => {
     if (!model) return {} as Record<string, Element>;
@@ -98,6 +111,11 @@ export function ModelPalette({ onSelect }: Props) {
     return Object.values(model.relationships);
   }, [model]);
 
+  const views = useMemo(() => {
+    if (!model) return [];
+    return Object.values(model.views).sort(sortByName);
+  }, [model]);
+
   const canCreateRelationship =
     Boolean(model) && elements.length >= 2 && sourceId !== '' && targetId !== '' && sourceId !== targetId;
 
@@ -115,6 +133,22 @@ export function ModelPalette({ onSelect }: Props) {
     setElementNameDraft(el.name);
     setEditElementId(id);
   }
+
+  function openCreateViewDialog() {
+    setViewNameDraft('');
+    setViewViewpointDraft(VIEWPOINTS[0]?.id ?? 'layered');
+    setCreateViewOpen(true);
+  }
+
+  function openEditViewDialog(id: string) {
+    const view = views.find((v) => v.id === id);
+    if (!view) return;
+    setViewNameDraft(view.name);
+    setViewViewpointDraft(view.viewpointId);
+    setEditViewId(id);
+  }
+
+  // (intentionally no overloads; keep a single helper per action)
 
   return (
     <section aria-label="Model palette" style={{ display: 'grid', gap: 12, marginBottom: 14 }}>
@@ -243,6 +277,15 @@ export function ModelPalette({ onSelect }: Props) {
         >
           Relationships
         </button>
+        <button
+          type="button"
+          role="tab"
+          className={`tabButton ${activeTab === 'views' ? 'isActive' : ''}`}
+          aria-selected={activeTab === 'views'}
+          onClick={() => setActiveTab('views')}
+        >
+          Views
+        </button>
       </div>
 
       {activeTab === 'elements' ? (
@@ -346,7 +389,7 @@ export function ModelPalette({ onSelect }: Props) {
             )}
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'relationships' ? (
         <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>Relationships</div>
 
@@ -473,6 +516,82 @@ export function ModelPalette({ onSelect }: Props) {
             <p className="panelHint">Create or open a model to use the palette.</p>
           )}
         </div>
+      ) : (
+        <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Views</div>
+
+          {model ? (
+            <>
+              <div className="propertiesGrid">
+                <div className="propertiesRow">
+                  <div className="propertiesKey">Create</div>
+                  <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                    <button type="button" className="shellButton" onClick={openCreateViewDialog}>
+                      Create View
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                {views.length === 0 ? (
+                  <p className="panelHint">No views yet</p>
+                ) : (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
+                    {views.map((v) => {
+                      const vp = VIEWPOINTS.find((x) => x.id === v.viewpointId);
+                      return (
+                        <li key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            {/* Render as an input to avoid duplicating exact text nodes with the navigator tree. */}
+                            <input
+                              className="textInput"
+                              aria-label={`View name ${v.name}`}
+                              readOnly
+                              value={v.name}
+                              style={{ width: 180, marginRight: 8 }}
+                            />
+                            <span className="panelHint">({vp?.title ?? v.viewpointId})</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Select view ${v.name}`}
+                            onClick={() => onSelect({ kind: 'view', viewId: v.id })}
+                          >
+                            Select
+                          </button>
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Edit view ${v.name}`}
+                            onClick={() => openEditViewDialog(v.id)}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Delete view ${v.name}`}
+                            onClick={() => {
+                              const ok = window.confirm('Delete view?');
+                              if (!ok) return;
+                              modelStore.deleteView(v.id);
+                            }}
+                          >
+                            🗑
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="panelHint">Create or open a model to manage views.</p>
+          )}
+        </div>
       )}
 
       <Dialog
@@ -550,6 +669,120 @@ export function ModelPalette({ onSelect }: Props) {
                 value={elementNameDraft}
                 onChange={(e) => setElementNameDraft(e.target.value)}
               />
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        title="Create view"
+        isOpen={createViewOpen}
+        onClose={() => setCreateViewOpen(false)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="shellButton" onClick={() => setCreateViewOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="shellButton"
+              disabled={!model || viewNameDraft.trim().length === 0}
+              onClick={() => {
+                if (!model) return;
+                const created = createView({ name: viewNameDraft.trim(), viewpointId: viewViewpointDraft });
+                modelStore.addView(created);
+                setCreateViewOpen(false);
+                onSelect({ kind: 'view', viewId: created.id });
+              }}
+            >
+              Create
+            </button>
+          </div>
+        }
+      >
+        <div className="propertiesGrid">
+          <div className="propertiesRow">
+            <div className="propertiesKey">Name</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="View name"
+                value={viewNameDraft}
+                onChange={(e) => setViewNameDraft(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Viewpoint</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Viewpoint"
+                value={viewViewpointDraft}
+                onChange={(e) => setViewViewpointDraft(e.target.value)}
+              >
+                {VIEWPOINTS.map((vp) => (
+                  <option key={vp.id} value={vp.id}>
+                    {vp.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        title="Edit view"
+        isOpen={editViewId != null}
+        onClose={() => setEditViewId(null)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="shellButton" onClick={() => setEditViewId(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="shellButton"
+              disabled={!model || !editViewId || viewNameDraft.trim().length === 0}
+              onClick={() => {
+                if (!model || !editViewId) return;
+                modelStore.updateView(editViewId, { name: viewNameDraft.trim(), viewpointId: viewViewpointDraft });
+                setEditViewId(null);
+              }}
+            >
+              Save
+            </button>
+          </div>
+        }
+      >
+        <div className="propertiesGrid">
+          <div className="propertiesRow">
+            <div className="propertiesKey">Name</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="View name"
+                value={viewNameDraft}
+                onChange={(e) => setViewNameDraft(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Viewpoint</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Viewpoint"
+                value={viewViewpointDraft}
+                onChange={(e) => setViewViewpointDraft(e.target.value)}
+              >
+                {VIEWPOINTS.map((vp) => (
+                  <option key={vp.id} value={vp.id}>
+                    {vp.title}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

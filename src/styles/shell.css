@@ -257,6 +257,82 @@
   opacity: 0.85;
 }
 
+/* Diagram canvas (Step 8) */
+.diagramCanvas {
+  border: 1px solid #d4d7db;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.diagramCanvasHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.diagramCanvasTitle {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.diagramCanvasControls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.diagramSurface {
+  position: relative;
+  height: 420px;
+  border-radius: 10px;
+  border: 1px dashed #d4d7db;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.02),
+    rgba(0, 0, 0, 0.02) 1px,
+    transparent 1px,
+    transparent 20px
+  ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.02),
+      rgba(0, 0, 0, 0.02) 1px,
+      transparent 1px,
+      transparent 20px
+    );
+  overflow: hidden;
+}
+
+.diagramNode {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid #cfd3d8;
+  background: #ffffff;
+  padding: 10px;
+  user-select: none;
+  cursor: grab;
+}
+
+.diagramNode:active {
+  cursor: grabbing;
+}
+
+.diagramNodeTitle {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.diagramNodeMeta {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
 .about {
   max-width: 820px;
 }

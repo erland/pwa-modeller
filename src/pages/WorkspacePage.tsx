@@ -6,11 +6,18 @@ import { ModelPalette } from '../components/model/ModelPalette';
 import { ModelPropertiesDialog } from '../components/model/ModelPropertiesDialog';
 import { PropertiesPanel } from '../components/model/PropertiesPanel';
 import { noSelection, type Selection } from '../components/model/selection';
+import { DiagramCanvas } from '../components/diagram/DiagramCanvas';
 import { AppShell } from '../components/shell/AppShell';
 import { VIEWPOINTS } from '../domain';
 import { useModelStore } from '../store/useModelStore';
 
-function WorkspaceMainPlaceholder({ selection }: { selection: Selection }) {
+function WorkspaceMainPlaceholder({
+  selection,
+  onSelect
+}: {
+  selection: Selection;
+  onSelect: (sel: Selection) => void;
+}) {
   const model = useModelStore((s) => s.model);
   const currentView = useMemo(() => {
     if (!model) return null;
@@ -38,23 +45,25 @@ function WorkspaceMainPlaceholder({ selection }: { selection: Selection }) {
         </div>
       </div>
 
-      <div className="canvasPlaceholder" aria-label="Diagram canvas placeholder">
-        <div className="canvasPlaceholderInner">
-          <p className="canvasTitle">Diagram canvas</p>
-          {currentView ? (
-            <p className="canvasHint" style={{ marginBottom: 10 }}>
-              <strong>Current view:</strong> {currentView.name}
-              {currentViewpointTitle ? ` — ${currentViewpointTitle}` : ''}
+      <div className="canvasPlaceholder" aria-label="Diagram canvas">
+        <div className="canvasPlaceholderInner" style={{ padding: 0 }}>
+          <div style={{ padding: 12, borderBottom: '1px solid var(--border)' }}>
+            <p className="canvasTitle" style={{ marginBottom: 6 }}>
+              Diagram canvas
             </p>
-          ) : (
-            <p className="canvasHint" style={{ marginBottom: 10 }}>
-              No views yet — create one from the <strong>Views</strong> tab in the palette.
-            </p>
-          )}
-          <p className="canvasHint">
-            In later steps this area will render the current view and allow creating/moving diagram nodes and
-            relationships.
-          </p>
+            {currentView ? (
+              <p className="canvasHint" style={{ marginBottom: 0 }}>
+                <strong>Current view:</strong> {currentView.name}
+                {currentViewpointTitle ? ` — ${currentViewpointTitle}` : ''}
+              </p>
+            ) : (
+              <p className="canvasHint" style={{ marginBottom: 0 }}>
+                No views yet — create one from the <strong>Views</strong> tab in the palette.
+              </p>
+            )}
+          </div>
+
+          <DiagramCanvas selection={selection} onSelect={onSelect} />
         </div>
       </div>
     </div>
@@ -75,7 +84,7 @@ export default function WorkspacePage() {
         rightSidebar={<PropertiesPanel selection={selection} onEditModelProps={() => setModelPropsOpen(true)} />}
       >
         <ModelPalette onSelect={setSelection} />
-            <WorkspaceMainPlaceholder selection={selection} />
+        <WorkspaceMainPlaceholder selection={selection} onSelect={setSelection} />
       </AppShell>
 
       <ModelPropertiesDialog isOpen={modelPropsOpen} onClose={() => setModelPropsOpen(false)} />

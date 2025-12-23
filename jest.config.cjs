@@ -1,8 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'jsdom',
-  // Keep tests inside src/ and support both *.test.ts(x) and *.spec.ts(x)
-  testMatch: ['<rootDir>/src/**/*.{test,spec}.{ts,tsx}'],
+  testMatch: ['<rootDir>/src/**/?(*.)+(test|spec).[tj]s?(x)'],
   transform: {
     '^.+\\.(t|j)sx?$': [
       'ts-jest',

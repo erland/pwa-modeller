@@ -1,0 +1,345 @@
+/* Application shell layout
+   - Header
+   - Left navigation sidebar
+   - Main content
+   - Right properties sidebar
+
+   The shell is intentionally simple and CSS-only.
+*/
+
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shellHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.shellBrand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+}
+
+.shellTitle {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.shellSubtitle {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.shellNav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.shellNavLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.85;
+  border: 1px solid transparent;
+}
+
+.shellNavLink:hover {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.shellNavLink.isActive {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.shellActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shellButton {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+}
+
+.shellButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.shellIconButton {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.shellBody {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr 320px;
+  gap: 12px;
+  padding: 12px;
+}
+
+.shellSidebar {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shellSidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.shellSidebarTitle {
+  font-weight: 700;
+}
+
+.shellSidebarContent {
+  padding: 10px 12px;
+  overflow: auto;
+}
+
+.shellMain {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Workspace & panel placeholders */
+
+.panelHint {
+  margin: 0 0 12px;
+  opacity: 0.85;
+}
+
+.treeList {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.treeNode {
+  font-weight: 600;
+}
+
+.treeLeaf {
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.propertiesGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.propertiesRow {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.propertiesKey {
+  opacity: 0.78;
+}
+
+.propertiesValue {
+  font-weight: 600;
+}
+
+.workspaceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspaceTitle {
+  margin: 0;
+  font-size: 18px;
+}
+
+.workspaceTabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tabButton {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+}
+
+.tabButton.isActive {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tabButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.canvasPlaceholder {
+  margin-top: 14px;
+  border-radius: 12px;
+  border: 2px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.01);
+  min-height: 420px;
+  display: flex;
+}
+
+.canvasPlaceholderInner {
+  margin: auto;
+  max-width: 520px;
+  padding: 18px;
+  text-align: center;
+}
+
+.canvasTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.canvasHint {
+  margin: 10px 0 0;
+  opacity: 0.85;
+}
+
+.about {
+  max-width: 820px;
+}
+
+.aboutSection {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.aboutHeading {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+/* Responsive: tablet and down */
+
+@media (max-width: 1100px) {
+  .shellBody {
+    grid-template-columns: 240px 1fr 280px;
+  }
+}
+
+@media (max-width: 900px) {
+  .shellBody {
+    grid-template-columns: 240px 1fr;
+  }
+
+  .shellSidebarRight {
+    display: none;
+  }
+}
+
+/* Small screens: sidebars become overlays, opened via icon buttons */
+
+@media (max-width: 720px) {
+  .shellButton {
+    display: none;
+  }
+
+  .shellOnlySmall {
+    display: inline-flex;
+  }
+
+  .shellBody {
+    grid-template-columns: 1fr;
+  }
+
+  .shellSidebar {
+    position: fixed;
+    top: 54px;
+    bottom: 12px;
+    width: min(360px, calc(100vw - 24px));
+    z-index: 20;
+    display: none;
+  }
+
+  .shellSidebar.isOpen {
+    display: flex;
+  }
+
+  .shellSidebarLeft {
+    left: 12px;
+  }
+
+  .shellSidebarRight {
+    right: 12px;
+  }
+
+  .shellBackdrop {
+    position: fixed;
+    top: 54px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 15;
+  }
+}
+
+/* Default: small-only controls hidden */
+.shellOnlySmall {
+  display: none;
+}

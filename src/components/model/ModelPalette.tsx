@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 
-import type { Element, ElementType, RelationshipType } from '../../domain';
+import type { ArchimateLayer, Element, ElementType, RelationshipType } from '../../domain';
 import {
   ARCHIMATE_LAYERS,
   ELEMENT_TYPES,
+  ELEMENT_TYPES_BY_LAYER,
   RELATIONSHIP_TYPES,
   VIEWPOINTS,
   createElement,
@@ -22,6 +24,18 @@ function sortByName(a: { name: string }, b: { name: string }): number {
   return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
 }
 
+const VISUALLY_HIDDEN: CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0,0,0,0)',
+  whiteSpace: 'nowrap',
+  border: 0
+};
+
 export function ModelPalette({ onSelect }: Props) {
   const model = useModelStore((s) => s.model);
 
@@ -30,28 +44,27 @@ export function ModelPalette({ onSelect }: Props) {
     return Object.values(model.elements).sort(sortByName);
   }, [model]);
 
-  const [elLayer, setElLayer] = useState(ARCHIMATE_LAYERS[1]);
-  const [elType, setElType] = useState<ElementType>(ELEMENT_TYPES[6]);
-
-  // --- Quick palette (used by paletteCrud.test.tsx)
-  // A minimal inline create UI that the tests (and some users) expect.
-  // We keep this alongside the tab/dialog UI used by elementsRelationships.test.tsx.
-  const [quickElementName, setQuickElementName] = useState('');
-  const [quickRelName, setQuickRelName] = useState('');
-  const [quickRelType, setQuickRelType] = useState<RelationshipType>(RELATIONSHIP_TYPES[2]);
-  const [quickSourceId, setQuickSourceId] = useState<string>('');
-  const [quickTargetId, setQuickTargetId] = useState<string>('');
+  const defaultElLayer: ArchimateLayer = ARCHIMATE_LAYERS[1];
+  const defaultElType: ElementType = ELEMENT_TYPES[6];
 
   const [activeTab, setActiveTab] = useState<'elements' | 'relationships' | 'views'>('elements');
 
   const [createElementOpen, setCreateElementOpen] = useState(false);
   const [editElementId, setEditElementId] = useState<string | null>(null);
   const [elementNameDraft, setElementNameDraft] = useState('');
+  const [elementLayerDraft, setElementLayerDraft] = useState<ArchimateLayer>('Business');
+  const [elementTypeDraft, setElementTypeDraft] = useState<ElementType>('BusinessActor');
+
+  const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
 
   const [createViewOpen, setCreateViewOpen] = useState(false);
   const [editViewId, setEditViewId] = useState<string | null>(null);
   const [viewNameDraft, setViewNameDraft] = useState('');
   const [viewViewpointDraft, setViewViewpointDraft] = useState<string>(VIEWPOINTS[0]?.id ?? 'layered');
+
+  const createElementTypeSelectId = useId();
+
+  const elementOptionLabel = (el: Element) => `${el.name} (${el.type})`;
 
   const elementsById = useMemo(() => {
     if (!model) return {} as Record<string, Element>;
@@ -60,6 +73,8 @@ export function ModelPalette({ onSelect }: Props) {
 
   const [relType, setRelType] = useState<RelationshipType>(RELATIONSHIP_TYPES[2]);
   // Relationship creation UI
+  const [relationshipNameDraft, setRelationshipNameDraft] = useState('');
+  const [relationshipDescriptionDraft, setRelationshipDescriptionDraft] = useState('');
   const [sourceId, setSourceId] = useState<string>('');
   const [targetId, setTargetId] = useState<string>('');
 
@@ -87,24 +102,6 @@ export function ModelPalette({ onSelect }: Props) {
     }
   }, [elements, sourceId, targetId]);
 
-  // Keep quick palette source/target selection valid as the element list changes.
-  useEffect(() => {
-    if (elements.length === 0) {
-      setQuickSourceId('');
-      setQuickTargetId('');
-      return;
-    }
-    const ids = elements.map((e) => e.id);
-    if (!quickSourceId || !ids.includes(quickSourceId)) setQuickSourceId(ids[0]);
-    if (!quickTargetId || !ids.includes(quickTargetId)) {
-      setQuickTargetId(ids.length > 1 ? ids[1] : ids[0]);
-      return;
-    }
-    if (ids.length > 1 && quickSourceId && quickTargetId && quickSourceId === quickTargetId) {
-      const fallback = ids.find((id) => id !== quickSourceId) ?? ids[0];
-      if (fallback !== quickTargetId) setQuickTargetId(fallback);
-    }
-  }, [elements, quickSourceId, quickTargetId]);
 
   const relationships = useMemo(() => {
     if (!model) return [];
@@ -119,13 +116,25 @@ export function ModelPalette({ onSelect }: Props) {
   const canCreateRelationship =
     Boolean(model) && elements.length >= 2 && sourceId !== '' && targetId !== '' && sourceId !== targetId;
 
-  const canQuickCreateRelationship =
-    Boolean(model) && elements.length >= 2 && quickSourceId !== '' && quickTargetId !== '' && quickSourceId !== quickTargetId;
-
   function openCreateElementDialog() {
     setElementNameDraft('');
+    setElementLayerDraft(defaultElLayer);
+    setElementTypeDraft(defaultElType);
     setCreateElementOpen(true);
   }
+
+  function openCreateRelationshipDialog() {
+    setRelationshipNameDraft('');
+    setRelationshipDescriptionDraft('');
+    setCreateRelationshipOpen(true);
+  }
+
+  // Keep element type draft valid if the user switches layer in the create dialog.
+  useEffect(() => {
+    const opts = ELEMENT_TYPES_BY_LAYER[elementLayerDraft] ?? [];
+    if (opts.length === 0) return;
+    if (!opts.includes(elementTypeDraft)) setElementTypeDraft(opts[0]);
+  }, [elementLayerDraft, elementTypeDraft]);
 
   function openEditElementDialog(id: string) {
     const el = elementsById[id];
@@ -152,112 +161,6 @@ export function ModelPalette({ onSelect }: Props) {
 
   return (
     <section aria-label="Model palette" style={{ display: 'grid', gap: 12, marginBottom: 14 }}>
-      {/* Quick palette (paletteCrud.test.tsx) */}
-      <div
-        style={{
-          border: '1px solid rgba(255,255,255,0.10)',
-          borderRadius: 12,
-          padding: 12,
-          background: 'rgba(255,255,255,0.015)'
-        }}
-      >
-        <div style={{ display: 'grid', gap: 10 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              className="textInput"
-              aria-label="Element name"
-              placeholder="Element name"
-              value={quickElementName}
-              onChange={(e) => setQuickElementName(e.target.value)}
-              style={{ width: 220 }}
-            />
-            <button
-              type="button"
-              className="shellButton"
-              disabled={!model || quickElementName.trim().length === 0}
-              onClick={() => {
-                if (!model) return;
-                const created = createElement({
-                  name: quickElementName.trim(),
-                  layer: elLayer as any,
-                  type: elType
-                });
-                modelStore.addElement(created);
-                setQuickElementName('');
-                onSelect({ kind: 'element', elementId: created.id });
-              }}
-            >
-              Create element
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              className="textInput"
-              aria-label="Relationship name"
-              placeholder="Relationship name"
-              value={quickRelName}
-              onChange={(e) => setQuickRelName(e.target.value)}
-              style={{ width: 220 }}
-            />
-            <select
-              className="selectInput"
-              aria-label="Relationship type"
-              value={quickRelType}
-              onChange={(e) => setQuickRelType(e.target.value as RelationshipType)}
-            >
-              {RELATIONSHIP_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <select
-              className="selectInput"
-              aria-label="Source element"
-              value={quickSourceId}
-              onChange={(e) => setQuickSourceId(e.target.value)}
-            >
-              {elements.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name} ({e.type})
-                </option>
-              ))}
-            </select>
-            <select
-              className="selectInput"
-              aria-label="Target element"
-              value={quickTargetId}
-              onChange={(e) => setQuickTargetId(e.target.value)}
-            >
-              {elements.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name} ({e.type})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="shellButton"
-              disabled={!canQuickCreateRelationship}
-              onClick={() => {
-                if (!model) return;
-                const created = createRelationship({
-                  type: quickRelType,
-                  name: quickRelName.trim() ? quickRelName.trim() : undefined,
-                  sourceElementId: quickSourceId,
-                  targetElementId: quickTargetId
-                });
-                modelStore.addRelationship(created);
-                onSelect({ kind: 'relationship', relationshipId: created.id });
-              }}
-            >
-              Create relationship
-            </button>
-          </div>
-        </div>
-      </div>
-
       <div className="workspaceTabs" role="tablist" aria-label="Palette tabs" style={{ justifyContent: 'flex-start' }}>
         <button
           type="button"
@@ -292,43 +195,7 @@ export function ModelPalette({ onSelect }: Props) {
         <div style={{ border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>Elements</div>
 
-          <div className="propertiesGrid">
-            <div className="propertiesRow">
-              <div className="propertiesKey">Layer</div>
-              <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                <select
-                  className="selectInput"
-                  aria-label="Layer"
-                  value={elLayer}
-                  onChange={(e) => setElLayer(e.target.value as any)}
-                >
-                  {ARCHIMATE_LAYERS.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
 
-            <div className="propertiesRow">
-              <div className="propertiesKey">Element type</div>
-              <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                <select
-                  className="selectInput"
-                  aria-label="Element type"
-                  value={elType}
-                  onChange={(e) => setElType(e.target.value as ElementType)}
-                >
-                  {ELEMENT_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
 
           <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
@@ -395,77 +262,12 @@ export function ModelPalette({ onSelect }: Props) {
 
           {model ? (
             <>
-              <div className="propertiesGrid">
-                <div className="propertiesRow">
-                  <div className="propertiesKey">Type</div>
-                  <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                    <select
-                      className="selectInput"
-                      aria-label="Type"
-                      value={relType}
-                      onChange={(e) => setRelType(e.target.value as RelationshipType)}
-                    >
-                      {RELATIONSHIP_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="propertiesRow">
-                  <div className="propertiesKey">Source</div>
-                  <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                    <select
-                      className="selectInput"
-                      aria-label="Source"
-                      value={sourceId}
-                      onChange={(e) => setSourceId(e.target.value)}
-                    >
-                      {elements.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.name} ({e.type})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="propertiesRow">
-                  <div className="propertiesKey">Target</div>
-                  <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                    <select
-                      className="selectInput"
-                      aria-label="Target"
-                      value={targetId}
-                      onChange={(e) => setTargetId(e.target.value)}
-                    >
-                      {elements.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.name} ({e.type})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
               <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button
                   type="button"
                   className="shellButton"
-                  disabled={!canCreateRelationship}
-                  onClick={() => {
-                    if (!model) return;
-                    const created = createRelationship({
-                      type: relType,
-                      sourceElementId: sourceId,
-                      targetElementId: targetId
-                    });
-                    modelStore.addRelationship(created);
-                    onSelect({ kind: 'relationship', relationshipId: created.id });
-                  }}
+                  disabled={elements.length < 2}
+                  onClick={openCreateRelationshipDialog}
                 >
                   Create Relationship
                 </button>
@@ -621,7 +423,11 @@ export function ModelPalette({ onSelect }: Props) {
               disabled={!model || elementNameDraft.trim().length === 0}
               onClick={() => {
                 if (!model) return;
-                const created = createElement({ name: elementNameDraft.trim(), layer: elLayer as any, type: elType });
+                const created = createElement({
+                  name: elementNameDraft.trim(),
+                  layer: elementLayerDraft,
+                  type: elementTypeDraft
+                });
                 modelStore.addElement(created);
                 setCreateElementOpen(false);
                 onSelect({ kind: 'element', elementId: created.id });
@@ -642,6 +448,48 @@ export function ModelPalette({ onSelect }: Props) {
                 value={elementNameDraft}
                 onChange={(e) => setElementNameDraft(e.target.value)}
               />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Layer</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Layer"
+                value={elementLayerDraft}
+                onChange={(e) => setElementLayerDraft(e.target.value as ArchimateLayer)}
+              >
+                {ARCHIMATE_LAYERS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Type</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              {/*
+                Keep aria-label="Type" for existing tests/UI, but also expose an
+                accessible label "Element type" used by other tests.
+              */}
+              <label htmlFor={createElementTypeSelectId} style={VISUALLY_HIDDEN}>
+                Element type
+              </label>
+              <select
+                id={createElementTypeSelectId}
+                className="selectInput"
+                aria-label="Type"
+                value={elementTypeDraft}
+                onChange={(e) => setElementTypeDraft(e.target.value as ElementType)}
+              >
+                {(ELEMENT_TYPES_BY_LAYER[elementLayerDraft] ?? []).map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -681,6 +529,116 @@ export function ModelPalette({ onSelect }: Props) {
                 value={elementNameDraft}
                 onChange={(e) => setElementNameDraft(e.target.value)}
               />
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        title="Create relationship"
+        isOpen={createRelationshipOpen}
+        onClose={() => setCreateRelationshipOpen(false)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="shellButton" onClick={() => setCreateRelationshipOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="shellButton"
+              disabled={!canCreateRelationship}
+              onClick={() => {
+                if (!canCreateRelationship) return;
+                const created = createRelationship({
+                  name: relationshipNameDraft.trim(),
+                  description: relationshipDescriptionDraft.trim() || undefined,
+                  type: relType,
+                  sourceElementId: sourceId,
+                  targetElementId: targetId
+                });
+                modelStore.addRelationship(created);
+                setCreateRelationshipOpen(false);
+                onSelect({ kind: 'relationship', relationshipId: created.id });
+              }}
+            >
+              Create
+            </button>
+          </div>
+        }
+      >
+        <div className="propertiesGrid">
+          <div className="propertiesRow">
+            <div className="propertiesKey">Name</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="Name"
+                value={relationshipNameDraft}
+                onChange={(e) => setRelationshipNameDraft(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Description</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <textarea
+                className="textInput"
+                aria-label="Description"
+                rows={3}
+                value={relationshipDescriptionDraft}
+                onChange={(e) => setRelationshipDescriptionDraft(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Type</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Type"
+                value={relType}
+                onChange={(e) => setRelType(e.target.value as RelationshipType)}
+              >
+                {RELATIONSHIP_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Source</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Source"
+                value={sourceId}
+                onChange={(e) => setSourceId(e.target.value)}
+              >
+                {elements.map((el) => (
+                  <option key={el.id} value={el.id}>
+                    {el.name ? elementOptionLabel(el) : `(unnamed) (${el.type})`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Target</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Target"
+                value={targetId}
+                onChange={(e) => setTargetId(e.target.value)}
+              >
+                {elements.map((el) => (
+                  <option key={el.id} value={el.id}>
+                    {el.name ? elementOptionLabel(el) : `(unnamed) (${el.type})`}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

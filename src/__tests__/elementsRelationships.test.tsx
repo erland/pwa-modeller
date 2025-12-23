@@ -27,9 +27,9 @@ describe('Elements & Relationships CRUD', () => {
     const user = await createModel('My Model');
 
     await user.click(screen.getByRole('tab', { name: 'Elements' }));
-    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
-    await user.selectOptions(screen.getByLabelText('Element type'), 'BusinessActor');
     await user.click(screen.getByRole('button', { name: 'Create Element' }));
+    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
+    await user.selectOptions(screen.getByLabelText('Type'), 'BusinessActor');
     await user.type(screen.getByLabelText('Name'), 'Actor A');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
@@ -50,21 +50,22 @@ describe('Elements & Relationships CRUD', () => {
     const user = await createModel('Rel Model');
 
     await user.click(screen.getByRole('tab', { name: 'Elements' }));
-    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
-    await user.selectOptions(screen.getByLabelText('Element type'), 'BusinessService');
     await user.click(screen.getByRole('button', { name: 'Create Element' }));
+    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
+    await user.selectOptions(screen.getByLabelText('Type'), 'BusinessService');
     await user.type(screen.getByLabelText('Name'), 'Service');
     await user.click(screen.getByRole('button', { name: 'Create' }));
-
-    await user.selectOptions(screen.getByLabelText('Element type'), 'BusinessActor');
     await user.click(screen.getByRole('button', { name: 'Create Element' }));
+    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
+    await user.selectOptions(screen.getByLabelText('Type'), 'BusinessActor');
     await user.type(screen.getByLabelText('Name'), 'Actor');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await user.click(screen.getByRole('tab', { name: 'Relationships' }));
+    await user.click(screen.getByRole('button', { name: 'Create Relationship' }));
     // default source/target are preselected; choose Serving explicitly.
     await user.selectOptions(screen.getByLabelText('Type'), 'Serving');
-    await user.click(screen.getByRole('button', { name: 'Create Relationship' }));
+    await user.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(screen.getByRole('table', { name: 'Relationships list' })).toBeInTheDocument();
     expect(screen.getAllByText('Serving').length).toBeGreaterThan(0);

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import App from '../App';
@@ -23,23 +23,32 @@ describe('Palette CRUD', () => {
     await user.type(screen.getByLabelText('Name'), 'Palette Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    // Create element A.
-    await user.type(screen.getByLabelText('Element name'), 'A');
-    await user.click(screen.getByRole('button', { name: 'Create element' }));
+    // Create element A (via dialog).
+    await user.click(screen.getByRole('tab', { name: 'Elements' }));
+    await user.click(screen.getByRole('button', { name: 'Create Element' }));
+    const createElA = screen.getByRole('dialog', { name: 'Create element' });
+    await user.type(within(createElA).getByLabelText('Name'), 'A');
+    await user.selectOptions(within(createElA).getByLabelText('Layer'), 'Business');
+    await user.selectOptions(within(createElA).getByLabelText('Element type'), 'BusinessActor');
+    await user.click(within(createElA).getByRole('button', { name: 'Create' }));
 
     // Create element B.
-    await user.type(screen.getByLabelText('Element name'), 'B');
-    await user.click(screen.getByRole('button', { name: 'Create element' }));
+    await user.click(screen.getByRole('button', { name: 'Create Element' }));
+    const createElB = screen.getByRole('dialog', { name: 'Create element' });
+    await user.type(within(createElB).getByLabelText('Name'), 'B');
+    await user.selectOptions(within(createElB).getByLabelText('Layer'), 'Business');
+    await user.selectOptions(within(createElB).getByLabelText('Element type'), 'BusinessService');
+    await user.click(within(createElB).getByRole('button', { name: 'Create' }));
 
-    // Create relationship A -> B.
-    await user.type(screen.getByLabelText('Relationship name'), 'Uses');
-    await user.selectOptions(screen.getByLabelText('Relationship type'), 'Serving');
-    // Source/Target default to first two elements, but make the test explicit.
-    const source = screen.getByLabelText('Source element');
-    const target = screen.getByLabelText('Target element');
-    await user.selectOptions(source, (source as HTMLSelectElement).options[0].value);
-    await user.selectOptions(target, (target as HTMLSelectElement).options[1].value);
-    await user.click(screen.getByRole('button', { name: 'Create relationship' }));
+    // Create relationship A -> B (via dialog).
+    await user.click(screen.getByRole('tab', { name: 'Relationships' }));
+    await user.click(screen.getByRole('button', { name: 'Create Relationship' }));
+    const createRel = screen.getByRole('dialog', { name: 'Create relationship' });
+    await user.type(within(createRel).getByLabelText('Name'), 'Uses');
+    await user.selectOptions(within(createRel).getByLabelText('Type'), 'Serving');
+    await user.selectOptions(within(createRel).getByLabelText('Source'), 'A (BusinessActor)');
+    await user.selectOptions(within(createRel).getByLabelText('Target'), 'B (BusinessService)');
+    await user.click(within(createRel).getByRole('button', { name: 'Create' }));
 
     // Relationship appears in the navigator.
     expect(await screen.findByText('Serving: Uses')).toBeInTheDocument();

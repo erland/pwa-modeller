@@ -90,19 +90,32 @@ export interface Viewpoint {
   allowedRelationshipTypes: RelationshipType[];
 }
 
-// Diagram placeholders (will be fleshed out in later steps).
+// Diagram placeholders (layout for nodes and connections; we keep it intentionally simple for now)
 export interface ViewNodeLayout {
   elementId: string;
   x: number;
   y: number;
-  width?: number;
-  height?: number;
+  width: number;
+  height: number;
+  /** View-specific emphasis flag (does not change the underlying element). */
+  highlighted?: boolean;
+  /** View-specific style tag badge (does not change the underlying element). */
+  styleTag?: string;
 }
 
 export interface ViewRelationshipLayout {
   relationshipId: string;
-  /** Optional bend points, labels, etc. */
+  /** Optional polyline points for routing. */
   points?: Array<{ x: number; y: number }>;
+}
+
+export interface ViewFormatting {
+  /** Optional per-layer default styling (e.g. tag badge). */
+  layerStyleTags?: Partial<Record<ArchimateLayer, string>>;
+  /** When moving nodes, snap to grid. */
+  snapToGrid?: boolean;
+  /** Grid size in pixels for snapping. */
+  gridSize?: number;
 }
 
 export interface ViewLayout {
@@ -117,6 +130,8 @@ export interface View {
   description?: string;
   documentation?: string;
   stakeholders?: string[];
+  formatting?: ViewFormatting;
+
   layout?: ViewLayout;
 }
 

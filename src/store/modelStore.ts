@@ -1,5 +1,5 @@
-import type { Element, Folder, Model, ModelMetadata, Relationship, View, ViewRelationshipLayout, ViewNodeLayout } from '../domain';
-import { createEmptyModel } from '../domain';
+import type { Element, Folder, Model, ModelMetadata, Relationship, View, ViewLayout, ViewRelationshipLayout, ViewNodeLayout, ViewFormatting } from '../domain';
+import { createEmptyModel, createView } from '../domain';
 
 export type ModelStoreState = {
   model: Model | null;
@@ -10,6 +10,8 @@ export type ModelStoreState = {
 };
 
 type Listener = () => void;
+
+type ViewWithLayout = View & { layout: ViewLayout };
 
 function findFolderIdByKind(model: Model, kind: Folder['kind']): string {
   const folder = Object.values(model.folders).find((f) => f.kind === kind);
@@ -43,8 +45,8 @@ function getView(model: Model, viewId: string): View {
   return view;
 }
 
-function ensureViewLayout(view: View): View {
-  if (view.layout) return view;
+function ensureViewLayout(view: View): ViewWithLayout {
+  if (view.layout) return view as ViewWithLayout;
   return { ...view, layout: { nodes: [], relationships: [] } };
 }
 
@@ -265,8 +267,83 @@ export class ModelStore {
       model.views[viewId] = { ...current, ...patch, id: current.id };
     });
   }
+  updateViewFormatting(viewId: string, patch: Partial<ViewFormatting>): void {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) return;
+
+      const prev = view.formatting ?? { snapToGrid: true, gridSize: 20, layerStyleTags: {} };
+      const next: ViewFormatting = {
+        ...prev,
+        ...patch,
+        layerStyleTags: { ...(prev.layerStyleTags ?? {}), ...(patch.layerStyleTags ?? {}) }
+      };
+
+      model.views[viewId] = { ...view, formatting: next };
+    });
+  }
+
+  /** Clone a view (including its layout) into the same folder as the original. Returns the new view id. */
+  cloneView(viewId: string): string | null {
+    let created: string | null = null;
+
+    this.updateModel((model) => {
+      const original = model.views[viewId];
+      if (!original) return;
+
+      const baseName = original.name.trim() || 'View';
+      const existingNames = new Set(Object.values(model.views).map((v) => v.name));
+      let name = `Copy of ${baseName}`;
+      if (existingNames.has(name)) {
+        let i = 2;
+        while (existingNames.has(`${name} (${i})`)) i++;
+        name = `${name} (${i})`;
+      }
+
+      const clone = createView({
+        name,
+        viewpointId: original.viewpointId,
+        description: original.description,
+        documentation: original.documentation,
+        stakeholders: original.stakeholders ? [...original.stakeholders] : undefined,
+        formatting: original.formatting ? JSON.parse(JSON.stringify(original.formatting)) : undefined,
+        layout: original.layout ? JSON.parse(JSON.stringify(original.layout)) : undefined
+      });
+
+      model.views[clone.id] = clone;
+
+      const folderId = findFolderContainingView(model, viewId) ?? findFolderIdByKind(model, 'views');
+      model.folders[folderId] = {
+        ...model.folders[folderId],
+        viewIds: [...model.folders[folderId].viewIds, clone.id]
+      };
+
+      created = clone.id;
+    });
+
+    return created;
+  }
+
+  updateViewNodeLayout(viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) return;
+
+      const viewWithLayout = ensureViewLayout(view);
+      const idx = viewWithLayout.layout.nodes.findIndex((n) => n.elementId === elementId);
+      if (idx < 0) return;
+
+      const prev = viewWithLayout.layout.nodes[idx];
+      const next: ViewNodeLayout = { ...prev, ...patch, elementId: prev.elementId };
+      const nextNodes = viewWithLayout.layout.nodes.slice();
+      nextNodes[idx] = next;
+
+      model.views[viewId] = { ...viewWithLayout, layout: { ...viewWithLayout.layout, nodes: nextNodes } };
+    });
+  }
 
   deleteView(viewId: string): void {
+
     this.updateModel((model) => {
       if (!model.views[viewId]) return;
 

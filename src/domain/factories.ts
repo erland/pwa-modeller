@@ -45,12 +45,16 @@ export function createView(input: CreateViewInput): View {
   requireNonBlank(input.name, 'View.name');
   requireNonBlank(input.viewpointId, 'View.viewpointId');
 
+  const formatting = input.formatting ?? { snapToGrid: true, gridSize: 20, layerStyleTags: {} };
+
   return {
     id: input.id ?? createId('view'),
     name: input.name.trim(),
     viewpointId: input.viewpointId.trim(),
     description: input.description?.trim() || undefined,
+    documentation: input.documentation?.trim() || undefined,
     stakeholders: input.stakeholders,
+    formatting,
     layout: input.layout
   };
 }

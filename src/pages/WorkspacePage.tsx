@@ -22,6 +22,7 @@ function WorkspaceMainPlaceholder({
   const currentView = useMemo(() => {
     if (!model) return null;
     if (selection.kind === 'view') return model.views[selection.viewId] ?? null;
+    if (selection.kind === 'viewNode') return model.views[selection.viewId] ?? null;
     // If a view exists, show the first one as context even if nothing is selected.
     return Object.values(model.views)[0] ?? null;
   }, [model, selection]);

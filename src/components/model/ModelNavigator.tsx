@@ -151,7 +151,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
             {scope === 'views'
               ? viewLeaves.map((v) => (
                   <li key={v.id}>
-                    <div className={['navNode', selection.kind === 'view' && selection.viewId === v.id ? 'isSelected' : null].filter(Boolean).join(' ')}>
+                    <div className={['navNode', (selection.kind === 'view' || selection.kind === 'viewNode') && selection.viewId === v.id ? 'isSelected' : null].filter(Boolean).join(' ')}>
                       <div className="navNodeMain">
                         <span className="navNodeTitle">{v.name}</span>
                         <span className="navNodeCount">{v.viewpointId}</span>

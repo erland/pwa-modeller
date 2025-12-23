@@ -322,6 +322,26 @@
   cursor: grabbing;
 }
 
+.diagramNode.isSelected {
+  outline: 2px solid #7aa6ff;
+  outline-offset: 2px;
+}
+
+.diagramNode.isHighlighted {
+  border-width: 2px;
+  border-color: #ffb703;
+}
+
+.diagramNodeTag {
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f3f5;
+  display: inline-block;
+}
+
+
 .diagramNodeTitle {
   font-weight: 700;
   font-size: 13px;

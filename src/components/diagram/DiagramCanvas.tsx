@@ -28,10 +28,14 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       setActiveViewId(selection.viewId);
       return;
     }
+    if (selection.kind === 'viewNode') {
+      setActiveViewId(selection.viewId);
+      return;
+    }
     if (activeViewId && model.views[activeViewId]) return;
     setActiveViewId(views[0]?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, selection.kind === 'view' ? selection.viewId : null, views.length]);
+  }, [model, selection.kind === 'view' ? selection.viewId : selection.kind === 'viewNode' ? selection.viewId : null, views.length]);
 
   const activeView = model && activeViewId ? model.views[activeViewId] : null;
 
@@ -70,7 +74,20 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       if (!d) return;
       const dx = ev.clientX - d.startX;
       const dy = ev.clientY - d.startY;
-      modelStore.updateViewNodePosition(d.viewId, d.elementId, d.origX + dx, d.origY + dy);
+
+      const state = modelStore.getState();
+      const view = state.model?.views[d.viewId];
+      const snap = view?.formatting?.snapToGrid ?? true;
+      const grid = view?.formatting?.gridSize ?? 20;
+
+      let x = d.origX + dx;
+      let y = d.origY + dy;
+      if (snap && grid > 1) {
+        x = Math.round(x / grid) * grid;
+        y = Math.round(y / grid) * grid;
+      }
+
+      modelStore.updateViewNodePosition(d.viewId, d.elementId, x, y);
     }
     function onUp() {
       dragRef.current = null;
@@ -171,12 +188,18 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
               return (
                 <div
                   key={n.elementId}
-                  className="diagramNode"
+                  className={
+                    'diagramNode' +
+                    (selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId
+                      ? ' isSelected'
+                      : '') +
+                    (n.highlighted ? ' isHighlighted' : '')
+                  }
                   style={{ left: n.x, top: n.y, width: n.width ?? 120, height: n.height ?? 60 }}
                   role="button"
                   tabIndex={0}
                   aria-label={`Diagram node ${el.name || '(unnamed)'}`}
-                  onClick={() => onSelect({ kind: 'element', elementId: el.id })}
+                  onClick={() => onSelect({ kind: 'viewNode', viewId: activeView.id, elementId: el.id })}
                   onPointerDown={(ev) => {
                     dragRef.current = {
                       viewId: activeView.id,
@@ -190,6 +213,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                 >
                   <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
                   <div className="diagramNodeMeta">{el.type}</div>
+                  {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
                 </div>
               );
             })}

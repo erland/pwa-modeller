@@ -569,6 +569,18 @@ export function ModelPalette({ onSelect }: Props) {
                           >
                             ✎
                           </button>
+
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Clone view ${v.name}`}
+                            onClick={() => {
+                              const clonedId = modelStore.cloneView(v.id);
+                              if (clonedId) onSelect({ kind: 'view', viewId: clonedId });
+                            }}
+                          >
+                            ⎘
+                          </button>
                           <button
                             type="button"
                             className="miniButton"

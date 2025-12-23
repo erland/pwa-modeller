@@ -30,6 +30,24 @@ function gatherFolderOptions(model: Model, rootId: string): Array<{ id: string; 
   walk(rootId, '');
   return out;
 }
+function folderPathLabel(model: Model, folderId: string): string {
+  const start = model.folders[folderId];
+  if (!start) return folderId;
+
+  const parts: string[] = [];
+  const visited = new Set<string>();
+  let current: Folder | undefined = start;
+
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    parts.unshift(current.name);
+    if (!current.parentId) break;
+    current = model.folders[current.parentId];
+  }
+
+  return parts.join(' / ');
+}
+
 
 function findFolderContaining(model: Model, kind: 'element' | 'view', id: string): string | null {
   for (const folder of Object.values(model.folders)) {
@@ -94,7 +112,13 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
             <div className="propertiesKey">Views</div>
             <div className="propertiesValue">{folder.viewIds.length}</div>
           </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">Path</div>
+            <div className="propertiesValue">{folderPathLabel(model, folder.id)}</div>
+          </div>
         </div>
+
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button
@@ -121,6 +145,57 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
           >
             Delete
           </button>
+        </div>
+      </div>
+    );
+  }
+
+
+  if (selection.kind === 'viewNode') {
+    const view = model.views[selection.viewId];
+    const element = model.elements[selection.elementId];
+    const node = view?.layout?.nodes.find((n) => n.elementId === selection.elementId);
+
+    if (!view || !element || !node) {
+      return (
+        <div>
+          <h2 className="panelTitle">Properties</h2>
+          <p className="panelHint">Select something to edit its properties.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <h2 className="panelTitle">Node formatting</h2>
+        <p className="panelHint" style={{ marginTop: 6 }}>
+          {element.name} <span style={{ opacity: 0.75 }}>in</span> {view.name}
+        </p>
+
+        <div className="fieldGroup">
+          <label className="fieldLabel">
+            <input
+              type="checkbox"
+              checked={Boolean(node.highlighted)}
+              onChange={(e) => modelStore.updateViewNodeLayout(view.id, element.id, { highlighted: e.target.checked })}
+            />{' '}
+            Highlight
+          </label>
+        </div>
+
+        <div className="fieldGroup">
+          <label className="fieldLabel" htmlFor="node-style-tag">
+            Style tag
+          </label>
+          <input
+            id="node-style-tag"
+            aria-label="Node style tag"
+            className="textInput"
+            placeholder="e.g. Critical"
+            value={node.styleTag ?? ''}
+            onChange={(e) => modelStore.updateViewNodeLayout(view.id, element.id, { styleTag: e.target.value || undefined })}
+          />
+          <p className="panelHint">View-only label; does not change the underlying element.</p>
         </div>
       </div>
     );
@@ -220,6 +295,7 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
               </select>
             </div>
           </div>
+
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -432,6 +508,75 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
               </select>
             </div>
           </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">Snap</div>
+            <div className="propertiesValue">
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={view.formatting?.snapToGrid ?? true}
+                  onChange={(e) => modelStore.updateViewFormatting(view.id, { snapToGrid: e.target.checked })}
+                />
+                <span>Snap to grid</span>
+              </label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                <span className="panelHint" style={{ margin: 0 }}>
+                  Grid size
+                </span>
+                <input
+                  aria-label="Grid size"
+                  type="number"
+                  min={2}
+                  className="textInput"
+                  style={{ width: 100 }}
+                  value={view.formatting?.gridSize ?? 20}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    modelStore.updateViewFormatting(view.id, { gridSize: Number.isFinite(n) && n > 1 ? n : 20 });
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">Defaults</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <div className="panelHint" style={{ margin: 0 }}>
+                Default style tag per layer
+              </div>
+              <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                {ARCHIMATE_LAYERS.map((layer) => {
+                  const value = view.formatting?.layerStyleTags?.[layer] ?? '';
+                  return (
+                    <div
+                      key={layer}
+                      style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, alignItems: 'center' }}
+                    >
+                      <div className="panelHint" style={{ margin: 0 }}>
+                        {layer}
+                      </div>
+                      <input
+                        aria-label={`Default style tag ${layer}`}
+                        className="textInput"
+                        placeholder="(none)"
+                        value={value}
+                        onChange={(e) => {
+                          const nextValue = e.target.value;
+                          const nextTags = { ...(view.formatting?.layerStyleTags ?? {}) } as Record<string, string>;
+                          if (!nextValue) delete nextTags[layer];
+                          else nextTags[layer] = nextValue;
+                          modelStore.updateViewFormatting(view.id, { layerStyleTags: nextTags as any });
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

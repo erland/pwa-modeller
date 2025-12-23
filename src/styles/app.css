@@ -1,0 +1,45 @@
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.appHeader {
+  padding: 16px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.appTitle {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: 0.2px;
+}
+
+.appSubtitle {
+  margin: 8px 0 0;
+  opacity: 0.85;
+}
+
+.appMain {
+  margin-top: 18px;
+  padding: 16px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.appSection {
+  margin-top: 16px;
+}
+
+.appSection h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.appSection ul {
+  margin: 0;
+  padding-left: 18px;
+}

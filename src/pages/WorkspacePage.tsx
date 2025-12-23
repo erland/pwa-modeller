@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { ModelActions } from '../components/model/ModelActions';
 import { ModelNavigator } from '../components/model/ModelNavigator';
+import { ModelPalette } from '../components/model/ModelPalette';
 import { ModelPropertiesDialog } from '../components/model/ModelPropertiesDialog';
 import { PropertiesPanel } from '../components/model/PropertiesPanel';
 import { noSelection, type Selection } from '../components/model/selection';
@@ -48,6 +49,7 @@ export default function WorkspacePage() {
         leftSidebar={<ModelNavigator selection={selection} onSelect={setSelection} />}
         rightSidebar={<PropertiesPanel selection={selection} onEditModelProps={() => setModelPropsOpen(true)} />}
       >
+        <ModelPalette onSelect={setSelection} />
         <WorkspaceMainPlaceholder />
       </AppShell>
 

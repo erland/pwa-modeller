@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
-import type { Folder, Model } from '../../domain';
+import type { Folder, Model, RelationshipType } from '../../domain';
+import { ARCHIMATE_LAYERS, ELEMENT_TYPES, RELATIONSHIP_TYPES } from '../../domain';
 import { modelStore, useModelStore } from '../../store';
 import type { Selection } from './selection';
 
@@ -135,15 +136,70 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
         <div className="propertiesGrid">
           <div className="propertiesRow">
             <div className="propertiesKey">Name</div>
-            <div className="propertiesValue">{el.name}</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="Element property name"
+                value={el.name}
+                onChange={(e) => modelStore.updateElement(el.id, { name: e.target.value })}
+              />
+            </div>
           </div>
           <div className="propertiesRow">
             <div className="propertiesKey">Type</div>
-            <div className="propertiesValue">{el.type}</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Element property type"
+                value={el.type}
+                onChange={(e) => modelStore.updateElement(el.id, { type: e.target.value as any })}
+              >
+                {ELEMENT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="propertiesRow">
             <div className="propertiesKey">Layer</div>
-            <div className="propertiesValue">{el.layer}</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Element property layer"
+                value={el.layer}
+                onChange={(e) => modelStore.updateElement(el.id, { layer: e.target.value as any })}
+              >
+                {ARCHIMATE_LAYERS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Description</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <textarea
+                className="textArea"
+                aria-label="Element property description"
+                value={el.description ?? ''}
+                onChange={(e) => modelStore.updateElement(el.id, { description: e.target.value || undefined })}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Docs</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <textarea
+                className="textArea"
+                aria-label="Element property documentation"
+                value={el.documentation ?? ''}
+                onChange={(e) => modelStore.updateElement(el.id, { documentation: e.target.value || undefined })}
+              />
+            </div>
           </div>
           <div className="propertiesRow">
             <div className="propertiesKey">Folder</div>
@@ -164,6 +220,132 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
               </select>
             </div>
           </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              const ok = window.confirm('Delete this element? Relationships referencing it will also be removed.');
+              if (!ok) return;
+              modelStore.deleteElement(el.id);
+            }}
+          >
+            Delete element
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (selection.kind === 'relationship') {
+    const rel = model.relationships[selection.relationshipId];
+    if (!rel) return <p className="panelHint">Relationship not found.</p>;
+    const elementOptions = Object.values(model.elements)
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+    const sourceName = model.elements[rel.sourceElementId]?.name ?? rel.sourceElementId;
+    const targetName = model.elements[rel.targetElementId]?.name ?? rel.targetElementId;
+
+    return (
+      <div>
+        <p className="panelHint">Relationship</p>
+        <div className="propertiesGrid">
+          <div className="propertiesRow">
+            <div className="propertiesKey">Type</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Relationship property type"
+                value={rel.type}
+                onChange={(e) => modelStore.updateRelationship(rel.id, { type: e.target.value as RelationshipType })}
+              >
+                {RELATIONSHIP_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">From</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Relationship property source"
+                value={rel.sourceElementId}
+                onChange={(e) => modelStore.updateRelationship(rel.id, { sourceElementId: e.target.value })}
+              >
+                {elementOptions.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name} ({e.type})
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Current: {sourceName}</div>
+            </div>
+          </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">To</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Relationship property target"
+                value={rel.targetElementId}
+                onChange={(e) => modelStore.updateRelationship(rel.id, { targetElementId: e.target.value })}
+              >
+                {elementOptions.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name} ({e.type})
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Current: {targetName}</div>
+            </div>
+          </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">Name</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="Relationship property name"
+                value={rel.name ?? ''}
+                onChange={(e) => modelStore.updateRelationship(rel.id, { name: e.target.value || undefined })}
+              />
+            </div>
+          </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">Description</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <textarea
+                className="textArea"
+                aria-label="Relationship property description"
+                value={rel.description ?? ''}
+                onChange={(e) => modelStore.updateRelationship(rel.id, { description: e.target.value || undefined })}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              const ok = window.confirm('Delete this relationship?');
+              if (!ok) return;
+              modelStore.deleteRelationship(rel.id);
+            }}
+          >
+            Delete relationship
+          </button>
         </div>
       </div>
     );

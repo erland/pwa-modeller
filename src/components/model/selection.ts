@@ -3,6 +3,7 @@ export type Selection =
   | { kind: 'model' }
   | { kind: 'folder'; folderId: string }
   | { kind: 'element'; elementId: string }
+  | { kind: 'relationship'; relationshipId: string }
   | { kind: 'view'; viewId: string };
 
 export const noSelection: Selection = { kind: 'none' };

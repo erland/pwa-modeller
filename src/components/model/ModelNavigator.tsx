@@ -171,6 +171,76 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     );
   }
 
+  function renderRelationships(modelValue: Model) {
+    const rels = Object.values(modelValue.relationships)
+      .filter(Boolean)
+      .sort((a, b) => {
+        const byType = a.type.localeCompare(b.type, undefined, { sensitivity: 'base' });
+        if (byType !== 0) return byType;
+        return (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
+      });
+
+    const id = 'relationships';
+    const hasAnyChildren = rels.length > 0;
+
+    return (
+      <li key="relationships">
+        <div className={['navNode', selection.kind === 'relationship' ? 'isSelected' : null].filter(Boolean).join(' ')}>
+          <div className="navNodeMain">
+            <button
+              type="button"
+              className="miniButton"
+              aria-label={isExpanded(id) ? 'Collapse folder' : 'Expand folder'}
+              onClick={() => toggleExpanded(id)}
+              disabled={!hasAnyChildren}
+            >
+              {isExpanded(id) ? '▾' : '▸'}
+            </button>
+            <button type="button" className="navNodeButton" onClick={() => onSelect({ kind: 'model' })}>
+              <span className="navNodeTitle">Relationships</span>
+              <span className="navNodeCount">({rels.length})</span>
+            </button>
+          </div>
+        </div>
+
+        {isExpanded(id) && hasAnyChildren ? (
+          <ul className="navChildren">
+            {rels.map((r) => {
+              const src = modelValue.elements[r.sourceElementId]?.name ?? r.sourceElementId;
+              const tgt = modelValue.elements[r.targetElementId]?.name ?? r.targetElementId;
+              const label = r.name ? `${r.type}: ${r.name}` : r.type;
+              return (
+                <li key={r.id}>
+                  <div
+                    className={['navNode', selection.kind === 'relationship' && selection.relationshipId === r.id ? 'isSelected' : null]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <div className="navNodeMain">
+                      <span className="navNodeTitle">{label}</span>
+                      <span className="navNodeCount">
+                        {src} → {tgt}
+                      </span>
+                    </div>
+                    <div className="navNodeActions">
+                      <button
+                        type="button"
+                        className="miniButton"
+                        onClick={() => onSelect({ kind: 'relationship', relationshipId: r.id })}
+                      >
+                        Select
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </li>
+    );
+  }
+
   if (!model || !roots) {
     return (
       <div className="navigator">
@@ -195,6 +265,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
       <ul className="navTree" aria-label="Model navigator">
         {renderFolder(model, roots.elementsRoot.id, 'elements')}
         {renderFolder(model, roots.viewsRoot.id, 'views')}
+        {renderRelationships(model)}
       </ul>
 
       <FolderNameDialog

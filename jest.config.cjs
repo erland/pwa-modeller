@@ -1,7 +1,8 @@
 /** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'jsdom',
-  testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)'],
+  // Keep tests inside src/ and support both *.test.ts(x) and *.spec.ts(x)
+  testMatch: ['<rootDir>/src/**/*.{test,spec}.{ts,tsx}'],
   transform: {
     '^.+\\.(t|j)sx?$': [
       'ts-jest',
@@ -15,6 +16,5 @@ module.exports = {
     '\\.(css|less|sass|scss)$': 'identity-obj-proxy',
     '\\.(gif|ttf|eot|svg|png|jpg|jpeg|webp)$': '<rootDir>/src/test/fileMock.ts'
   },
-  testMatch: ['<rootDir>/src/**/*.test.(ts|tsx)'],
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/*.d.ts']
 };

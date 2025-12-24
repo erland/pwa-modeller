@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { View } from '../../domain';
-import { modelStore } from '../../store';
+import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
+import { createViewSvg } from './exportSvg';
 
 type Props = {
   selection: Selection;
@@ -52,10 +53,19 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   }, [elementToAdd, elements]);
 
   const canAdd = Boolean(model && activeViewId && elementToAdd);
+  const canExportImage = Boolean(model && activeViewId && activeView);
 
   function handleAdd() {
     if (!model || !activeViewId || !elementToAdd) return;
     modelStore.addElementToView(activeViewId, elementToAdd);
+  }
+
+  function handleExportImage() {
+    if (!model || !activeViewId) return;
+    const svg = createViewSvg(model, activeViewId);
+    const base = `${model.metadata.name}-${activeView?.name || 'view'}`;
+    const fileName = sanitizeFileNameWithExtension(base, 'svg');
+    downloadTextFile(fileName, svg, 'image/svg+xml');
   }
 
   // Basic drag handling
@@ -165,6 +175,10 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
         <button className="shellButton" type="button" onClick={handleAdd} disabled={!canAdd || views.length === 0}>
           Add to view
+        </button>
+
+        <button className="shellButton" type="button" onClick={handleExportImage} disabled={!canExportImage}>
+          Export as Image
         </button>
       </div>
 

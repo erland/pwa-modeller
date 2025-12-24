@@ -8,6 +8,7 @@ import { PropertiesPanel } from '../components/model/PropertiesPanel';
 import { noSelection, type Selection } from '../components/model/selection';
 import { DiagramCanvas } from '../components/diagram/DiagramCanvas';
 import { ReportsWorkspace } from '../components/reports/ReportsWorkspace';
+import { ValidationWorkspace } from '../components/validation/ValidationWorkspace';
 import { AppShell } from '../components/shell/AppShell';
 import { VIEWPOINTS } from '../domain';
 import { useModelStore } from '../store/useModelStore';
@@ -19,8 +20,8 @@ function WorkspaceMainPlaceholder({
   onSelect
 }: {
   selection: Selection;
-  mainTab: 'diagram' | 'reports';
-  onChangeTab: (tab: 'diagram' | 'reports') => void;
+  mainTab: 'diagram' | 'reports' | 'validation';
+  onChangeTab: (tab: 'diagram' | 'reports' | 'validation') => void;
   onSelect: (sel: Selection) => void;
 }) {
   const model = useModelStore((s) => s.model);
@@ -60,6 +61,15 @@ function WorkspaceMainPlaceholder({
           >
             Reports
           </button>
+          <button
+            type="button"
+            className={`tabButton ${mainTab === 'validation' ? 'isActive' : ''}`}
+            role="tab"
+            aria-selected={mainTab === 'validation'}
+            onClick={() => onChangeTab('validation')}
+          >
+            Validation
+          </button>
         </div>
       </div>
 
@@ -85,8 +95,10 @@ function WorkspaceMainPlaceholder({
             <DiagramCanvas selection={selection} onSelect={onSelect} />
           </div>
         </div>
-      ) : (
+      ) : mainTab === 'reports' ? (
         <ReportsWorkspace />
+      ) : (
+        <ValidationWorkspace onSelect={onSelect} onGoToDiagram={() => onChangeTab('diagram')} />
       )}
     </div>
   );
@@ -95,7 +107,7 @@ function WorkspaceMainPlaceholder({
 export default function WorkspacePage() {
   const [selection, setSelection] = useState<Selection>(noSelection);
   const [modelPropsOpen, setModelPropsOpen] = useState(false);
-  const [mainTab, setMainTab] = useState<'diagram' | 'reports'>('diagram');
+  const [mainTab, setMainTab] = useState<'diagram' | 'reports' | 'validation'>('diagram');
 
   return (
     <>

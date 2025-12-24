@@ -63,7 +63,9 @@ describe('Elements & Relationships CRUD', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Relationships' }));
     await user.click(screen.getByRole('button', { name: 'Create Relationship' }));
-    // default source/target are preselected; choose Serving explicitly.
+    // Serving must originate from the service and point to the actor.
+    await user.selectOptions(screen.getByLabelText('Source'), 'Service (BusinessService)');
+    await user.selectOptions(screen.getByLabelText('Target'), 'Actor (BusinessActor)');
     await user.selectOptions(screen.getByLabelText('Type'), 'Serving');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 

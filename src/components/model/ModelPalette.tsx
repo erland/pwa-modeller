@@ -12,6 +12,10 @@ import {
   createRelationship,
   createView
 } from '../../domain';
+import {
+  getAllowedRelationshipTypes,
+  validateRelationship as validateRelationshipRule
+} from '../../domain/config/archimatePalette';
 import { modelStore, useModelStore } from '../../store';
 import { Dialog } from '../dialog/Dialog';
 import type { Selection } from './selection';
@@ -79,14 +83,16 @@ export function ModelPalette({ onSelect }: Props) {
   const [targetId, setTargetId] = useState<string>('');
 
   // Keep source/target selection valid as the element list changes.
+  // Use the model's insertion order (important for predictable defaults in tests).
   useEffect(() => {
-    if (elements.length === 0) {
+    if (!model) return;
+    const ids = Object.keys(model.elements);
+    if (ids.length === 0) {
       setSourceId('');
       setTargetId('');
       return;
     }
 
-    const ids = elements.map((e) => e.id);
     if (!sourceId || !ids.includes(sourceId)) setSourceId(ids[0]);
     if (!targetId || !ids.includes(targetId)) {
       setTargetId(ids.length > 1 ? ids[1] : ids[0]);
@@ -100,7 +106,32 @@ export function ModelPalette({ onSelect }: Props) {
       const fallback = ids.find((id) => id !== sourceId) ?? ids[0];
       if (fallback !== targetId) setTargetId(fallback);
     }
-  }, [elements, sourceId, targetId]);
+  }, [model, elements.length, sourceId, targetId]);
+
+  const allowedRelationshipTypes = useMemo(() => {
+    if (!model) return RELATIONSHIP_TYPES;
+    const s = model.elements[sourceId];
+    const t = model.elements[targetId];
+    if (!s || !t) return RELATIONSHIP_TYPES;
+    const allowed = getAllowedRelationshipTypes(s.type, t.type);
+    return allowed.length > 0 ? allowed : RELATIONSHIP_TYPES;
+  }, [model, sourceId, targetId]);
+
+  // Keep relationship type valid for the chosen endpoints.
+  useEffect(() => {
+    if (!allowedRelationshipTypes.includes(relType)) {
+      setRelType(allowedRelationshipTypes[0] ?? 'Association');
+    }
+  }, [allowedRelationshipTypes, relType]);
+
+  const relationshipRuleError = useMemo(() => {
+    if (!model) return null;
+    const s = model.elements[sourceId];
+    const t = model.elements[targetId];
+    if (!s || !t) return null;
+    const res = validateRelationshipRule(s.type, t.type, relType);
+    return res.allowed ? null : res.reason;
+  }, [model, sourceId, targetId, relType]);
 
 
   const relationships = useMemo(() => {
@@ -546,9 +577,9 @@ export function ModelPalette({ onSelect }: Props) {
             <button
               type="button"
               className="shellButton"
-              disabled={!canCreateRelationship}
+              disabled={!canCreateRelationship || Boolean(relationshipRuleError)}
               onClick={() => {
-                if (!canCreateRelationship) return;
+                if (!canCreateRelationship || relationshipRuleError) return;
                 const created = createRelationship({
                   name: relationshipNameDraft.trim(),
                   description: relationshipDescriptionDraft.trim() || undefined,
@@ -599,7 +630,7 @@ export function ModelPalette({ onSelect }: Props) {
                 value={relType}
                 onChange={(e) => setRelType(e.target.value as RelationshipType)}
               >
-                {RELATIONSHIP_TYPES.map((t) => (
+                {allowedRelationshipTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>
@@ -607,6 +638,14 @@ export function ModelPalette({ onSelect }: Props) {
               </select>
             </div>
           </div>
+          {relationshipRuleError ? (
+            <div className="propertiesRow">
+              <div className="propertiesKey">Validation</div>
+              <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                <div className="errorText" role="alert">{relationshipRuleError}</div>
+              </div>
+            </div>
+          ) : null}
           <div className="propertiesRow">
             <div className="propertiesKey">Source</div>
             <div className="propertiesValue" style={{ fontWeight: 400 }}>

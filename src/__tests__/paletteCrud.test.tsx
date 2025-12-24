@@ -45,9 +45,10 @@ describe('Palette CRUD', () => {
     await user.click(screen.getByRole('button', { name: 'Create Relationship' }));
     const createRel = screen.getByRole('dialog', { name: 'Create relationship' });
     await user.type(within(createRel).getByLabelText('Name'), 'Uses');
+    // Serving must originate from the service and point to the actor (minimal ArchiMate rule).
+    await user.selectOptions(within(createRel).getByLabelText('Source'), 'B (BusinessService)');
+    await user.selectOptions(within(createRel).getByLabelText('Target'), 'A (BusinessActor)');
     await user.selectOptions(within(createRel).getByLabelText('Type'), 'Serving');
-    await user.selectOptions(within(createRel).getByLabelText('Source'), 'A (BusinessActor)');
-    await user.selectOptions(within(createRel).getByLabelText('Target'), 'B (BusinessService)');
     await user.click(within(createRel).getByRole('button', { name: 'Create' }));
 
     // Relationship appears in the navigator.

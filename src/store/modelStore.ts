@@ -1,5 +1,6 @@
 import type { Element, Folder, Model, ModelMetadata, Relationship, View, ViewLayout, ViewRelationshipLayout, ViewNodeLayout, ViewFormatting } from '../domain';
 import { createEmptyModel, createView } from '../domain';
+import { clearPersistedStoreState, loadPersistedStoreState, persistStoreState } from './storePersistence';
 
 export type ModelStoreState = {
   model: Model | null;
@@ -58,7 +59,7 @@ function assertCanDeleteFolder(model: Model, folderId: string): void {
 }
 
 export class ModelStore {
-  private state: ModelStoreState = {
+  private state: ModelStoreState = loadPersistedStoreState() ?? {
     model: null,
     fileName: null,
     isDirty: false
@@ -77,6 +78,7 @@ export class ModelStore {
 
   private setState(next: Partial<ModelStoreState>): void {
     this.state = { ...this.state, ...next };
+    persistStoreState(this.state);
     for (const l of this.listeners) l();
   }
 
@@ -104,6 +106,7 @@ export class ModelStore {
   }
 
   reset(): void {
+    clearPersistedStoreState();
     this.setState({ model: null, fileName: null, isDirty: false });
   }
 

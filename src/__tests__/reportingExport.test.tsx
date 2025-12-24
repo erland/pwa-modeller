@@ -61,9 +61,7 @@ describe('Step 11 – Reporting and Export', () => {
     // - an outer placeholder wrapper
     // - the actual interactive canvas (.diagramCanvas)
     // Pick the real one to avoid "Found multiple" query errors.
-    const canvases = await screen.findAllByLabelText('Diagram canvas');
-    const diagramCanvas =
-      canvases.find((el) => el.classList.contains('diagramCanvas')) ?? canvases[0];
+    const diagramCanvas = await screen.findByLabelText('Diagram canvas');
     expect(within(diagramCanvas).getByText('Main View', { selector: 'span' })).toBeInTheDocument();
 
     const exportBtn = screen.getByRole('button', { name: /export as image/i });

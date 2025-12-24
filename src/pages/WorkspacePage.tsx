@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ModelActions } from '../components/model/ModelActions';
 import { ModelNavigator } from '../components/model/ModelNavigator';
@@ -10,7 +10,6 @@ import { DiagramCanvas } from '../components/diagram/DiagramCanvas';
 import { ReportsWorkspace } from '../components/reports/ReportsWorkspace';
 import { ValidationWorkspace } from '../components/validation/ValidationWorkspace';
 import { AppShell } from '../components/shell/AppShell';
-import { VIEWPOINTS } from '../domain';
 import { modelStore } from '../store';
 import { useModelStore } from '../store/useModelStore';
 
@@ -34,20 +33,6 @@ function WorkspaceMainPlaceholder({
   onChangeTab: (tab: 'diagram' | 'reports' | 'validation') => void;
   onSelect: (sel: Selection) => void;
 }) {
-  const model = useModelStore((s) => s.model);
-  const currentView = useMemo(() => {
-    if (!model) return null;
-    if (selection.kind === 'view') return model.views[selection.viewId] ?? null;
-    if (selection.kind === 'viewNode') return model.views[selection.viewId] ?? null;
-    // If a view exists, show the first one as context even if nothing is selected.
-    return Object.values(model.views)[0] ?? null;
-  }, [model, selection]);
-
-  const currentViewpointTitle = useMemo(() => {
-    if (!currentView) return null;
-    return VIEWPOINTS.find((v) => v.id === currentView.viewpointId)?.name ?? currentView.viewpointId;
-  }, [currentView]);
-
   return (
     <div className="workspace">
       <div className="workspaceHeader">
@@ -84,26 +69,8 @@ function WorkspaceMainPlaceholder({
       </div>
 
       {mainTab === 'diagram' ? (
-        <div className="canvasPlaceholder" aria-label="Diagram canvas">
-          <div className="canvasPlaceholderInner" style={{ padding: 0 }}>
-            <div style={{ padding: 12, borderBottom: '1px solid var(--border)' }}>
-              <p className="canvasTitle" style={{ marginBottom: 6 }}>
-                Diagram canvas
-              </p>
-              {currentView ? (
-                <p className="canvasHint" style={{ marginBottom: 0 }}>
-                  <strong>Current view:</strong> {currentView.name}
-                  {currentViewpointTitle ? ` — ${currentViewpointTitle}` : ''}
-                </p>
-              ) : (
-                <p className="canvasHint" style={{ marginBottom: 0 }}>
-                  No views yet — create one from the <strong>Views</strong> tab in the palette.
-                </p>
-              )}
-            </div>
-
-            <DiagramCanvas selection={selection} onSelect={onSelect} />
-          </div>
+        <div className="modelWorkspaceCanvas" aria-label="Diagram area">
+          <DiagramCanvas selection={selection} onSelect={onSelect} />
         </div>
       ) : mainTab === 'reports' ? (
         <ReportsWorkspace />

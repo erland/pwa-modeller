@@ -13,6 +13,14 @@
   flex-direction: column;
 }
 
+.modelWorkspaceCanvas {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px;
+}
+
+
 .shellHeader {
   display: flex;
   align-items: center;
@@ -288,17 +296,17 @@
   gap: 12px;
   align-items: flex-end;
   padding: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(0, 0, 0, 0.20);
   margin-bottom: 10px;
 }
 
 .diagramCanvas {
-  border: 1px solid #d4d7db;
-  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
   padding: 12px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .diagramCanvasHeader {
@@ -323,33 +331,49 @@
 
 .diagramViewport {
   position: relative;
-  height: 420px;
-  border-radius: 10px;
-  border: 1px dashed #d4d7db;
-  background: #f6f7f9;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      rgba(0, 0, 0, 0.04),
-      rgba(0, 0, 0, 0.04) 1px,
-      transparent 1px,
-      transparent 20px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(0, 0, 0, 0.04),
-      rgba(0, 0, 0, 0.04) 1px,
-      transparent 1px,
-      transparent 20px
-    );
   overflow: auto;
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  min-height: 420px;
 }
 
 .diagramSurface {
   position: relative;
-  min-width: 100%;
-  min-height: 100%;
+  height: 420px;
+  border-radius: 12px;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.06) 1px,
+    transparent 1px,
+    transparent 24px
+  ),
+  repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.06) 1px,
+    transparent 1px,
+    transparent 24px
+  );
 }
+
+.diagramRelationships {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.diagramRelationships line {
+  stroke: rgba(0, 0, 0, 0.60);
+  stroke-width: 2;
+}
+
+.diagramRelationships path {
+  fill: rgba(0, 0, 0, 0.60);
+}
+
 
 .diagramRelationships {
   position: absolute;
@@ -359,25 +383,29 @@
 
 .diagramHint {
   position: sticky;
-  top: 0;
-  left: 0;
+  top: 10px;
+  left: 10px;
   z-index: 5;
   display: inline-flex;
   gap: 6px;
   align-items: baseline;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.85);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(17, 24, 39, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
 }
 
 .diagramNode {
   position: absolute;
   box-sizing: border-box;
-  border-radius: 10px;
-  border: 1px solid #cfd3d8;
-  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
   padding: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   user-select: none;
   cursor: grab;
 }
@@ -415,6 +443,7 @@
 .diagramNodeMeta {
   font-size: 12px;
   opacity: 0.85;
+  color: rgba(0, 0, 0, 0.72);
 }
 
 .about {

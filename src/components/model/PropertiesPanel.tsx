@@ -1,14 +1,92 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import type { Folder, Model, RelationshipType } from '../../domain';
+import type { Folder, Model, Relationship, RelationshipType } from '../../domain';
 import { ARCHIMATE_LAYERS, ELEMENT_TYPES, RELATIONSHIP_TYPES, VIEWPOINTS } from '../../domain';
 import { modelStore, useModelStore } from '../../store';
 import type { Selection } from './selection';
 
 type Props = {
   selection: Selection;
+  onSelect?: (selection: Selection) => void;
   onEditModelProps: () => void;
 };
+
+type TraceDirection = 'outgoing' | 'incoming' | 'both';
+
+type TraceStep = {
+  depth: number;
+  relationship: Relationship;
+  fromId: string;
+  toId: string;
+};
+
+function getElementLabel(model: Model, elementId: string): string {
+  const el = model.elements[elementId];
+  if (!el) return elementId;
+  // Keep it stable for tests/UX: name (Type)
+  return `${el.name} (${el.type})`;
+}
+
+function splitRelationshipsForElement(model: Model, elementId: string) {
+  const rels = Object.values(model.relationships);
+  const outgoing = rels.filter((r) => r.sourceElementId === elementId);
+  const incoming = rels.filter((r) => r.targetElementId === elementId);
+  return { incoming, outgoing };
+}
+
+function computeRelationshipTrace(model: Model, startElementId: string, direction: TraceDirection, depthMax: number): TraceStep[] {
+  // Compute a BFS trace (using relationships) starting from the element.
+  const steps: TraceStep[] = [];
+  const visited = new Set<string>();
+  visited.add(startElementId);
+
+  type QueueItem = { elementId: string; depth: number };
+  const queue: QueueItem[] = [{ elementId: startElementId, depth: 0 }];
+
+  const relsBySource = new Map<string, Relationship[]>();
+  const relsByTarget = new Map<string, Relationship[]>();
+  for (const r of Object.values(model.relationships)) {
+    const byS = relsBySource.get(r.sourceElementId) ?? [];
+    byS.push(r);
+    relsBySource.set(r.sourceElementId, byS);
+
+    const byT = relsByTarget.get(r.targetElementId) ?? [];
+    byT.push(r);
+    relsByTarget.set(r.targetElementId, byT);
+  }
+
+  while (queue.length > 0) {
+    const item = queue.shift();
+    if (!item) break;
+    if (item.depth >= depthMax) continue;
+
+    const nextDepth = item.depth + 1;
+
+    if (direction === 'outgoing' || direction === 'both') {
+      const out = relsBySource.get(item.elementId) ?? [];
+      for (const r of out) {
+        steps.push({ depth: nextDepth, relationship: r, fromId: r.sourceElementId, toId: r.targetElementId });
+        if (!visited.has(r.targetElementId)) {
+          visited.add(r.targetElementId);
+          queue.push({ elementId: r.targetElementId, depth: nextDepth });
+        }
+      }
+    }
+
+    if (direction === 'incoming' || direction === 'both') {
+      const inc = relsByTarget.get(item.elementId) ?? [];
+      for (const r of inc) {
+        steps.push({ depth: nextDepth, relationship: r, fromId: r.targetElementId, toId: r.sourceElementId });
+        if (!visited.has(r.sourceElementId)) {
+          visited.add(r.sourceElementId);
+          queue.push({ elementId: r.sourceElementId, depth: nextDepth });
+        }
+      }
+    }
+  }
+
+  return steps;
+}
 
 function findFolderByKind(model: Model, kind: Folder['kind']): Folder {
   const found = Object.values(model.folders).find((f) => f.kind === kind);
@@ -57,8 +135,19 @@ function findFolderContaining(model: Model, kind: 'element' | 'view', id: string
   return null;
 }
 
-export function PropertiesPanel({ selection, onEditModelProps }: Props) {
+export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props) {
   const model = useModelStore((s) => s.model);
+
+  const [traceDirection, setTraceDirection] = useState<TraceDirection>('both');
+  const [traceDepth, setTraceDepth] = useState<number>(1);
+
+  const traceElementId = selection.kind === 'element' ? selection.elementId : null;
+
+  useEffect(() => {
+    if (!traceElementId) return;
+    setTraceDirection('both');
+    setTraceDepth(1);
+  }, [traceElementId]);
 
   const options = useMemo(() => {
     if (!model) return { elementFolders: [], viewFolders: [] };
@@ -69,6 +158,16 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
       viewFolders: gatherFolderOptions(model, viewsRoot.id)
     };
   }, [model]);
+
+  const relatedForElement = useMemo(() => {
+    if (!model || !traceElementId) return { incoming: [] as Relationship[], outgoing: [] as Relationship[] };
+    return splitRelationshipsForElement(model, traceElementId);
+  }, [model, traceElementId]);
+
+  const traceSteps = useMemo(() => {
+    if (!model || !traceElementId) return [] as TraceStep[];
+    return computeRelationshipTrace(model, traceElementId, traceDirection, traceDepth);
+  }, [model, traceElementId, traceDirection, traceDepth]);
 
   if (!model) {
     return (
@@ -205,6 +304,10 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
     const el = model.elements[selection.elementId];
     if (!el) return <p className="panelHint">Element not found.</p>;
     const currentFolderId = findFolderContaining(model, 'element', el.id);
+
+    const incoming = relatedForElement.incoming;
+    const outgoing = relatedForElement.outgoing;
+
     return (
       <div>
         <p className="panelHint">Element</p>
@@ -296,6 +399,168 @@ export function PropertiesPanel({ selection, onEditModelProps }: Props) {
             </div>
           </div>
 
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <p className="panelHint">Relationships</p>
+          <div className="propertiesGrid">
+            <div className="propertiesRow">
+              <div className="propertiesKey">Outgoing</div>
+              <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                {outgoing.length === 0 ? (
+                  <span style={{ opacity: 0.7 }}>None</span>
+                ) : (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {outgoing.map((r) => {
+                      const targetName = getElementLabel(model, r.targetElementId);
+                      const relLabel = `${r.type}${r.name ? ` — ${r.name}` : ''}`;
+                      return (
+                        <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Select relationship ${relLabel}`}
+                            onClick={() => onSelect?.({ kind: 'relationship', relationshipId: r.id })}
+                          >
+                            {relLabel}
+                          </button>
+                          <span style={{ opacity: 0.7 }}>→</span>
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Select target element ${targetName}`}
+                            onClick={() => onSelect?.({ kind: 'element', elementId: r.targetElementId })}
+                          >
+                            {targetName}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="propertiesRow">
+              <div className="propertiesKey">Incoming</div>
+              <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                {incoming.length === 0 ? (
+                  <span style={{ opacity: 0.7 }}>None</span>
+                ) : (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {incoming.map((r) => {
+                      const sourceName = getElementLabel(model, r.sourceElementId);
+                      const relLabel = `${r.type}${r.name ? ` — ${r.name}` : ''}`;
+                      return (
+                        <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Select source element ${sourceName}`}
+                            onClick={() => onSelect?.({ kind: 'element', elementId: r.sourceElementId })}
+                          >
+                            {sourceName}
+                          </button>
+                          <span style={{ opacity: 0.7 }}>→</span>
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Select relationship ${relLabel}`}
+                            onClick={() => onSelect?.({ kind: 'relationship', relationshipId: r.id })}
+                          >
+                            {relLabel}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <p className="panelHint">Trace</p>
+          <div className="propertiesGrid">
+            <div className="propertiesRow">
+              <div className="propertiesKey">Direction</div>
+              <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                <select
+                  className="selectInput"
+                  aria-label="Trace direction"
+                  value={traceDirection}
+                  onChange={(e) => setTraceDirection(e.target.value as TraceDirection)}
+                >
+                  <option value="both">Both</option>
+                  <option value="outgoing">Outgoing</option>
+                  <option value="incoming">Incoming</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="propertiesRow">
+              <div className="propertiesKey">Depth</div>
+              <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                <select
+                  className="selectInput"
+                  aria-label="Trace depth"
+                  value={String(traceDepth)}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setTraceDepth(Number.isFinite(n) && n >= 1 && n <= 5 ? n : 1);
+                  }}
+                >
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+            {traceSteps.length === 0 ? (
+              <div style={{ opacity: 0.7 }}>No trace results.</div>
+            ) : (
+              traceSteps.map((s, idx) => {
+                const relLabel = `${s.relationship.type}${s.relationship.name ? ` — ${s.relationship.name}` : ''}`;
+                const fromName = getElementLabel(model, s.fromId);
+                const toName = getElementLabel(model, s.toId);
+                return (
+                  <div key={`${s.relationship.id}_${idx}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                    <span style={{ opacity: 0.7 }}>d{s.depth}</span>
+                    <button
+                      type="button"
+                      className="miniButton"
+                      aria-label={`Select relationship ${relLabel}`}
+                      onClick={() => onSelect?.({ kind: 'relationship', relationshipId: s.relationship.id })}
+                    >
+                      {relLabel}
+                    </button>
+                    <span style={{ opacity: 0.7 }}>:</span>
+                    <button
+                      type="button"
+                      className="miniButton"
+                      aria-label={`Select element ${fromName}`}
+                      onClick={() => onSelect?.({ kind: 'element', elementId: s.fromId })}
+                    >
+                      {fromName}
+                    </button>
+                    <span style={{ opacity: 0.7 }}>→</span>
+                    <button
+                      type="button"
+                      className="miniButton"
+                      aria-label={`Select element ${toName}`}
+                      onClick={() => onSelect?.({ kind: 'element', elementId: s.toId })}
+                    >
+                      {toName}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

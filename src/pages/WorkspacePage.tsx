@@ -82,7 +82,13 @@ export default function WorkspacePage() {
         subtitle="Enterprise Architecture Modeling PWA (ArchiMate® 3.2)"
         actions={<ModelActions onEditModelProps={() => setModelPropsOpen(true)} />}
         leftSidebar={<ModelNavigator selection={selection} onSelect={setSelection} />}
-        rightSidebar={<PropertiesPanel selection={selection} onEditModelProps={() => setModelPropsOpen(true)} />}
+        rightSidebar={
+          <PropertiesPanel
+            selection={selection}
+            onSelect={setSelection}
+            onEditModelProps={() => setModelPropsOpen(true)}
+          />
+        }
       >
         <ModelPalette onSelect={setSelection} />
         <WorkspaceMainPlaceholder selection={selection} onSelect={setSelection} />

@@ -30,6 +30,9 @@ export function ModelNavigator({ selection, onSelect }: Props) {
   const isDirty = useModelStore((s) => s.isDirty);
   const fileName = useModelStore((s) => s.fileName);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchTerm = searchQuery.trim().toLowerCase();
+
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [createParentId, setCreateParentId] = useState<string | null>(null);
   const [renameFolderId, setRenameFolderId] = useState<string | null>(null);
@@ -40,6 +43,32 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     const viewsRoot = findFolderByKind(model, 'views');
     return { elementsRoot, viewsRoot };
   }, [model]);
+
+  const searchResults = useMemo(() => {
+    if (!model || !searchTerm) return null;
+    const match = (text: string | undefined | null) => (text ?? '').toLowerCase().includes(searchTerm);
+
+    const elements = Object.values(model.elements)
+      .filter((el) => match(el.name) || match(el.type))
+      .sort(sortByName)
+      .slice(0, 30);
+
+    const views = Object.values(model.views)
+      .filter((v) => match(v.name) || match(v.viewpointId))
+      .sort(sortByName)
+      .slice(0, 30);
+
+    const relationships = Object.values(model.relationships)
+      .filter((r) => match(r.name) || match(r.type))
+      .slice(0, 30);
+
+    const folders = Object.values(model.folders)
+      .filter((f) => match(f.name) || match(f.kind))
+      .sort(sortByName)
+      .slice(0, 30);
+
+    return { elements, views, relationships, folders };
+  }, [model, searchTerm]);
 
   function isExpanded(id: string): boolean {
     return expanded[id] ?? true;
@@ -260,12 +289,149 @@ export function ModelNavigator({ selection, onSelect }: Props) {
           {isDirty ? ' *' : ''}
         </div>
         <div className="navigatorMeta">{fileName ? `File: ${fileName}` : 'Not saved yet'}</div>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+          <input
+            className="textInput"
+            aria-label="Search model"
+            placeholder="Search elements, relationships, views…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery.trim() && (
+            <button
+              type="button"
+              className="miniButton"
+              aria-label="Clear model search"
+              onClick={() => setSearchQuery('')}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <ul className="navTree" aria-label="Model navigator">
-        {renderFolder(model, roots.elementsRoot.id, 'elements')}
-        {renderFolder(model, roots.viewsRoot.id, 'views')}
-        {renderRelationships(model)}
+        {searchResults ? (
+          <>
+            <li>
+              <div className="navNode">
+                <div className="navNodeMain">
+                  <span className="navNodeTitle">Search results</span>
+                  <span className="navNodeCount">
+                    ({
+                      searchResults.elements.length +
+                      searchResults.views.length +
+                      searchResults.relationships.length +
+                      searchResults.folders.length
+                    })
+                  </span>
+                </div>
+              </div>
+            </li>
+
+            {searchResults.elements.length > 0 && (
+              <li>
+                <div className="navNode">
+                  <div className="navNodeMain">
+                    <span className="navNodeTitle">Elements</span>
+                    <span className="navNodeCount">({searchResults.elements.length})</span>
+                  </div>
+                </div>
+              </li>
+            )}
+            {searchResults.elements.map((el) => (
+              <li key={el.id}>
+                <div className={selection.kind === 'element' && selection.elementId === el.id ? 'navNode isSelected' : 'navNode'}>
+                  <div className="navNodeMain">
+                    <button className="navNodeButton" type="button" onClick={() => onSelect({ kind: 'element', elementId: el.id })}>
+                      <span className="navNodeTitle">{el.name || '(unnamed)'}</span>
+                      <span className="navNodeCount">({el.type})</span>
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+
+            {searchResults.views.length > 0 && (
+              <li>
+                <div className="navNode">
+                  <div className="navNodeMain">
+                    <span className="navNodeTitle">Views</span>
+                    <span className="navNodeCount">({searchResults.views.length})</span>
+                  </div>
+                </div>
+              </li>
+            )}
+            {searchResults.views.map((v) => (
+              <li key={v.id}>
+                <div className={selection.kind === 'view' && selection.viewId === v.id ? 'navNode isSelected' : 'navNode'}>
+                  <div className="navNodeMain">
+                    <button className="navNodeButton" type="button" onClick={() => onSelect({ kind: 'view', viewId: v.id })}>
+                      <span className="navNodeTitle">{v.name || '(unnamed)'}</span>
+                      <span className="navNodeCount">({v.viewpointId})</span>
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+
+            {searchResults.relationships.length > 0 && (
+              <li>
+                <div className="navNode">
+                  <div className="navNodeMain">
+                    <span className="navNodeTitle">Relationships</span>
+                    <span className="navNodeCount">({searchResults.relationships.length})</span>
+                  </div>
+                </div>
+              </li>
+            )}
+            {searchResults.relationships.map((r) => (
+              <li key={r.id}>
+                <div className={selection.kind === 'relationship' && selection.relationshipId === r.id ? 'navNode isSelected' : 'navNode'}>
+                  <div className="navNodeMain">
+                    <button
+                      className="navNodeButton"
+                      type="button"
+                      onClick={() => onSelect({ kind: 'relationship', relationshipId: r.id })}
+                    >
+                      <span className="navNodeTitle">{r.name || '(unnamed)'}</span>
+                      <span className="navNodeCount">({r.type})</span>
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+
+            {searchResults.folders.length > 0 && (
+              <li>
+                <div className="navNode">
+                  <div className="navNodeMain">
+                    <span className="navNodeTitle">Folders</span>
+                    <span className="navNodeCount">({searchResults.folders.length})</span>
+                  </div>
+                </div>
+              </li>
+            )}
+            {searchResults.folders.map((f) => (
+              <li key={f.id}>
+                <div className={selection.kind === 'folder' && selection.folderId === f.id ? 'navNode isSelected' : 'navNode'}>
+                  <div className="navNodeMain">
+                    <button className="navNodeButton" type="button" onClick={() => onSelect({ kind: 'folder', folderId: f.id })}>
+                      <span className="navNodeTitle">{f.name || '(unnamed)'}</span>
+                      <span className="navNodeCount">(folder)</span>
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </>
+        ) : (
+          <>
+            {renderFolder(model, roots.elementsRoot.id, 'elements')}
+            {renderFolder(model, roots.viewsRoot.id, 'views')}
+            {renderRelationships(model)}
+          </>
+        )}
       </ul>
 
       <FolderNameDialog

@@ -1,7 +1,9 @@
-import { ReactNode, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { ReactNode, useMemo, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 
 import '../../styles/shell.css';
+import { useModelStore } from '../../store';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 type AppShellProps = {
   title: string;
@@ -12,7 +14,8 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-function TopNavLink({ to, label }: { to: string; label: string }) {
+function TopNavLink({ to, label, confirmNavigate }: { to: string; label: string; confirmNavigate?: () => boolean }) {
+  const location = useLocation();
   return (
     <NavLink
       to={to}
@@ -20,6 +23,13 @@ function TopNavLink({ to, label }: { to: string; label: string }) {
         ['shellNavLink', isActive ? 'isActive' : null].filter(Boolean).join(' ')
       }
       end={to === '/'}
+      onClick={(e) => {
+        if (!confirmNavigate) return;
+        // Only confirm if we're actually leaving the current route.
+        if (location.pathname === to) return;
+        const ok = confirmNavigate();
+        if (!ok) e.preventDefault();
+      }}
     >
       {label}
     </NavLink>
@@ -29,6 +39,16 @@ function TopNavLink({ to, label }: { to: string; label: string }) {
 export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, children }: AppShellProps) {
   const hasLeft = Boolean(leftSidebar);
   const hasRight = Boolean(rightSidebar);
+
+  const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.model }));
+  const online = useOnlineStatus();
+
+  const confirmNavigate = useMemo(() => {
+    return () => {
+      if (!isDirty) return true;
+      return window.confirm('You have unsaved changes. Leave this page?');
+    };
+  }, [isDirty]);
 
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
@@ -44,11 +64,15 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
         </div>
 
         <nav className="shellNav" aria-label="Primary navigation" data-testid="app-nav">
-          <TopNavLink to="/" label="Workspace" />
-          <TopNavLink to="/about" label="About" />
+          <TopNavLink to="/" label="Workspace" confirmNavigate={confirmNavigate} />
+          <TopNavLink to="/about" label="About" confirmNavigate={confirmNavigate} />
         </nav>
 
         <div className="shellActions" aria-label="Actions">
+          <div className="shellStatus" aria-label="Status">
+            {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
+            {model && isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}
+          </div>
           {actions ?? (
             <>
               <button type="button" className="shellButton" disabled title="Coming in later steps">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ModelActions } from '../components/model/ModelActions';
 import { ModelNavigator } from '../components/model/ModelNavigator';
@@ -11,7 +11,17 @@ import { ReportsWorkspace } from '../components/reports/ReportsWorkspace';
 import { ValidationWorkspace } from '../components/validation/ValidationWorkspace';
 import { AppShell } from '../components/shell/AppShell';
 import { VIEWPOINTS } from '../domain';
+import { modelStore } from '../store';
 import { useModelStore } from '../store/useModelStore';
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  const tag = el.tagName?.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  if (el.isContentEditable) return true;
+  return false;
+}
 
 function WorkspaceMainPlaceholder({
   selection,
@@ -108,6 +118,69 @@ export default function WorkspacePage() {
   const [selection, setSelection] = useState<Selection>(noSelection);
   const [modelPropsOpen, setModelPropsOpen] = useState(false);
   const [mainTab, setMainTab] = useState<'diagram' | 'reports' | 'validation'>('diagram');
+  const model = useModelStore((s) => s.model);
+
+  // Step 13: basic keyboard shortcuts
+  useEffect(() => {
+    function requestSave() {
+      window.dispatchEvent(new CustomEvent('pwa-modeller:request-save'));
+    }
+
+    function deleteSelection() {
+      if (!model) return;
+      switch (selection.kind) {
+        case 'viewNode':
+          modelStore.removeElementFromView(selection.viewId, selection.elementId);
+          setSelection({ kind: 'view', viewId: selection.viewId });
+          return;
+        case 'relationship': {
+          const ok = window.confirm('Delete this relationship?');
+          if (ok) {
+            modelStore.deleteRelationship(selection.relationshipId);
+            setSelection(noSelection);
+          }
+          return;
+        }
+        case 'element': {
+          const ok = window.confirm('Delete this element? Relationships referencing it will also be removed.');
+          if (ok) {
+            modelStore.deleteElement(selection.elementId);
+            setSelection(noSelection);
+          }
+          return;
+        }
+        case 'view': {
+          const ok = window.confirm('Delete this view?');
+          if (ok) {
+            modelStore.deleteView(selection.viewId);
+            setSelection(noSelection);
+          }
+          return;
+        }
+        default:
+          return;
+      }
+    }
+
+    function onKeyDown(ev: KeyboardEvent) {
+      // Save: Ctrl+S / Cmd+S
+      const key = ev.key.toLowerCase();
+      if ((ev.metaKey || ev.ctrlKey) && key === 's') {
+        ev.preventDefault();
+        requestSave();
+        return;
+      }
+
+      // Delete: Delete / Backspace
+      if (ev.key === 'Delete' || ev.key === 'Backspace') {
+        if (isEditableTarget(ev.target)) return;
+        deleteSelection();
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [model, selection]);
 
   return (
     <>

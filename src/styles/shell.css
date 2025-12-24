@@ -81,6 +81,30 @@
   gap: 8px;
 }
 
+.shellStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+}
+
+.shellStatusChip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 0.92;
+}
+
+.shellStatusChip.isOffline {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.shellStatusChip.isDirty {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
 .shellButton {
   padding: 7px 10px;
   border-radius: 10px;
@@ -258,6 +282,18 @@
 }
 
 /* Diagram canvas (Step 8) */
+.diagramToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  margin-bottom: 10px;
+}
+
 .diagramCanvas {
   border: 1px solid #d4d7db;
   border-radius: 10px;
@@ -391,6 +427,15 @@
 /* Small screens: sidebars become overlays, opened via icon buttons */
 
 @media (max-width: 720px) {
+  .workspaceHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workspaceTabs {
+    flex-wrap: wrap;
+  }
+
   .shellButton {
     display: none;
   }
@@ -401,6 +446,19 @@
 
   .shellBody {
     grid-template-columns: 1fr;
+  }
+
+  .workspaceHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workspaceTabs {
+    flex-wrap: wrap;
+  }
+
+  .diagramToolbar {
+    justify-content: flex-start;
   }
 
   .shellSidebar {

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ModelMetadata } from '../../domain';
 import { deserializeModel, serializeModel, downloadTextFile, sanitizeFileName, modelStore, useModelStore } from '../../store';
@@ -60,16 +60,19 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
     modelStore.loadModel(loaded, file.name);
   }
 
-  function triggerDownload(name: string) {
+  const triggerDownload = useCallback(
+    (name: string) => {
     if (!model) return;
     const json = serializeModel(model);
     const finalName = sanitizeFileName(name);
     downloadTextFile(finalName, json);
     modelStore.setFileName(finalName);
     modelStore.markSaved();
-  }
+    },
+    [model]
+  );
 
-  function doSave() {
+  const doSave = useCallback(() => {
     if (!model) return;
     if (fileName) {
       triggerDownload(fileName);
@@ -77,13 +80,22 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
     }
     setSaveAsName(saveAsDefault);
     setSaveAsDialogOpen(true);
-  }
+  }, [fileName, model, saveAsDefault, triggerDownload]);
 
-  function doSaveAs() {
+  const doSaveAs = useCallback(() => {
     if (!model) return;
     setSaveAsName(saveAsDefault);
     setSaveAsDialogOpen(true);
-  }
+  }, [model, saveAsDefault]);
+
+  // Step 13: global shortcut (Ctrl/Cmd+S) can request a save.
+  useEffect(() => {
+    function onRequestSave() {
+      doSave();
+    }
+    window.addEventListener('pwa-modeller:request-save', onRequestSave as EventListener);
+    return () => window.removeEventListener('pwa-modeller:request-save', onRequestSave as EventListener);
+  }, [doSave]);
 
   return (
     <>
@@ -98,7 +110,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         className="shellButton"
         onClick={doSave}
         disabled={!model}
-        title={!model ? 'No model loaded' : isDirty ? 'Save changes' : 'Download model'}
+        title={!model ? 'No model loaded' : isDirty ? 'Save changes (Ctrl/Cmd+S)' : 'Download model (Ctrl/Cmd+S)'}
       >
         Save model{isDirty ? '*' : ''}
       </button>

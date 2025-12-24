@@ -6,10 +6,16 @@
   - Uses a simple network-first strategy for navigations.
 */
 
-const CACHE_NAME = 'pwa-modeller-v1';
+const CACHE_NAME = 'pwa-modeller-v2';
 
 // Keep this list small; Vite will fingerprint assets.
-const APP_SHELL = ['./', './index.html', './manifest.webmanifest'];
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

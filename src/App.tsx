@@ -1,5 +1,8 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 
+import { useModelStore } from './store';
+import { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
+
 import AboutPage from './pages/AboutPage';
 import WorkspacePage from './pages/WorkspacePage';
 
@@ -14,6 +17,9 @@ export function AppRoutes() {
 }
 
 export default function App() {
+  const isDirty = useModelStore((s) => s.isDirty);
+  useUnsavedChangesGuard(isDirty, { markTitle: true });
+
   return (
     <HashRouter>
       <AppRoutes />

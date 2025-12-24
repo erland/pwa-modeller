@@ -4,15 +4,6 @@ import '@testing-library/jest-dom';
 // These warnings are helpful during upgrades, but they add noise to test output.
 const originalWarn = console.warn;
 
-
-beforeEach(() => {
-  try {
-    window.localStorage?.removeItem('pwa-modeller:storeState:v1');
-  } catch {
-    // ignore
-  }
-});
-
 beforeAll(() => {
   jest.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
     const first = args[0];

@@ -64,7 +64,7 @@ describe('Step 11 – Reporting and Export', () => {
     const canvases = await screen.findAllByLabelText('Diagram canvas');
     const diagramCanvas =
       canvases.find((el) => el.classList.contains('diagramCanvas')) ?? canvases[0];
-    expect(within(diagramCanvas).getByText('Main View')).toBeInTheDocument();
+    expect(within(diagramCanvas).getByText('Main View', { selector: 'span' })).toBeInTheDocument();
 
     const exportBtn = screen.getByRole('button', { name: /export as image/i });
     expect(exportBtn).toBeEnabled();

@@ -321,26 +321,53 @@
   flex-wrap: wrap;
 }
 
-.diagramSurface {
+.diagramViewport {
   position: relative;
   height: 420px;
   border-radius: 10px;
   border: 1px dashed #d4d7db;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.02),
-    rgba(0, 0, 0, 0.02) 1px,
-    transparent 1px,
-    transparent 20px
-  ),
+  background: #f6f7f9;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.04),
+      rgba(0, 0, 0, 0.04) 1px,
+      transparent 1px,
+      transparent 20px
+    ),
     repeating-linear-gradient(
       90deg,
-      rgba(0, 0, 0, 0.02),
-      rgba(0, 0, 0, 0.02) 1px,
+      rgba(0, 0, 0, 0.04),
+      rgba(0, 0, 0, 0.04) 1px,
       transparent 1px,
       transparent 20px
     );
-  overflow: hidden;
+  overflow: auto;
+}
+
+.diagramSurface {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.diagramRelationships {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.diagramHint {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.85);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .diagramNode {
@@ -350,6 +377,7 @@
   border: 1px solid #cfd3d8;
   background: #ffffff;
   padding: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   user-select: none;
   cursor: grab;
 }

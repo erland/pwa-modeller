@@ -103,6 +103,20 @@ export class ModelStore {
     this.setState({ model, fileName, isDirty: false });
   }
 
+  /**
+   * Restore store state from persistence.
+   *
+   * This is intentionally separate from loadModel() so we can restore the
+   * `isDirty` flag as well.
+   */
+  hydrate(state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>): void {
+    this.setState({
+      model: state.model,
+      fileName: state.fileName,
+      isDirty: state.isDirty
+    });
+  }
+
   reset(): void {
     this.setState({ model: null, fileName: null, isDirty: false });
   }

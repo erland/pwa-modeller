@@ -34,6 +34,9 @@ type Props = {
   onSelect: (selection: Selection) => void;
 };
 
+// Drag payload for dragging an element from the tree into a view.
+const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
+
 type NavNodeKind = 'folder' | 'element' | 'view' | 'relationship' | 'section';
 type NavNode = {
   key: string;
@@ -665,6 +668,20 @@ return [
             data-kind={node.kind}
             data-nodekey={node.key}
             title={title}
+            draggable={node.kind === 'element' && Boolean(node.elementId)}
+            onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+              if (node.kind !== 'element' || !node.elementId) return;
+              // Ensure the element is selected when starting a drag (helps with keyboard-only drop flows later).
+              handleSelectionChange(new Set([node.key]));
+              try {
+                e.dataTransfer.setData(DND_ELEMENT_MIME, node.elementId);
+                // Fallback to plain text for debugging / other drop targets.
+                e.dataTransfer.setData('text/plain', node.elementId);
+                e.dataTransfer.effectAllowed = 'copy';
+              } catch {
+                // Ignore (some test environments may not fully implement DataTransfer)
+              }
+            }}
             onClick={(e: React.MouseEvent) => {
               const target = e.target as HTMLElement | null;
               // Don't steal clicks from expand button or inline action buttons.

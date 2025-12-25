@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { View, ViewNodeLayout, ViewRelationshipLayout } from '../../domain';
 import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
@@ -9,6 +10,21 @@ type Props = {
   selection: Selection;
   onSelect: (sel: Selection) => void;
 };
+
+// Drag payload for dragging an element from the tree into a view.
+const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
+
+function dataTransferHasElement(dt: DataTransfer | null): boolean {
+  if (!dt) return false;
+  const types = Array.from(dt.types ?? []);
+  return types.includes(DND_ELEMENT_MIME) || types.includes('text/plain');
+}
+
+function readDraggedElementId(dt: DataTransfer | null): string | null {
+  if (!dt) return null;
+  const id = dt.getData(DND_ELEMENT_MIME) || dt.getData('text/plain');
+  return id ? String(id) : null;
+}
 
 function sortViews(views: Record<string, View>): View[] {
   return Object.values(views).sort((a, b) => a.name.localeCompare(b.name));
@@ -92,6 +108,44 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   // Zoom & fit
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState<number>(1);
+
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  function handleViewportDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (!activeViewId) return;
+    if (!dataTransferHasElement(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  }
+
+  function handleViewportDragLeave() {
+    setIsDragOver(false);
+  }
+
+  function handleViewportDrop(e: React.DragEvent<HTMLDivElement>) {
+    setIsDragOver(false);
+    if (!model || !activeViewId) return;
+    const elementId = readDraggedElementId(e.dataTransfer);
+    if (!elementId) return;
+    if (!model.elements[elementId]) return;
+
+    e.preventDefault();
+
+    const vp = viewportRef.current;
+    if (!vp) {
+      modelStore.addElementToView(activeViewId, elementId);
+      onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
+      return;
+    }
+
+    const rect = vp.getBoundingClientRect();
+    const x = (vp.scrollLeft + (e.clientX - rect.left)) / zoom;
+    const y = (vp.scrollTop + (e.clientY - rect.top)) / zoom;
+
+    modelStore.addElementToViewAt(activeViewId, elementId, x, y);
+    onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
+  }
 
   const nodes: ViewNodeLayout[] = useMemo(
     () =>
@@ -318,7 +372,14 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
         ) : !activeView ? (
           <div className="diagramEmpty">Select a view to start diagramming.</div>
         ) : (
-          <div className="diagramViewport" ref={viewportRef} aria-label="Diagram canvas">
+          <div
+            className={'diagramViewport' + (isDragOver ? ' isDropTarget' : '')}
+            ref={viewportRef}
+            aria-label="Diagram canvas"
+            onDragOver={handleViewportDragOver}
+            onDragLeave={handleViewportDragLeave}
+            onDrop={handleViewportDrop}
+          >
             <div className="diagramHint">
               <span style={{ fontWeight: 700 }}>{activeView.name}</span>
               <span style={{ opacity: 0.8 }}>— drag nodes to reposition</span>

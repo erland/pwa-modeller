@@ -406,6 +406,50 @@ addElementToView(viewId: string, elementId: string): string {
   return elementId;
 }
 
+  /**
+   * Adds an element to a view at a specific position (idempotent).
+   * If the node already exists in the view, its position is updated.
+   */
+  addElementToViewAt(viewId: string, elementId: string, x: number, y: number): string {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) throw new Error(`View not found: ${viewId}`);
+      const element = model.elements[elementId];
+      if (!element) throw new Error(`Element not found: ${elementId}`);
+
+      const viewWithLayout = ensureViewLayout(view);
+      const layout = viewWithLayout.layout!;
+
+      const snap = Boolean(viewWithLayout.formatting?.snapToGrid);
+      const grid = viewWithLayout.formatting?.gridSize ?? 20;
+
+      const nodeW = 140;
+      const nodeH = 70;
+      // Drop position is interpreted as the cursor position; center the node under it.
+      let nx = Math.max(0, x - nodeW / 2);
+      let ny = Math.max(0, y - nodeH / 2);
+      if (snap && grid > 1) {
+        nx = Math.round(nx / grid) * grid;
+        ny = Math.round(ny / grid) * grid;
+      }
+
+      const existing = layout.nodes.find((n) => n.elementId === elementId);
+      if (existing) {
+        const nextNodes = layout.nodes.map((n) => (n.elementId === elementId ? { ...n, x: nx, y: ny } : n));
+        model.views[viewId] = { ...viewWithLayout, layout: { nodes: nextNodes, relationships: layout.relationships } };
+        return;
+      }
+
+      const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH };
+      model.views[viewId] = {
+        ...viewWithLayout,
+        layout: { nodes: [...layout.nodes, node], relationships: layout.relationships },
+      };
+    });
+
+    return elementId;
+  }
+
   removeElementFromView(viewId: string, elementId: string): void {
     this.updateModel((model) => {
       const view = getView(model, viewId);

@@ -1,5 +1,45 @@
 import '@testing-library/jest-dom';
 
+// react-aria-components may rely on browser APIs that JSDOM doesn't implement.
+// Keep these minimal (and no-op) for unit tests.
+if (typeof (globalThis as any).ResizeObserver === 'undefined') {
+  class ResizeObserver {
+    observe() {
+      /* no-op */
+    }
+    unobserve() {
+      /* no-op */
+    }
+    disconnect() {
+      /* no-op */
+    }
+  }
+  (globalThis as any).ResizeObserver = ResizeObserver;
+}
+
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'undefined') {
+  window.matchMedia = (() => {
+    return {
+      matches: false,
+      media: '',
+      onchange: null,
+      addListener: () => {
+        /* deprecated */
+      },
+      removeListener: () => {
+        /* deprecated */
+      },
+      addEventListener: () => {
+        /* no-op */
+      },
+      removeEventListener: () => {
+        /* no-op */
+      },
+      dispatchEvent: () => false
+    } as unknown as MediaQueryList;
+  }) as any;
+}
+
 // Silence React Router v6 "Future Flag" warnings in tests.
 // These warnings are helpful during upgrades, but they add noise to test output.
 const originalWarn = console.warn;

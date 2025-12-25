@@ -27,6 +27,153 @@
   gap: 6px;
 }
 
+/* -------------------------
+   React Aria Tree styling
+   ------------------------- */
+
+.navAriaTree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Ensure the tree is visible and scrolls independently inside the sidebar. */
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 10px;
+}
+
+.navEmpty {
+  padding: 8px;
+  opacity: 0.75;
+}
+
+/* TreeItem root elements produced by react-aria-components include useful data-* attrs.
+   Keep selectors broad to avoid depending on exact DOM structure. */
+.navAriaTree [data-focus-visible] .navTreeRow,
+.navAriaTree [data-focus-visible="true"] .navTreeRow {
+  outline: 2px solid rgba(255, 255, 255, 0.32);
+  outline-offset: 2px;
+}
+
+.navAriaTree [data-selected="true"] .navTreeRow {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.navTreeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: transparent;
+  min-width: 0;
+  user-select: none;
+  cursor: pointer;
+}
+
+.navTreeRow:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+
+.navTreeIndent {
+  height: 18px;
+  align-self: stretch;
+  display: inline-block;
+  /* Vertical guide lines every 14px (Explorer-like). */
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.18) 0 1px, transparent 1px);
+  background-size: 14px 100%;
+  background-repeat: repeat-x;
+  opacity: 0.9;
+}
+
+.navTreeConnector {
+  width: 12px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+  display: inline-block;
+  margin-right: 2px;
+}
+
+.navTreeChevron,
+.navTreeChevronSpacer {
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+  opacity: 0.85;
+}
+
+.navTreeChevronButton {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  width: 14px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.navTreeChevronButton:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+}
+
+.navAriaTree [role='treeitem'][aria-expanded='true'] .navTreeChevron::before {
+  content: '▾';
+}
+
+.navAriaTree [role='treeitem'][aria-expanded='false'] .navTreeChevron::before {
+  content: '▸';
+}
+
+.navTreeIcon {
+  width: 16px;
+  display: inline-flex;
+  justify-content: center;
+  opacity: 0.9;
+}
+
+.navTreeLabel {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navTreeSecondary {
+  font-size: 11px;
+  opacity: 0.72;
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.navTreeActions {
+  display: inline-flex;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.navTreeRow:hover .navTreeActions,
+.navTreeRow:focus-within .navTreeActions,
+.navAriaTree [data-selected] .navTreeActions,
+.navAriaTree [data-selected="true"] .navTreeActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.navInlineRename {
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
 .navNode {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -105,4 +252,9 @@
   margin: 0;
   font-size: 12px;
   opacity: 0.75;
+}
+
+.navTreeRow[data-kind="section"] {
+  font-weight: 750;
+  margin-top: 6px;
 }

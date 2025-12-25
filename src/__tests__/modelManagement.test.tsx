@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import App from '../App';
@@ -35,9 +35,14 @@ describe('Model management UI', () => {
     await user.type(screen.getByLabelText('Name'), 'Folder Test Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    // First "Create folder" button belongs to the Elements root.
-    const createButtons = screen.getAllByRole('button', { name: 'Create folder' });
-    await user.click(createButtons[0]);
+    // Select Elements root, then create a folder via the navigator "Create…" menu.
+    await user.click(screen.getByRole('row', { name: 'Elements' }));
+
+    const searchInput = screen.getByRole('textbox', { name: 'Search model' });
+    // eslint-disable-next-line testing-library/no-node-access
+    const headerRow = searchInput.parentElement as HTMLElement;
+    await user.click(within(headerRow).getByRole('button', { name: 'Create…' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Folder…' }));
     await user.type(screen.getByLabelText('Folder name'), 'Foo');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 

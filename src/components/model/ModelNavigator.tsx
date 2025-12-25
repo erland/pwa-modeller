@@ -1,11 +1,31 @@
 import type * as React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Tree, TreeItem, TreeItemContent } from 'react-aria-components';
+import {
+  Button,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+  Tree,
+  TreeItem,
+  TreeItemContent
+} from 'react-aria-components';
 import type { Key } from '@react-types/shared';
 
-import type { Folder, Model } from '../../domain';
+import type { ArchimateLayer, ElementType, Folder, Model, RelationshipType } from '../../domain';
+import {
+  ARCHIMATE_LAYERS,
+  ELEMENT_TYPES_BY_LAYER,
+  RELATIONSHIP_TYPES,
+  VIEWPOINTS,
+  createElement,
+  createRelationship,
+  createView
+} from '../../domain';
+import { getAllowedRelationshipTypes, validateRelationship } from '../../domain/config/archimatePalette';
 import { modelStore, useModelStore } from '../../store';
 import '../../styles/navigator.css';
+import { Dialog } from '../dialog/Dialog';
 import { FolderNameDialog } from './FolderNameDialog';
 import type { Selection } from './selection';
 
@@ -22,8 +42,12 @@ type NavNode = {
   secondary?: string; // rendered as a compact badge (e.g. counts)
   tooltip?: string;
   children?: NavNode[];
+  scope?: 'elements' | 'views' | 'relationships' | 'other';
   // Actions
   canCreateFolder?: boolean;
+  canCreateElement?: boolean;
+  canCreateView?: boolean;
+  canCreateRelationship?: boolean;
   canDelete?: boolean;
   canRename?: boolean;
   // IDs
@@ -49,14 +73,38 @@ function makeKey(kind: NavNodeKind, id: string): string {
 
 
 
-function makeSection(id: string, label: string, secondary: string, children: NavNode[]): NavNode {
+function makeSection(
+  id: string,
+  label: string,
+  secondary: string,
+  children: NavNode[],
+  scope: NavNode['scope'] = 'other'
+): NavNode {
   return {
     key: makeKey('section', id),
     kind: 'section',
     label,
     secondary,
-    children
+    children,
+    scope
   };
+}
+
+function scopeForFolder(model: Model, roots: { elementsRoot: Folder; viewsRoot: Folder }, folderId: string): 'elements' | 'views' | 'other' {
+  let cur: Folder | undefined = model.folders[folderId];
+  while (cur) {
+    if (cur.id === roots.elementsRoot.id) return 'elements';
+    if (cur.id === roots.viewsRoot.id) return 'views';
+    if (!cur.parentId) return 'other';
+    cur = model.folders[cur.parentId];
+  }
+  return 'other';
+}
+
+function elementOptionLabel(model: Model, elementId: string): string {
+  const el = model.elements[elementId];
+  if (!el) return elementId;
+  return `${el.name || '(unnamed)'} (${el.type})`;
 }
 function parseKey(key: string): { kind: NavNodeKind; id: string } | null {
   const idx = key.indexOf(':');
@@ -118,7 +166,31 @@ export function ModelNavigator({ selection, onSelect }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const searchTerm = searchQuery.trim().toLowerCase();
 
-  const [createParentId, setCreateParentId] = useState<string | null>(null);
+  const [createFolderParentId, setCreateFolderParentId] = useState<string | null>(null);
+
+  // Create dialogs
+  const [createElementOpen, setCreateElementOpen] = useState(false);
+  const [createElementFolderId, setCreateElementFolderId] = useState<string | null>(null);
+  const [elementNameDraft, setElementNameDraft] = useState('');
+  const [elementLayerDraft, setElementLayerDraft] = useState<ArchimateLayer>(ARCHIMATE_LAYERS[1]);
+  const [elementTypeDraft, setElementTypeDraft] = useState<ElementType>(() => {
+    const types = ELEMENT_TYPES_BY_LAYER[ARCHIMATE_LAYERS[1]];
+    return (types?.[0] ?? 'BusinessActor') as ElementType;
+  });
+
+  const [createViewOpen, setCreateViewOpen] = useState(false);
+  const [createViewFolderId, setCreateViewFolderId] = useState<string | null>(null);
+  const [viewNameDraft, setViewNameDraft] = useState('');
+  const [viewViewpointDraft, setViewViewpointDraft] = useState<string>(VIEWPOINTS[0]?.id ?? 'layered');
+
+  const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
+  const [relationshipNameDraft, setRelationshipNameDraft] = useState('');
+  const [relationshipDescriptionDraft, setRelationshipDescriptionDraft] = useState('');
+  const [sourceId, setSourceId] = useState<string>('');
+  const [targetId, setTargetId] = useState<string>('');
+  const [relationshipTypeDraft, setRelationshipTypeDraft] = useState<RelationshipType>(
+    (RELATIONSHIP_TYPES[2] ?? 'Association') as RelationshipType
+  );
 
   // Expansion state (default: expand everything, keeps the tree explorer-like)
   const [expandedKeys, setExpandedKeys] = useState<Set<Key>>(new Set());
@@ -134,6 +206,44 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     const viewsRoot = findFolderByKind(model, 'views');
     return { elementsRoot, viewsRoot };
   }, [model]);
+
+  const elementIdsInOrder = useMemo(() => {
+    if (!model) return [] as string[];
+    // Keep insertion order for predictable defaults.
+    return Object.keys(model.elements);
+  }, [model]);
+
+  // Keep element type selection valid when layer changes.
+  useEffect(() => {
+    const opts = ELEMENT_TYPES_BY_LAYER[elementLayerDraft] ?? [];
+    if (opts.length === 0) return;
+    if (!opts.includes(elementTypeDraft)) setElementTypeDraft(opts[0]);
+  }, [elementLayerDraft, elementTypeDraft]);
+
+  const allowedRelationshipTypes = useMemo(() => {
+    if (!model) return RELATIONSHIP_TYPES as RelationshipType[];
+    const s = model.elements[sourceId];
+    const t = model.elements[targetId];
+    if (!s || !t) return RELATIONSHIP_TYPES as RelationshipType[];
+    const allowed = getAllowedRelationshipTypes(s.type, t.type);
+    return (allowed.length > 0 ? allowed : RELATIONSHIP_TYPES) as RelationshipType[];
+  }, [model, sourceId, targetId]);
+
+  // Keep relationship type valid for the chosen endpoints.
+  useEffect(() => {
+    if (!allowedRelationshipTypes.includes(relationshipTypeDraft)) {
+      setRelationshipTypeDraft(allowedRelationshipTypes[0] ?? ('Association' as RelationshipType));
+    }
+  }, [allowedRelationshipTypes, relationshipTypeDraft]);
+
+  const relationshipRuleError = useMemo(() => {
+    if (!model) return null;
+    const s = model.elements[sourceId];
+    const t = model.elements[targetId];
+    if (!s || !t) return null;
+    const res = validateRelationship(s.type, t.type, relationshipTypeDraft);
+    return res.allowed ? null : res.reason;
+  }, [model, sourceId, targetId, relationshipTypeDraft]);
 
   const treeData = useMemo<NavNode[] | null>(() => {
     if (!model || !roots) return null;
@@ -192,8 +302,11 @@ export function ModelNavigator({ selection, onSelect }: Props) {
             ? `${folder.name} — ${folder.elementIds.length} elements, ${childFolders.length} folders`
             : `${folder.name} — ${folder.viewIds.length} views, ${childFolders.length} folders`,
         children,
+        scope,
         folderId,
         canCreateFolder: true,
+        canCreateElement: scope === 'elements',
+        canCreateView: scope === 'views',
         canRename: !isRootFolder,
         canDelete: !isRootFolder
       };
@@ -224,11 +337,8 @@ export function ModelNavigator({ selection, onSelect }: Props) {
       buildFolder(roots.elementsRoot.id, 'elements'),
       buildFolder(roots.viewsRoot.id, 'views'),
       {
-        key: makeKey('section', 'relationships'),
-        kind: 'section',
-        label: 'Relationships',
-        secondary: String(relationships.length),
-        children: relationships
+        ...makeSection('relationships', 'Relationships', String(relationships.length), relationships, 'relationships'),
+        canCreateRelationship: true
       }
     ];
 
@@ -322,6 +432,45 @@ return [
   }, [model?.id, searchTerm, treeData]);
 
   const selectedKey = selectionToKey(selection);
+
+  function openCreateFolder(parentFolderId: string) {
+    setCreateFolderParentId(parentFolderId);
+  }
+
+  function openCreateElement(targetFolderId?: string) {
+    if (!roots) return;
+    setCreateElementFolderId(targetFolderId ?? roots.elementsRoot.id);
+    setElementNameDraft('');
+    const defaultLayer = ARCHIMATE_LAYERS[1];
+    setElementLayerDraft(defaultLayer);
+    const opts = ELEMENT_TYPES_BY_LAYER[defaultLayer] ?? [];
+    setElementTypeDraft((opts[0] ?? 'BusinessActor') as ElementType);
+    setCreateElementOpen(true);
+  }
+
+  function openCreateView(targetFolderId?: string) {
+    if (!roots) return;
+    setCreateViewFolderId(targetFolderId ?? roots.viewsRoot.id);
+    setViewNameDraft('');
+    setViewViewpointDraft(VIEWPOINTS[0]?.id ?? 'layered');
+    setCreateViewOpen(true);
+  }
+
+  function openCreateRelationship(prefillSourceElementId?: string) {
+    if (!model) return;
+    setRelationshipNameDraft('');
+    setRelationshipDescriptionDraft('');
+
+    const ids = elementIdsInOrder;
+    const validSource = prefillSourceElementId && ids.includes(prefillSourceElementId) ? prefillSourceElementId : ids[0];
+    const validTarget = ids.find((id) => id !== validSource) ?? validSource ?? '';
+
+    setSourceId(validSource ?? '');
+    setTargetId(validTarget ?? '');
+    // Type will be normalized by the allowedRelationshipTypes effect.
+    setRelationshipTypeDraft((RELATIONSHIP_TYPES[2] ?? 'Association') as RelationshipType);
+    setCreateRelationshipOpen(true);
+  }
 
   function clearEditing() {
     setEditingKey(null);
@@ -432,21 +581,43 @@ return [
     const showBadge = !!node.secondary && (node.kind === 'folder' || node.kind === 'section');
     const title = node.tooltip ?? node.label;
 
+    // Single "Create…" button (Explorer/Finder-like) with a menu for all create actions
+    // relevant to this node.
+    const canShowCreateMenu =
+      Boolean(node.canCreateFolder && node.folderId) ||
+      Boolean(node.canCreateElement && node.folderId) ||
+      Boolean(node.canCreateView && node.folderId) ||
+      Boolean(node.canCreateRelationship);
+
     const actions = (
       <span className="navTreeActions" aria-label="Node actions">
-        {node.canCreateFolder && node.folderId ? (
-          <button
-            type="button"
-            className="miniButton"
-            aria-label="Create folder"
-            onClick={(e: React.MouseEvent) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setCreateParentId(node.folderId!);
-            }}
-          >
-            ＋
-          </button>
+        {canShowCreateMenu ? (
+          <MenuTrigger>
+            <Button className="miniButton" aria-label="Create…">＋</Button>
+            <Popover className="navMenuPopover">
+              <Menu
+                className="navMenu"
+                onAction={(key) => {
+                  const k = String(key);
+                  if (k === 'folder' && node.folderId) {
+                    openCreateFolder(node.folderId);
+                  } else if (k === 'element' && node.folderId) {
+                    openCreateElement(node.folderId);
+                  } else if (k === 'view' && node.folderId) {
+                    openCreateView(node.folderId);
+                  } else if (k === 'relationship') {
+                    const prefill = selection.kind === 'element' ? selection.elementId : undefined;
+                    openCreateRelationship(prefill);
+                  }
+                }}
+              >
+                {node.canCreateFolder && node.folderId ? <MenuItem className="navMenuItem" id="folder">Folder…</MenuItem> : null}
+                {node.canCreateElement && node.folderId ? <MenuItem className="navMenuItem" id="element">Element…</MenuItem> : null}
+                {node.canCreateView && node.folderId ? <MenuItem className="navMenuItem" id="view">View…</MenuItem> : null}
+                {node.canCreateRelationship ? <MenuItem className="navMenuItem" id="relationship">Relationship…</MenuItem> : null}
+              </Menu>
+            </Popover>
+          </MenuTrigger>
         ) : null}
 
         {node.canRename ? (
@@ -495,10 +666,11 @@ return [
             data-nodekey={node.key}
             title={title}
             onClick={(e: React.MouseEvent) => {
-                          const target = e.target as HTMLElement | null;
-                          if (target && target.closest('[data-chevron="1"]')) {
-                            return;
-                          }
+              const target = e.target as HTMLElement | null;
+              // Don't steal clicks from expand button or inline action buttons.
+              if (target && (target.closest('[data-chevron="1"]') || target.closest('.navTreeActions'))) {
+                return;
+              }
               // Ensure mouse click selects the item (Explorer/Finder behavior).
               e.preventDefault();
               e.stopPropagation();
@@ -583,7 +755,7 @@ return [
           {isDirty ? ' *' : ''}
         </div>
         <div className="navigatorMeta">{fileName ? `File: ${fileName}` : 'Not saved yet'}</div>
-        <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             className="textInput"
             aria-label="Search model"
@@ -596,6 +768,38 @@ return [
               ✕
             </button>
           )}
+
+          <MenuTrigger>
+            <Button className="miniButton" aria-label="Create…">＋</Button>
+            <Popover className="navMenuPopover">
+              <Menu
+                className="navMenu"
+                onAction={(key) => {
+                  const k = String(key);
+                  const selectedFolderId = selection.kind === 'folder' ? selection.folderId : null;
+                  const selectedScope = selectedFolderId ? scopeForFolder(model, roots, selectedFolderId) : 'other';
+
+                  if (k === 'folder') {
+                    openCreateFolder(selectedFolderId ?? roots.elementsRoot.id);
+                  } else if (k === 'element') {
+                    const folderId = selectedFolderId && selectedScope === 'elements' ? selectedFolderId : roots.elementsRoot.id;
+                    openCreateElement(folderId);
+                  } else if (k === 'view') {
+                    const folderId = selectedFolderId && selectedScope === 'views' ? selectedFolderId : roots.viewsRoot.id;
+                    openCreateView(folderId);
+                  } else if (k === 'relationship') {
+                    const prefill = selection.kind === 'element' ? selection.elementId : undefined;
+                    openCreateRelationship(prefill);
+                  }
+                }}
+              >
+                <MenuItem className="navMenuItem" id="folder">Folder…</MenuItem>
+                <MenuItem className="navMenuItem" id="element">Element…</MenuItem>
+                <MenuItem className="navMenuItem" id="view">View…</MenuItem>
+                <MenuItem className="navMenuItem" id="relationship">Relationship…</MenuItem>
+              </Menu>
+            </Popover>
+          </MenuTrigger>
         </div>
         <p className="navHint">Tip: Click to select, use ←/→ to collapse/expand, and F2 (or ✎) to rename.</p>
       </div>
@@ -627,16 +831,253 @@ return [
       </div>
 
       <FolderNameDialog
-        isOpen={createParentId !== null}
+        isOpen={createFolderParentId !== null}
         title="Create folder"
         confirmLabel="Create"
-        onCancel={() => setCreateParentId(null)}
+        onCancel={() => setCreateFolderParentId(null)}
         onConfirm={(name) => {
-          if (!createParentId) return;
-          modelStore.createFolder(createParentId, name);
-          setCreateParentId(null);
+          if (!createFolderParentId) return;
+          modelStore.createFolder(createFolderParentId, name);
+          setCreateFolderParentId(null);
         }}
       />
+
+      <Dialog
+        title="Create element"
+        isOpen={createElementOpen}
+        onClose={() => setCreateElementOpen(false)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="shellButton" onClick={() => setCreateElementOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="shellButton"
+              disabled={!model || elementNameDraft.trim().length === 0}
+              onClick={() => {
+                if (!model) return;
+                const created = createElement({
+                  name: elementNameDraft.trim(),
+                  layer: elementLayerDraft,
+                  type: elementTypeDraft
+                });
+                modelStore.addElement(created, createElementFolderId ?? undefined);
+                setCreateElementOpen(false);
+                onSelect({ kind: 'element', elementId: created.id });
+              }}
+            >
+              Create
+            </button>
+          </div>
+        }
+      >
+        <div className="propertiesGrid">
+          <div className="propertiesRow">
+            <div className="propertiesKey">Name</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="Element name"
+                value={elementNameDraft}
+                onChange={(e) => setElementNameDraft(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Layer</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Layer"
+                value={elementLayerDraft}
+                onChange={(e) => setElementLayerDraft(e.target.value as ArchimateLayer)}
+              >
+                {ARCHIMATE_LAYERS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Type</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Type"
+                value={elementTypeDraft}
+                onChange={(e) => setElementTypeDraft(e.target.value as ElementType)}
+              >
+                {(ELEMENT_TYPES_BY_LAYER[elementLayerDraft] ?? []).map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        title="Create view"
+        isOpen={createViewOpen}
+        onClose={() => setCreateViewOpen(false)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" className="shellButton" onClick={() => setCreateViewOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="shellButton"
+              disabled={!model || viewNameDraft.trim().length === 0}
+              onClick={() => {
+                if (!model) return;
+                const created = createView({ name: viewNameDraft.trim(), viewpointId: viewViewpointDraft });
+                modelStore.addView(created, createViewFolderId ?? undefined);
+                setCreateViewOpen(false);
+                onSelect({ kind: 'view', viewId: created.id });
+              }}
+            >
+              Create
+            </button>
+          </div>
+        }
+      >
+        <div className="propertiesGrid">
+          <div className="propertiesRow">
+            <div className="propertiesKey">Name</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="View name"
+                value={viewNameDraft}
+                onChange={(e) => setViewNameDraft(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Viewpoint</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Viewpoint"
+                value={viewViewpointDraft}
+                onChange={(e) => setViewViewpointDraft(e.target.value)}
+              >
+                {VIEWPOINTS.map((vp) => (
+                  <option key={vp.id} value={vp.id}>
+                    {vp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        title="Create relationship"
+        isOpen={createRelationshipOpen}
+        onClose={() => setCreateRelationshipOpen(false)}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
+            {relationshipRuleError ? <span className="panelHint" style={{ color: '#ffb3b3' }}>{relationshipRuleError}</span> : null}
+            <button type="button" className="shellButton" onClick={() => setCreateRelationshipOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="shellButton"
+              disabled={!model || !sourceId || !targetId || sourceId === targetId || Boolean(relationshipRuleError)}
+              onClick={() => {
+                if (!model) return;
+                const created = createRelationship({
+                  sourceElementId: sourceId,
+                  targetElementId: targetId,
+                  type: relationshipTypeDraft,
+                  name: relationshipNameDraft.trim() || undefined,
+                  description: relationshipDescriptionDraft.trim() || undefined
+                });
+                modelStore.addRelationship(created);
+                setCreateRelationshipOpen(false);
+                onSelect({ kind: 'relationship', relationshipId: created.id });
+              }}
+            >
+              Create
+            </button>
+          </div>
+        }
+      >
+        <div className="propertiesGrid">
+          <div className="propertiesRow">
+            <div className="propertiesKey">Type</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Relationship type"
+                value={relationshipTypeDraft}
+                onChange={(e) => setRelationshipTypeDraft(e.target.value as RelationshipType)}
+              >
+                {allowedRelationshipTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Name</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="Relationship name"
+                value={relationshipNameDraft}
+                onChange={(e) => setRelationshipNameDraft(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Description</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="Relationship description"
+                value={relationshipDescriptionDraft}
+                onChange={(e) => setRelationshipDescriptionDraft(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Source</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select className="selectInput" aria-label="Source" value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
+                {elementIdsInOrder.map((id) => (
+                  <option key={id} value={id}>
+                    {elementOptionLabel(model, id)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="propertiesRow">
+            <div className="propertiesKey">Target</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select className="selectInput" aria-label="Target" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                {elementIdsInOrder.map((id) => (
+                  <option key={id} value={id}>
+                    {elementOptionLabel(model, id)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

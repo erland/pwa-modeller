@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import App from '../App';
 import { modelStore } from '../store';
 
-describe('Palette CRUD', () => {
+describe('Navigator CRUD', () => {
   beforeEach(() => {
     modelStore.reset();
     jest.spyOn(window, 'confirm').mockImplementation(() => true);
@@ -14,41 +14,51 @@ describe('Palette CRUD', () => {
     (window.confirm as jest.Mock).mockRestore?.();
   });
 
-  it('can create elements and relationships from the palette and edit properties', async () => {
+  it('can create elements and relationships from the navigator and edit properties', async () => {
     const user = userEvent.setup();
     render(<App />);
 
     // Create a new model.
     await user.click(screen.getByRole('button', { name: 'New' }));
-    await user.type(screen.getByLabelText('Name'), 'Palette Model');
+    await user.type(screen.getByLabelText('Name'), 'Navigator Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
+    const left = screen.getByTestId('left-sidebar');
+    const openCreateMenu = async () => {
+      const buttons = within(left).getAllByRole('button', { name: 'Create…' });
+      // The first Create… button is the global one next to the search field.
+      await user.click(buttons[0]);
+    };
+
+    const chooseCreate = async (label: string) => {
+      await openCreateMenu();
+      await user.click(await screen.findByRole('menuitem', { name: label }));
+    };
+
     // Create element A (via dialog).
-    await user.click(screen.getByRole('tab', { name: 'Elements' }));
-    await user.click(screen.getByRole('button', { name: 'Create Element' }));
+    await chooseCreate('Element…');
     const createElA = screen.getByRole('dialog', { name: 'Create element' });
-    await user.type(within(createElA).getByLabelText('Name'), 'A');
+    await user.type(within(createElA).getByLabelText('Element name'), 'A');
     await user.selectOptions(within(createElA).getByLabelText('Layer'), 'Business');
-    await user.selectOptions(within(createElA).getByLabelText('Element type'), 'BusinessActor');
+    await user.selectOptions(within(createElA).getByLabelText('Type'), 'BusinessActor');
     await user.click(within(createElA).getByRole('button', { name: 'Create' }));
 
     // Create element B.
-    await user.click(screen.getByRole('button', { name: 'Create Element' }));
+    await chooseCreate('Element…');
     const createElB = screen.getByRole('dialog', { name: 'Create element' });
-    await user.type(within(createElB).getByLabelText('Name'), 'B');
+    await user.type(within(createElB).getByLabelText('Element name'), 'B');
     await user.selectOptions(within(createElB).getByLabelText('Layer'), 'Business');
-    await user.selectOptions(within(createElB).getByLabelText('Element type'), 'BusinessService');
+    await user.selectOptions(within(createElB).getByLabelText('Type'), 'BusinessService');
     await user.click(within(createElB).getByRole('button', { name: 'Create' }));
 
     // Create relationship A -> B (via dialog).
-    await user.click(screen.getByRole('tab', { name: 'Relationships' }));
-    await user.click(screen.getByRole('button', { name: 'Create Relationship' }));
+    await chooseCreate('Relationship…');
     const createRel = screen.getByRole('dialog', { name: 'Create relationship' });
-    await user.type(within(createRel).getByLabelText('Name'), 'Uses');
+    await user.type(within(createRel).getByLabelText('Relationship name'), 'Uses');
     // Serving must originate from the service and point to the actor (minimal ArchiMate rule).
     await user.selectOptions(within(createRel).getByLabelText('Source'), 'B (BusinessService)');
     await user.selectOptions(within(createRel).getByLabelText('Target'), 'A (BusinessActor)');
-    await user.selectOptions(within(createRel).getByLabelText('Type'), 'Serving');
+    await user.selectOptions(within(createRel).getByLabelText('Relationship type'), 'Serving');
     await user.click(within(createRel).getByRole('button', { name: 'Create' }));
 
     // Relationship appears in the navigator.

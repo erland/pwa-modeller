@@ -849,6 +849,16 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
             type="button"
             className="shellButton"
             onClick={() => {
+              const id = modelStore.cloneView(view.id);
+              if (id) onSelect?.({ kind: 'view', viewId: id });
+            }}
+          >
+            Duplicate view
+          </button>
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
               const ok = window.confirm('Delete this view?');
               if (!ok) return;
               modelStore.deleteView(view.id);

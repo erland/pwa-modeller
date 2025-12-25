@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import App from '../App';
@@ -17,63 +17,87 @@ describe('Elements & Relationships CRUD', () => {
   async function createModel(name: string) {
     const user = userEvent.setup();
     render(<App />);
+
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), name);
     await user.click(screen.getByRole('button', { name: 'Create' }));
-    return user;
+
+    const left = screen.getByTestId('left-sidebar');
+
+    const openCreateMenu = async () => {
+      const buttons = within(left).getAllByRole('button', { name: 'Create…' });
+      // The first Create… button is the global one next to the search field.
+      await user.click(buttons[0]);
+    };
+
+    const chooseCreate = async (label: string) => {
+      await openCreateMenu();
+      await user.click(await screen.findByRole('menuitem', { name: label }));
+    };
+
+    const createElement = async (opts: { name: string; layer: string; type: string }) => {
+      await chooseCreate('Element…');
+      const dlg = screen.getByRole('dialog', { name: 'Create element' });
+      await user.selectOptions(within(dlg).getByLabelText('Layer'), opts.layer);
+      await user.selectOptions(within(dlg).getByLabelText('Type'), opts.type);
+      await user.type(within(dlg).getByLabelText('Element name'), opts.name);
+      await user.click(within(dlg).getByRole('button', { name: 'Create' }));
+    };
+
+    const createRelationship = async (opts: {
+      name: string;
+      type: string;
+      sourceLabel: string;
+      targetLabel: string;
+    }) => {
+      await chooseCreate('Relationship…');
+      const dlg = screen.getByRole('dialog', { name: 'Create relationship' });
+      await user.selectOptions(within(dlg).getByLabelText('Source'), opts.sourceLabel);
+      await user.selectOptions(within(dlg).getByLabelText('Target'), opts.targetLabel);
+      await user.selectOptions(within(dlg).getByLabelText('Relationship type'), opts.type);
+      await user.type(within(dlg).getByLabelText('Relationship name'), opts.name);
+      await user.click(within(dlg).getByRole('button', { name: 'Create' }));
+    };
+
+    return { user, left, chooseCreate, createElement, createRelationship };
   }
 
   it('creates, edits and deletes an element', async () => {
-    const user = await createModel('My Model');
+    const { user, left, createElement } = await createModel('My Model');
 
-    await user.click(screen.getByRole('tab', { name: 'Elements' }));
-    await user.click(screen.getByRole('button', { name: 'Create Element' }));
-    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
-    await user.selectOptions(screen.getByLabelText('Type'), 'BusinessActor');
-    await user.type(screen.getByLabelText('Name'), 'Actor A');
-    await user.click(screen.getByRole('button', { name: 'Create' }));
+    await createElement({ name: 'Actor A', layer: 'Business', type: 'BusinessActor' });
+    expect(within(left).getByText('Actor A')).toBeInTheDocument();
 
-    expect(screen.getByText('Actor A')).toBeInTheDocument();
+    // Select in the tree and edit via the properties panel.
+    await user.click(within(left).getByText('Actor A'));
+    await user.clear(screen.getByLabelText('Element property name'));
+    await user.type(screen.getByLabelText('Element property name'), 'Actor A2');
+    expect(within(left).getByText('Actor A2')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /edit element Actor A/i }));
-    await user.clear(screen.getByLabelText('Name'));
-    await user.type(screen.getByLabelText('Name'), 'Actor A2');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-
-    expect(screen.getByText('Actor A2')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /delete element Actor A2/i }));
-    expect(screen.queryByText('Actor A2')).not.toBeInTheDocument();
+    // Delete via keyboard shortcut (Delete/Backspace).
+    await user.keyboard('{Delete}');
+    expect(within(left).queryByText('Actor A2')).not.toBeInTheDocument();
   });
 
   it('creates and deletes a relationship', async () => {
-    const user = await createModel('Rel Model');
+    const { user, left, createElement, createRelationship } = await createModel('Rel Model');
 
-    await user.click(screen.getByRole('tab', { name: 'Elements' }));
-    await user.click(screen.getByRole('button', { name: 'Create Element' }));
-    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
-    await user.selectOptions(screen.getByLabelText('Type'), 'BusinessService');
-    await user.type(screen.getByLabelText('Name'), 'Service');
-    await user.click(screen.getByRole('button', { name: 'Create' }));
-    await user.click(screen.getByRole('button', { name: 'Create Element' }));
-    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
-    await user.selectOptions(screen.getByLabelText('Type'), 'BusinessActor');
-    await user.type(screen.getByLabelText('Name'), 'Actor');
-    await user.click(screen.getByRole('button', { name: 'Create' }));
+    await createElement({ name: 'Service', layer: 'Business', type: 'BusinessService' });
+    await createElement({ name: 'Actor', layer: 'Business', type: 'BusinessActor' });
 
-    await user.click(screen.getByRole('tab', { name: 'Relationships' }));
-    await user.click(screen.getByRole('button', { name: 'Create Relationship' }));
     // Serving must originate from the service and point to the actor.
-    await user.selectOptions(screen.getByLabelText('Source'), 'Service (BusinessService)');
-    await user.selectOptions(screen.getByLabelText('Target'), 'Actor (BusinessActor)');
-    await user.selectOptions(screen.getByLabelText('Type'), 'Serving');
-    await user.click(screen.getByRole('button', { name: 'Create' }));
+    await createRelationship({
+      name: 'Uses',
+      type: 'Serving',
+      sourceLabel: 'Service (BusinessService)',
+      targetLabel: 'Actor (BusinessActor)'
+    });
 
-    expect(screen.getByRole('table', { name: 'Relationships list' })).toBeInTheDocument();
-    expect(screen.getAllByText('Serving').length).toBeGreaterThan(0);
+    expect(within(left).getByText('Serving: Uses')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /delete relationship Serving/i }));
-    // Relationship list should fall back to empty state
-    expect(screen.getByText(/no relationships yet/i)).toBeInTheDocument();
+    // Delete the relationship by selecting it in the tree and pressing Delete.
+    await user.click(within(left).getByText('Serving: Uses'));
+    await user.keyboard('{Delete}');
+    expect(within(left).queryByText('Serving: Uses')).not.toBeInTheDocument();
   });
 });

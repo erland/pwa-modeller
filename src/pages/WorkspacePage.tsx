@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 
 import { ModelActions } from '../components/model/ModelActions';
 import { ModelNavigator } from '../components/model/ModelNavigator';
-import { ModelPalette } from '../components/model/ModelPalette';
 import { ModelPropertiesDialog } from '../components/model/ModelPropertiesDialog';
 import { PropertiesPanel } from '../components/model/PropertiesPanel';
 import { noSelection, type Selection } from '../components/model/selection';
@@ -140,7 +139,9 @@ export default function WorkspacePage() {
 
       // Delete: Delete / Backspace
       if (ev.key === 'Delete' || ev.key === 'Backspace') {
-        if (isEditableTarget(ev.target)) return;
+        // Allow Delete to remove the selected entity even if focus is in a text field,
+        // but keep Backspace for normal text editing.
+        if (ev.key === 'Backspace' && isEditableTarget(ev.target)) return;
         deleteSelection();
       }
     }
@@ -164,7 +165,6 @@ export default function WorkspacePage() {
           />
         }
       >
-        <ModelPalette onSelect={setSelection} />
         <WorkspaceMainPlaceholder
           selection={selection}
           mainTab={mainTab}

@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import App from '../App';
@@ -24,19 +24,23 @@ describe('Validation UI', () => {
     await user.type(screen.getByLabelText('Name'), 'Validation Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    await user.click(screen.getByRole('tab', { name: 'Elements' }));
+    const left = screen.getByTestId('left-sidebar');
+    const openCreateMenu = async () => {
+      const buttons = within(left).getAllByRole('button', { name: 'Create…' });
+      await user.click(buttons[0]);
+    };
+    const createElement = async (opts: { name: string; layer: string; type: string }) => {
+      await openCreateMenu();
+      await user.click(await screen.findByRole('menuitem', { name: 'Element…' }));
+      const dlg = screen.getByRole('dialog', { name: 'Create element' });
+      await user.selectOptions(within(dlg).getByLabelText('Layer'), opts.layer);
+      await user.selectOptions(within(dlg).getByLabelText('Type'), opts.type);
+      await user.type(within(dlg).getByLabelText('Element name'), opts.name);
+      await user.click(within(dlg).getByRole('button', { name: 'Create' }));
+    };
 
-    await user.click(screen.getByRole('button', { name: 'Create Element' }));
-    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
-    await user.selectOptions(screen.getByLabelText('Type'), 'BusinessService');
-    await user.type(screen.getByLabelText('Name'), 'Service');
-    await user.click(screen.getByRole('button', { name: 'Create' }));
-
-    await user.click(screen.getByRole('button', { name: 'Create Element' }));
-    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
-    await user.selectOptions(screen.getByLabelText('Type'), 'BusinessActor');
-    await user.type(screen.getByLabelText('Name'), 'Actor');
-    await user.click(screen.getByRole('button', { name: 'Create' }));
+    await createElement({ name: 'Service', layer: 'Business', type: 'BusinessService' });
+    await createElement({ name: 'Actor', layer: 'Business', type: 'BusinessActor' });
 
     // Inject an invalid relationship (Actor -> Service, Serving) to ensure the validator finds it.
     const current = modelStore.getState().model!;

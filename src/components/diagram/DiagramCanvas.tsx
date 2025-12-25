@@ -314,7 +314,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
       <div className="diagramCanvas">
         {views.length === 0 ? (
-          <div className="diagramEmpty">Create a view (Palette ▸ Views) to start placing elements.</div>
+          <div className="diagramEmpty">Create a view from the left tree (Views ▸ Create…) to start placing elements.</div>
         ) : !activeView ? (
           <div className="diagramEmpty">Select a view to start diagramming.</div>
         ) : (

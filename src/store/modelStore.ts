@@ -57,6 +57,83 @@ function assertCanDeleteFolder(model: Model, folderId: string): void {
   }
 }
 
+
+function deleteViewInModel(model: Model, viewId: string): void {
+  if (!model.views[viewId]) return;
+
+  const nextViews = { ...model.views };
+  delete nextViews[viewId];
+  model.views = nextViews;
+
+  for (const fid of Object.keys(model.folders)) {
+    const f = model.folders[fid];
+    if (f.viewIds.includes(viewId)) {
+      model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
+    }
+  }
+}
+
+function deleteElementInModel(model: Model, elementId: string): void {
+  if (!model.elements[elementId]) return;
+
+  // Remove element itself
+  const nextElements = { ...model.elements };
+  delete nextElements[elementId];
+  model.elements = nextElements;
+
+  // Remove from any folder that contains it
+  for (const fid of Object.keys(model.folders)) {
+    const f = model.folders[fid];
+    if (f.elementIds.includes(elementId)) {
+      model.folders[fid] = { ...f, elementIds: f.elementIds.filter((id) => id !== elementId) };
+    }
+  }
+
+  // Remove relationships that reference it
+  const relIdsToDelete = Object.values(model.relationships)
+    .filter((r) => r.sourceElementId === elementId || r.targetElementId === elementId)
+    .map((r) => r.id);
+
+  if (relIdsToDelete.length > 0) {
+    const nextRels = { ...model.relationships };
+    for (const rid of relIdsToDelete) delete nextRels[rid];
+    model.relationships = nextRels;
+  }
+
+  // Remove any view layout nodes that reference the element, and
+  // remove any view connections that reference deleted relationships.
+  for (const view of Object.values(model.views)) {
+    if (!view.layout) continue;
+    const nextNodes = view.layout.nodes.filter((n) => n.elementId !== elementId);
+    const nextConnections = view.layout.relationships.filter((c) => model.relationships[c.relationshipId]);
+    if (nextNodes.length !== view.layout.nodes.length || nextConnections.length !== view.layout.relationships.length) {
+      model.views[view.id] = {
+        ...view,
+        layout: {
+          nodes: nextNodes,
+          relationships: nextConnections
+        }
+      };
+    }
+  }
+}
+
+function collectFolderSubtreeIds(model: Model, folderId: string): string[] {
+  const out: string[] = [];
+  const stack: string[] = [folderId];
+  const visited = new Set<string>();
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const f = model.folders[id];
+    if (!f) continue;
+    out.push(id);
+    for (const childId of f.folderIds) stack.push(childId);
+  }
+  return out;
+}
+
 export class ModelStore {
   private state: ModelStoreState = {
     model: null,
@@ -542,14 +619,64 @@ addElementToView(viewId: string, elementId: string): string {
    * Delete a folder, but do not delete model content.
    * Contents and child folders are moved to the parent.
    */
-  deleteFolder(folderId: string): void {
-    this.updateModel((model) => {
-      assertCanDeleteFolder(model, folderId);
-      const folder = getFolder(model, folderId);
-      const parentId = folder.parentId;
-      if (!parentId) throw new Error('Cannot delete folder without parent');
-      const parent = getFolder(model, parentId);
+  
+/**
+ * Deletes a folder.
+ *
+ * Default behavior (no options): contents and child folders are moved to the parent folder.
+ *
+ * Options:
+ * - { mode: 'move', targetFolderId }: move contents and child folders to the given folder (must not be inside the deleted folder subtree).
+ * - { mode: 'deleteContents' }: delete the entire folder subtree and all contained elements/views.
+ */
+deleteFolder(
+  folderId: string,
+  options?: { mode?: 'move'; targetFolderId?: string } | { mode: 'deleteContents' }
+): void {
+  this.updateModel((model) => {
+    assertCanDeleteFolder(model, folderId);
+    const folder = getFolder(model, folderId);
+    const parentId = folder.parentId;
+    if (!parentId) throw new Error('Cannot delete folder without parent');
 
+    // Delete subtree contents (and the subtree folders themselves).
+    if (options && 'mode' in options && options.mode === 'deleteContents') {
+      const folderIdsToDelete = collectFolderSubtreeIds(model, folderId);
+      const elementIds = new Set<string>();
+      const viewIds = new Set<string>();
+
+      for (const fid of folderIdsToDelete) {
+        const f = model.folders[fid];
+        if (!f) continue;
+        for (const eid of f.elementIds) elementIds.add(eid);
+        for (const vid of f.viewIds) viewIds.add(vid);
+      }
+
+      // Delete elements first (also deletes related relationships and removes from views).
+      for (const eid of elementIds) deleteElementInModel(model, eid);
+      // Delete views next.
+      for (const vid of viewIds) deleteViewInModel(model, vid);
+
+      // Remove from parent
+      const parent = getFolder(model, parentId);
+      model.folders[parentId] = { ...parent, folderIds: parent.folderIds.filter((id) => id !== folderId) };
+
+      // Remove folder objects
+      const nextFolders = { ...model.folders };
+      for (const fid of folderIdsToDelete) delete nextFolders[fid];
+      model.folders = nextFolders;
+      return;
+    }
+
+    // Otherwise: move contents/children to a target folder (default: parent).
+    const subtree = new Set(collectFolderSubtreeIds(model, folderId));
+    const requestedTargetId =
+      options && 'mode' in options && (options.mode ?? 'move') === 'move' ? options.targetFolderId : undefined;
+    const targetId = requestedTargetId && !subtree.has(requestedTargetId) ? requestedTargetId : parentId;
+
+    const parent = getFolder(model, parentId);
+
+    if (targetId === parentId) {
       // Move children and contents to parent.
       const nextParent: Folder = {
         ...parent,
@@ -557,7 +684,6 @@ addElementToView(viewId: string, elementId: string): string {
         elementIds: [...parent.elementIds, ...folder.elementIds],
         viewIds: [...parent.viewIds, ...folder.viewIds]
       };
-
       model.folders[parentId] = nextParent;
 
       // Reparent children folders.
@@ -565,12 +691,32 @@ addElementToView(viewId: string, elementId: string): string {
         const child = getFolder(model, childId);
         model.folders[childId] = { ...child, parentId };
       }
+    } else {
+      const target = getFolder(model, targetId);
 
-      const rest = { ...model.folders };
-      delete rest[folderId];
-      model.folders = rest;
-    });
-  }
+      // Remove folder from its parent list
+      model.folders[parentId] = { ...parent, folderIds: parent.folderIds.filter((id) => id !== folderId) };
+
+      // Move children and contents to target
+      model.folders[targetId] = {
+        ...target,
+        folderIds: [...target.folderIds, ...folder.folderIds],
+        elementIds: [...target.elementIds, ...folder.elementIds],
+        viewIds: [...target.viewIds, ...folder.viewIds]
+      };
+
+      // Reparent children folders.
+      for (const childId of folder.folderIds) {
+        const child = getFolder(model, childId);
+        model.folders[childId] = { ...child, parentId: targetId };
+      }
+    }
+
+    const rest = { ...model.folders };
+    delete rest[folderId];
+    model.folders = rest;
+  });
+}
 
   /** Ensure a model has the root folder structure (used by future migrations). */
   ensureRootFolders(): void {

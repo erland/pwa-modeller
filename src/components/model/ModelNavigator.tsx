@@ -104,6 +104,39 @@ function scopeForFolder(model: Model, roots: { elementsRoot: Folder; viewsRoot: 
   return 'other';
 }
 
+
+function gatherFolderOptions(model: Model, rootId: string): Array<{ id: string; label: string }> {
+  const out: Array<{ id: string; label: string }> = [];
+  function walk(folderId: string, prefix: string) {
+    const folder = model.folders[folderId];
+    if (!folder) return;
+    out.push({ id: folderId, label: prefix ? `${prefix} / ${folder.name}` : folder.name });
+    const children = folder.folderIds
+      .map((id) => model.folders[id])
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    for (const c of children) walk(c.id, prefix ? `${prefix} / ${folder.name}` : folder.name);
+  }
+  walk(rootId, '');
+  return out;
+}
+
+function collectFolderSubtreeIds(model: Model, folderId: string): string[] {
+  const out: string[] = [];
+  const stack = [folderId];
+  const visited = new Set<string>();
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const f = model.folders[id];
+    if (!f) continue;
+    out.push(id);
+    for (const childId of f.folderIds) stack.push(childId);
+  }
+  return out;
+}
+
 function elementOptionLabel(model: Model, elementId: string): string {
   const el = model.elements[elementId];
   if (!el) return elementId;
@@ -171,6 +204,10 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
   const [createFolderParentId, setCreateFolderParentId] = useState<string | null>(null);
 
+const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
+const [deleteFolderMode, setDeleteFolderMode] = useState<'move' | 'deleteContents'>('move');
+const [deleteFolderTargetId, setDeleteFolderTargetId] = useState<string>('');
+
   // Create dialogs
   const [createElementOpen, setCreateElementOpen] = useState(false);
   const [createElementFolderId, setCreateElementFolderId] = useState<string | null>(null);
@@ -209,6 +246,17 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     const viewsRoot = findFolderByKind(model, 'views');
     return { elementsRoot, viewsRoot };
   }, [model]);
+
+  // When a folder is selected for deletion, default to "move contents to parent".
+  // IMPORTANT: Do not reference `roots` here; it can trigger a TDZ error because
+  // `roots` is initialized via useMemo.
+  useEffect(() => {
+    if (!model || !deleteFolderId) return;
+    const folder = model.folders[deleteFolderId];
+    if (!folder) return;
+    setDeleteFolderMode('move');
+    setDeleteFolderTargetId(folder.parentId ?? '');
+  }, [model, deleteFolderId]);
 
   const elementIdsInOrder = useMemo(() => {
     if (!model) return [] as string[];
@@ -646,13 +694,8 @@ return [
             onClick={(e: React.MouseEvent) => {
               e.preventDefault();
               e.stopPropagation();
-              const ok = window.confirm('Delete this folder? Contents will be moved to its parent folder.');
-              if (!ok) return;
-              modelStore.deleteFolder(node.folderId!);
-              if (selection.kind === 'folder' && selection.folderId === node.folderId) {
-                onSelect({ kind: 'model' });
-              }
-            }}
+              setDeleteFolderId(node.folderId!);
+}}
           >
             🗑
           </button>
@@ -847,7 +890,124 @@ return [
       </Tree>
       </div>
 
-      <FolderNameDialog
+      
+<Dialog
+  title="Delete folder"
+  isOpen={deleteFolderId !== null}
+  onClose={() => setDeleteFolderId(null)}
+  footer={
+    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+      <button type="button" className="shellButton" onClick={() => setDeleteFolderId(null)}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        className="shellButton"
+        onClick={() => {
+          if (!model || !roots || !deleteFolderId) return;
+          const folder = model.folders[deleteFolderId];
+          if (!folder) return;
+
+          if (deleteFolderMode === 'deleteContents') {
+            modelStore.deleteFolder(deleteFolderId, { mode: 'deleteContents' });
+          } else {
+            const target = deleteFolderTargetId || folder.parentId || roots.elementsRoot.id;
+            modelStore.deleteFolder(deleteFolderId, { mode: 'move', targetFolderId: target });
+          }
+
+          if (selection.kind === 'folder' && selection.folderId === deleteFolderId) {
+            onSelect({ kind: 'model' });
+          }
+          setDeleteFolderId(null);
+        }}
+      >
+        Delete
+      </button>
+    </div>
+  }
+>
+  {model && roots && deleteFolderId ? (
+    (() => {
+      const folder = model.folders[deleteFolderId];
+      if (!folder) return <p>Folder not found.</p>;
+
+      const scope = scopeForFolder(model, roots, deleteFolderId);
+      const rootId = scope === 'views' ? roots.viewsRoot.id : roots.elementsRoot.id;
+      const subtree = new Set(collectFolderSubtreeIds(model, deleteFolderId));
+      const options = gatherFolderOptions(model, rootId).filter((o) => !subtree.has(o.id));
+
+      const subtreeFolderIds = collectFolderSubtreeIds(model, deleteFolderId);
+      let elementCount = 0;
+      let viewCount = 0;
+      for (const fid of subtreeFolderIds) {
+        const f = model.folders[fid];
+        if (!f) continue;
+        elementCount += f.elementIds.length;
+        viewCount += f.viewIds.length;
+      }
+
+      return (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <div style={{ opacity: 0.85 }}>
+            <div style={{ fontWeight: 600 }}>{folder.name}</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>
+              Contains: {subtreeFolderIds.length - 1} subfolder(s), {elementCount} element(s), {viewCount} view(s)
+            </div>
+          </div>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <input
+              type="radio"
+              name="deleteFolderMode"
+              checked={deleteFolderMode === 'move'}
+              onChange={() => setDeleteFolderMode('move')}
+            />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600 }}>Move contents to</div>
+              <div style={{ marginTop: 6 }}>
+                <select
+                  className="selectInput"
+                  aria-label="Move folder contents to"
+                  value={deleteFolderTargetId}
+                  disabled={deleteFolderMode !== 'move'}
+                  onChange={(e) => setDeleteFolderTargetId(e.target.value)}
+                >
+                  {options.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                  The folder will be removed; its children and items will be moved.
+                </div>
+              </div>
+            </div>
+          </label>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <input
+              type="radio"
+              name="deleteFolderMode"
+              checked={deleteFolderMode === 'deleteContents'}
+              onChange={() => setDeleteFolderMode('deleteContents')}
+            />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600 }}>Delete all contents</div>
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                This will delete all subfolders, elements, and views contained in this folder subtree.
+              </div>
+            </div>
+          </label>
+        </div>
+      );
+    })()
+  ) : (
+    <p>…</p>
+  )}
+</Dialog>
+
+<FolderNameDialog
         isOpen={createFolderParentId !== null}
         title="Create folder"
         confirmLabel="Create"

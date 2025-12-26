@@ -52,6 +52,10 @@ describe('Model management UI', () => {
     // The last delete button should be for the new folder
     await user.click(deleteButtons[deleteButtons.length - 1]);
 
+    const dialog = screen.getByRole('dialog', { name: 'Delete folder' });
+    // Default is "Move contents to", so just confirm delete.
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
     expect(screen.queryByText('Foo')).not.toBeInTheDocument();
   });
 

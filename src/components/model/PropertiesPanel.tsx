@@ -308,6 +308,14 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
     const incoming = relatedForElement.incoming;
     const outgoing = relatedForElement.outgoing;
 
+    const usedInViews = Object.values(model.views)
+      .filter((v) => v.layout && v.layout.nodes.some((n) => n.elementId === el.id))
+      .map((v) => {
+        const count = v.layout ? v.layout.nodes.filter((n) => n.elementId === el.id).length : 0;
+        return { id: v.id, name: v.name, count };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
     return (
       <div>
         <p className="panelHint">Element</p>
@@ -404,6 +412,31 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
         <div style={{ marginTop: 14 }}>
           <p className="panelHint">Relationships</p>
           <div className="propertiesGrid">
+
+<div className="propertiesRow">
+  <div className="propertiesKey">Used in views</div>
+  <div className="propertiesValue" style={{ fontWeight: 400 }}>
+    {usedInViews.length === 0 ? (
+      <span style={{ opacity: 0.7 }}>None</span>
+    ) : (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {usedInViews.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            className="miniButton"
+            aria-label={`Select view ${v.name}`}
+            onClick={() => onSelect?.({ kind: 'viewNode', viewId: v.id, elementId: el.id })}
+          >
+            {v.name}
+            {v.count > 1 ? ` (${v.count})` : ''}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+</div>
+
             <div className="propertiesRow">
               <div className="propertiesKey">Outgoing</div>
               <div className="propertiesValue" style={{ fontWeight: 400 }}>
@@ -561,6 +594,8 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
               })
             )}
           </div>
+
+
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -589,6 +624,14 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
 
     const sourceName = model.elements[rel.sourceElementId]?.name ?? rel.sourceElementId;
     const targetName = model.elements[rel.targetElementId]?.name ?? rel.targetElementId;
+
+    const usedInViews = Object.values(model.views)
+      .filter((v) => v.layout && v.layout.relationships.some((c) => c.relationshipId === rel.id))
+      .map((v) => {
+        const count = v.layout ? v.layout.relationships.filter((c) => c.relationshipId === rel.id).length : 0;
+        return { id: v.id, name: v.name, count };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
     return (
       <div>
@@ -673,6 +716,31 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
               />
             </div>
           </div>
+
+<div className="propertiesRow">
+  <div className="propertiesKey">Used in views</div>
+  <div className="propertiesValue" style={{ fontWeight: 400 }}>
+    {usedInViews.length === 0 ? (
+      <span style={{ opacity: 0.7 }}>None</span>
+    ) : (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {usedInViews.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            className="miniButton"
+            aria-label={`Select view ${v.name}`}
+            onClick={() => onSelect?.({ kind: 'view', viewId: v.id })}
+          >
+            {v.name}
+            {v.count > 1 ? ` (${v.count})` : ''}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+</div>
+
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -841,6 +909,7 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
               </div>
             </div>
           </div>
+
 
         </div>
 

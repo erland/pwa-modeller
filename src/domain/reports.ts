@@ -23,6 +23,15 @@ export type ViewInventoryRow = {
   folderPath: string;
 };
 
+export type RelationshipReportRow = {
+  id: string;
+  name: string;
+  type: string;
+  source: string;
+  target: string;
+  description: string;
+};
+
 function findFolderContainingElement(model: Model, elementId: string): string | null {
   for (const folder of Object.values(model.folders)) {
     if (folder.elementIds.includes(elementId)) return folder.id;
@@ -83,6 +92,23 @@ export function generateViewInventoryReport(model: Model): ViewInventoryRow[] {
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+export function generateRelationshipReport(model: Model): RelationshipReportRow[] {
+  return Object.values(model.relationships)
+    .map((r) => {
+      const src = model.elements[r.sourceElementId];
+      const tgt = model.elements[r.targetElementId];
+      return {
+        id: r.id,
+        name: r.name ?? '',
+        type: r.type,
+        source: src?.name || r.sourceElementId,
+        target: tgt?.name || r.targetElementId,
+        description: r.description ?? ''
+      };
+    })
+    .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }));
 }
 
 function escapeCsvValue(value: unknown): string {

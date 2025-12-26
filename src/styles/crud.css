@@ -75,6 +75,28 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+.tableSortButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tableSortButton:hover {
+  text-decoration: underline;
+}
+
+.tableSortIndicator {
+  font-size: 10px;
+  opacity: 0.75;
+}
+
 .dataTable tbody tr:hover {
   background: rgba(255, 255, 255, 0.03);
 }

@@ -77,25 +77,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
   const activeView = model && activeViewId ? model.views[activeViewId] : null;
 
-  const elements = useMemo(() => {
-    if (!model) return [] as { id: string; label: string }[];
-    return Object.values(model.elements)
-      .map((e) => ({ id: e.id, label: `${e.name || '(unnamed)'} (${e.type})` }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [model]);
-
-  const [elementToAdd, setElementToAdd] = useState<string>('');
-  useEffect(() => {
-    if (!elementToAdd && elements.length > 0) setElementToAdd(elements[0].id);
-  }, [elementToAdd, elements]);
-
-  const canAdd = Boolean(model && activeViewId && elementToAdd);
   const canExportImage = Boolean(model && activeViewId && activeView);
-
-  function handleAdd() {
-    if (!model || !activeViewId || !elementToAdd) return;
-    modelStore.addElementToView(activeViewId, elementToAdd);
-  }
 
   function handleExportImage() {
     if (!model || !activeViewId) return;
@@ -291,67 +273,11 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   return (
     <div className="diagramWrap">
       <div aria-label="Diagram toolbar" className="diagramToolbar">
-        <div style={{ display: 'grid', gap: 6 }}>
-          <label className="fieldLabel" htmlFor="active-view">
-            Current view
-          </label>
-          <select
-            id="active-view"
-            aria-label="Current view"
-            className="selectInput"
-            value={activeViewId ?? ''}
-            onChange={(e) => setActiveViewId(e.currentTarget.value)}
-            disabled={views.length === 0}
-          >
-            {views.length === 0 ? (
-              <option value="">(no views)</option>
-            ) : (
-              views.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
-
-        <div style={{ display: 'grid', gap: 6 }}>
-          <label className="fieldLabel" htmlFor="element-to-add">
-            Add element
-          </label>
-          <select
-            id="element-to-add"
-            aria-label="Element to add"
-            className="selectInput"
-            value={elementToAdd}
-            onChange={(e) => setElementToAdd(e.currentTarget.value)}
-            disabled={elements.length === 0 || views.length === 0}
-          >
-            {elements.length === 0 ? (
-              <option value="">(no elements)</option>
-            ) : (
-              elements.map((el) => (
-                <option key={el.id} value={el.id}>
-                  {el.label}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
-
-        <button className="shellButton" type="button" onClick={handleAdd} disabled={!canAdd}>
-          Add to view
-        </button>
-
-        <button className="shellButton" type="button" onClick={handleExportImage} disabled={!canExportImage}>
-          Export as Image
-        </button>
-
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' }}>
+        <div className="diagramToolbarButtons">
           <button className="shellButton" type="button" onClick={zoomOut} aria-label="Zoom out">
             −
           </button>
-          <div style={{ minWidth: 64, textAlign: 'center', opacity: 0.9 }} aria-label="Zoom level">
+          <div className="diagramZoomLabel" aria-label="Zoom level">
             {Math.round(zoom * 100)}%
           </div>
           <button className="shellButton" type="button" onClick={zoomIn} aria-label="Zoom in">
@@ -362,6 +288,9 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           </button>
           <button className="shellButton" type="button" onClick={fitToView} aria-label="Fit to view" disabled={!activeView || nodes.length === 0}>
             Fit
+          </button>
+          <button className="shellButton" type="button" onClick={handleExportImage} disabled={!canExportImage}>
+            Export as Image
           </button>
         </div>
       </div>

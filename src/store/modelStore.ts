@@ -1,5 +1,5 @@
 import type { Element, Folder, Model, ModelMetadata, Relationship, View, ViewLayout, ViewRelationshipLayout, ViewNodeLayout, ViewFormatting } from '../domain';
-import { createEmptyModel, createView } from '../domain';
+import { createEmptyModel, createView, collectFolderSubtreeIds } from '../domain';
 
 export type ModelStoreState = {
   model: Model | null;
@@ -118,21 +118,6 @@ function deleteElementInModel(model: Model, elementId: string): void {
   }
 }
 
-function collectFolderSubtreeIds(model: Model, folderId: string): string[] {
-  const out: string[] = [];
-  const stack: string[] = [folderId];
-  const visited = new Set<string>();
-  while (stack.length) {
-    const id = stack.pop()!;
-    if (visited.has(id)) continue;
-    visited.add(id);
-    const f = model.folders[id];
-    if (!f) continue;
-    out.push(id);
-    for (const childId of f.folderIds) stack.push(childId);
-  }
-  return out;
-}
 
 export class ModelStore {
   private state: ModelStoreState = {

@@ -14,6 +14,8 @@ import {
   ELEMENT_TYPES_BY_LAYER,
   RELATIONSHIP_TYPES,
   VIEWPOINTS,
+  collectFolderSubtreeIds,
+  gatherFolderOptions,
   createElement,
   createRelationship,
   createView
@@ -78,37 +80,7 @@ function scopeForFolder(model: Model, roots: { elementsRoot: Folder; viewsRoot: 
 }
 
 
-function gatherFolderOptions(model: Model, rootId: string): Array<{ id: string; label: string }> {
-  const out: Array<{ id: string; label: string }> = [];
-  function walk(folderId: string, prefix: string) {
-    const folder = model.folders[folderId];
-    if (!folder) return;
-    out.push({ id: folderId, label: prefix ? `${prefix} / ${folder.name}` : folder.name });
-    const children = folder.folderIds
-      .map((id) => model.folders[id])
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-    for (const c of children) walk(c.id, prefix ? `${prefix} / ${folder.name}` : folder.name);
-  }
-  walk(rootId, '');
-  return out;
-}
 
-function collectFolderSubtreeIds(model: Model, folderId: string): string[] {
-  const out: string[] = [];
-  const stack = [folderId];
-  const visited = new Set<string>();
-  while (stack.length) {
-    const id = stack.pop()!;
-    if (visited.has(id)) continue;
-    visited.add(id);
-    const f = model.folders[id];
-    if (!f) continue;
-    out.push(id);
-    for (const childId of f.folderIds) stack.push(childId);
-  }
-  return out;
-}
 
 function elementOptionLabel(model: Model, elementId: string): string {
   const el = model.elements[elementId];

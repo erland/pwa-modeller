@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Folder, Model, Relationship, RelationshipType } from '../../domain';
-import { ARCHIMATE_LAYERS, ELEMENT_TYPES, RELATIONSHIP_TYPES, VIEWPOINTS } from '../../domain';
+import { ARCHIMATE_LAYERS, ELEMENT_TYPES, RELATIONSHIP_TYPES, VIEWPOINTS, gatherFolderOptions } from '../../domain';
 import { modelStore, useModelStore } from '../../store';
 import type { Selection } from './selection';
 
@@ -94,20 +94,6 @@ function findFolderByKind(model: Model, kind: Folder['kind']): Folder {
   return found;
 }
 
-function gatherFolderOptions(model: Model, rootId: string): Array<{ id: string; label: string }> {
-  const out: Array<{ id: string; label: string }> = [];
-  function walk(folderId: string, prefix: string) {
-    const folder = model.folders[folderId];
-    out.push({ id: folderId, label: prefix ? `${prefix} / ${folder.name}` : folder.name });
-    const children = folder.folderIds
-      .map((id) => model.folders[id])
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-    for (const c of children) walk(c.id, prefix ? `${prefix} / ${folder.name}` : folder.name);
-  }
-  walk(rootId, '');
-  return out;
-}
 function folderPathLabel(model: Model, folderId: string): string {
   const start = model.folders[folderId];
   if (!start) return folderId;

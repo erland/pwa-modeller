@@ -128,21 +128,30 @@ export class ModelStore {
 
   private listeners = new Set<Listener>();
 
-  subscribe(listener: Listener): () => void {
+  /**
+   * IMPORTANT: All store methods are arrow functions to avoid `this`-binding bugs.
+   *
+   * Several UI layers pass store methods as callbacks. If these were prototype
+   * methods (e.g. `updateRelationship() { ... }`), `this` could become undefined
+   * or point at another object, causing runtime errors like:
+   *   `TypeError: this.updateModel is not a function`
+   */
+
+  subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
-  }
+  };
 
-  getState(): ModelStoreState {
+  getState = (): ModelStoreState => {
     return this.state;
-  }
+  };
 
-  private setState(next: Partial<ModelStoreState>): void {
+  private setState = (next: Partial<ModelStoreState>): void => {
     this.state = { ...this.state, ...next };
     for (const l of this.listeners) l();
-  }
+  };
 
-  private updateModel(mutator: (model: Model) => void, markDirty = true): void {
+  private updateModel = (mutator: (model: Model) => void, markDirty = true): void => {
     const current = this.state.model;
     if (!current) throw new Error('No model loaded');
 
@@ -158,12 +167,12 @@ export class ModelStore {
 
     mutator(nextModel);
     this.setState({ model: nextModel, isDirty: markDirty ? true : this.state.isDirty });
-  }
+  };
 
   /** Replace the current model. */
-  loadModel(model: Model, fileName: string | null = null): void {
+  loadModel = (model: Model, fileName: string | null = null): void => {
     this.setState({ model, fileName, isDirty: false });
-  }
+  };
 
   /**
    * Restore store state from persistence.
@@ -171,47 +180,47 @@ export class ModelStore {
    * This is intentionally separate from loadModel() so we can restore the
    * `isDirty` flag as well.
    */
-  hydrate(state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>): void {
+  hydrate = (state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>): void => {
     this.setState({
       model: state.model,
       fileName: state.fileName,
       isDirty: state.isDirty
     });
-  }
+  };
 
-  reset(): void {
+  reset = (): void => {
     this.setState({ model: null, fileName: null, isDirty: false });
-  }
+  };
 
-  newModel(metadata: ModelMetadata): void {
+  newModel = (metadata: ModelMetadata): void => {
     const model = createEmptyModel(metadata);
     this.setState({ model, fileName: null, isDirty: false });
-  }
+  };
 
   /** Backwards-compatible alias used by tests/earlier steps. */
-  createEmptyModel(metadata: ModelMetadata): void {
+  createEmptyModel = (metadata: ModelMetadata): void => {
     this.newModel(metadata);
-  }
+  };
 
-  setFileName(fileName: string | null): void {
+  setFileName = (fileName: string | null): void => {
     this.setState({ fileName });
-  }
+  };
 
-  markSaved(): void {
+  markSaved = (): void => {
     this.setState({ isDirty: false });
-  }
+  };
 
-  updateModelMetadata(patch: Partial<ModelMetadata>): void {
+  updateModelMetadata = (patch: Partial<ModelMetadata>): void => {
     this.updateModel((model) => {
       model.metadata = { ...model.metadata, ...patch };
     });
-  }
+  };
 
   // -------------------------
   // Elements
   // -------------------------
 
-  addElement(element: Element, folderId?: string): void {
+  addElement = (element: Element, folderId?: string): void => {
     this.updateModel((model) => {
       model.elements[element.id] = element;
 
@@ -221,17 +230,17 @@ export class ModelStore {
         model.folders[targetFolderId] = { ...folder, elementIds: [...folder.elementIds, element.id] };
       }
     });
-  }
+  };
 
-  updateElement(elementId: string, patch: Partial<Omit<Element, 'id'>>): void {
+  updateElement = (elementId: string, patch: Partial<Omit<Element, 'id'>>): void => {
     this.updateModel((model) => {
       const current = model.elements[elementId];
       if (!current) throw new Error(`Element not found: ${elementId}`);
       model.elements[elementId] = { ...current, ...patch, id: current.id };
     });
-  }
+  };
 
-  deleteElement(elementId: string): void {
+  deleteElement = (elementId: string): void => {
     this.updateModel((model) => {
       if (!model.elements[elementId]) return;
 
@@ -276,27 +285,27 @@ export class ModelStore {
         }
       }
     });
-  }
+  };
 
   // -------------------------
   // Relationships
   // -------------------------
 
-  addRelationship(relationship: Relationship): void {
+  addRelationship = (relationship: Relationship): void => {
     this.updateModel((model) => {
       model.relationships[relationship.id] = relationship;
     });
-  }
+  };
 
-  updateRelationship(relationshipId: string, patch: Partial<Omit<Relationship, 'id'>>): void {
+  updateRelationship = (relationshipId: string, patch: Partial<Omit<Relationship, 'id'>>): void => {
     this.updateModel((model) => {
       const current = model.relationships[relationshipId];
       if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
       model.relationships[relationshipId] = { ...current, ...patch, id: current.id };
     });
-  }
+  };
 
-  deleteRelationship(relationshipId: string): void {
+  deleteRelationship = (relationshipId: string): void => {
     this.updateModel((model) => {
       if (!model.relationships[relationshipId]) return;
       const next = { ...model.relationships };
@@ -318,13 +327,13 @@ export class ModelStore {
         }
       }
     });
-  }
+  };
 
   // -------------------------
   // Views
   // -------------------------
 
-  addView(view: View, folderId?: string): void {
+  addView = (view: View, folderId?: string): void => {
     this.updateModel((model) => {
       model.views[view.id] = view;
 
@@ -334,16 +343,17 @@ export class ModelStore {
         model.folders[targetFolderId] = { ...folder, viewIds: [...folder.viewIds, view.id] };
       }
     });
-  }
+  };
 
-  updateView(viewId: string, patch: Partial<Omit<View, 'id'>>): void {
+  updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => {
     this.updateModel((model) => {
       const current = model.views[viewId];
       if (!current) throw new Error(`View not found: ${viewId}`);
       model.views[viewId] = { ...current, ...patch, id: current.id };
     });
-  }
-  updateViewFormatting(viewId: string, patch: Partial<ViewFormatting>): void {
+  };
+
+  updateViewFormatting = (viewId: string, patch: Partial<ViewFormatting>): void => {
     this.updateModel((model) => {
       const view = model.views[viewId];
       if (!view) return;
@@ -357,10 +367,10 @@ export class ModelStore {
 
       model.views[viewId] = { ...view, formatting: next };
     });
-  }
+  };
 
   /** Clone a view (including its layout) into the same folder as the original. Returns the new view id. */
-  cloneView(viewId: string): string | null {
+  cloneView = (viewId: string): string | null => {
     let created: string | null = null;
 
     this.updateModel((model) => {
@@ -398,9 +408,9 @@ export class ModelStore {
     });
 
     return created;
-  }
+  };
 
-  updateViewNodeLayout(viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void {
+  updateViewNodeLayout = (viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void => {
     this.updateModel((model) => {
       const view = model.views[viewId];
       if (!view) return;
@@ -416,9 +426,9 @@ export class ModelStore {
 
       model.views[viewId] = { ...viewWithLayout, layout: { ...viewWithLayout.layout, nodes: nextNodes } };
     });
-  }
+  };
 
-  deleteView(viewId: string): void {
+  deleteView = (viewId: string): void => {
 
     this.updateModel((model) => {
       if (!model.views[viewId]) return;
@@ -434,45 +444,45 @@ export class ModelStore {
         }
       }
     });
-  }
+  };
 
   // -------------------------
   // Diagram layout (per view)
   // -------------------------
 
   /** Adds an element to a view's layout as a positioned node (idempotent). */
-addElementToView(viewId: string, elementId: string): string {
-  this.updateModel((model) => {
-    const view = model.views[viewId];
-    if (!view) throw new Error(`View not found: ${viewId}`);
-    const element = model.elements[elementId];
-    if (!element) throw new Error(`Element not found: ${elementId}`);
+  addElementToView = (viewId: string, elementId: string): string => {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) throw new Error(`View not found: ${viewId}`);
+      const element = model.elements[elementId];
+      if (!element) throw new Error(`Element not found: ${elementId}`);
 
-    const viewWithLayout = ensureViewLayout(view);
-    const layout = viewWithLayout.layout!;
+      const viewWithLayout = ensureViewLayout(view);
+      const layout = viewWithLayout.layout!;
 
-    if (layout.nodes.some((n) => n.elementId === elementId)) return;
+      if (layout.nodes.some((n) => n.elementId === elementId)) return;
 
-    const i = layout.nodes.length;
-    const cols = 4;
-    const x = 24 + (i % cols) * 160;
-    const y = 24 + Math.floor(i / cols) * 110;
+      const i = layout.nodes.length;
+      const cols = 4;
+      const x = 24 + (i % cols) * 160;
+      const y = 24 + Math.floor(i / cols) * 110;
 
-    const node: ViewNodeLayout = { elementId, x, y, width: 140, height: 70 };
-    model.views[viewId] = {
-      ...viewWithLayout,
-      layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
-    };
-  });
+      const node: ViewNodeLayout = { elementId, x, y, width: 140, height: 70 };
+      model.views[viewId] = {
+        ...viewWithLayout,
+        layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
+      };
+    });
 
-  return elementId;
-}
+    return elementId;
+  };
 
   /**
    * Adds an element to a view at a specific position (idempotent).
    * If the node already exists in the view, its position is updated.
    */
-  addElementToViewAt(viewId: string, elementId: string, x: number, y: number): string {
+  addElementToViewAt = (viewId: string, elementId: string, x: number, y: number): string => {
     this.updateModel((model) => {
       const view = model.views[viewId];
       if (!view) throw new Error(`View not found: ${viewId}`);
@@ -510,9 +520,9 @@ addElementToView(viewId: string, elementId: string): string {
     });
 
     return elementId;
-  }
+  };
 
-  removeElementFromView(viewId: string, elementId: string): void {
+  removeElementFromView = (viewId: string, elementId: string): void => {
     this.updateModel((model) => {
       const view = getView(model, viewId);
       if (!view.layout) return;
@@ -525,9 +535,9 @@ addElementToView(viewId: string, elementId: string): string {
       if (nextNodes.length === layout.nodes.length && nextConnections.length === layout.relationships.length) return;
       model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: nextConnections } };
     });
-  }
+  };
 
-  updateViewNodePosition(viewId: string, elementId: string, x: number, y: number): void {
+  updateViewNodePosition = (viewId: string, elementId: string, x: number, y: number): void => {
     this.updateModel((model) => {
       const view = getView(model, viewId);
       if (!view.layout) return;
@@ -537,13 +547,13 @@ addElementToView(viewId: string, elementId: string): string {
       const nextNodes = layout.nodes.map((n) => (n.elementId === elementId ? { ...n, x, y } : n));
       model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
     });
-  }
+  };
 
   // -------------------------
   // Folders
   // -------------------------
 
-  createFolder(parentId: string, name: string): string {
+  createFolder = (parentId: string, name: string): string => {
     const id = `folder_${Math.random().toString(36).slice(2, 10)}`;
     this.updateModel((model) => {
       const parent = getFolder(model, parentId);
@@ -560,9 +570,9 @@ addElementToView(viewId: string, elementId: string): string {
       model.folders[parentId] = { ...parent, folderIds: [...parent.folderIds, folder.id] };
     });
     return id;
-  }
+  };
 
-  moveElementToFolder(elementId: string, targetFolderId: string): void {
+  moveElementToFolder = (elementId: string, targetFolderId: string): void => {
     this.updateModel((model) => {
       const fromId = findFolderContainingElement(model, elementId);
       if (!fromId) throw new Error(`Element not found in any folder: ${elementId}`);
@@ -574,9 +584,9 @@ addElementToView(viewId: string, elementId: string): string {
       model.folders[fromId] = { ...from, elementIds: from.elementIds.filter((id) => id !== elementId) };
       model.folders[targetFolderId] = { ...to, elementIds: [...to.elementIds, elementId] };
     });
-  }
+  };
 
-  moveViewToFolder(viewId: string, targetFolderId: string): void {
+  moveViewToFolder = (viewId: string, targetFolderId: string): void => {
     this.updateModel((model) => {
       const fromId = findFolderContainingView(model, viewId);
       if (!fromId) throw new Error(`View not found in any folder: ${viewId}`);
@@ -588,9 +598,9 @@ addElementToView(viewId: string, elementId: string): string {
       model.folders[fromId] = { ...from, viewIds: from.viewIds.filter((id) => id !== viewId) };
       model.folders[targetFolderId] = { ...to, viewIds: [...to.viewIds, viewId] };
     });
-  }
+  };
 
-  renameFolder(folderId: string, name: string): void {
+  renameFolder = (folderId: string, name: string): void => {
     this.updateModel((model) => {
       const folder = getFolder(model, folderId);
       if (folder.kind === 'root' || folder.kind === 'elements' || folder.kind === 'views') {
@@ -598,113 +608,109 @@ addElementToView(viewId: string, elementId: string): string {
       }
       model.folders[folderId] = { ...folder, name: name.trim() };
     });
-  }
+  };
 
   /**
-   * Delete a folder, but do not delete model content.
-   * Contents and child folders are moved to the parent.
+   * Deletes a folder.
+   *
+   * Default behavior (no options): contents and child folders are moved to the parent folder.
+   *
+   * Options:
+   * - { mode: 'move', targetFolderId }: move contents and child folders to the given folder
+   *   (must not be inside the deleted folder subtree).
+   * - { mode: 'deleteContents' }: delete the entire folder subtree and all contained elements/views.
    */
-  
-/**
- * Deletes a folder.
- *
- * Default behavior (no options): contents and child folders are moved to the parent folder.
- *
- * Options:
- * - { mode: 'move', targetFolderId }: move contents and child folders to the given folder (must not be inside the deleted folder subtree).
- * - { mode: 'deleteContents' }: delete the entire folder subtree and all contained elements/views.
- */
-deleteFolder(
-  folderId: string,
-  options?: { mode?: 'move'; targetFolderId?: string } | { mode: 'deleteContents' }
-): void {
-  this.updateModel((model) => {
-    assertCanDeleteFolder(model, folderId);
-    const folder = getFolder(model, folderId);
-    const parentId = folder.parentId;
-    if (!parentId) throw new Error('Cannot delete folder without parent');
+  deleteFolder = (
+    folderId: string,
+    options?: { mode?: 'move'; targetFolderId?: string } | { mode: 'deleteContents' }
+  ): void => {
+    this.updateModel((model) => {
+      assertCanDeleteFolder(model, folderId);
+      const folder = getFolder(model, folderId);
+      const parentId = folder.parentId;
+      if (!parentId) throw new Error('Cannot delete folder without parent');
 
-    // Delete subtree contents (and the subtree folders themselves).
-    if (options && 'mode' in options && options.mode === 'deleteContents') {
-      const folderIdsToDelete = collectFolderSubtreeIds(model, folderId);
-      const elementIds = new Set<string>();
-      const viewIds = new Set<string>();
+      // Delete subtree contents (and the subtree folders themselves).
+      if (options && 'mode' in options && options.mode === 'deleteContents') {
+        const folderIdsToDelete = collectFolderSubtreeIds(model, folderId);
+        const elementIds = new Set<string>();
+        const viewIds = new Set<string>();
 
-      for (const fid of folderIdsToDelete) {
-        const f = model.folders[fid];
-        if (!f) continue;
-        for (const eid of f.elementIds) elementIds.add(eid);
-        for (const vid of f.viewIds) viewIds.add(vid);
+        for (const fid of folderIdsToDelete) {
+          const f = model.folders[fid];
+          if (!f) continue;
+          for (const eid of f.elementIds) elementIds.add(eid);
+          for (const vid of f.viewIds) viewIds.add(vid);
+        }
+
+        // Delete elements first (also deletes related relationships and removes from views).
+        for (const eid of elementIds) deleteElementInModel(model, eid);
+        // Delete views next.
+        for (const vid of viewIds) deleteViewInModel(model, vid);
+
+        // Remove from parent
+        const parent = getFolder(model, parentId);
+        model.folders[parentId] = { ...parent, folderIds: parent.folderIds.filter((id) => id !== folderId) };
+
+        // Remove folder objects
+        const nextFolders = { ...model.folders };
+        for (const fid of folderIdsToDelete) delete nextFolders[fid];
+        model.folders = nextFolders;
+        return;
       }
 
-      // Delete elements first (also deletes related relationships and removes from views).
-      for (const eid of elementIds) deleteElementInModel(model, eid);
-      // Delete views next.
-      for (const vid of viewIds) deleteViewInModel(model, vid);
+      // Otherwise: move contents/children to a target folder (default: parent).
+      const subtree = new Set(collectFolderSubtreeIds(model, folderId));
+      const requestedTargetId =
+        options && 'mode' in options && (options.mode ?? 'move') === 'move' ? options.targetFolderId : undefined;
+      const targetId = requestedTargetId && !subtree.has(requestedTargetId) ? requestedTargetId : parentId;
 
-      // Remove from parent
       const parent = getFolder(model, parentId);
-      model.folders[parentId] = { ...parent, folderIds: parent.folderIds.filter((id) => id !== folderId) };
 
-      // Remove folder objects
-      const nextFolders = { ...model.folders };
-      for (const fid of folderIdsToDelete) delete nextFolders[fid];
-      model.folders = nextFolders;
-      return;
-    }
+      if (targetId === parentId) {
+        // Move children and contents to parent.
+        const nextParent: Folder = {
+          ...parent,
+          folderIds: [...parent.folderIds.filter((id) => id !== folderId), ...folder.folderIds],
+          elementIds: [...parent.elementIds, ...folder.elementIds],
+          viewIds: [...parent.viewIds, ...folder.viewIds]
+        };
+        model.folders[parentId] = nextParent;
 
-    // Otherwise: move contents/children to a target folder (default: parent).
-    const subtree = new Set(collectFolderSubtreeIds(model, folderId));
-    const requestedTargetId =
-      options && 'mode' in options && (options.mode ?? 'move') === 'move' ? options.targetFolderId : undefined;
-    const targetId = requestedTargetId && !subtree.has(requestedTargetId) ? requestedTargetId : parentId;
+        // Reparent children folders.
+        for (const childId of folder.folderIds) {
+          const child = getFolder(model, childId);
+          model.folders[childId] = { ...child, parentId };
+        }
+      } else {
+        const target = getFolder(model, targetId);
 
-    const parent = getFolder(model, parentId);
+        // Remove folder from its parent list
+        model.folders[parentId] = { ...parent, folderIds: parent.folderIds.filter((id) => id !== folderId) };
 
-    if (targetId === parentId) {
-      // Move children and contents to parent.
-      const nextParent: Folder = {
-        ...parent,
-        folderIds: [...parent.folderIds.filter((id) => id !== folderId), ...folder.folderIds],
-        elementIds: [...parent.elementIds, ...folder.elementIds],
-        viewIds: [...parent.viewIds, ...folder.viewIds]
-      };
-      model.folders[parentId] = nextParent;
+        // Move children and contents to target
+        model.folders[targetId] = {
+          ...target,
+          folderIds: [...target.folderIds, ...folder.folderIds],
+          elementIds: [...target.elementIds, ...folder.elementIds],
+          viewIds: [...target.viewIds, ...folder.viewIds]
+        };
 
-      // Reparent children folders.
-      for (const childId of folder.folderIds) {
-        const child = getFolder(model, childId);
-        model.folders[childId] = { ...child, parentId };
+        // Reparent children folders.
+        for (const childId of folder.folderIds) {
+          const child = getFolder(model, childId);
+          model.folders[childId] = { ...child, parentId: targetId };
+        }
       }
-    } else {
-      const target = getFolder(model, targetId);
 
-      // Remove folder from its parent list
-      model.folders[parentId] = { ...parent, folderIds: parent.folderIds.filter((id) => id !== folderId) };
-
-      // Move children and contents to target
-      model.folders[targetId] = {
-        ...target,
-        folderIds: [...target.folderIds, ...folder.folderIds],
-        elementIds: [...target.elementIds, ...folder.elementIds],
-        viewIds: [...target.viewIds, ...folder.viewIds]
-      };
-
-      // Reparent children folders.
-      for (const childId of folder.folderIds) {
-        const child = getFolder(model, childId);
-        model.folders[childId] = { ...child, parentId: targetId };
-      }
-    }
-
-    const rest = { ...model.folders };
-    delete rest[folderId];
-    model.folders = rest;
-  });
-}
+      const rest = { ...model.folders };
+      delete rest[folderId];
+      model.folders = rest;
+    });
+  };
 
   /** Ensure a model has the root folder structure (used by future migrations). */
-  ensureRootFolders(): void {
+  ensureRootFolders = (): void => {
     this.updateModel(
       (model) => {
         // Will throw if missing, which is fine for now.
@@ -714,7 +720,7 @@ deleteFolder(
       },
       false
     );
-  }
+  };
 }
 
 /** Factory used by tests and to create isolated store instances. */

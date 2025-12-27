@@ -9,3 +9,5 @@ export * from './config/viewpoints';
 export * from './config/catalog';
 
 export * from './selectors/folders';
+
+export * from './graph/trace';

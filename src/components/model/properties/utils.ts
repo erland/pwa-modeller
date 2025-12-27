@@ -1,0 +1,47 @@
+import type { Folder, Model, Relationship } from '../../../domain';
+
+export function getElementLabel(model: Model, elementId: string): string {
+  const el = model.elements[elementId];
+  if (!el) return elementId;
+  // Keep it stable for tests/UX: name (Type)
+  return `${el.name} (${el.type})`;
+}
+
+export function splitRelationshipsForElement(model: Model, elementId: string) {
+  const rels = Object.values(model.relationships);
+  const outgoing = rels.filter((r) => r.sourceElementId === elementId);
+  const incoming = rels.filter((r) => r.targetElementId === elementId);
+  return { incoming, outgoing } as { incoming: Relationship[]; outgoing: Relationship[] };
+}
+
+export function findFolderByKind(model: Model, kind: Folder['kind']): Folder {
+  const found = Object.values(model.folders).find((f) => f.kind === kind);
+  if (!found) throw new Error(`Missing required folder kind: ${kind}`);
+  return found;
+}
+
+export function folderPathLabel(model: Model, folderId: string): string {
+  const start = model.folders[folderId];
+  if (!start) return folderId;
+
+  const parts: string[] = [];
+  const visited = new Set<string>();
+  let current: Folder | undefined = start;
+
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    parts.unshift(current.name);
+    if (!current.parentId) break;
+    current = model.folders[current.parentId];
+  }
+
+  return parts.join(' / ');
+}
+
+export function findFolderContaining(model: Model, kind: 'element' | 'view', id: string): string | null {
+  for (const folder of Object.values(model.folders)) {
+    if (kind === 'element' && folder.elementIds.includes(id)) return folder.id;
+    if (kind === 'view' && folder.viewIds.includes(id)) return folder.id;
+  }
+  return null;
+}

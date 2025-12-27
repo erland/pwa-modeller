@@ -1,14 +1,10 @@
-import type * as React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Menu,
   MenuItem,
   MenuTrigger,
-  Popover,
-  Tree,
-  TreeItem,
-  TreeItemContent
+  Popover
 } from 'react-aria-components';
 import type { Key } from '@react-types/shared';
 
@@ -28,41 +24,18 @@ import '../../styles/navigator.css';
 import { Dialog } from '../dialog/Dialog';
 import { FolderNameDialog } from './FolderNameDialog';
 import type { Selection } from './selection';
+import { ModelNavigatorTree } from './navigator/ModelNavigatorTree';
+import type { NavNode, NavNodeKind } from './navigator/types';
 
 type Props = {
   selection: Selection;
   onSelect: (selection: Selection) => void;
 };
 
-// Drag payload for dragging an element from the tree into a view.
-const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
-
-type NavNodeKind = 'folder' | 'element' | 'view' | 'relationship' | 'section';
-type NavNode = {
-  key: string;
-  kind: NavNodeKind;
-  label: string;
-  secondary?: string; // rendered as a compact badge (e.g. counts)
-  tooltip?: string;
-  children?: NavNode[];
-  scope?: 'elements' | 'views' | 'relationships' | 'other';
-  // Actions
-  canCreateFolder?: boolean;
-  canCreateElement?: boolean;
-  canCreateView?: boolean;
-  canCreateRelationship?: boolean;
-  canDelete?: boolean;
-  canRename?: boolean;
-  // IDs
-  folderId?: string;
-  elementId?: string;
-  viewId?: string;
-  relationshipId?: string;
-};
-
-function sortByName<T extends { name: string }>(a: T, b: T): number {
-  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+function sortByName<T extends { name?: string }>(a: T, b: T): number {
+  return (a?.name ?? '').localeCompare(b?.name ?? '', undefined, { sensitivity: 'base' });
 }
+
 
 function findFolderByKind(model: Model, kind: Folder['kind']): Folder {
   const found = Object.values(model.folders).find((f) => f.kind === kind);
@@ -170,30 +143,6 @@ function selectionToKey(selection: Selection): string | null {
       return null;
   }
 }
-
-function iconFor(node: NavNode): string {
-  switch (node.kind) {
-    case 'folder':
-      return '📁';
-    case 'view':
-      return '🗺️';
-    case 'element':
-      return '⬛';
-    case 'relationship':
-      return '🔗';
-    case 'section':
-    default:
-      return '▦';
-  }
-}
-
-function toggleExpandedKey(current: Set<Key>, key: Key): Set<Key> {
-  const next = new Set(current);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  return next;
-}
-
 export function ModelNavigator({ selection, onSelect }: Props) {
   const model = useModelStore((s) => s.model);
   const isDirty = useModelStore((s) => s.isDirty);
@@ -238,7 +187,7 @@ const [deleteFolderTargetId, setDeleteFolderTargetId] = useState<string>('');
   // Inline rename state
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
-  const editInputRef = useRef<HTMLInputElement | null>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const roots = useMemo(() => {
     if (!model) return null;
@@ -624,188 +573,6 @@ return [
     );
   }
 
-  function renderNode(node: NavNode, depth = 0): React.ReactNode {
-    const isEditing = editingKey === node.key;
-    const icon = iconFor(node);
-    const hasChildren = !!node.children && node.children.length > 0;
-    const isExpanded = hasChildren && expandedKeys.has(node.key);
-    const showBadge = !!node.secondary && (node.kind === 'folder' || node.kind === 'section');
-    const title = node.tooltip ?? node.label;
-
-    // Single "Create…" button (Explorer/Finder-like) with a menu for all create actions
-    // relevant to this node.
-    const canShowCreateMenu =
-      Boolean(node.canCreateFolder && node.folderId) ||
-      Boolean(node.canCreateElement && node.folderId) ||
-      Boolean(node.canCreateView && node.folderId) ||
-      Boolean(node.canCreateRelationship);
-
-    const actions = (
-      <span className="navTreeActions" aria-label="Node actions">
-        {canShowCreateMenu ? (
-          <MenuTrigger>
-            <Button className="miniButton" aria-label="Create…">＋</Button>
-            <Popover className="navMenuPopover">
-              <Menu
-                className="navMenu"
-                onAction={(key) => {
-                  const k = String(key);
-                  if (k === 'folder' && node.folderId) {
-                    openCreateFolder(node.folderId);
-                  } else if (k === 'element' && node.folderId) {
-                    openCreateElement(node.folderId);
-                  } else if (k === 'view' && node.folderId) {
-                    openCreateView(node.folderId);
-                  } else if (k === 'relationship') {
-                    const prefill = selection.kind === 'element' ? selection.elementId : undefined;
-                    openCreateRelationship(prefill);
-                  }
-                }}
-              >
-                {node.canCreateFolder && node.folderId ? <MenuItem className="navMenuItem" id="folder">Folder…</MenuItem> : null}
-                {node.canCreateElement && node.folderId ? <MenuItem className="navMenuItem" id="element">Element…</MenuItem> : null}
-                {node.canCreateView && node.folderId ? <MenuItem className="navMenuItem" id="view">View…</MenuItem> : null}
-                {node.canCreateRelationship ? <MenuItem className="navMenuItem" id="relationship">Relationship…</MenuItem> : null}
-              </Menu>
-            </Popover>
-          </MenuTrigger>
-        ) : null}
-
-        {node.canRename ? (
-          <button
-            type="button"
-            className="miniButton"
-            aria-label="Rename"
-            onClick={(e: React.MouseEvent) => {
-              e.preventDefault();
-              e.stopPropagation();
-              startEditing(node);
-            }}
-          >
-            ✎
-          </button>
-        ) : null}
-
-        {node.canDelete && node.folderId ? (
-          <button
-            type="button"
-            className="miniButton"
-            aria-label="Delete folder"
-            onClick={(e: React.MouseEvent) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setDeleteFolderId(node.folderId!);
-}}
-          >
-            🗑
-          </button>
-        ) : null}
-      </span>
-    );
-
-    return (
-      <TreeItem id={node.key} textValue={node.label} key={node.key}>
-        <TreeItemContent>
-          <div
-            className="navTreeRow"
-            data-kind={node.kind}
-            data-nodekey={node.key}
-            title={title}
-            draggable={node.kind === 'element' && Boolean(node.elementId)}
-            onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
-              if (node.kind !== 'element' || !node.elementId) return;
-              // Ensure the element is selected when starting a drag (helps with keyboard-only drop flows later).
-              handleSelectionChange(new Set([node.key]));
-              try {
-                e.dataTransfer.setData(DND_ELEMENT_MIME, node.elementId);
-                // Fallback to plain text for debugging / other drop targets.
-                e.dataTransfer.setData('text/plain', node.elementId);
-                e.dataTransfer.effectAllowed = 'copy';
-              } catch {
-                // Ignore (some test environments may not fully implement DataTransfer)
-              }
-            }}
-            onClick={(e: React.MouseEvent) => {
-              const target = e.target as HTMLElement | null;
-              // Don't steal clicks from expand button or inline action buttons.
-              if (target && (target.closest('[data-chevron="1"]') || target.closest('.navTreeActions'))) {
-                return;
-              }
-              // Ensure mouse click selects the item (Explorer/Finder behavior).
-              e.preventDefault();
-              e.stopPropagation();
-              handleSelectionChange(new Set([node.key]));
-            }}
-            onDoubleClick={(e: React.MouseEvent) => {
-              if (!hasChildren && !node.canRename) return;
-              e.preventDefault();
-              e.stopPropagation();
-              if (hasChildren) {
-                setExpandedKeys((prev) => toggleExpandedKey(prev, node.key));
-              } else {
-                startEditing(node);
-              }
-            }}
-          >
-            {depth > 0 ? (
-              <>
-                <span className="navTreeIndent" aria-hidden style={{ width: depth * 14 }} />
-                <span className="navTreeConnector" aria-hidden />
-              </>
-            ) : null}
-
-            {hasChildren ? (
-              // React Aria requires an explicit chevron button for expandable items for accessibility.
-              // See: Tree docs "Collapse and expand button".
-              <Button
-                slot="chevron"
-                className="navTreeChevronButton"
-                data-chevron="1"
-                aria-label={isExpanded ? 'Collapse' : 'Expand'}
-              >
-                <span className="navTreeChevron" aria-hidden>
-                  {isExpanded ? '▾' : '▸'}
-                </span>
-              </Button>
-            ) : (
-              <span className="navTreeChevronSpacer" aria-hidden />
-            )}
-
-            <span className="navTreeIcon" aria-hidden>
-              {icon}
-            </span>
-
-            {isEditing ? (
-              <input
-                ref={editInputRef}
-                className="textInput navInlineRename"
-                aria-label="Rename"
-                value={editingValue}
-                onChange={(e) => setEditingValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    commitEditing();
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    clearEditing();
-                  }
-                }}
-                onBlur={() => commitEditing()}
-              />
-            ) : (
-              <span className="navTreeLabel">{node.label}</span>
-            )}
-
-            {showBadge ? <span className="navTreeSecondary">{node.secondary}</span> : null}
-            {actions}
-          </div>
-        </TreeItemContent>
-
-        {hasChildren ? node.children!.map((c) => renderNode(c, depth + 1)) : null}
-      </TreeItem>
-    );
-  }
 
   return (
     <div className="navigator">
@@ -876,18 +643,26 @@ return [
     }
   }}
 >
-      <Tree
-        aria-label="Model navigator"
-        selectionMode="single"
-        // Keep selection controlled by the Workspace selection state.
-        selectedKeys={selectedKey ? new Set([selectedKey]) : new Set()}
-        onSelectionChange={handleSelectionChange}
+      <ModelNavigatorTree
+        treeData={treeData}
+        selectedKey={selectedKey}
         expandedKeys={expandedKeys}
-        onExpandedChange={(keys) => setExpandedKeys(new Set(keys as Iterable<Key>))}
-        className="navAriaTree"
-        renderEmptyState={() => <div className="navEmpty">No items</div>}      >
-        {treeData.map((n) => renderNode(n, 0))}
-      </Tree>
+        setExpandedKeys={setExpandedKeys}
+        handleSelectionChange={handleSelectionChange}
+        editingKey={editingKey}
+        editingValue={editingValue}
+        setEditingValue={setEditingValue}
+        editInputRef={editInputRef}
+        startEditing={startEditing}
+        commitEditing={commitEditing}
+        clearEditing={clearEditing}
+        selection={selection}
+        openCreateFolder={openCreateFolder}
+        openCreateElement={openCreateElement}
+        openCreateView={openCreateView}
+        openCreateRelationship={openCreateRelationship}
+        onRequestDeleteFolder={(id) => setDeleteFolderId(id)}
+      />
       </div>
 
       

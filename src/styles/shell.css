@@ -127,6 +127,11 @@
   cursor: not-allowed;
 }
 
+/* Default: small-only controls hidden */
+.shellOnlySmall {
+  display: none;
+}
+
 .shellIconButton {
   padding: 7px 10px;
   border-radius: 10px;
@@ -140,9 +145,26 @@
 .shellBody {
   flex: 1;
   display: grid;
-  grid-template-columns: 260px 1fr 320px;
+  /* Docked layout sizes (can be overridden in breakpoints below) */
+  --shellLeftWidth: 260px;
+  --shellRightWidth: 320px;
+  grid-template-columns: 1fr;
   gap: 12px;
   padding: 12px;
+}
+
+/* Docked layout: control which sidebars consume space */
+
+.shellBody.isLeftDockedOpen.isRightDockedOpen {
+  grid-template-columns: var(--shellLeftWidth) 1fr var(--shellRightWidth);
+}
+
+.shellBody.isLeftDockedOpen:not(.isRightDockedOpen) {
+  grid-template-columns: var(--shellLeftWidth) 1fr;
+}
+
+.shellBody.isRightDockedOpen:not(.isLeftDockedOpen) {
+  grid-template-columns: 1fr var(--shellRightWidth);
 }
 
 .shellSidebar {
@@ -153,6 +175,25 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* Hidden by default; shown when opened (both docked & overlay modes) */
+.shellSidebar:not(.isOpen) {
+  display: none;
+}
+
+.shellSidebar.isOpen {
+  display: flex;
+}
+
+.shellBackdrop {
+  position: fixed;
+  top: 54px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 15;
 }
 
 .shellSidebarHeader {
@@ -487,17 +528,18 @@
 
 @media (max-width: 1100px) {
   .shellBody {
-    grid-template-columns: 240px 1fr 280px;
-  }
-}
-
-@media (max-width: 900px) {
-  .shellBody {
-    grid-template-columns: 240px 1fr;
+    --shellLeftWidth: 240px;
+    --shellRightWidth: 280px;
   }
 
+  /* On medium screens the Properties panel opens as an overlay (doesn't shrink the canvas) */
   .shellSidebarRight {
-    display: none;
+    position: fixed;
+    top: 54px;
+    bottom: 12px;
+    right: 12px;
+    width: min(360px, calc(100vw - 24px));
+    z-index: 20;
   }
 }
 
@@ -513,8 +555,27 @@
     flex-wrap: wrap;
   }
 
-  .shellButton {
+  .shellHeader .shellActions > .shellButton {
     display: none;
+  }
+
+  .shellBrand {
+    display: none;
+  }
+
+  /* Hide About tab on small screens; access it via the ⋯ menu */
+  .shellNavLinkAbout {
+    display: none;
+  }
+
+  .shellNav {
+    flex: 0;
+    min-width: 0;
+  }
+
+  .shellNavLink {
+    padding: 6px 8px;
+    font-size: 13px;
   }
 
   .shellOnlySmall {
@@ -568,9 +629,4 @@
     background: rgba(0, 0, 0, 0.45);
     z-index: 15;
   }
-}
-
-/* Default: small-only controls hidden */
-.shellOnlySmall {
-  display: none;
 }

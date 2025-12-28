@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 import '../../styles/shell.css';
@@ -14,13 +14,13 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-function TopNavLink({ to, label, confirmNavigate }: { to: string; label: string; confirmNavigate?: () => boolean }) {
+function TopNavLink({ to, label, confirmNavigate, className }: { to: string; label: string; confirmNavigate?: () => boolean; className?: string }) {
   const location = useLocation();
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
-        ['shellNavLink', isActive ? 'isActive' : null].filter(Boolean).join(' ')
+        ['shellNavLink', className ?? null, isActive ? 'isActive' : null].filter(Boolean).join(' ')
       }
       end={to === '/'}
       onClick={(e) => {
@@ -36,9 +36,49 @@ function TopNavLink({ to, label, confirmNavigate }: { to: string; label: string;
   );
 }
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+
+    // NOTE: TypeScript's DOM lib assumes `addEventListener` exists on MediaQueryList,
+    // which makes feature checks like `'addEventListener' in mql` narrow the else
+    // branch to `never`. Use an `any`-based feature check so we can still support
+    // older Safari/iOS versions that only have `addListener/removeListener`.
+    const anyMql = mql as any;
+    if (typeof anyMql.addEventListener === 'function') {
+      anyMql.addEventListener('change', onChange);
+      return () => anyMql.removeEventListener('change', onChange);
+    }
+
+    // Safari < 14
+    if (typeof anyMql.addListener === 'function') {
+      // eslint-disable-next-line deprecation/deprecation
+      anyMql.addListener(onChange);
+      // eslint-disable-next-line deprecation/deprecation
+      return () => anyMql.removeListener(onChange);
+    }
+
+    return;
+  }, [query]);
+
+  return matches;
+}
+
 export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, children }: AppShellProps) {
   const hasLeft = Boolean(leftSidebar);
   const hasRight = Boolean(rightSidebar);
+
+  const isSmall = useMediaQuery('(max-width: 720px)');
+  const isMedium = useMediaQuery('(max-width: 1100px)');
+  const rightOverlay = !isSmall && isMedium;
 
   const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.model }));
   const online = useOnlineStatus();
@@ -50,10 +90,32 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
     };
   }, [isDirty]);
 
-  const [leftOpen, setLeftOpen] = useState(false);
-  const [rightOpen, setRightOpen] = useState(false);
+  const [leftOpen, setLeftOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth > 720;
+  });
+  const [rightOpen, setRightOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const w = window.innerWidth;
+    return w > 1100;
+  });
 
-  const showBackdrop = leftOpen || rightOpen;
+  // When entering small screens, close overlays by default.
+  useEffect(() => {
+    if (isSmall) {
+      setLeftOpen(false);
+      setRightOpen(false);
+    }
+  }, [isSmall]);
+
+  // On medium screens, prefer hiding the properties panel by default.
+  useEffect(() => {
+    if (!isSmall && isMedium) {
+      setRightOpen(false);
+    }
+  }, [isSmall, isMedium]);
+
+  const showBackdrop = (isSmall && (leftOpen || rightOpen)) || (rightOverlay && rightOpen);
 
   return (
     <div className="shell">
@@ -65,7 +127,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
 
         <nav className="shellNav" aria-label="Primary navigation" data-testid="app-nav">
           <TopNavLink to="/" label="Workspace" confirmNavigate={confirmNavigate} />
-          <TopNavLink to="/about" label="About" confirmNavigate={confirmNavigate} />
+          <TopNavLink to="/about" label="About" className="shellNavLinkAbout" confirmNavigate={confirmNavigate} />
         </nav>
 
         <div className="shellActions" aria-label="Actions">
@@ -90,11 +152,11 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
           {hasLeft ? (
             <button
               type="button"
-              className="shellIconButton shellOnlySmall"
+              className="shellIconButton"
               aria-label="Toggle model navigator"
               onClick={() => {
                 setLeftOpen((v) => !v);
-                setRightOpen(false);
+                if (isSmall) setRightOpen(false);
               }}
             >
               ☰
@@ -104,11 +166,11 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
           {hasRight ? (
             <button
               type="button"
-              className="shellIconButton shellOnlySmall"
+              className="shellIconButton"
               aria-label="Toggle properties panel"
               onClick={() => {
                 setRightOpen((v) => !v);
-                setLeftOpen(false);
+                if (isSmall) setLeftOpen(false);
               }}
             >
               ⚙
@@ -117,7 +179,15 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
         </div>
       </header>
 
-      <div className="shellBody">
+      <div
+        className={[
+          'shellBody',
+          hasLeft && leftOpen && !isSmall ? 'isLeftDockedOpen' : null,
+          hasRight && rightOpen && !isSmall && !isMedium ? 'isRightDockedOpen' : null
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         {hasLeft ? (
           <aside
             className={[
@@ -134,7 +204,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
               <div className="shellSidebarTitle">Model</div>
               <button
                 type="button"
-                className="shellIconButton shellOnlySmall"
+                className="shellIconButton"
                 aria-label="Close model navigator"
                 onClick={() => setLeftOpen(false)}
               >
@@ -161,7 +231,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
               <div className="shellSidebarTitle">Properties</div>
               <button
                 type="button"
-                className="shellIconButton shellOnlySmall"
+                className="shellIconButton"
                 aria-label="Close properties panel"
                 onClick={() => setRightOpen(false)}
               >
@@ -174,11 +244,18 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
 
         {showBackdrop ? (
           <div
-            className="shellBackdrop shellOnlySmall"
+            className="shellBackdrop"
             aria-hidden="true"
             onClick={() => {
-              setLeftOpen(false);
-              setRightOpen(false);
+              if (isSmall) {
+                setLeftOpen(false);
+                setRightOpen(false);
+                return;
+              }
+              // Medium screens: backdrop is used for the right overlay panel only.
+              if (rightOverlay) {
+                setRightOpen(false);
+              }
             }}
           />
         ) : null}

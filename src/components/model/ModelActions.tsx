@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import type { ModelMetadata } from '../../domain';
 import { deserializeModel, serializeModel, downloadTextFile, sanitizeFileName, modelStore, useModelStore } from '../../store';
@@ -13,10 +14,12 @@ type ModelActionsProps = {
 };
 
 export function ModelActions({ onEditModelProps }: ModelActionsProps) {
+  const navigate = useNavigate();
   const { model, fileName, isDirty } = useModelStore((s) => s);
   const openInputRef = useRef<HTMLInputElement | null>(null);
 
   const [newDialogOpen, setNewDialogOpen] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
   const [saveAsDialogOpen, setSaveAsDialogOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
@@ -127,6 +130,15 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         Model
       </button>
 
+      <button
+        type="button"
+        className="shellIconButton shellOnlySmall"
+        aria-label="More model actions"
+        onClick={() => setOverflowOpen(true)}
+      >
+        ⋯
+      </button>
+
       <input
         ref={openInputRef}
         data-testid="open-model-input"
@@ -140,6 +152,84 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
           void onFileChosen(f);
         }}
       />
+
+      <Dialog
+        title="Model actions"
+        isOpen={overflowOpen}
+        onClose={() => setOverflowOpen(false)}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              setOverflowOpen(false);
+              doNewModel();
+            }}
+          >
+            New
+          </button>
+
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              setOverflowOpen(false);
+              doOpenModel();
+            }}
+          >
+            Open
+          </button>
+
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              setOverflowOpen(false);
+              doSave();
+            }}
+            disabled={!model}
+            title={!model ? 'No model loaded' : isDirty ? 'Save changes (Ctrl/Cmd+S)' : 'Download model (Ctrl/Cmd+S)'}
+          >
+            Save model{isDirty ? '*' : ''}
+          </button>
+
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              setOverflowOpen(false);
+              doSaveAs();
+            }}
+            disabled={!model}
+          >
+            Download As
+          </button>
+
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              setOverflowOpen(false);
+              onEditModelProps();
+            }}
+            disabled={!model}
+          >
+            Model
+          </button>
+
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              setOverflowOpen(false);
+              navigate('/about');
+            }}
+          >
+            About
+          </button>
+        </div>
+      </Dialog>
 
       <Dialog
         title="New model"

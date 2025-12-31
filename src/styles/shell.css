@@ -11,6 +11,8 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .modelWorkspaceCanvas {
@@ -27,6 +29,9 @@
   justify-content: space-between;
   gap: 16px;
   padding: 12px 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
   position: sticky;
@@ -39,17 +44,25 @@
   flex-direction: column;
   gap: 2px;
   min-width: 140px;
+  max-width: 40vw;
+  overflow: hidden;
 }
 
 .shellTitle {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .shellSubtitle {
   font-size: 12px;
   opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .shellNav {
@@ -57,6 +70,7 @@
   align-items: center;
   gap: 8px;
   flex: 1;
+  min-width: 0;
 }
 
 .shellNavLink {
@@ -87,6 +101,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
 }
 
 .shellStatus {
@@ -527,6 +542,30 @@
 /* Responsive: tablet and down */
 
 @media (max-width: 1100px) {
+  /* Header: prevent horizontal overflow on tablets (e.g. iPad).
+     Collapse the model action buttons into the ⋯ overflow menu earlier.
+  */
+  .shellHeader {
+    overflow-x: clip;
+  }
+
+  .shellHeader > * {
+    min-width: 0;
+  }
+
+  .shellActions > .shellButton {
+    display: none;
+  }
+
+  .shellOnlySmall {
+    display: inline-flex;
+  }
+
+  /* About can be reached via the ⋯ menu on narrower screens */
+  .shellNavLinkAbout {
+    display: none;
+  }
+
   .shellBody {
     --shellLeftWidth: 240px;
     --shellRightWidth: 280px;

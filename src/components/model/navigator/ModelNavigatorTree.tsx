@@ -41,6 +41,7 @@ type Props = {
   openCreateElement: (targetFolderId?: string) => void;
   onRequestDeleteFolder: (folderId: string) => void;
   openCreateView: (targetFolderId?: string) => void;
+  openCreateCenteredView: (elementId: string) => void;
   openCreateRelationship: (prefillSourceElementId?: string) => void;
 
   /** Optional handler: move an element to a folder when dropped on a folder in the tree. */
@@ -116,6 +117,7 @@ export function ModelNavigatorTree({
   openCreateElement,
   onRequestDeleteFolder,
   openCreateView,
+  openCreateCenteredView,
   openCreateRelationship,
   onMoveElementToFolder
 }: Props) {
@@ -237,6 +239,7 @@ export function ModelNavigatorTree({
             openCreateFolder={openCreateFolder}
             openCreateElement={openCreateElement}
             openCreateView={openCreateView}
+            openCreateCenteredView={openCreateCenteredView}
             openCreateRelationship={openCreateRelationship}
             onRequestDeleteFolder={onRequestDeleteFolder}
           />

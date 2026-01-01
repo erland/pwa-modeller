@@ -89,6 +89,25 @@ function deleteElementInModel(model: Model, elementId: string): void {
     }
   }
 
+  // If there are views centered on this element, move them back to the root folder.
+  const rootId = findFolderIdByKind(model, 'root');
+  const rootFolder = getFolder(model, rootId);
+  let rootViewIds = rootFolder.viewIds;
+  let rootChanged = false;
+  for (const view of Object.values(model.views)) {
+    if (view.centerElementId === elementId) {
+      model.views[view.id] = { ...view, centerElementId: undefined };
+      if (!rootViewIds.includes(view.id)) {
+        if (!rootChanged) rootViewIds = [...rootViewIds];
+        rootViewIds.push(view.id);
+        rootChanged = true;
+      }
+    }
+  }
+  if (rootChanged) {
+    model.folders[rootId] = { ...rootFolder, viewIds: rootViewIds };
+  }
+
   // Remove relationships that reference it
   const relIdsToDelete = Object.values(model.relationships)
     .filter((r) => r.sourceElementId === elementId || r.targetElementId === elementId)
@@ -332,10 +351,20 @@ export class ModelStore {
   // -------------------------
   // Views
   // -------------------------
-
   addView = (view: View, folderId?: string): void => {
     this.updateModel((model) => {
       model.views[view.id] = view;
+
+      // If the view is centered on an element, it should not live in any folder.
+      if (view.centerElementId) {
+        for (const fid of Object.keys(model.folders)) {
+          const f = model.folders[fid];
+          if (f.viewIds.includes(view.id)) {
+            model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== view.id) };
+          }
+        }
+        return;
+      }
 
       const targetFolderId = folderId ?? findFolderIdByKind(model, 'root');
       const folder = getFolder(model, targetFolderId);
@@ -344,12 +373,37 @@ export class ModelStore {
       }
     });
   };
-
   updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => {
     this.updateModel((model) => {
       const current = model.views[viewId];
       if (!current) throw new Error(`View not found: ${viewId}`);
-      model.views[viewId] = { ...current, ...patch, id: current.id };
+
+      const next: View = { ...current, ...patch, id: current.id };
+
+      // Maintain placement invariant when centerElementId is modified.
+      if (Object.prototype.hasOwnProperty.call(patch, 'centerElementId')) {
+        const nextCenter = (patch as any).centerElementId as (string | undefined);
+
+        if (typeof nextCenter === 'string' && nextCenter) {
+          // Centered views should not be present in any folder list.
+          for (const fid of Object.keys(model.folders)) {
+            const f = model.folders[fid];
+            if (f.viewIds.includes(viewId)) {
+              model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
+            }
+          }
+        } else if (!nextCenter) {
+          // Clearing centering: ensure the view is in a folder (default to root).
+          const inFolder = Object.values(model.folders).some((f) => f.viewIds.includes(viewId));
+          if (!inFolder) {
+            const rootId = findFolderIdByKind(model, 'root');
+            const root = getFolder(model, rootId);
+            model.folders[rootId] = root.viewIds.includes(viewId) ? root : { ...root, viewIds: [...root.viewIds, viewId] };
+          }
+        }
+      }
+
+      model.views[viewId] = next;
     });
   };
 
@@ -393,16 +447,20 @@ export class ModelStore {
         documentation: original.documentation,
         stakeholders: original.stakeholders ? [...original.stakeholders] : undefined,
         formatting: original.formatting ? JSON.parse(JSON.stringify(original.formatting)) : undefined,
+        centerElementId: original.centerElementId,
         layout: original.layout ? JSON.parse(JSON.stringify(original.layout)) : undefined
       });
 
       model.views[clone.id] = clone;
 
-      const folderId = findFolderContainingView(model, viewId) ?? findFolderIdByKind(model, 'root');
-      model.folders[folderId] = {
-        ...model.folders[folderId],
-        viewIds: [...model.folders[folderId].viewIds, clone.id]
-      };
+      // Preserve placement: if the original is centered on an element, keep the clone centered too.
+      if (!original.centerElementId) {
+        const folderId = findFolderContainingView(model, viewId) ?? findFolderIdByKind(model, 'root');
+        model.folders[folderId] = {
+          ...model.folders[folderId],
+          viewIds: [...model.folders[folderId].viewIds, clone.id]
+        };
+      }
 
       created = clone.id;
     });
@@ -585,22 +643,65 @@ export class ModelStore {
       model.folders[targetFolderId] = { ...to, elementIds: [...to.elementIds, elementId] };
     });
   };
-
   moveViewToFolder = (viewId: string, targetFolderId: string): void => {
     this.updateModel((model) => {
+      const view = getView(model, viewId);
       const fromId = findFolderContainingView(model, viewId);
-      if (!fromId) throw new Error(`View not found in any folder: ${viewId}`);
-      if (fromId === targetFolderId) return;
 
-      const from = getFolder(model, fromId);
+      // If the view is currently centered on an element, it might not be in any folder.
+      if (!fromId && !view.centerElementId) {
+        throw new Error(`View not found in any folder: ${viewId}`);
+      }
+
+      // If already in the target folder and not centered, nothing to do.
+      if (fromId === targetFolderId && !view.centerElementId) return;
+
+      // Remove from the previous folder (if any).
+      if (fromId) {
+        const from = getFolder(model, fromId);
+        model.folders[fromId] = { ...from, viewIds: from.viewIds.filter((id) => id !== viewId) };
+      }
+
+      // Clear centering when moving to a folder.
+      if (view.centerElementId) {
+        model.views[viewId] = { ...view, centerElementId: undefined };
+      }
+
+      // Ensure not duplicated in any folder list (defensive).
+      for (const fid of Object.keys(model.folders)) {
+        const f = model.folders[fid];
+        if (f.viewIds.includes(viewId) && fid != targetFolderId) {
+          model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
+        }
+      }
+
       const to = getFolder(model, targetFolderId);
-
-      model.folders[fromId] = { ...from, viewIds: from.viewIds.filter((id) => id !== viewId) };
-      model.folders[targetFolderId] = { ...to, viewIds: [...to.viewIds, viewId] };
+      if (!to.viewIds.includes(viewId)) {
+        model.folders[targetFolderId] = { ...to, viewIds: [...to.viewIds, viewId] };
+      }
     });
   };
 
-  renameFolder = (folderId: string, name: string): void => {
+  moveViewToElement = (viewId: string, elementId: string): void => {
+    this.updateModel((model) => {
+      // Ensure both ids exist.
+      if (!model.elements[elementId]) throw new Error(`Element not found: ${elementId}`);
+      const view = getView(model, viewId);
+
+      // Remove from any folder it might currently be in.
+      for (const fid of Object.keys(model.folders)) {
+        const f = model.folders[fid];
+        if (f.viewIds.includes(viewId)) {
+          model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
+        }
+      }
+
+      // Update placement on the view.
+      model.views[viewId] = { ...view, centerElementId: elementId };
+    });
+  };
+
+    renameFolder = (folderId: string, name: string): void => {
     this.updateModel((model) => {
       const folder = getFolder(model, folderId);
       if (folder.kind === 'root') {

@@ -14,6 +14,19 @@ export function buildNavigatorTreeData(args: {
 }): NavNode[] {
   const { model, rootFolderId, searchTerm } = args;
 
+  // Precompute views that are centered on elements so we can render them nested under elements in the tree.
+  const centeredViewsByElementId = new Map<string, { id: string; name: string; viewpointId: string }[]>();
+  for (const v of Object.values(model.views)) {
+    if (!v.centerElementId) continue;
+    const arr = centeredViewsByElementId.get(v.centerElementId) ?? [];
+    arr.push({ id: v.id, name: v.name || '(unnamed)', viewpointId: v.viewpointId });
+    centeredViewsByElementId.set(v.centerElementId, arr);
+  }
+  for (const [k, arr] of centeredViewsByElementId.entries()) {
+    arr.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }));
+    centeredViewsByElementId.set(k, arr);
+  }
+
   const buildFolder = (folderId: string): NavNode => {
     const folder = model.folders[folderId];
     const isRootFolder = folder.kind === 'root';
@@ -21,18 +34,32 @@ export function buildNavigatorTreeData(args: {
     const childFolders = folder.folderIds.map((id) => model.folders[id]).filter(Boolean).sort(sortByName);
     const childFolderNodes = childFolders.map((f) => buildFolder(f.id));
 
-    const elementLeaves = folder.elementIds
+        const elementLeaves = folder.elementIds
       .map((id) => model.elements[id])
       .filter(Boolean)
       .sort(sortByName)
-      .map<NavNode>((el) => ({
-        key: makeKey('element', el.id),
-        kind: 'element',
-        label: el.name || '(unnamed)',
-        tooltip: `${el.name || '(unnamed)'} (${el.type})`,
-        canRename: true,
-        elementId: el.id
-      }));
+      .map<NavNode>((el) => {
+        const centered = centeredViewsByElementId.get(el.id) ?? [];
+        const centeredViewNodes: NavNode[] = centered.map((v) => ({
+          key: makeKey('view', v.id),
+          kind: 'view',
+          label: v.name || '(unnamed)',
+          tooltip: `${v.name || '(unnamed)'} (${v.viewpointId})`,
+          canRename: true,
+          viewId: v.id
+        }));
+
+        return {
+          key: makeKey('element', el.id),
+          kind: 'element',
+          label: el.name || '(unnamed)',
+          tooltip: `${el.name || '(unnamed)'} (${el.type})`,
+          canRename: true,
+          canCreateCenteredView: true,
+          children: centeredViewNodes.length ? centeredViewNodes : undefined,
+          elementId: el.id
+        };
+      });
 
     const viewLeaves = folder.viewIds
       .map((id) => model.views[id])

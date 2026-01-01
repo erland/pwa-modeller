@@ -36,6 +36,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
   const [createViewOpen, setCreateViewOpen] = useState(false);
   const [createViewFolderId, setCreateViewFolderId] = useState<string | null>(null);
+  const [createViewCenteredElementId, setCreateViewCenteredElementId] = useState<string | null>(null);
 
   const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
   const [relationshipPrefillSourceId, setRelationshipPrefillSourceId] = useState<string | undefined>(undefined);
@@ -70,7 +71,15 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
   const openCreateView = (targetFolderId?: string) => {
     if (!rootFolder) return;
+    setCreateViewCenteredElementId(null);
     setCreateViewFolderId(targetFolderId ?? rootFolder.id);
+    setCreateViewOpen(true);
+  };
+
+  const openCreateCenteredView = (elementId: string) => {
+    if (!rootFolder) return;
+    setCreateViewFolderId(null);
+    setCreateViewCenteredElementId(elementId);
     setCreateViewOpen(true);
   };
 
@@ -124,6 +133,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
           openCreateFolder={openCreateFolder}
           openCreateElement={openCreateElement}
           openCreateView={openCreateView}
+          openCreateCenteredView={openCreateCenteredView}
           openCreateRelationship={openCreateRelationship}
           onRequestDeleteFolder={(id) => setDeleteFolderId(id)}
           onMoveElementToFolder={(elementId, targetFolderId) => {
@@ -154,7 +164,11 @@ export function ModelNavigator({ selection, onSelect }: Props) {
       <CreateViewDialog
         isOpen={createViewOpen}
         targetFolderId={createViewFolderId ?? rootFolder.id}
-        onClose={() => setCreateViewOpen(false)}
+        centerElementId={createViewCenteredElementId ?? undefined}
+        onClose={() => {
+          setCreateViewOpen(false);
+          setCreateViewCenteredElementId(null);
+        }}
         onSelect={onSelect}
       />
 

@@ -55,6 +55,7 @@ export function createView(input: CreateViewInput): View {
     documentation: input.documentation?.trim() || undefined,
     stakeholders: input.stakeholders,
     formatting,
+    centerElementId: input.centerElementId,
     layout: input.layout
   };
 }

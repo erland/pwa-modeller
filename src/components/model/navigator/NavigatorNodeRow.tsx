@@ -45,6 +45,7 @@ type Props = {
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string) => void;
   openCreateView: (targetFolderId?: string) => void;
+  openCreateCenteredView: (elementId: string) => void;
   openCreateRelationship: (prefillSourceElementId?: string) => void;
   onRequestDeleteFolder: (folderId: string) => void;
 };
@@ -70,15 +71,17 @@ export function NavigatorNodeRow({
   openCreateFolder,
   openCreateElement,
   openCreateView,
+  openCreateCenteredView,
   openCreateRelationship,
   onRequestDeleteFolder
 }: Props) {
   // Single "Create…" button (Explorer/Finder-like) with a menu for all create actions
   // relevant to this node.
   const canShowCreateMenu =
-    Boolean(node.canCreateFolder && node.folderId) ||
-    Boolean(node.canCreateElement && node.folderId) ||
-    Boolean(node.canCreateView && node.folderId) ||
+    (Boolean(node.canCreateFolder && node.folderId) ||
+      Boolean(node.canCreateElement && node.folderId) ||
+      Boolean(node.canCreateView && node.folderId) ||
+      Boolean(node.canCreateCenteredView && node.elementId)) ||
     Boolean(node.canCreateRelationship);
 
   const actions = (
@@ -97,6 +100,8 @@ export function NavigatorNodeRow({
                   openCreateElement(node.folderId);
                 } else if (k === 'view' && node.folderId) {
                   openCreateView(node.folderId);
+                } else if (k === 'centeredView' && node.elementId) {
+                  openCreateCenteredView(node.elementId);
                 } else if (k === 'relationship') {
                   const prefill = selection.kind === 'element' ? selection.elementId : undefined;
                   openCreateRelationship(prefill);
@@ -111,6 +116,9 @@ export function NavigatorNodeRow({
               ) : null}
               {node.canCreateView && node.folderId ? (
                 <MenuItem className="navMenuItem" id="view">View…</MenuItem>
+              ) : null}
+              {node.canCreateCenteredView && node.elementId ? (
+                <MenuItem className="navMenuItem" id="centeredView">Centered view…</MenuItem>
               ) : null}
               {node.canCreateRelationship ? (
                 <MenuItem className="navMenuItem" id="relationship">Relationship…</MenuItem>

@@ -89,12 +89,20 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
                 if (targetId) actions.moveViewToFolder(view.id, targetId);
               }}
             >
+              {!currentFolderId ? (
+                <option value="">{view.centerElementId ? '(centered on element)' : '(not in folder)'}</option>
+              ) : null}
               {viewFolders.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.label}
                 </option>
               ))}
             </select>
+            {view.centerElementId ? (
+              <p className="panelHint" style={{ marginTop: 6 }}>
+                Centered on: {model.elements[view.centerElementId]?.name ?? view.centerElementId}
+              </p>
+            ) : null}
           </div>
         </div>
 

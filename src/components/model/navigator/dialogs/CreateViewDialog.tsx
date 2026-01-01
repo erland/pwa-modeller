@@ -8,11 +8,13 @@ import type { Selection } from '../../selection';
 type Props = {
   isOpen: boolean;
   targetFolderId: string;
+  /** If set, the view will be created nested under (centered around) this element and will not be placed in any folder. */
+  centerElementId?: string;
   onClose: () => void;
   onSelect: (selection: Selection) => void;
 };
 
-export function CreateViewDialog({ isOpen, targetFolderId, onClose, onSelect }: Props) {
+export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, onClose, onSelect }: Props) {
   const [nameDraft, setNameDraft] = useState('');
   const [viewpointDraft, setViewpointDraft] = useState<string>(VIEWPOINTS[0]?.id ?? 'layered');
 
@@ -37,8 +39,13 @@ export function CreateViewDialog({ isOpen, targetFolderId, onClose, onSelect }: 
             className="shellButton"
             disabled={nameDraft.trim().length === 0}
             onClick={() => {
-              const created = createView({ name: nameDraft.trim(), viewpointId: viewpointDraft });
-              modelStore.addView(created, targetFolderId ?? undefined);
+              const created = createView({
+                name: nameDraft.trim(),
+                viewpointId: viewpointDraft,
+                centerElementId: centerElementId || undefined
+              });
+              // Centered views are not placed in folders (store enforces this invariant).
+              modelStore.addView(created, centerElementId ? undefined : (targetFolderId ?? undefined));
               onClose();
               onSelect({ kind: 'view', viewId: created.id });
             }}
@@ -48,6 +55,11 @@ export function CreateViewDialog({ isOpen, targetFolderId, onClose, onSelect }: 
         </div>
       }
     >
+      {centerElementId ? (
+        <p className="panelHint" style={{ marginTop: 0 }}>
+          This view will be nested under the selected element in the navigator.
+        </p>
+      ) : null}
       <div className="propertiesGrid">
         <div className="propertiesRow">
           <div className="propertiesKey">Name</div>

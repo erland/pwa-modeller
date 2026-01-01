@@ -132,6 +132,9 @@ export interface View {
   stakeholders?: string[];
   formatting?: ViewFormatting;
 
+  /** If set, the view is nested under (and conceptually centered around) this element in the navigator. */
+  centerElementId?: string;
+
   layout?: ViewLayout;
 }
 

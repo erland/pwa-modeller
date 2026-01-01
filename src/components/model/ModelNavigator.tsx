@@ -11,7 +11,6 @@ import { findFolderByKind } from './navigator/navUtils';
 import { useNavigatorState } from './navigator/useNavigatorState';
 import { CreateElementDialog } from './navigator/dialogs/CreateElementDialog';
 import { CreateFolderDialog } from './navigator/dialogs/CreateFolderDialog';
-import { CreateRelationshipDialog } from './navigator/dialogs/CreateRelationshipDialog';
 import { CreateViewDialog } from './navigator/dialogs/CreateViewDialog';
 import { DeleteFolderDialog } from './navigator/dialogs/DeleteFolderDialog';
 
@@ -37,9 +36,6 @@ export function ModelNavigator({ selection, onSelect }: Props) {
   const [createViewOpen, setCreateViewOpen] = useState(false);
   const [createViewFolderId, setCreateViewFolderId] = useState<string | null>(null);
   const [createViewCenteredElementId, setCreateViewCenteredElementId] = useState<string | null>(null);
-
-  const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
-  const [relationshipPrefillSourceId, setRelationshipPrefillSourceId] = useState<string | undefined>(undefined);
 
   const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
 
@@ -83,11 +79,6 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     setCreateViewOpen(true);
   };
 
-  const openCreateRelationship = (prefillSourceElementId?: string) => {
-    setRelationshipPrefillSourceId(prefillSourceElementId);
-    setCreateRelationshipOpen(true);
-  };
-
   if (!model || !rootFolder || !treeData) {
     return (
       <div className="navigator">
@@ -112,7 +103,6 @@ export function ModelNavigator({ selection, onSelect }: Props) {
         onCreateFolder={openCreateFolder}
         onCreateElement={openCreateElement}
         onCreateView={openCreateView}
-        onCreateRelationship={openCreateRelationship}
       />
 
       <div className="navTreeWrap" onKeyDown={nav.onTreeKeyDown}>
@@ -129,12 +119,10 @@ export function ModelNavigator({ selection, onSelect }: Props) {
           startEditing={nav.startEditing}
           commitEditing={nav.commitEditing}
           clearEditing={nav.clearEditing}
-          selection={selection}
           openCreateFolder={openCreateFolder}
           openCreateElement={openCreateElement}
           openCreateView={openCreateView}
           openCreateCenteredView={openCreateCenteredView}
-          openCreateRelationship={openCreateRelationship}
           onRequestDeleteFolder={(id) => setDeleteFolderId(id)}
           onMoveElementToFolder={(elementId, targetFolderId) => {
             // Action is on the store instance (not part of the Zustand state snapshot).
@@ -172,13 +160,6 @@ export function ModelNavigator({ selection, onSelect }: Props) {
         onSelect={onSelect}
       />
 
-      <CreateRelationshipDialog
-        model={model}
-        isOpen={createRelationshipOpen}
-        prefillSourceElementId={relationshipPrefillSourceId}
-        onClose={() => setCreateRelationshipOpen(false)}
-        onSelect={onSelect}
-      />
     </div>
   );
 }

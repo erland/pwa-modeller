@@ -23,7 +23,6 @@ type Props = {
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string) => void;
   openCreateView: (targetFolderId?: string) => void;
-  openCreateRelationship: (prefillSourceElementId?: string) => void;
 };
 
 export function ModelNavigatorHeader({
@@ -37,7 +36,6 @@ export function ModelNavigatorHeader({
   openCreateFolder,
   openCreateElement,
   openCreateView,
-  openCreateRelationship
 }: Props) {
   return (
     <div className="navigatorHeader">
@@ -51,7 +49,7 @@ export function ModelNavigatorHeader({
         <input
           className="textInput"
           aria-label="Search model"
-          placeholder="Search elements, relationships, views…"
+          placeholder="Search elements, views, folders…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -79,9 +77,6 @@ export function ModelNavigatorHeader({
                   openCreateElement(folderId);
                 } else if (k === 'view') {
                   openCreateView(folderId);
-                } else if (k === 'relationship') {
-                  const prefill = selection.kind === 'element' ? selection.elementId : undefined;
-                  openCreateRelationship(prefill);
                 }
               }}
             >
@@ -93,9 +88,6 @@ export function ModelNavigatorHeader({
               </MenuItem>
               <MenuItem className="navMenuItem" id="view">
                 View…
-              </MenuItem>
-              <MenuItem className="navMenuItem" id="relationship">
-                Relationship…
               </MenuItem>
             </Menu>
           </Popover>

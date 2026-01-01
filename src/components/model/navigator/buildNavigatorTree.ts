@@ -94,33 +94,8 @@ export function buildNavigatorTreeData(args: {
     };
   };
 
-  const relationships = Object.values(model.relationships)
-    .filter(Boolean)
-    .sort((a, b) => {
-      const byType = a.type.localeCompare(b.type, undefined, { sensitivity: 'base' });
-      if (byType !== 0) return byType;
-      return (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' });
-    })
-    .map<NavNode>((r) => {
-      const src = model.elements[r.sourceElementId]?.name ?? r.sourceElementId;
-      const tgt = model.elements[r.targetElementId]?.name ?? r.targetElementId;
-      const label = r.name ? `${r.type}: ${r.name}` : r.type;
-      return {
-        key: makeKey('relationship', r.id),
-        kind: 'relationship',
-        label,
-        tooltip: `${label} — ${src} → ${tgt}`,
-        relationshipId: r.id
-      };
-    });
-
-  const rootNodes: NavNode[] = [
-    buildFolder(rootFolderId),
-    {
-      ...makeSection('relationships', 'Relationships', String(relationships.length), relationships, 'relationships'),
-      canCreateRelationship: true
-    }
-  ];
+  // Relationships are intentionally not shown in the navigator tree.
+  const rootNodes: NavNode[] = [buildFolder(rootFolderId)];
 
   if (!searchTerm) return rootNodes;
 
@@ -152,22 +127,6 @@ export function buildNavigatorTreeData(args: {
       viewId: v.id
     }));
 
-  const rels = Object.values(model.relationships)
-    .filter((r) => match(r.name) || match(r.type))
-    .slice(0, 30)
-    .map<NavNode>((r) => {
-      const src = model.elements[r.sourceElementId]?.name ?? r.sourceElementId;
-      const tgt = model.elements[r.targetElementId]?.name ?? r.targetElementId;
-      const label = r.name ? `${r.type}: ${r.name}` : r.type;
-      return {
-        key: makeKey('relationship', r.id),
-        kind: 'relationship',
-        label,
-        tooltip: `${label} — ${src} → ${tgt}`,
-        relationshipId: r.id
-      };
-    });
-
   const folders = Object.values(model.folders)
     .filter((f) => match(f.name) || match(f.kind))
     .sort(sortByName)
@@ -184,11 +143,10 @@ export function buildNavigatorTreeData(args: {
     makeSection(
       'search',
       'Search results',
-      String(elements.length + views.length + rels.length + folders.length),
+      String(elements.length + views.length + folders.length),
       [
         ...(elements.length ? [makeSection('search-elements', 'Elements', String(elements.length), elements)] : []),
         ...(views.length ? [makeSection('search-views', 'Views', String(views.length), views)] : []),
-        ...(rels.length ? [makeSection('search-relationships', 'Relationships', String(rels.length), rels)] : []),
         ...(folders.length ? [makeSection('search-folders', 'Folders', String(folders.length), folders)] : [])
       ]
     )

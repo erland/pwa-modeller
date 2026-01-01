@@ -25,7 +25,6 @@ export type NavNode = {
   canCreateView?: boolean;
   /** Create a view centered on an element (only meaningful for element nodes). */
   canCreateCenteredView?: boolean;
-  canCreateRelationship?: boolean;
   canDelete?: boolean;
   canRename?: boolean;
 

@@ -22,7 +22,6 @@ type Props = {
   onCreateFolder: (parentFolderId: string) => void;
   onCreateElement: (targetFolderId?: string) => void;
   onCreateView: (targetFolderId?: string) => void;
-  onCreateRelationship: (prefillSourceElementId?: string) => void;
 };
 
 export function NavigatorToolbar({
@@ -35,8 +34,7 @@ export function NavigatorToolbar({
   setSearchQuery,
   onCreateFolder,
   onCreateElement,
-  onCreateView,
-  onCreateRelationship
+  onCreateView
 }: Props) {
   return (
     <div className="navigatorHeader">
@@ -50,7 +48,7 @@ export function NavigatorToolbar({
         <input
           className="textInput"
           aria-label="Search model"
-          placeholder="Search elements, relationships, views…"
+          placeholder="Search elements, views, folders…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -83,9 +81,6 @@ export function NavigatorToolbar({
                   onCreateElement(folderId);
                 } else if (k === 'view') {
                   onCreateView(folderId);
-                } else if (k === 'relationship') {
-                  const prefill = selection.kind === 'element' ? selection.elementId : undefined;
-                  onCreateRelationship(prefill);
                 }
               }}
             >
@@ -97,9 +92,6 @@ export function NavigatorToolbar({
               </MenuItem>
               <MenuItem className="navMenuItem" id="view">
                 View…
-              </MenuItem>
-              <MenuItem className="navMenuItem" id="relationship">
-                Relationship…
               </MenuItem>
             </Menu>
           </Popover>

@@ -7,7 +7,6 @@ import {
   Popover
 } from 'react-aria-components';
 
-import type { Selection } from '../selection';
 import type { NavNode } from './types';
 import { DND_ELEMENT_MIME } from './types';
 
@@ -41,12 +40,10 @@ type Props = {
   clearEditing: () => void;
 
   // Create actions
-  selection: Selection;
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string) => void;
   openCreateView: (targetFolderId?: string) => void;
   openCreateCenteredView: (elementId: string) => void;
-  openCreateRelationship: (prefillSourceElementId?: string) => void;
   onRequestDeleteFolder: (folderId: string) => void;
 };
 
@@ -67,12 +64,10 @@ export function NavigatorNodeRow({
   startEditing,
   commitEditing,
   clearEditing,
-  selection,
   openCreateFolder,
   openCreateElement,
   openCreateView,
   openCreateCenteredView,
-  openCreateRelationship,
   onRequestDeleteFolder
 }: Props) {
   // Single "Create…" button (Explorer/Finder-like) with a menu for all create actions
@@ -82,7 +77,7 @@ export function NavigatorNodeRow({
       Boolean(node.canCreateElement && node.folderId) ||
       Boolean(node.canCreateView && node.folderId) ||
       Boolean(node.canCreateCenteredView && node.elementId)) ||
-    Boolean(node.canCreateRelationship);
+    false;
 
   const actions = (
     <span className="navTreeActions" aria-label="Node actions">
@@ -102,9 +97,6 @@ export function NavigatorNodeRow({
                   openCreateView(node.folderId);
                 } else if (k === 'centeredView' && node.elementId) {
                   openCreateCenteredView(node.elementId);
-                } else if (k === 'relationship') {
-                  const prefill = selection.kind === 'element' ? selection.elementId : undefined;
-                  openCreateRelationship(prefill);
                 }
               }}
             >
@@ -119,9 +111,6 @@ export function NavigatorNodeRow({
               ) : null}
               {node.canCreateCenteredView && node.elementId ? (
                 <MenuItem className="navMenuItem" id="centeredView">Centered view…</MenuItem>
-              ) : null}
-              {node.canCreateRelationship ? (
-                <MenuItem className="navMenuItem" id="relationship">Relationship…</MenuItem>
               ) : null}
             </Menu>
           </Popover>

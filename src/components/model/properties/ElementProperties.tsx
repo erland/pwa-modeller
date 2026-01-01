@@ -7,6 +7,7 @@ import type { FolderOption } from '../../../domain';
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { findFolderContaining, getElementLabel, splitRelationshipsForElement } from './utils';
+import { CreateRelationshipDialog } from '../navigator/dialogs/CreateRelationshipDialog';
 
 type TraceDirection = 'outgoing' | 'incoming' | 'both';
 
@@ -21,6 +22,8 @@ type Props = {
 export function ElementProperties({ model, elementId, actions, elementFolders, onSelect }: Props) {
   const el = model.elements[elementId];
   if (!el) return <p className="panelHint">Element not found.</p>;
+
+  const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
 
   const [traceDirection, setTraceDirection] = useState<TraceDirection>('both');
   const [traceDepth, setTraceDepth] = useState<number>(1);
@@ -52,6 +55,9 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
       })
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   }, [model, el.id]);
+
+  const canCreateRelationship = Object.keys(model.elements).length >= 2;
+  const onSelectSafe = onSelect ?? (() => undefined);
 
   return (
     <div>
@@ -146,7 +152,20 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
       </div>
 
       <div style={{ marginTop: 14 }}>
-        <p className="panelHint">Relationships</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <p className="panelHint" style={{ margin: 0 }}>
+            Relationships
+          </p>
+          <button
+            type="button"
+            className="miniButton"
+            disabled={!canCreateRelationship}
+            title={canCreateRelationship ? 'Create relationship' : 'Create at least two elements first'}
+            onClick={() => setCreateRelationshipOpen(true)}
+          >
+            New relationship…
+          </button>
+        </div>
         <div className="propertiesGrid">
           <div className="propertiesRow">
             <div className="propertiesKey">Used in views</div>
@@ -347,6 +366,14 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
           Delete element
         </button>
       </div>
+
+      <CreateRelationshipDialog
+        model={model}
+        isOpen={createRelationshipOpen}
+        prefillSourceElementId={el.id}
+        onClose={() => setCreateRelationshipOpen(false)}
+        onSelect={onSelectSafe}
+      />
     </div>
   );
 }

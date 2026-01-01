@@ -7,7 +7,6 @@ import {
   TreeItemContent
 } from 'react-aria-components';
 
-import type { Selection } from '../selection';
 import type { NavNode } from './types';
 import { DND_ELEMENT_MIME } from './types';
 import { NavigatorNodeRow } from './NavigatorNodeRow';
@@ -36,13 +35,11 @@ type Props = {
   clearEditing: () => void;
 
   // Create actions
-  selection: Selection;
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string) => void;
   onRequestDeleteFolder: (folderId: string) => void;
   openCreateView: (targetFolderId?: string) => void;
   openCreateCenteredView: (elementId: string) => void;
-  openCreateRelationship: (prefillSourceElementId?: string) => void;
 
   /** Optional handler: move an element to a folder when dropped on a folder in the tree. */
   onMoveElementToFolder?: (elementId: string, targetFolderId: string) => void;
@@ -112,13 +109,11 @@ export function ModelNavigatorTree({
   startEditing,
   commitEditing,
   clearEditing,
-  selection,
   openCreateFolder,
   openCreateElement,
   onRequestDeleteFolder,
   openCreateView,
   openCreateCenteredView,
-  openCreateRelationship,
   onMoveElementToFolder
 }: Props) {
   const treeWrapRef = useRef<HTMLDivElement | null>(null);
@@ -235,12 +230,10 @@ export function ModelNavigatorTree({
             startEditing={startEditing}
             commitEditing={commitEditing}
             clearEditing={clearEditing}
-            selection={selection}
             openCreateFolder={openCreateFolder}
             openCreateElement={openCreateElement}
             openCreateView={openCreateView}
             openCreateCenteredView={openCreateCenteredView}
-            openCreateRelationship={openCreateRelationship}
             onRequestDeleteFolder={onRequestDeleteFolder}
           />
         </TreeItemContent>

@@ -14,7 +14,7 @@ describe('Navigator CRUD', () => {
     (window.confirm as jest.Mock).mockRestore?.();
   });
 
-  it('can create elements and relationships from the navigator and edit properties', async () => {
+  it('can create elements and relationships and edit relationship properties', async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -51,8 +51,9 @@ describe('Navigator CRUD', () => {
     await user.selectOptions(within(createElB).getByLabelText('Type'), 'BusinessService');
     await user.click(within(createElB).getByRole('button', { name: 'Create' }));
 
-    // Create relationship A -> B (via dialog).
-    await chooseCreate('Relationship…');
+    // Create relationship B -> A (via element properties panel).
+    await user.click(within(left).getByText('B'));
+    await user.click(screen.getByRole('button', { name: 'New relationship…' }));
     const createRel = screen.getByRole('dialog', { name: 'Create relationship' });
     await user.type(within(createRel).getByLabelText('Relationship name'), 'Uses');
     // Serving must originate from the service and point to the actor (minimal ArchiMate rule).
@@ -61,12 +62,16 @@ describe('Navigator CRUD', () => {
     await user.selectOptions(within(createRel).getByLabelText('Relationship type'), 'Serving');
     await user.click(within(createRel).getByRole('button', { name: 'Create' }));
 
-    // Relationship appears in the navigator.
-    expect(await screen.findByText('Serving: Uses')).toBeInTheDocument();
+    // After creation, the dialog selects the new relationship.
+    expect(screen.getByText('Relationship')).toBeInTheDocument();
 
     // Edit the selected relationship name via properties panel.
     await user.clear(screen.getByLabelText('Relationship property name'));
     await user.type(screen.getByLabelText('Relationship property name'), 'Uses2');
-    expect(screen.getByText('Serving: Uses2')).toBeInTheDocument();
+
+    // Confirm the edited relationship is visible from the source element.
+    await user.click(within(left).getByText('B'));
+    const right = screen.getByTestId('right-sidebar');
+    expect(within(right).getAllByRole('button', { name: /Select relationship Serving.*Uses2/i }).length).toBeGreaterThan(0);
   });
 });

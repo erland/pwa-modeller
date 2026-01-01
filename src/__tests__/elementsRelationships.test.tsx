@@ -50,7 +50,9 @@ describe('Elements & Relationships CRUD', () => {
       sourceLabel: string;
       targetLabel: string;
     }) => {
-      await chooseCreate('Relationship…');
+      // Relationships are created from the Element properties panel.
+      await user.click(within(left).getByText(opts.sourceLabel.split(' (')[0]));
+      await user.click(screen.getByRole('button', { name: 'New relationship…' }));
       const dlg = screen.getByRole('dialog', { name: 'Create relationship' });
       await user.selectOptions(within(dlg).getByLabelText('Source'), opts.sourceLabel);
       await user.selectOptions(within(dlg).getByLabelText('Target'), opts.targetLabel);
@@ -93,11 +95,16 @@ describe('Elements & Relationships CRUD', () => {
       targetLabel: 'Actor (BusinessActor)'
     });
 
-    expect(within(left).getByText('Serving: Uses')).toBeInTheDocument();
+    // After creation, the dialog selects the new relationship.
+    expect(screen.getByText('Relationship')).toBeInTheDocument();
+    expect(screen.getByLabelText('Relationship property type')).toHaveValue('Serving');
+    expect(screen.getByLabelText('Relationship property name')).toHaveValue('Uses');
 
-    // Delete the relationship by selecting it in the tree and pressing Delete.
-    await user.click(within(left).getByText('Serving: Uses'));
-    await user.keyboard('{Delete}');
-    expect(within(left).queryByText('Serving: Uses')).not.toBeInTheDocument();
+    // Delete via the relationship properties panel.
+    await user.click(screen.getByRole('button', { name: 'Delete relationship' }));
+
+    // Confirm the relationship is gone by returning to the source element and checking outgoing list.
+    await user.click(within(left).getByText('Service'));
+    expect(screen.queryByRole('button', { name: /Select relationship Serving/i })).not.toBeInTheDocument();
   });
 });

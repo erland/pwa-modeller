@@ -11,6 +11,13 @@ import type { Selection } from '../selection';
 import type { NavNode } from './types';
 import { DND_ELEMENT_MIME } from './types';
 
+const DND_DEBUG = typeof window !== 'undefined' && window.localStorage?.getItem('pwaModellerDndDebug') === '1';
+function dndLog(...args: unknown[]) {
+  if (!DND_DEBUG) return;
+  // eslint-disable-next-line no-console
+  console.log('[PWA Modeller DND]', ...args);
+}
+
 type Props = {
   node: NavNode;
   depth: number;
@@ -165,20 +172,61 @@ export function NavigatorNodeRow({
       title={title}
       draggable={node.kind === 'element' && Boolean(node.elementId)}
       onPointerDown={handleRowPointerDown}
+      onClick={(e: React.MouseEvent) => {
+        const target = e.target as HTMLElement | null;
+        if (target?.closest('[data-chevron="1"]')) return;
+        if (target?.closest('.navTreeActions')) return;
+        if (target?.closest('input')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        focusTreeRow(e.currentTarget as HTMLElement);
+      }}
       onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+        dndLog('tree dragstart (before setData)', {
+          key: node.key,
+          elementId: node.elementId,
+          types: Array.from(e.dataTransfer?.types ?? []),
+        });
         if (node.kind !== 'element' || !node.elementId) return;
-        // Ensure the element is selected when starting a drag (helps with keyboard-only drop flows later).
-        // NOTE: We intentionally do NOT stop propagation here; the Tree should remain in control of focus/selection.
-        handleSelectionChange(new Set([node.key]));
-        focusTreeRow(e.currentTarget);
         try {
           e.dataTransfer.setData(DND_ELEMENT_MIME, node.elementId);
-          // Fallback to plain text for debugging / other drop targets.
           e.dataTransfer.setData('text/plain', node.elementId);
           e.dataTransfer.effectAllowed = 'copy';
+          try {
+            const ghost = document.createElement('div');
+            ghost.textContent = node.label;
+            ghost.style.position = 'fixed';
+            ghost.style.top = '0';
+            ghost.style.left = '0';
+            ghost.style.padding = '6px 10px';
+            ghost.style.borderRadius = '10px';
+            ghost.style.background = 'rgba(0,0,0,0.75)';
+            ghost.style.color = 'white';
+            ghost.style.fontSize = '12px';
+            ghost.style.pointerEvents = 'none';
+            ghost.style.zIndex = '999999';
+            document.body.appendChild(ghost);
+            e.dataTransfer.setDragImage(ghost, 10, 10);
+            setTimeout(() => ghost.remove(), 0);
+          } catch {
+            // ignore
+          }
+          dndLog('tree dragstart (after setData)', {
+            key: node.key,
+            elementId: node.elementId,
+            types: Array.from(e.dataTransfer?.types ?? []),
+          });
         } catch {
           // Ignore (some test environments may not fully implement DataTransfer)
         }
+      }}
+      onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
+        dndLog('tree dragend', {
+          key: node.key,
+          elementId: node.elementId,
+          dropEffect: (e.dataTransfer && (e.dataTransfer as any).dropEffect) || undefined,
+          effectAllowed: (e.dataTransfer && (e.dataTransfer as any).effectAllowed) || undefined,
+        });
       }}
       onDoubleClick={(e: React.MouseEvent) => {
         // Let the Tree handle selection/focus. We only use double-click as a convenience action.

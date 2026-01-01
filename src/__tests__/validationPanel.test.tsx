@@ -12,17 +12,17 @@ describe('Validation panel (Step 12)', () => {
 
   it('runs validation and shows issues', async () => {
     const model = createEmptyModel({ name: 'Invalid Model' });
-    const elementsFolder = Object.values(model.folders).find((f) => f.kind === 'elements');
-    if (!elementsFolder) throw new Error('Missing elements folder');
+    const rootFolder = Object.values(model.folders).find((f) => f.kind === 'root');
+    if (!rootFolder) throw new Error('Missing root folder');
 
     const actor = createElement({ name: 'Actor', layer: 'Business', type: 'BusinessActor' });
     const service = createElement({ name: 'Service', layer: 'Business', type: 'BusinessService' });
 
     model.elements[actor.id] = actor;
     model.elements[service.id] = service;
-    model.folders[elementsFolder.id] = {
-      ...elementsFolder,
-      elementIds: [...elementsFolder.elementIds, actor.id, service.id]
+    model.folders[rootFolder.id] = {
+      ...rootFolder,
+      elementIds: [...rootFolder.elementIds, actor.id, service.id]
     };
 
     // Invalid direction for Serving (per minimal ruleset): Actor -> Service

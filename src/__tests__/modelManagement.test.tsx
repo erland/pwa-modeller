@@ -27,7 +27,7 @@ describe('Model management UI', () => {
     expect(screen.getByRole('button', { name: /save/i })).toBeEnabled();
   });
 
-  it('creates and deletes a folder under Elements', async () => {
+  it('creates and deletes a folder under the model root', async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -35,8 +35,8 @@ describe('Model management UI', () => {
     await user.type(screen.getByLabelText('Name'), 'Folder Test Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    // Select Elements root, then create a folder via the navigator "Create…" menu.
-    await user.click(screen.getByRole('row', { name: 'Elements' }));
+    // Select the model root, then create a folder via the navigator "Create…" menu.
+    await user.click(screen.getByRole('row', { name: 'Model' }));
 
     const searchInput = screen.getByRole('textbox', { name: 'Search model' });
     // eslint-disable-next-line testing-library/no-node-access

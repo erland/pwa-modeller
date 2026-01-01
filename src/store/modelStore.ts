@@ -52,8 +52,8 @@ function ensureViewLayout(view: View): ViewWithLayout {
 
 function assertCanDeleteFolder(model: Model, folderId: string): void {
   const folder = getFolder(model, folderId);
-  if (folder.kind === 'root' || folder.kind === 'elements' || folder.kind === 'views') {
-    throw new Error('Cannot delete root folders');
+  if (folder.kind === 'root') {
+    throw new Error('Cannot delete root folder');
   }
 }
 
@@ -224,7 +224,7 @@ export class ModelStore {
     this.updateModel((model) => {
       model.elements[element.id] = element;
 
-      const targetFolderId = folderId ?? findFolderIdByKind(model, 'elements');
+      const targetFolderId = folderId ?? findFolderIdByKind(model, 'root');
       const folder = getFolder(model, targetFolderId);
       if (!folder.elementIds.includes(element.id)) {
         model.folders[targetFolderId] = { ...folder, elementIds: [...folder.elementIds, element.id] };
@@ -337,7 +337,7 @@ export class ModelStore {
     this.updateModel((model) => {
       model.views[view.id] = view;
 
-      const targetFolderId = folderId ?? findFolderIdByKind(model, 'views');
+      const targetFolderId = folderId ?? findFolderIdByKind(model, 'root');
       const folder = getFolder(model, targetFolderId);
       if (!folder.viewIds.includes(view.id)) {
         model.folders[targetFolderId] = { ...folder, viewIds: [...folder.viewIds, view.id] };
@@ -398,7 +398,7 @@ export class ModelStore {
 
       model.views[clone.id] = clone;
 
-      const folderId = findFolderContainingView(model, viewId) ?? findFolderIdByKind(model, 'views');
+      const folderId = findFolderContainingView(model, viewId) ?? findFolderIdByKind(model, 'root');
       model.folders[folderId] = {
         ...model.folders[folderId],
         viewIds: [...model.folders[folderId].viewIds, clone.id]
@@ -603,8 +603,8 @@ export class ModelStore {
   renameFolder = (folderId: string, name: string): void => {
     this.updateModel((model) => {
       const folder = getFolder(model, folderId);
-      if (folder.kind === 'root' || folder.kind === 'elements' || folder.kind === 'views') {
-        throw new Error('Cannot rename root folders');
+      if (folder.kind === 'root') {
+        throw new Error('Cannot rename root folder');
       }
       model.folders[folderId] = { ...folder, name: name.trim() };
     });
@@ -715,8 +715,6 @@ export class ModelStore {
       (model) => {
         // Will throw if missing, which is fine for now.
         findFolderIdByKind(model, 'root');
-        findFolderIdByKind(model, 'elements');
-        findFolderIdByKind(model, 'views');
       },
       false
     );

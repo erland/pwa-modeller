@@ -12,7 +12,7 @@ export function FolderProperties({ model, folderId, actions }: Props) {
   const folder = model.folders[folderId];
   if (!folder) return <p className="panelHint">Folder not found.</p>;
 
-  const canEdit = !(folder.kind === 'root' || folder.kind === 'elements' || folder.kind === 'views');
+  const canEdit = folder.kind !== 'root';
 
   return (
     <div>

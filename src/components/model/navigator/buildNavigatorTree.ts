@@ -16,7 +16,7 @@ export function buildNavigatorTreeData(args: {
 
   const buildFolder = (folderId: string): NavNode => {
     const folder = model.folders[folderId];
-    const isRootFolder = folder.kind === 'elements' || folder.kind === 'views' || folder.kind === 'root';
+    const isRootFolder = folder.kind === 'root';
 
     const childFolders = folder.folderIds.map((id) => model.folders[id]).filter(Boolean).sort(sortByName);
     const childFolderNodes = childFolders.map((f) => buildFolder(f.id));

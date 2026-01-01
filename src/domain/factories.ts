@@ -76,11 +76,8 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
   requireNonBlank(metadata.name, 'Model.metadata.name');
 
   const modelId = id ?? createId('model');
-  const root = createFolder('Root', 'root', undefined, createId('folder'));
-  const elementsFolder = createFolder('Elements', 'elements', root.id, createId('folder'));
-  const viewsFolder = createFolder('Views', 'views', root.id, createId('folder'));
-
-  root.folderIds.push(elementsFolder.id, viewsFolder.id);
+  // v2+: a single root folder that can contain both elements and views.
+  const root = createFolder('Model', 'root', undefined, createId('folder'));
 
   return {
     id: modelId,
@@ -94,10 +91,8 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     relationships: {},
     views: {},
     folders: {
-      [root.id]: root,
-      [elementsFolder.id]: elementsFolder,
-      [viewsFolder.id]: viewsFolder
+      [root.id]: root
     },
-    schemaVersion: 1
+    schemaVersion: 2
   };
 }

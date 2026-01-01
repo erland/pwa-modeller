@@ -38,18 +38,19 @@ describe('domain factories', () => {
     expect(rel.name).toBe('relates');
   });
 
-  test('createEmptyModel creates root + elements/views folders', () => {
+  test('createEmptyModel creates a single root folder (v2+)', () => {
     const model = createEmptyModel({ name: 'Test Model' });
     const folders = Object.values(model.folders);
-    const root = folders.find(f => f.kind === 'root');
-    const elements = folders.find(f => f.kind === 'elements');
-    const views = folders.find(f => f.kind === 'views');
+    const root = folders.find((f) => f.kind === 'root');
 
     expect(root).toBeTruthy();
-    expect(elements).toBeTruthy();
-    expect(views).toBeTruthy();
+    expect(folders).toHaveLength(1);
 
-    // Root should reference its children.
-    expect(root!.folderIds).toEqual(expect.arrayContaining([elements!.id, views!.id]));
+    // Root starts empty and can hold both elements and views.
+    expect(root!.folderIds).toEqual([]);
+    expect(root!.elementIds).toEqual([]);
+    expect(root!.viewIds).toEqual([]);
+
+    expect(model.schemaVersion).toBe(2);
   });
 });

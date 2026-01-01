@@ -52,8 +52,8 @@ function folderPath(model: Model, folderId: string | null): string {
   // Folder ids can be stale (e.g., after import/migration), so treat lookup as optional.
   let cur: Folder | undefined = model.folders[folderId];
   while (cur) {
-    // Skip the technical root folder name to keep paths compact.
-    if (cur.kind !== 'root') names.push(cur.name);
+    // Include root in paths. With a unified navigator, the root folder is user-facing (e.g. "Model").
+    names.push(cur.name);
     cur = cur.parentId ? model.folders[cur.parentId] : undefined;
   }
   return names.reverse().join(' / ');

@@ -6,9 +6,8 @@ import {
   Popover
 } from 'react-aria-components';
 
-import type { Folder, Model } from '../../domain';
+import type { Model } from '../../domain';
 import type { Selection } from './selection';
-import { scopeForFolder } from './navigator/treeUtils';
 
 type Props = {
   model: Model;
@@ -19,7 +18,7 @@ type Props = {
   setSearchQuery: (value: string) => void;
 
   selection: Selection;
-  roots: { elementsRoot: Folder; viewsRoot: Folder };
+  rootFolderId: string;
 
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string) => void;
@@ -34,7 +33,7 @@ export function ModelNavigatorHeader({
   searchQuery,
   setSearchQuery,
   selection,
-  roots,
+  rootFolderId,
   openCreateFolder,
   openCreateElement,
   openCreateView,
@@ -72,16 +71,13 @@ export function ModelNavigatorHeader({
               onAction={(key) => {
                 const k = String(key);
                 const selectedFolderId = selection.kind === 'folder' ? selection.folderId : null;
-                const selectedScope = selectedFolderId ? scopeForFolder(model, roots, selectedFolderId) : 'other';
+                const folderId = selectedFolderId ?? rootFolderId;
 
                 if (k === 'folder') {
-                  openCreateFolder(selectedFolderId ?? roots.elementsRoot.id);
+                  openCreateFolder(folderId);
                 } else if (k === 'element') {
-                  const folderId =
-                    selectedFolderId && selectedScope === 'elements' ? selectedFolderId : roots.elementsRoot.id;
                   openCreateElement(folderId);
                 } else if (k === 'view') {
-                  const folderId = selectedFolderId && selectedScope === 'views' ? selectedFolderId : roots.viewsRoot.id;
                   openCreateView(folderId);
                 } else if (k === 'relationship') {
                   const prefill = selection.kind === 'element' ? selection.elementId : undefined;

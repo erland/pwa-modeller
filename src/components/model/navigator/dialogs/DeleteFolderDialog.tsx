@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { Folder, Model } from '../../../../domain';
+import type { Model } from '../../../../domain';
 import { collectFolderSubtreeIds, gatherFolderOptions } from '../../../../domain';
 import { modelStore } from '../../../../store';
 import { Dialog } from '../../../dialog/Dialog';
 import type { Selection } from '../../selection';
-import { scopeForFolder } from '../navUtils';
 
 type Props = {
   model: Model;
-  roots: { elementsRoot: Folder; viewsRoot: Folder };
+  rootFolderId: string;
   folderId: string | null;
   selection: Selection;
   onSelect: (selection: Selection) => void;
   onClose: () => void;
 };
 
-export function DeleteFolderDialog({ model, roots, folderId, selection, onSelect, onClose }: Props) {
+export function DeleteFolderDialog({ model, rootFolderId, folderId, selection, onSelect, onClose }: Props) {
   const isOpen = folderId !== null;
 
   const [mode, setMode] = useState<'move' | 'deleteContents'>('move');
@@ -36,10 +35,8 @@ export function DeleteFolderDialog({ model, roots, folderId, selection, onSelect
     const folder = model.folders[folderId];
     if (!folder) return <p>Folder not found.</p>;
 
-    const scope = scopeForFolder(model, roots, folderId);
-    const rootId = scope === 'views' ? roots.viewsRoot.id : roots.elementsRoot.id;
     const subtree = new Set(collectFolderSubtreeIds(model, folderId));
-    const options = gatherFolderOptions(model, rootId).filter((o) => !subtree.has(o.id));
+    const options = gatherFolderOptions(model, rootFolderId).filter((o) => !subtree.has(o.id));
 
     const subtreeFolderIds = collectFolderSubtreeIds(model, folderId);
     let elementCount = 0;
@@ -106,7 +103,7 @@ export function DeleteFolderDialog({ model, roots, folderId, selection, onSelect
         </label>
       </div>
     );
-  }, [folderId, model, roots, mode, targetId]);
+  }, [folderId, model, rootFolderId, mode, targetId]);
 
   return (
     <Dialog
@@ -129,7 +126,7 @@ export function DeleteFolderDialog({ model, roots, folderId, selection, onSelect
               if (mode === 'deleteContents') {
                 modelStore.deleteFolder(folderId, { mode: 'deleteContents' });
               } else {
-                const target = targetId || folder.parentId || roots.elementsRoot.id;
+                const target = targetId || folder.parentId || rootFolderId;
                 modelStore.deleteFolder(folderId, { mode: 'move', targetFolderId: target });
               }
 

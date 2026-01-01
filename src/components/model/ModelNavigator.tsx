@@ -42,21 +42,19 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
   const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
 
-  const roots = useMemo(() => {
+  const rootFolder = useMemo(() => {
     if (!model) return null;
-    const elementsRoot = findFolderByKind(model, 'elements');
-    const viewsRoot = findFolderByKind(model, 'views');
-    return { elementsRoot, viewsRoot };
+    return findFolderByKind(model, 'root');
   }, [model]);
 
   const treeData = useMemo(() => {
-    if (!model || !roots) return null;
+    if (!model || !rootFolder) return null;
     return buildNavigatorTreeData({
       model,
-      roots: { elementsRootId: roots.elementsRoot.id, viewsRootId: roots.viewsRoot.id },
+      rootFolderId: rootFolder.id,
       searchTerm
     });
-  }, [model, roots, searchTerm]);
+  }, [model, rootFolder, searchTerm]);
 
   const nav = useNavigatorState({ model, treeData, searchTerm, selection, onSelect });
 
@@ -65,14 +63,14 @@ export function ModelNavigator({ selection, onSelect }: Props) {
   };
 
   const openCreateElement = (targetFolderId?: string) => {
-    if (!roots) return;
-    setCreateElementFolderId(targetFolderId ?? roots.elementsRoot.id);
+    if (!rootFolder) return;
+    setCreateElementFolderId(targetFolderId ?? rootFolder.id);
     setCreateElementOpen(true);
   };
 
   const openCreateView = (targetFolderId?: string) => {
-    if (!roots) return;
-    setCreateViewFolderId(targetFolderId ?? roots.viewsRoot.id);
+    if (!rootFolder) return;
+    setCreateViewFolderId(targetFolderId ?? rootFolder.id);
     setCreateViewOpen(true);
   };
 
@@ -81,7 +79,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     setCreateRelationshipOpen(true);
   };
 
-  if (!model || !roots || !treeData) {
+  if (!model || !rootFolder || !treeData) {
     return (
       <div className="navigator">
         <div className="navigatorHeader">
@@ -98,7 +96,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
         model={model}
         isDirty={isDirty}
         fileName={fileName}
-        roots={roots}
+        rootFolderId={rootFolder.id}
         selection={selection}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -137,7 +135,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
       <DeleteFolderDialog
         model={model}
-        roots={roots}
+        rootFolderId={rootFolder.id}
         folderId={deleteFolderId}
         selection={selection}
         onSelect={onSelect}
@@ -148,14 +146,14 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
       <CreateElementDialog
         isOpen={createElementOpen}
-        targetFolderId={createElementFolderId ?? roots.elementsRoot.id}
+        targetFolderId={createElementFolderId ?? rootFolder.id}
         onClose={() => setCreateElementOpen(false)}
         onSelect={onSelect}
       />
 
       <CreateViewDialog
         isOpen={createViewOpen}
-        targetFolderId={createViewFolderId ?? roots.viewsRoot.id}
+        targetFolderId={createViewFolderId ?? rootFolder.id}
         onClose={() => setCreateViewOpen(false)}
         onSelect={onSelect}
       />

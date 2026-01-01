@@ -9,52 +9,46 @@ import {
 
 export function buildNavigatorTreeData(args: {
   model: Model;
-  roots: { elementsRootId: string; viewsRootId: string };
+  rootFolderId: string;
   searchTerm: string;
 }): NavNode[] {
-  const { model, roots, searchTerm } = args;
+  const { model, rootFolderId, searchTerm } = args;
 
-  const buildFolder = (folderId: string, scope: 'elements' | 'views'): NavNode => {
+  const buildFolder = (folderId: string): NavNode => {
     const folder = model.folders[folderId];
     const isRootFolder = folder.kind === 'elements' || folder.kind === 'views' || folder.kind === 'root';
 
     const childFolders = folder.folderIds.map((id) => model.folders[id]).filter(Boolean).sort(sortByName);
-    const childFolderNodes = childFolders.map((f) => buildFolder(f.id, scope));
+    const childFolderNodes = childFolders.map((f) => buildFolder(f.id));
 
-    const elementLeaves =
-      scope === 'elements'
-        ? folder.elementIds
-            .map((id) => model.elements[id])
-            .filter(Boolean)
-            .sort(sortByName)
-            .map<NavNode>((el) => ({
-              key: makeKey('element', el.id),
-              kind: 'element',
-              label: el.name || '(unnamed)',
-              tooltip: `${el.name || '(unnamed)'} (${el.type})`,
-              canRename: true,
-              elementId: el.id
-            }))
-        : [];
+    const elementLeaves = folder.elementIds
+      .map((id) => model.elements[id])
+      .filter(Boolean)
+      .sort(sortByName)
+      .map<NavNode>((el) => ({
+        key: makeKey('element', el.id),
+        kind: 'element',
+        label: el.name || '(unnamed)',
+        tooltip: `${el.name || '(unnamed)'} (${el.type})`,
+        canRename: true,
+        elementId: el.id
+      }));
 
-    const viewLeaves =
-      scope === 'views'
-        ? folder.viewIds
-            .map((id) => model.views[id])
-            .filter(Boolean)
-            .sort(sortByName)
-            .map<NavNode>((v) => ({
-              key: makeKey('view', v.id),
-              kind: 'view',
-              label: v.name || '(unnamed)',
-              tooltip: `${v.name || '(unnamed)'} (${v.viewpointId})`,
-              canRename: true,
-              viewId: v.id
-            }))
-        : [];
+    const viewLeaves = folder.viewIds
+      .map((id) => model.views[id])
+      .filter(Boolean)
+      .sort(sortByName)
+      .map<NavNode>((v) => ({
+        key: makeKey('view', v.id),
+        kind: 'view',
+        label: v.name || '(unnamed)',
+        tooltip: `${v.name || '(unnamed)'} (${v.viewpointId})`,
+        canRename: true,
+        viewId: v.id
+      }));
 
     const children: NavNode[] = [...childFolderNodes, ...elementLeaves, ...viewLeaves];
-    const immediateCount = childFolders.length + (scope === 'elements' ? folder.elementIds.length : folder.viewIds.length);
+    const immediateCount = childFolders.length + folder.elementIds.length + folder.viewIds.length;
 
     return {
       key: makeKey('folder', folderId),
@@ -62,15 +56,12 @@ export function buildNavigatorTreeData(args: {
       label: folder.name,
       secondary: String(immediateCount),
       tooltip:
-        scope === 'elements'
-          ? `${folder.name} — ${folder.elementIds.length} elements, ${childFolders.length} folders`
-          : `${folder.name} — ${folder.viewIds.length} views, ${childFolders.length} folders`,
+        `${folder.name} — ${folder.elementIds.length} element(s), ${folder.viewIds.length} view(s), ${childFolders.length} folder(s)`,
       children,
-      scope,
       folderId,
       canCreateFolder: true,
-      canCreateElement: scope === 'elements',
-      canCreateView: scope === 'views',
+      canCreateElement: true,
+      canCreateView: true,
       canRename: !isRootFolder,
       canDelete: !isRootFolder
     };
@@ -97,8 +88,7 @@ export function buildNavigatorTreeData(args: {
     });
 
   const rootNodes: NavNode[] = [
-    buildFolder(roots.elementsRootId, 'elements'),
-    buildFolder(roots.viewsRootId, 'views'),
+    buildFolder(rootFolderId),
     {
       ...makeSection('relationships', 'Relationships', String(relationships.length), relationships, 'relationships'),
       canCreateRelationship: true

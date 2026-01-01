@@ -43,7 +43,7 @@ type Props = {
   openCreateView: (targetFolderId?: string) => void;
   openCreateRelationship: (prefillSourceElementId?: string) => void;
 
-  /** Optional handler: move an element to a folder when dropped on an Elements folder in the tree. */
+  /** Optional handler: move an element to a folder when dropped on a folder in the tree. */
   onMoveElementToFolder?: (elementId: string, targetFolderId: string) => void;
 };
 
@@ -144,7 +144,7 @@ export function ModelNavigatorTree({
         return;
       }
       const target = e.target as HTMLElement | null;
-      const row = target?.closest('.navTreeRow[data-drop-folder="elements"]') as HTMLElement | null;
+      const row = target?.closest('.navTreeRow[data-drop-folder="folder"]') as HTMLElement | null;
       if (!row) {
         clearHighlight();
         return;
@@ -164,7 +164,7 @@ export function ModelNavigatorTree({
       if (!onMoveElementToFolder) return;
       const elId = parseDraggedElementId(e.dataTransfer);
       const target = e.target as HTMLElement | null;
-      const row = target?.closest('.navTreeRow[data-drop-folder="elements"]') as HTMLElement | null;
+      const row = target?.closest('.navTreeRow[data-drop-folder="folder"]') as HTMLElement | null;
       const folderId = row?.dataset.folderid;
       clearHighlight();
       if (!elId || !folderId) return;

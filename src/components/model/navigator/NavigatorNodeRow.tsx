@@ -171,7 +171,7 @@ export function NavigatorNodeRow({
       data-scope={node.scope}
       data-nodekey={node.key}
       data-folderid={node.kind === 'folder' ? node.folderId : undefined}
-      data-drop-folder={node.kind === 'folder' && node.scope === 'elements' ? 'elements' : undefined}
+      data-drop-folder={node.kind === 'folder' ? 'folder' : undefined}
       title={title}
       draggable={node.kind === 'element' && Boolean(node.elementId)}
       onPointerDown={handleRowPointerDown}

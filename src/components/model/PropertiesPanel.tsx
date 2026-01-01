@@ -21,12 +21,11 @@ type Props = {
 };
 
 function buildFolderOptions(model: Model): { elementFolders: FolderOption[]; viewFolders: FolderOption[] } {
-  const elementsRoot = findFolderByKind(model, 'elements');
-  const viewsRoot = findFolderByKind(model, 'views');
-  return {
-    elementFolders: gatherFolderOptions(model, elementsRoot.id),
-    viewFolders: gatherFolderOptions(model, viewsRoot.id)
-  };
+  // Step 1 (mixed navigator): folders can contain both elements and views.
+  // Use a unified folder option list rooted at the model root so both properties editors stay consistent.
+  const root = findFolderByKind(model, 'root');
+  const all = gatherFolderOptions(model, root.id);
+  return { elementFolders: all, viewFolders: all };
 }
 
 export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props) {

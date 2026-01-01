@@ -6,15 +6,14 @@ import {
   Popover
 } from 'react-aria-components';
 
-import type { Folder, Model } from '../../../domain';
+import type { Model } from '../../../domain';
 import type { Selection } from '../selection';
-import { scopeForFolder } from './navUtils';
 
 type Props = {
   model: Model;
   isDirty: boolean;
   fileName: string | null;
-  roots: { elementsRoot: Folder; viewsRoot: Folder };
+  rootFolderId: string;
   selection: Selection;
 
   searchQuery: string;
@@ -30,7 +29,7 @@ export function NavigatorToolbar({
   model,
   isDirty,
   fileName,
-  roots,
+  rootFolderId,
   selection,
   searchQuery,
   setSearchQuery,
@@ -76,16 +75,13 @@ export function NavigatorToolbar({
               onAction={(key) => {
                 const k = String(key);
                 const selectedFolderId = selection.kind === 'folder' ? selection.folderId : null;
-                const selectedScope = selectedFolderId ? scopeForFolder(model, roots, selectedFolderId) : 'other';
+                const folderId = selectedFolderId ?? rootFolderId;
 
                 if (k === 'folder') {
-                  onCreateFolder(selectedFolderId ?? roots.elementsRoot.id);
+                  onCreateFolder(folderId);
                 } else if (k === 'element') {
-                  const folderId =
-                    selectedFolderId && selectedScope === 'elements' ? selectedFolderId : roots.elementsRoot.id;
                   onCreateElement(folderId);
                 } else if (k === 'view') {
-                  const folderId = selectedFolderId && selectedScope === 'views' ? selectedFolderId : roots.viewsRoot.id;
                   onCreateView(folderId);
                 } else if (k === 'relationship') {
                   const prefill = selection.kind === 'element' ? selection.elementId : undefined;

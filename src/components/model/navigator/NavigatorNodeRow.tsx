@@ -168,7 +168,10 @@ export function NavigatorNodeRow({
     <div
       className="navTreeRow"
       data-kind={node.kind}
+      data-scope={node.scope}
       data-nodekey={node.key}
+      data-folderid={node.kind === 'folder' ? node.folderId : undefined}
+      data-drop-folder={node.kind === 'folder' && node.scope === 'elements' ? 'elements' : undefined}
       title={title}
       draggable={node.kind === 'element' && Boolean(node.elementId)}
       onPointerDown={handleRowPointerDown}
@@ -191,7 +194,8 @@ export function NavigatorNodeRow({
         try {
           e.dataTransfer.setData(DND_ELEMENT_MIME, node.elementId);
           e.dataTransfer.setData('text/plain', node.elementId);
-          e.dataTransfer.effectAllowed = 'copy';
+          // Allow both copy (tree -> view) and move (tree -> folder).
+          e.dataTransfer.effectAllowed = 'copyMove';
           try {
             const ghost = document.createElement('div');
             ghost.textContent = node.label;

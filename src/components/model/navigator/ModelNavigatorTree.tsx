@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type * as React from 'react';
 import type { Key } from '@react-types/shared';
 import {
@@ -8,7 +9,15 @@ import {
 
 import type { Selection } from '../selection';
 import type { NavNode } from './types';
+import { DND_ELEMENT_MIME } from './types';
 import { NavigatorNodeRow } from './NavigatorNodeRow';
+
+const DND_DEBUG = typeof window !== 'undefined' && window.localStorage?.getItem('pwaModellerDndDebug') === '1';
+function dndLog(...args: unknown[]) {
+  if (!DND_DEBUG) return;
+  // eslint-disable-next-line no-console
+  console.log('[PWA Modeller DND]', ...args);
+}
 
 type Props = {
   treeData: NavNode[];
@@ -33,7 +42,38 @@ type Props = {
   onRequestDeleteFolder: (folderId: string) => void;
   openCreateView: (targetFolderId?: string) => void;
   openCreateRelationship: (prefillSourceElementId?: string) => void;
+
+  /** Optional handler: move an element to a folder when dropped on an Elements folder in the tree. */
+  onMoveElementToFolder?: (elementId: string, targetFolderId: string) => void;
 };
+
+function parseDraggedElementId(dt: DataTransfer | null): string | null {
+  if (!dt) return null;
+  try {
+    const id = dt.getData(DND_ELEMENT_MIME);
+    if (id) return id;
+  } catch {
+    // ignore
+  }
+  try {
+    const t = dt.getData('text/plain');
+    if (t) return t;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function isMaybeElementDrag(dt: DataTransfer | null): boolean {
+  if (!dt) return false;
+  try {
+    const types = Array.from(dt.types ?? []);
+    // Note: some browsers restrict getData() during dragover, but types are still visible.
+    return types.includes(DND_ELEMENT_MIME) || types.includes('text/plain');
+  } catch {
+    return false;
+  }
+}
 
 function iconFor(node: NavNode): string {
   switch (node.kind) {
@@ -76,8 +116,91 @@ export function ModelNavigatorTree({
   openCreateElement,
   onRequestDeleteFolder,
   openCreateView,
-  openCreateRelationship
+  openCreateRelationship,
+  onMoveElementToFolder
 }: Props) {
+  const treeWrapRef = useRef<HTMLDivElement | null>(null);
+  const currentDropElRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const root = treeWrapRef.current;
+    if (!root) return;
+
+    // Native listeners: React Aria Tree can swallow/retarget drag events. Capturing native events
+    // on the tree wrapper makes folder drops reliable.
+    const clearHighlight = () => {
+      if (currentDropElRef.current) {
+        currentDropElRef.current.classList.remove('isDropTarget');
+        currentDropElRef.current = null;
+      }
+    };
+
+    const onDragOver = (e: DragEvent) => {
+      if (!onMoveElementToFolder) return;
+      // During dragover, some browsers may not expose the data payload via getData().
+      // Accept the drop based on visible types and resolve the element id on drop.
+      if (!isMaybeElementDrag(e.dataTransfer)) {
+        clearHighlight();
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      const row = target?.closest('.navTreeRow[data-drop-folder="elements"]') as HTMLElement | null;
+      if (!row) {
+        clearHighlight();
+        return;
+      }
+      // Accept the drop.
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      if (currentDropElRef.current !== row) {
+        clearHighlight();
+        row.classList.add('isDropTarget');
+        currentDropElRef.current = row;
+      }
+      dndLog('tree folder dragover (accepted)', { folderId: row.dataset.folderid, types: Array.from(e.dataTransfer?.types ?? []) });
+    };
+
+    const onDrop = (e: DragEvent) => {
+      if (!onMoveElementToFolder) return;
+      const elId = parseDraggedElementId(e.dataTransfer);
+      const target = e.target as HTMLElement | null;
+      const row = target?.closest('.navTreeRow[data-drop-folder="elements"]') as HTMLElement | null;
+      const folderId = row?.dataset.folderid;
+      clearHighlight();
+      if (!elId || !folderId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dndLog('tree folder drop', { elementId: elId, folderId });
+      // Safety: confirmation to avoid accidental moves.
+      if (window.confirm('Move element to this folder?')) {
+        onMoveElementToFolder(elId, folderId);
+      }
+    };
+
+    const onDragLeave = (_e: DragEvent) => {
+      // If the pointer leaves the tree wrapper entirely, clear highlight.
+      // (dragover will re-apply when entering another folder row)
+      // Note: dragleave fires frequently; keep this conservative.
+    };
+
+    const onDragEnd = () => {
+      clearHighlight();
+    };
+
+    root.addEventListener('dragover', onDragOver, true);
+    root.addEventListener('drop', onDrop, true);
+    root.addEventListener('dragleave', onDragLeave, true);
+    document.addEventListener('dragend', onDragEnd, true);
+
+    return () => {
+      root.removeEventListener('dragover', onDragOver, true);
+      root.removeEventListener('drop', onDrop, true);
+      root.removeEventListener('dragleave', onDragLeave, true);
+      document.removeEventListener('dragend', onDragEnd, true);
+      clearHighlight();
+    };
+  }, [onMoveElementToFolder]);
+
   const toggleExpanded = (nodeKey: string) => {
     setExpandedKeys((prev) => toggleExpandedKey(prev, nodeKey));
   };
@@ -129,7 +252,8 @@ export function ModelNavigatorTree({
   }
 
   return (
-    <Tree
+    <div ref={treeWrapRef}>
+      <Tree
       aria-label="Model navigator"
       selectionMode="single"
       // Keep selection controlled by the Workspace selection state.
@@ -143,6 +267,7 @@ export function ModelNavigatorTree({
       {treeData.map((n) => (
         <NavigatorTreeItem node={n} depth={0} key={n.key} />
       ))}
-    </Tree>
+      </Tree>
+    </div>
   );
 }

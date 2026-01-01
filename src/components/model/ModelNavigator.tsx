@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { useModelStore } from '../../store';
+import { modelStore, useModelStore } from '../../store';
 import '../../styles/navigator.css';
 
 import type { Selection } from './selection';
@@ -128,6 +128,10 @@ export function ModelNavigator({ selection, onSelect }: Props) {
           openCreateView={openCreateView}
           openCreateRelationship={openCreateRelationship}
           onRequestDeleteFolder={(id) => setDeleteFolderId(id)}
+          onMoveElementToFolder={(elementId, targetFolderId) => {
+            // Action is on the store instance (not part of the Zustand state snapshot).
+            modelStore.moveElementToFolder(elementId, targetFolderId);
+          }}
         />
       </div>
 

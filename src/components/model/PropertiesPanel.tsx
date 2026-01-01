@@ -48,6 +48,7 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
 
     updateView: (viewId, patch) => modelStore.updateView(viewId, patch),
     moveViewToFolder: (viewId, folderId) => modelStore.moveViewToFolder(viewId, folderId),
+    moveViewToElement: (viewId, elementId) => modelStore.moveViewToElement(viewId, elementId),
     updateViewFormatting: (viewId, patch) => modelStore.updateViewFormatting(viewId, patch),
     cloneView: (viewId) => modelStore.cloneView(viewId),
     deleteView: (viewId) => modelStore.deleteView(viewId)

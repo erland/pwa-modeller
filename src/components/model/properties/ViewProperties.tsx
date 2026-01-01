@@ -21,6 +21,13 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
   const currentFolderId = findFolderContaining(model, 'view', view.id);
   const viewpointLabel = (id: string) => VIEWPOINTS.find((v) => v.id === id)?.name ?? id;
 
+  const isCentered = Boolean(view.centerElementId);
+  const rootFolderId = viewFolders[0]?.id;
+  const elementOptions = Object.values(model.elements)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+    .map((e) => ({ id: e.id, label: e.name }));
+
   return (
     <div>
       <p className="panelHint">View</p>
@@ -79,30 +86,77 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
           </div>
         </div>
         <div className="propertiesRow">
-          <div className="propertiesKey">Folder</div>
+          <div className="propertiesKey">Placement</div>
           <div className="propertiesValue">
             <select
               className="selectInput"
-              value={currentFolderId ?? ''}
+              aria-label="View property placement"
+              value={isCentered ? 'centered' : 'folder'}
               onChange={(e) => {
-                const targetId = e.target.value;
-                if (targetId) actions.moveViewToFolder(view.id, targetId);
+                const mode = e.target.value;
+
+                if (mode === 'folder') {
+                  // If the view is currently centered (and thus not in any folder), move it to root by default.
+                  const target = currentFolderId ?? rootFolderId;
+                  if (target) actions.moveViewToFolder(view.id, target);
+                  return;
+                }
+
+                // mode === 'centered'
+                const preferred = view.centerElementId ?? elementOptions[0]?.id;
+                if (preferred) actions.moveViewToElement(view.id, preferred);
               }}
             >
-              {!currentFolderId ? (
-                <option value="">{view.centerElementId ? '(centered on element)' : '(not in folder)'}</option>
-              ) : null}
-              {viewFolders.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
+              <option value="folder">In folder</option>
+              <option value="centered" disabled={elementOptions.length === 0}>
+                Centered on element
+              </option>
             </select>
-            {view.centerElementId ? (
-              <p className="panelHint" style={{ marginTop: 6 }}>
-                Centered on: {model.elements[view.centerElementId]?.name ?? view.centerElementId}
-              </p>
-            ) : null}
+
+            {!isCentered ? (
+              <div style={{ marginTop: 8 }}>
+                <select
+                  className="selectInput"
+                  aria-label="View property folder"
+                  value={currentFolderId ?? ''}
+                  onChange={(e) => {
+                    const targetId = e.target.value;
+                    if (targetId) actions.moveViewToFolder(view.id, targetId);
+                  }}
+                >
+                  {!currentFolderId ? <option value="">(choose folder)</option> : null}
+                  {viewFolders.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{ marginTop: 8 }}>
+                <select
+                  className="selectInput"
+                  aria-label="View property centered element"
+                  value={view.centerElementId ?? ''}
+                  onChange={(e) => {
+                    const targetId = e.target.value;
+                    if (targetId) actions.moveViewToElement(view.id, targetId);
+                  }}
+                >
+                  {elementOptions.length === 0 ? <option value="">(no elements)</option> : null}
+                  {elementOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {view.centerElementId ? (
+                  <p className="panelHint" style={{ marginTop: 6 }}>
+                    Centered on: {model.elements[view.centerElementId]?.name ?? view.centerElementId}
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
         </div>
 

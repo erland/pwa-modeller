@@ -22,6 +22,7 @@ export type ModelActions = {
 
   updateView: (viewId: string, patch: Partial<View>) => void;
   moveViewToFolder: (viewId: string, folderId: string) => void;
+  moveViewToElement: (viewId: string, elementId: string) => void;
   updateViewFormatting: (viewId: string, patch: Partial<ViewFormatting>) => void;
   cloneView: (viewId: string) => string | null;
   deleteView: (viewId: string) => void;

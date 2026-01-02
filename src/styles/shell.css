@@ -183,6 +183,7 @@
 }
 
 .shellSidebar {
+  position: relative;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
@@ -199,6 +200,38 @@
 
 .shellSidebar.isOpen {
   display: flex;
+}
+
+
+
+/* Drag handles for resizing docked sidebars */
+.shellResizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.shellResizerLeft {
+  right: -5px;
+}
+
+.shellResizerRight {
+  left: -5px;
+}
+
+.shellResizer:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.shell.isResizing {
+  cursor: col-resize;
+}
+
+.shell.isResizing * {
+  user-select: none;
 }
 
 .shellBackdrop {

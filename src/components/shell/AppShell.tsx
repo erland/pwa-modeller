@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 import '../../styles/shell.css';
@@ -80,7 +80,39 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const isMedium = useMediaQuery('(max-width: 1100px)');
   const rightOverlay = !isSmall && isMedium;
 
-  const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.model }));
+  // Sidebar widths are driven by CSS variables in shell.css. We override them here so the user
+  // can resize the docked sidebars. Values are persisted in localStorage.
+  const DEFAULT_LEFT_WIDTH = 260;
+  const DEFAULT_RIGHT_WIDTH = 320;
+  const MIN_LEFT_WIDTH = 200;
+  const MIN_RIGHT_WIDTH = 240;
+  const MIN_MAIN_WIDTH = 360;
+
+  const [leftWidth, setLeftWidth] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
+    const n = Number(window.localStorage.getItem('shellLeftWidthPx'));
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_LEFT_WIDTH;
+  });
+
+  const [rightWidth, setRightWidth] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_RIGHT_WIDTH;
+    const n = Number(window.localStorage.getItem('shellRightWidthPx'));
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_RIGHT_WIDTH;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('shellLeftWidthPx', String(Math.round(leftWidth)));
+  }, [leftWidth]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('shellRightWidthPx', String(Math.round(rightWidth)));
+  }, [rightWidth]);
+
+  const shellBodyRef = useRef<HTMLDivElement | null>(null);
+  const [isResizing, setIsResizing] = useState<null | 'left' | 'right'>(null);
+const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.model }));
   const online = useOnlineStatus();
 
   const confirmNavigate = useMemo(() => {
@@ -100,6 +132,43 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
     return w > 1100;
   });
 
+  const leftDocked = hasLeft && leftOpen && !isSmall;
+  const rightDocked = hasRight && rightOpen && !isSmall && !isMedium;
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const onMove = (ev: PointerEvent) => {
+      const el = shellBodyRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+
+      const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+      if (isResizing === 'left') {
+        const rightW = rightDocked ? rightWidth : 0;
+        const maxLeft = Math.max(MIN_LEFT_WIDTH, rect.width - rightW - MIN_MAIN_WIDTH);
+        const next = clamp(ev.clientX - rect.left, MIN_LEFT_WIDTH, maxLeft);
+        setLeftWidth(next);
+      } else {
+        const leftW = leftDocked ? leftWidth : 0;
+        const maxRight = Math.max(MIN_RIGHT_WIDTH, rect.width - leftW - MIN_MAIN_WIDTH);
+        const next = clamp(rect.right - ev.clientX, MIN_RIGHT_WIDTH, maxRight);
+        setRightWidth(next);
+      }
+    };
+
+    const onUp = () => setIsResizing(null);
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [isResizing, leftDocked, rightDocked, leftWidth, rightWidth]);
+
   // When entering small screens, close overlays by default.
   useEffect(() => {
     if (isSmall) {
@@ -118,7 +187,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const showBackdrop = (isSmall && (leftOpen || rightOpen)) || (rightOverlay && rightOpen);
 
   return (
-    <div className="shell">
+    <div className={['shell', isResizing ? 'isResizing' : null].filter(Boolean).join(' ')}>
       <header className="shellHeader" data-testid="app-header">
         <div className="shellBrand" aria-label="Application">
           <div className="shellTitle">{title}</div>
@@ -180,6 +249,13 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
       </header>
 
       <div
+        ref={shellBodyRef}
+        style={
+          {
+            ['--shellLeftWidth' as any]: `${Math.round(leftWidth)}px`,
+            ['--shellRightWidth' as any]: `${Math.round(rightWidth)}px`
+          } as any
+        }
         className={[
           'shellBody',
           hasLeft && leftOpen && !isSmall ? 'isLeftDockedOpen' : null,
@@ -211,7 +287,22 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
                 ✕
               </button>
             </div>
-            <div className="shellSidebarContent">{leftSidebar}</div>
+                        <div className="shellSidebarContent">{leftSidebar}</div>
+            {leftDocked ? (
+              <div
+                className="shellResizer shellResizerLeft"
+                role="separator"
+                aria-label="Resize model navigator"
+                title="Drag to resize (double-click to reset)"
+                onDoubleClick={() => setLeftWidth(DEFAULT_LEFT_WIDTH)}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.preventDefault();
+                  (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+                  setIsResizing('left');
+                }}
+              />
+            ) : null}
           </aside>
         ) : null}
 
@@ -238,7 +329,22 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
                 ✕
               </button>
             </div>
-            <div className="shellSidebarContent">{rightSidebar}</div>
+                        <div className="shellSidebarContent">{rightSidebar}</div>
+            {rightDocked ? (
+              <div
+                className="shellResizer shellResizerRight"
+                role="separator"
+                aria-label="Resize properties panel"
+                title="Drag to resize (double-click to reset)"
+                onDoubleClick={() => setRightWidth(DEFAULT_RIGHT_WIDTH)}
+                onPointerDown={(e) => {
+                  if (e.button !== 0) return;
+                  e.preventDefault();
+                  (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+                  setIsResizing('right');
+                }}
+              />
+            ) : null}
           </aside>
         ) : null}
 

@@ -515,6 +515,8 @@
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
   padding: 10px;
+  /* App shell uses light text on a dark background; nodes are light so we force readable text. */
+  color: rgba(0, 0, 0, 0.88);
   user-select: none;
   cursor: grab;
 }
@@ -543,6 +545,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: rgba(0, 0, 0, 0.78);
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1;
   cursor: crosshair;
   user-select: none;
 }
@@ -571,6 +577,7 @@
   padding: 2px 8px;
   border-radius: 999px;
   background: #f1f3f5;
+  color: rgba(0, 0, 0, 0.78);
   display: inline-block;
 }
 

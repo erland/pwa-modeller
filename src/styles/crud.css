@@ -2,7 +2,7 @@
   margin-top: 14px;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-1);
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -58,7 +58,7 @@
   border-collapse: collapse;
   overflow: hidden;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-1);
 }
 
 .dataTable th,
@@ -108,7 +108,7 @@
 }
 
 .miniLinkButton {
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--button-border);
   background: rgba(255, 255, 255, 0.03);
   color: inherit;
   cursor: pointer;

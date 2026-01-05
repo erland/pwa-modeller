@@ -4,6 +4,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import '../../styles/shell.css';
 import { useModelStore } from '../../store';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { useTheme } from '../../hooks/useTheme';
 
 type AppShellProps = {
   title: string;
@@ -114,6 +115,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const [isResizing, setIsResizing] = useState<null | 'left' | 'right'>(null);
 const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.model }));
   const online = useOnlineStatus();
+  const { theme, toggleTheme } = useTheme();
 
   const confirmNavigate = useMemo(() => {
     return () => {
@@ -204,6 +206,15 @@ const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.
             {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
             {model && isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}
           </div>
+          <button
+            type="button"
+            className="shellIconButton"
+            aria-label="Toggle theme"
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            onClick={toggleTheme}
+          >
+            {theme === 'dark' ? '🌙' : '☀️'}
+          </button>
           {actions ?? (
             <>
               <button type="button" className="shellButton" disabled title="Coming in later steps">

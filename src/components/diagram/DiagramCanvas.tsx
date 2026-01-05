@@ -109,32 +109,34 @@ type RelationshipVisual = {
   showInfluenceLabel?: boolean;
 };
 
-function relationshipVisual(type: RelationshipType): RelationshipVisual {
+function relationshipVisual(type: RelationshipType, isSelected: boolean): RelationshipVisual {
+  const suffix = isSelected ? 'Sel' : '';
+
   switch (type) {
     case 'Association':
       return {};
     case 'Composition':
-      return { markerStart: 'url(#diamondFilled)' };
+      return { markerStart: `url(#diamondFilled${suffix})` };
     case 'Aggregation':
-      return { markerStart: 'url(#diamondOpen)' };
+      return { markerStart: `url(#diamondOpen${suffix})` };
     case 'Specialization':
-      return { markerEnd: 'url(#triangleOpen)' };
+      return { markerEnd: `url(#triangleOpen${suffix})` };
     case 'Realization':
-      return { markerEnd: 'url(#triangleOpen)', dasharray: '6 5' };
+      return { markerEnd: `url(#triangleOpen${suffix})`, dasharray: '6 5' };
     case 'Serving':
-      return { markerEnd: 'url(#arrowOpen)', dasharray: '6 5' };
+      return { markerEnd: `url(#arrowOpen${suffix})`, dasharray: '6 5' };
     case 'Flow':
-      return { markerEnd: 'url(#arrowOpen)', dasharray: '6 5' };
+      return { markerEnd: `url(#arrowOpen${suffix})`, dasharray: '6 5' };
     case 'Triggering':
-      return { markerEnd: 'url(#arrowOpen)' };
+      return { markerEnd: `url(#arrowOpen${suffix})` };
     case 'Assignment':
-      return { markerEnd: 'url(#arrowFilled)' };
+      return { markerEnd: `url(#arrowFilled${suffix})` };
     case 'Access':
-      return { markerEnd: 'url(#arrowOpen)' };
+      return { markerEnd: `url(#arrowOpen${suffix})` };
     case 'Influence':
-      return { markerEnd: 'url(#arrowOpen)', dasharray: '2 4', showInfluenceLabel: true };
+      return { markerEnd: `url(#arrowOpen${suffix})`, dasharray: '2 4', showInfluenceLabel: true };
     default:
-      return { markerEnd: 'url(#arrowOpen)' };
+      return { markerEnd: `url(#arrowOpen${suffix})` };
   }
 }
 
@@ -616,25 +618,77 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   <defs>
                     {/* Open arrow (dependency/triggering/flow/serving/access/influence) */}
                     <marker id="arrowOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth="1.6" strokeLinejoin="round" />
+                      <path
+                        d="M 0 0 L 10 5 L 0 10"
+                        fill="none"
+                        stroke="var(--diagram-rel-stroke)"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
+                    </marker>
+                    <marker id="arrowOpenSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                      <path
+                        d="M 0 0 L 10 5 L 0 10"
+                        fill="none"
+                        stroke="var(--diagram-rel-stroke-selected)"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
                     </marker>
 
                     {/* Filled arrow (assignment) */}
                     <marker id="arrowFilled" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                      <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(0,0,0,0.55)" />
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-rel-stroke)" />
+                    </marker>
+                    <marker id="arrowFilledSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-rel-stroke-selected)" />
                     </marker>
 
                     {/* Open triangle (realization/specialization) */}
                     <marker id="triangleOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path d="M 0 0 L 10 5 L 0 10 z" fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth="1.6" strokeLinejoin="round" />
+                      <path
+                        d="M 0 0 L 10 5 L 0 10 z"
+                        fill="none"
+                        stroke="var(--diagram-rel-stroke)"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
+                    </marker>
+                    <marker id="triangleOpenSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+                      <path
+                        d="M 0 0 L 10 5 L 0 10 z"
+                        fill="none"
+                        stroke="var(--diagram-rel-stroke-selected)"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
                     </marker>
 
                     {/* Diamonds (composition/aggregation) at the source side */}
                     <marker id="diamondOpen" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth="1.6" strokeLinejoin="round" />
+                      <path
+                        d="M 0 5 L 5 0 L 10 5 L 5 10 z"
+                        fill="none"
+                        stroke="var(--diagram-rel-stroke)"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
                     </marker>
+                    <marker id="diamondOpenSel" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+                      <path
+                        d="M 0 5 L 5 0 L 10 5 L 5 10 z"
+                        fill="none"
+                        stroke="var(--diagram-rel-stroke-selected)"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
+                    </marker>
+
                     <marker id="diamondFilled" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="rgba(0,0,0,0.55)" />
+                      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="var(--diagram-rel-stroke)" />
+                    </marker>
+                    <marker id="diamondFilledSel" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+                      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="var(--diagram-rel-stroke-selected)" />
                     </marker>
                   </defs>
 
@@ -678,7 +732,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                     const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
                     const isSelected = selection.kind === 'relationship' && selection.relationshipId === relId;
-                    const v = relationshipVisual(rel.type);
+                    const v = relationshipVisual(rel.type, isSelected);
                     const mid = v.showInfluenceLabel ? polylineMidPoint(points) : null;
 
                     return (

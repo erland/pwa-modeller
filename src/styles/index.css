@@ -1,5 +1,64 @@
 :root {
-  color-scheme: light dark;
+  /* Theme tokens (default: dark) */
+  color-scheme: dark;
+
+  --app-bg: #0b1220;
+  --app-fg: #e5e7eb;
+  --app-muted-fg: rgba(229, 231, 235, 0.72);
+
+  --surface-1: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.06);
+  --surface-3: rgba(255, 255, 255, 0.08);
+
+  --border-1: rgba(255, 255, 255, 0.12);
+  --border-2: rgba(255, 255, 255, 0.20);
+  --border-3: rgba(255, 255, 255, 0.28);
+
+  --button-bg: rgba(255, 255, 255, 0.06);
+  --button-bg-hover: rgba(255, 255, 255, 0.10);
+  --button-fg: rgba(255, 255, 255, 0.92);
+  --button-border: rgba(255, 255, 255, 0.14);
+
+  --hint-bg: rgba(17, 24, 39, 0.78);
+  --hint-fg: rgba(255, 255, 255, 0.92);
+
+  --diagram-canvas-bg: rgba(255, 255, 255, 0.02);
+  --diagram-canvas-border: rgba(255, 255, 255, 0.12);
+  --diagram-grid-line: rgba(255, 255, 255, 0.06);
+
+  --diagram-rel-stroke: rgba(255, 255, 255, 0.72);
+  --diagram-rel-stroke-selected: rgba(255, 255, 255, 0.95);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --app-bg: #f6f7fb;
+  --app-fg: #111827;
+  --app-muted-fg: rgba(17, 24, 39, 0.70);
+
+  --surface-1: rgba(17, 24, 39, 0.04);
+  --surface-2: rgba(17, 24, 39, 0.06);
+  --surface-3: rgba(17, 24, 39, 0.08);
+
+  --border-1: rgba(17, 24, 39, 0.12);
+  --border-2: rgba(17, 24, 39, 0.20);
+  --border-3: rgba(17, 24, 39, 0.28);
+
+  --button-bg: rgba(17, 24, 39, 0.04);
+  --button-bg-hover: rgba(17, 24, 39, 0.08);
+  --button-fg: rgba(17, 24, 39, 0.92);
+  --button-border: rgba(17, 24, 39, 0.16);
+
+  --hint-bg: rgba(255, 255, 255, 0.86);
+  --hint-fg: rgba(17, 24, 39, 0.92);
+
+  --diagram-canvas-bg: rgba(255, 255, 255, 0.86);
+  --diagram-canvas-border: rgba(17, 24, 39, 0.12);
+  --diagram-grid-line: rgba(17, 24, 39, 0.10);
+
+  --diagram-rel-stroke: rgba(17, 24, 39, 0.55);
+  --diagram-rel-stroke-selected: rgba(17, 24, 39, 0.88);
 }
 
 html,
@@ -11,8 +70,8 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   line-height: 1.5;
-  background: #0b1220;
-  color: #e5e7eb;
+  background: var(--app-bg);
+  color: var(--app-fg);
   overflow-x: hidden;
 }
 

@@ -24,7 +24,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--border-1);
 }
 
 .dialogTitle {
@@ -40,7 +40,7 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid var(--border-1);
 }
 
 .formGrid {
@@ -65,7 +65,7 @@
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-1);
   color: inherit;
 }
 

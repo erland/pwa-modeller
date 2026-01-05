@@ -6,9 +6,9 @@
 
 .appHeader {
   padding: 16px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-1);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-1);
 }
 
 .appTitle {
@@ -25,7 +25,7 @@
 .appMain {
   margin-top: 18px;
   padding: 16px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-1);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
 }

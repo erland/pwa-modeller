@@ -18,7 +18,7 @@
 .modelWorkspaceCanvas {
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--diagram-canvas-bg);
   padding: 12px;
 }
 
@@ -88,12 +88,12 @@
 .shellNavLink:hover {
   opacity: 1;
   border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-1);
 }
 
 .shellNavLink.isActive {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-3);
   border-color: rgba(255, 255, 255, 0.18);
 }
 
@@ -115,8 +115,8 @@
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-1);
+  background: var(--surface-2);
   opacity: 0.92;
 }
 
@@ -131,8 +131,8 @@
 .shellButton {
   padding: 7px 10px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--button-border);
+  background: var(--surface-1);
   color: inherit;
   cursor: pointer;
 }
@@ -150,8 +150,8 @@
 .shellIconButton {
   padding: 7px 10px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--button-border);
+  background: var(--surface-1);
   color: inherit;
   cursor: pointer;
   line-height: 1;
@@ -184,7 +184,7 @@
 
 .shellSidebar {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--diagram-canvas-border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   overflow: hidden;
@@ -223,7 +223,7 @@
 }
 
 .shellResizer:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-3);
 }
 
 .shell.isResizing {
@@ -263,7 +263,7 @@
 }
 
 .shellMain {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-1);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
   padding: 14px;
@@ -304,7 +304,7 @@
   gap: 10px;
   padding: 8px 10px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-1);
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -336,14 +336,14 @@
 .tabButton {
   padding: 7px 10px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--button-border);
+  background: var(--surface-1);
   color: inherit;
   cursor: pointer;
 }
 
 .tabButton.isActive {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-3);
 }
 
 .tabButton:disabled {
@@ -385,9 +385,9 @@
   gap: 12px;
   align-items: center;
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-1);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.20);
+  background: var(--surface-2);
   margin-bottom: 10px;
 }
 
@@ -406,10 +406,10 @@
 }
 
 .diagramCanvas {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--diagram-canvas-border);
   border-radius: 12px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--diagram-canvas-bg);
 }
 
 .diagramCanvasHeader {
@@ -436,15 +436,15 @@
   position: relative;
   overflow: auto;
   border-radius: 12px;
-  border: 1px dashed rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed var(--border-2);
+  background: var(--surface-1);
   min-height: 420px;
 }
 
 .diagramViewport.isDropTarget {
   border-style: solid;
-  border-color: rgba(255, 255, 255, 0.32);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  border-color: var(--border-3);
+  box-shadow: inset 0 0 0 1px var(--border-2);
 }
 
 .diagramSurface {
@@ -453,15 +453,15 @@
   border-radius: 12px;
   background: repeating-linear-gradient(
     0deg,
-    rgba(255, 255, 255, 0.06),
-    rgba(255, 255, 255, 0.06) 1px,
+    var(--diagram-grid-line),
+    var(--diagram-grid-line) 1px,
     transparent 1px,
     transparent 24px
   ),
   repeating-linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.06),
-    rgba(255, 255, 255, 0.06) 1px,
+    var(--diagram-grid-line),
+    var(--diagram-grid-line) 1px,
     transparent 1px,
     transparent 24px
   );
@@ -486,15 +486,19 @@
 /* Visible relationship line. */
 .diagramRelLine {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.55);
+  stroke: var(--diagram-rel-stroke);
+  color: var(--diagram-rel-stroke);
   stroke-width: 2px;
   pointer-events: none;
 }
 
+
 .diagramRelLine.isSelected {
-  stroke: rgba(0, 0, 0, 0.85);
+  stroke: var(--diagram-rel-stroke-selected);
+  color: var(--diagram-rel-stroke-selected);
   stroke-width: 3.5px;
 }
+
 
 .diagramHint {
   position: sticky;
@@ -505,9 +509,9 @@
   gap: 6px;
   align-items: baseline;
   padding: 8px 10px;
-  color: rgba(255, 255, 255, 0.92);
-  background: rgba(17, 24, 39, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--hint-fg);
+  background: var(--hint-bg);
+  border: 1px solid var(--button-border);
   border-radius: 10px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(4px);
@@ -517,7 +521,7 @@
   position: absolute;
   box-sizing: border-box;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.20);
+  border: 1px solid var(--border-2);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
   padding: 10px;
@@ -628,7 +632,7 @@
   margin-top: 18px;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-1);
   background: rgba(255, 255, 255, 0.02);
 }
 

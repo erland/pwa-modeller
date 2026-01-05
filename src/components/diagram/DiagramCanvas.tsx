@@ -864,7 +864,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                           e.stopPropagation();
                           (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
 
-                          const sourcePoint: Point = { x: n.x + n.width, y: n.y + n.height / 2 };
+                          // Start the drag from the bottom-right corner (matches the handle position)
+                          const sourcePoint: Point = { x: n.x + n.width, y: n.y + n.height };
                           const p = clientToModelPoint(e.clientX, e.clientY) ?? sourcePoint;
                           setLinkDrag({
                             viewId: activeView.id,

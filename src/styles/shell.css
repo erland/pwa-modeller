@@ -543,9 +543,10 @@
 
 .diagramRelHandle {
   position: absolute;
+  /* Place the relationship-drag handle at the bottom-right corner of the node */
   right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
+  bottom: -12px;
+  transform: none;
   width: 24px;
   height: 24px;
   border-radius: 999px;
@@ -564,7 +565,7 @@
 }
 
 .diagramRelHandle:hover {
-  transform: translateY(-50%) scale(1.06);
+  transform: scale(1.06);
 }
 
 .diagramNode:active {

@@ -200,10 +200,23 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
   // Zoom & fit
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState<number>(1);
 
   const clientToModelPoint = useCallback(
     (clientX: number, clientY: number): Point | null => {
+      // Prefer converting relative to the scaled diagram surface.
+      // This avoids vertical offsets caused by sticky overlays inside the scroll viewport.
+      const surface = surfaceRef.current;
+      if (surface) {
+        const rect = surface.getBoundingClientRect();
+        return {
+          x: (clientX - rect.left) / zoom,
+          y: (clientY - rect.top) / zoom,
+        };
+      }
+
+      // Fallback (should rarely be needed): convert relative to the scroll viewport.
       const vp = viewportRef.current;
       if (!vp) return null;
       const rect = vp.getBoundingClientRect();
@@ -602,6 +615,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
             <div style={{ width: surfaceWidthModel * zoom, height: surfaceHeightModel * zoom, position: 'relative' }}>
               <div
                 className="diagramSurface"
+                ref={surfaceRef}
                 style={{
                   width: surfaceWidthModel,
                   height: surfaceHeightModel,
@@ -793,7 +807,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         key="__preview__"
                         d={d}
                         fill="none"
-                        stroke="rgba(0,0,0,0.35)"
+                        stroke="var(--diagram-rel-stroke)"
                         strokeWidth={2}
                         strokeDasharray="6 5"
                         markerEnd="url(#arrowOpen)"

@@ -1,7 +1,7 @@
 import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout } from '../../domain';
-import { RELATIONSHIP_TYPES, createRelationship, getViewpointById, validateRelationship } from '../../domain';
+import type {RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout, ArchimateLayer, ElementType } from '../../domain';
+import {RELATIONSHIP_TYPES, createRelationship, getViewpointById, validateRelationship, ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
@@ -16,6 +16,25 @@ type Props = {
 
 // Drag payload for dragging an element from the tree into a view.
 const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
+
+const ELEMENT_TYPE_TO_LAYER: Partial<Record<ElementType, ArchimateLayer>> = (() => {
+  const map: Partial<Record<ElementType, ArchimateLayer>> = {};
+  (Object.keys(ELEMENT_TYPES_BY_LAYER) as ArchimateLayer[]).forEach((layer) => {
+    for (const t of ELEMENT_TYPES_BY_LAYER[layer] ?? []) map[t] = layer;
+  });
+  return map;
+})();
+
+const LAYER_BG_VAR: Record<ArchimateLayer, string> = {
+  Strategy: 'var(--arch-layer-strategy)',
+  Motivation: 'var(--arch-layer-motivation)',
+  Business: 'var(--arch-layer-business)',
+  Application: 'var(--arch-layer-application)',
+  Technology: 'var(--arch-layer-technology)',
+  Physical: 'var(--arch-layer-physical)',
+  ImplementationMigration: 'var(--arch-layer-implementation)'
+};
+
 
 function dataTransferHasElement(dt: DataTransfer | null): boolean {
   if (!dt) return false;
@@ -834,7 +853,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         (isRelTarget ? ' isRelTarget' : '') +
                         (isRelSource ? ' isRelSource' : '')
                       }
-                      style={{ left: n.x, top: n.y, width: n.width ?? 120, height: n.height ?? 60 }}
+                      style={{ left: n.x, top: n.y, width: n.width ?? 120, height: n.height ?? 60, '--diagram-node-bg': LAYER_BG_VAR[ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business'] } as React.CSSProperties}
                       role="button"
                       tabIndex={0}
                       aria-label={`Diagram node ${el.name || '(unnamed)'}`}

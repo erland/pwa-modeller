@@ -28,6 +28,15 @@
 
   --diagram-rel-stroke: rgba(255, 255, 255, 0.72);
   --diagram-rel-stroke-selected: rgba(255, 255, 255, 0.95);
+
+  /* ArchiMate classic layer palette (light fills) */
+  --arch-layer-strategy: rgba(182, 139, 106, 0.92);
+  --arch-layer-motivation: rgba(197, 168, 255, 0.92);
+  --arch-layer-business: rgba(255, 235, 140, 0.92);
+  --arch-layer-application: rgba(159, 207, 255, 0.92);
+  --arch-layer-technology: rgba(168, 233, 178, 0.92);
+  --arch-layer-physical: rgba(168, 233, 178, 0.92);
+  --arch-layer-implementation: rgba(255, 180, 206, 0.92);
 }
 
 :root[data-theme='light'] {

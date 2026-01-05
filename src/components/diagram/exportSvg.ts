@@ -1,7 +1,27 @@
-import type { Model, RelationshipType, ViewNodeLayout } from '../../domain';
+import type {Model, RelationshipType, ViewNodeLayout, ArchimateLayer, ElementType } from '../../domain';
+import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
 
 type Point = { x: number; y: number };
 
+
+
+const ELEMENT_TYPE_TO_LAYER: Partial<Record<ElementType, ArchimateLayer>> = (() => {
+  const map: Partial<Record<ElementType, ArchimateLayer>> = {};
+  (Object.keys(ELEMENT_TYPES_BY_LAYER) as ArchimateLayer[]).forEach((layer) => {
+    for (const t of ELEMENT_TYPES_BY_LAYER[layer] ?? []) map[t] = layer;
+  });
+  return map;
+})();
+
+const LAYER_FILL: Record<ArchimateLayer, string> = {
+  Strategy: '#f0d1c0',
+  Motivation: '#eadcff',
+  Business: '#fff0b3',
+  Application: '#d4ebff',
+  Technology: '#d8f5df',
+  Physical: '#d8f5df',
+  ImplementationMigration: '#ffd0e0'
+};
 type RelationshipVisual = {
   markerStartId?: string;
   markerEndId?: string;
@@ -225,6 +245,8 @@ export function createViewSvg(model: Model, viewId: string): string {
       const y = n.y + offsetY;
       const name = el.name || '(unnamed)';
       const type = el.type;
+      const layer = (ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business') as ArchimateLayer;
+      const fill = LAYER_FILL[layer];
       const tag = n.styleTag;
       const highlight = n.highlighted;
 
@@ -237,7 +259,7 @@ export function createViewSvg(model: Model, viewId: string): string {
 
       return `
         <g>
-          <rect x="${x}" y="${y}" width="${n.width}" height="${n.height}" rx="10" fill="#ffffff" stroke="${highlight ? '#f59e0b' : '#cbd5e1'}" stroke-width="${highlight ? 2 : 1}" />
+          <rect x="${x}" y="${y}" width="${n.width}" height="${n.height}" rx="10" fill="${fill}" stroke="${highlight ? '#f59e0b' : '#cbd5e1'}" stroke-width="${highlight ? 2 : 1}" />
           <text x="${x + 10}" y="${y + 22}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="13" font-weight="700" fill="#0f172a">${escapeXml(name)}</text>
           <text x="${x + 10}" y="${y + 40}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" fill="#334155">${escapeXml(type)}</text>
           ${tagSvg}
@@ -245,6 +267,10 @@ export function createViewSvg(model: Model, viewId: string): string {
       `;
     })
     .join('');
+
+  // Export uses a neutral light background so diagrams remain readable when
+  // embedded in documents regardless of the app's current theme.
+  const backgroundFill = '#ffffff';
 
   const title = escapeXml(view.name);
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
@@ -266,7 +292,7 @@ export function createViewSvg(model: Model, viewId: string): string {
       <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="rgba(0,0,0,0.55)" />
     </marker>
   </defs>
-  <rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff" />
+  <rect x="0" y="0" width="${width}" height="${height}" fill="${backgroundFill}" />
   <text x="${padding}" y="${padding}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" font-weight="700" fill="#0f172a">${title}</text>
   <g transform="translate(0, 12)">
     ${linesSvg}

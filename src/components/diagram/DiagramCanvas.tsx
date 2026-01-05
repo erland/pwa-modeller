@@ -500,7 +500,31 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                     const points = [{ x: sx, y: sy }, ...pts, { x: tx, y: ty }];
                     const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
-                    return <path key={relId} d={d} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={2} markerEnd="url(#arrow)" />;
+                    const isSelected = selection.kind === 'relationship' && selection.relationshipId === relId;
+
+                    return (
+                      <g key={relId}>
+                        {/*
+                          Large invisible hit target so relationships are easy to select.
+                          (The visible line itself has pointer-events disabled.)
+                        */}
+                        <path
+                          className="diagramRelHit"
+                          d={d}
+                          onClick={(e) => {
+                            if (linkDrag) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onSelect({ kind: 'relationship', relationshipId: relId });
+                          }}
+                        />
+                        <path
+                          className={'diagramRelLine' + (isSelected ? ' isSelected' : '')}
+                          d={d}
+                          markerEnd="url(#arrow)"
+                        />
+                      </g>
+                    );
                   })}
 
 

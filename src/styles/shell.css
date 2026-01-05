@@ -469,25 +469,31 @@
 
 .diagramRelationships {
   position: absolute;
-  left: 0;
-  top: 0;
-  pointer-events: none;
-}
-
-.diagramRelationships line {
-  stroke: rgba(0, 0, 0, 0.60);
-  stroke-width: 2;
-}
-
-.diagramRelationships path {
-  fill: rgba(0, 0, 0, 0.60);
-}
-
-
-.diagramRelationships {
-  position: absolute;
   inset: 0;
+  /* Don't block node interactions in empty space; hit targets opt-in per relationship. */
   pointer-events: none;
+}
+
+/* Clickable relationship hit target (invisible but wide). */
+.diagramRelHit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14px;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+/* Visible relationship line. */
+.diagramRelLine {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 2px;
+  pointer-events: none;
+}
+
+.diagramRelLine.isSelected {
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 3.5px;
 }
 
 .diagramHint {

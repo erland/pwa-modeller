@@ -80,9 +80,11 @@ function iconFor(node: NavNode): string {
     case 'view':
       return '🗺️';
     case 'element':
-      return '⬛';
+      // Use a non-emoji glyph so CSS `color` can style it in light/dark themes.
+      return '■';
     case 'relationship':
-      return '🔗';
+      // Non-emoji glyph for consistent theming.
+      return '⟶';
     case 'section':
     default:
       return '▦';

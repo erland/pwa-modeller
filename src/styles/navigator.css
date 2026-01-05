@@ -51,12 +51,12 @@
    Keep selectors broad to avoid depending on exact DOM structure. */
 .navAriaTree [data-focus-visible] .navTreeRow,
 .navAriaTree [data-focus-visible="true"] .navTreeRow {
-  outline: 2px solid rgba(255, 255, 255, 0.32);
+  outline: 2px solid var(--border-3);
   outline-offset: 2px;
 }
 
 .navAriaTree [data-selected="true"] .navTreeRow {
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--surface-2);
 }
 
 .navTreeRow {
@@ -77,9 +77,9 @@
 
 /* Drop target highlight for moving elements between folders (Elements scope). */
 .navTreeRow.isDropTarget {
-  outline: 2px dashed rgba(255, 255, 255, 0.45);
+  outline: 2px dashed var(--border-2);
   outline-offset: 2px;
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--surface-2);
 }
 
 
@@ -88,7 +88,7 @@
   align-self: stretch;
   display: inline-block;
   /* Vertical guide lines every 14px (Explorer-like). */
-  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.18) 0 1px, transparent 1px);
+  background-image: linear-gradient(to right, var(--border-1) 0 1px, transparent 1px);
   background-size: 14px 100%;
   background-repeat: repeat-x;
   opacity: 0.9;
@@ -97,7 +97,7 @@
 .navTreeConnector {
   width: 12px;
   height: 1px;
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--border-1);
   display: inline-block;
   margin-right: 2px;
 }
@@ -141,6 +141,14 @@
   display: inline-flex;
   justify-content: center;
   opacity: 0.9;
+  /* Icons are rendered as text glyphs; theme them like muted UI affordances. */
+  color: var(--app-muted-fg);
+}
+
+/* Emphasize icons on hover/selection. */
+.navTreeRow:hover .navTreeIcon,
+.navAriaTree [data-selected="true"] .navTreeIcon {
+  color: var(--app-fg);
 }
 
 .navTreeLabel {
@@ -272,7 +280,9 @@
 
 .navMenuPopover {
   border: 1px solid var(--button-border);
-  background: rgba(20, 20, 24, 0.96);
+  /* Theme-aware so it stays readable in both light/dark modes */
+  background: var(--hint-bg);
+  color: var(--hint-fg);
   border-radius: 10px;
   padding: 4px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);

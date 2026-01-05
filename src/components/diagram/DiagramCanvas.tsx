@@ -67,6 +67,40 @@ function hitTestNodeId(nodes: ViewNodeLayout[], p: Point, excludeElementId: stri
   return null;
 }
 
+function rectEdgeAnchor(n: ViewNodeLayout, toward: Point): Point {
+  // Returns a point on the rectangle border of node n in the direction of `toward`.
+  const w = n.width ?? 120;
+  const h = n.height ?? 60;
+  const cx = n.x + w / 2;
+  const cy = n.y + h / 2;
+  const dx = toward.x - cx;
+  const dy = toward.y - cy;
+
+  // If the target is exactly at the center, just return center.
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+
+  const adx = Math.abs(dx);
+  const ady = Math.abs(dy);
+  const sx = adx === 0 ? Number.POSITIVE_INFINITY : (w / 2) / adx;
+  const sy = ady === 0 ? Number.POSITIVE_INFINITY : (h / 2) / ady;
+  const s = Math.min(sx, sy);
+  return { x: cx + dx * s, y: cy + dy * s };
+}
+
+function unitPerp(from: Point, to: Point): Point {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy);
+  if (!Number.isFinite(len) || len < 1e-6) return { x: 0, y: -1 };
+  // Perpendicular (rotate 90 degrees).
+  return { x: -dy / len, y: dx / len };
+}
+
+function offsetPolyline(points: Point[], perp: Point, offset: number): Point[] {
+  if (offset === 0) return points;
+  return points.map((p) => ({ x: p.x + perp.x * offset, y: p.y + perp.y * offset }));
+}
+
 export function DiagramCanvas({ selection, onSelect }: Props) {
   const model = useModelStore((s) => s.model);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
@@ -355,6 +389,50 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     return m;
   }, [activeView]);
 
+  type RelRenderItem = {
+    relId: string;
+    source: ViewNodeLayout;
+    target: ViewNodeLayout;
+    indexInGroup: number;
+    totalInGroup: number;
+    groupKey: string;
+  };
+
+  const relRenderItems: RelRenderItem[] = useMemo(() => {
+    if (!model || !activeView) return [];
+    // Group relationships by unordered (A,B) element pair so parallel lines are drawn
+    // when multiple relationships exist between the same two elements.
+    const groups = new Map<string, string[]>();
+    for (const relId of relationshipIdsToRender) {
+      const rel = model.relationships[relId];
+      if (!rel) continue;
+      const a = rel.sourceElementId;
+      const b = rel.targetElementId;
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      const list = groups.get(key) ?? [];
+      list.push(relId);
+      groups.set(key, list);
+    }
+
+    const byElementId = new Map(nodes.map((n) => [n.elementId, n] as const));
+
+    const items: RelRenderItem[] = [];
+    for (const [groupKey, relIds] of groups.entries()) {
+      // Keep stable order within group: by relationship id (consistent across renders)
+      const stable = [...relIds].sort((x, y) => x.localeCompare(y));
+      for (let i = 0; i < stable.length; i += 1) {
+        const relId = stable[i];
+        const rel = model.relationships[relId];
+        if (!rel) continue;
+        const s = byElementId.get(rel.sourceElementId);
+        const t = byElementId.get(rel.targetElementId);
+        if (!s || !t) continue;
+        items.push({ relId, source: s, target: t, indexInGroup: i, totalInGroup: stable.length, groupKey });
+      }
+    }
+    return items;
+  }, [model, activeView, nodes, relationshipIdsToRender]);
+
   const pendingRelTypeOptions = useMemo(() => {
     if (!model || !pendingCreateRel) return RELATIONSHIP_TYPES;
     const view = model.views[pendingCreateRel.viewId];
@@ -482,22 +560,43 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                     </marker>
                   </defs>
 
-                  {relationshipIdsToRender.map((relId) => {
+                  {relRenderItems.map((item) => {
+                    const relId = item.relId;
                     const rel = model.relationships[relId];
                     if (!rel) return null;
 
-                    const s = nodes.find((n) => n.elementId === rel.sourceElementId);
-                    const t = nodes.find((n) => n.elementId === rel.targetElementId);
-                    if (!s || !t) return null;
+                    const s = item.source;
+                    const t = item.target;
 
-                    const sx = s.x + s.width / 2;
-                    const sy = s.y + s.height / 2;
-                    const tx = t.x + t.width / 2;
-                    const ty = t.y + t.height / 2;
+                    const sc: Point = { x: s.x + (s.width ?? 120) / 2, y: s.y + (s.height ?? 60) / 2 };
+                    const tc: Point = { x: t.x + (t.width ?? 120) / 2, y: t.y + (t.height ?? 60) / 2 };
+
+                    // Prefer border anchors (looks nicer than center-to-center).
+                    const start = rectEdgeAnchor(s, tc);
+                    const end = rectEdgeAnchor(t, sc);
 
                     const layout = relLayoutById.get(relId);
-                    const pts = layout?.points ?? [];
-                    const points = [{ x: sx, y: sy }, ...pts, { x: tx, y: ty }];
+                    const midPts = layout?.points ?? [];
+                    let points: Point[] = [start, ...midPts, end];
+
+                    // If there are multiple relationships between the same two elements, offset them in parallel.
+                    const total = item.totalInGroup;
+                    if (total > 1) {
+                      const spacing = 14;
+                      const offsetIndex = item.indexInGroup - (total - 1) / 2;
+                      const offset = offsetIndex * spacing;
+
+                      // Use a stable perpendicular based on the unordered group key so
+                      // relationships in opposite directions still spread apart consistently.
+                      const parts = item.groupKey.split('|');
+                      const aNode = nodes.find((n) => n.elementId === parts[0]);
+                      const bNode = nodes.find((n) => n.elementId === parts[1]);
+                      const aC: Point | null = aNode ? { x: aNode.x + (aNode.width ?? 120) / 2, y: aNode.y + (aNode.height ?? 60) / 2 } : null;
+                      const bC: Point | null = bNode ? { x: bNode.x + (bNode.width ?? 120) / 2, y: bNode.y + (bNode.height ?? 60) / 2 } : null;
+                      const perp = aC && bC ? unitPerp(aC, bC) : unitPerp(sc, tc);
+                      points = offsetPolyline(points, perp, offset);
+                    }
+
                     const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
                     const isSelected = selection.kind === 'relationship' && selection.relationshipId === relId;
@@ -511,6 +610,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         <path
                           className="diagramRelHit"
                           d={d}
+                          style={{ strokeWidth: total > 1 ? 10 : 14 }}
                           onClick={(e) => {
                             if (linkDrag) return;
                             e.preventDefault();

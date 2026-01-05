@@ -519,6 +519,38 @@
   cursor: grab;
 }
 
+.diagramNode.isRelTarget {
+  outline: 2px solid rgba(34, 197, 94, 0.85);
+  outline-offset: 2px;
+}
+
+.diagramNode.isRelSource {
+  outline: 2px solid rgba(59, 130, 246, 0.70);
+  outline-offset: 2px;
+}
+
+.diagramRelHandle {
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.diagramRelHandle:hover {
+  transform: translateY(-50%) scale(1.06);
+}
+
 .diagramNode:active {
   cursor: grabbing;
 }

@@ -1,9 +1,11 @@
 import type * as React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { View, ViewNodeLayout, ViewRelationshipLayout } from '../../domain';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout } from '../../domain';
+import { RELATIONSHIP_TYPES, createRelationship, getViewpointById, validateRelationship } from '../../domain';
 import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
+import { Dialog } from '../dialog/Dialog';
 import { createViewSvg } from './exportSvg';
 
 type Props = {
@@ -34,6 +36,8 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
+type Point = { x: number; y: number };
+
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
 function boundsForNodes(nodes: ViewNodeLayout[]): Bounds {
@@ -49,6 +53,18 @@ function boundsForNodes(nodes: ViewNodeLayout[]): Bounds {
     maxY = Math.max(maxY, n.y + (n.height ?? 60));
   }
   return { minX, minY, maxX, maxY };
+}
+
+function hitTestNodeId(nodes: ViewNodeLayout[], p: Point, excludeElementId: string | null): string | null {
+  // Iterate from end to start so later-rendered nodes win if they overlap.
+  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+    const n = nodes[i];
+    if (excludeElementId && n.elementId === excludeElementId) continue;
+    const w = n.width ?? 120;
+    const h = n.height ?? 60;
+    if (p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h) return n.elementId;
+  }
+  return null;
 }
 
 export function DiagramCanvas({ selection, onSelect }: Props) {
@@ -90,6 +106,44 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   // Zoom & fit
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState<number>(1);
+
+  const clientToModelPoint = useCallback(
+    (clientX: number, clientY: number): Point | null => {
+      const vp = viewportRef.current;
+      if (!vp) return null;
+      const rect = vp.getBoundingClientRect();
+      return {
+        x: (vp.scrollLeft + (clientX - rect.left)) / zoom,
+        y: (vp.scrollTop + (clientY - rect.top)) / zoom,
+      };
+    },
+    [zoom]
+  );
+
+  // Relationship "wire" creation (drag from a node handle to another node).
+  const [linkDrag, setLinkDrag] = useState<
+    | {
+        viewId: string;
+        sourceElementId: string;
+        sourcePoint: Point;
+        currentPoint: Point;
+        targetElementId: string | null;
+      }
+    | null
+  >(null);
+
+  const [pendingCreateRel, setPendingCreateRel] = useState<
+    | {
+        viewId: string;
+        sourceElementId: string;
+        targetElementId: string;
+      }
+    | null
+  >(null);
+
+  const [lastRelType, setLastRelType] = useState<RelationshipType>('Association');
+  const [pendingRelType, setPendingRelType] = useState<RelationshipType>('Association');
+  const [pendingRelError, setPendingRelError] = useState<string | null>(null);
 
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -245,6 +299,45 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     };
   }, [zoom]);
 
+  // Relationship creation: drag a "wire" from a node handle to another node.
+  useEffect(() => {
+    if (!linkDrag) return;
+
+    function onMove(e: PointerEvent) {
+      const p = clientToModelPoint(e.clientX, e.clientY);
+      if (!p) return;
+      // IMPORTANT: the relationship handle typically uses pointer capture.
+      // That prevents pointerenter/leave from firing on other nodes, so we hit-test
+      // in model coordinates to detect the current drop target.
+      setLinkDrag((prev) => {
+        if (!prev) return prev;
+        const targetId = hitTestNodeId(nodes, p, prev.sourceElementId);
+        return { ...prev, currentPoint: p, targetElementId: targetId };
+      });
+    }
+
+    function onUp(e: PointerEvent) {
+      const p = clientToModelPoint(e.clientX, e.clientY);
+      setLinkDrag((prev) => {
+        if (!prev) return prev;
+        const target = p ? hitTestNodeId(nodes, p, prev.sourceElementId) : prev.targetElementId;
+        if (target && target !== prev.sourceElementId) {
+          setPendingCreateRel({ viewId: prev.viewId, sourceElementId: prev.sourceElementId, targetElementId: target });
+          setPendingRelType(lastRelType);
+          setPendingRelError(null);
+        }
+        return null;
+      });
+    }
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [linkDrag, clientToModelPoint, lastRelType, nodes]);
+
   // Relationships to render: explicit in view if present, otherwise infer from model relationships between nodes in view.
   const relationshipIdsToRender = useMemo(() => {
     if (!model || !activeView) return [] as string[];
@@ -261,6 +354,59 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     for (const r of activeView?.layout?.relationships ?? []) m.set(r.relationshipId, r);
     return m;
   }, [activeView]);
+
+  const pendingRelTypeOptions = useMemo(() => {
+    if (!model || !pendingCreateRel) return RELATIONSHIP_TYPES;
+    const view = model.views[pendingCreateRel.viewId];
+    const vp = view ? getViewpointById(view.viewpointId) : undefined;
+    return vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : RELATIONSHIP_TYPES;
+  }, [model, pendingCreateRel]);
+
+  // When the dialog opens, default the type to last used (if allowed), otherwise first option.
+  useEffect(() => {
+    if (!pendingCreateRel) return;
+    const opts = pendingRelTypeOptions;
+    const next = opts.includes(lastRelType) ? lastRelType : opts[0] ?? 'Association';
+    setPendingRelType(next);
+    setPendingRelError(null);
+  }, [pendingCreateRel, pendingRelTypeOptions, lastRelType]);
+
+  function closePendingRelationshipDialog() {
+    setPendingCreateRel(null);
+    setPendingRelError(null);
+  }
+
+  function confirmCreatePendingRelationship() {
+    if (!model || !pendingCreateRel) return;
+    setPendingRelError(null);
+
+    const { sourceElementId, targetElementId } = pendingCreateRel;
+    if (!model.elements[sourceElementId] || !model.elements[targetElementId]) {
+      setPendingRelError('Both source and target elements must exist.');
+      return;
+    }
+
+    const validation = validateRelationship({
+      id: 'tmp',
+      type: pendingRelType,
+      sourceElementId,
+      targetElementId
+    });
+    if (!validation.ok) {
+      setPendingRelError(validation.errors[0] ?? 'Invalid relationship');
+      return;
+    }
+
+    const rel = createRelationship({
+      sourceElementId,
+      targetElementId,
+      type: pendingRelType
+    });
+    modelStore.addRelationship(rel);
+    setLastRelType(pendingRelType);
+    setPendingCreateRel(null);
+    onSelect({ kind: 'relationship', relationshipId: rel.id });
+  }
 
   if (!model) {
     return (
@@ -356,32 +502,101 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
                     return <path key={relId} d={d} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={2} markerEnd="url(#arrow)" />;
                   })}
+
+
+                  {/* Link creation preview */}
+                  {linkDrag ? (() => {
+                    const start = linkDrag.sourcePoint;
+                    let end = linkDrag.currentPoint;
+                    if (linkDrag.targetElementId) {
+                      const t = nodes.find((n) => n.elementId === linkDrag.targetElementId);
+                      if (t) end = { x: t.x + t.width / 2, y: t.y + t.height / 2 };
+                    }
+                    const d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+                    return (
+                      <path
+                        key="__preview__"
+                        d={d}
+                        fill="none"
+                        stroke="rgba(0,0,0,0.35)"
+                        strokeWidth={2}
+                        strokeDasharray="6 5"
+                        markerEnd="url(#arrow)"
+                      />
+                    );
+                  })() : null}
                 </svg>
+
 
                 {nodes.map((n) => {
                   const el = model.elements[n.elementId];
                   if (!el) return null;
+
+                  const isRelTarget = Boolean(linkDrag && linkDrag.targetElementId === n.elementId && linkDrag.sourceElementId !== n.elementId);
+                  const isRelSource = Boolean(linkDrag && linkDrag.sourceElementId === n.elementId);
+
                   return (
                     <div
                       key={n.elementId}
                       className={
                         'diagramNode' +
                         (selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId ? ' isSelected' : '') +
-                        (n.highlighted ? ' isHighlighted' : '')
+                        (n.highlighted ? ' isHighlighted' : '') +
+                        (isRelTarget ? ' isRelTarget' : '') +
+                        (isRelSource ? ' isRelSource' : '')
                       }
                       style={{ left: n.x, top: n.y, width: n.width ?? 120, height: n.height ?? 60 }}
                       role="button"
                       tabIndex={0}
                       aria-label={`Diagram node ${el.name || '(unnamed)'}`}
-                      onClick={() => onSelect({ kind: 'viewNode', viewId: activeView.id, elementId: el.id })}
+                      onClick={() => {
+                        if (linkDrag) return;
+                        onSelect({ kind: 'viewNode', viewId: activeView.id, elementId: el.id });
+                      }}
                       onPointerDown={(e) => {
+                        if (linkDrag) return;
                         e.currentTarget.setPointerCapture(e.pointerId);
                         dragRef.current = { viewId: activeView.id, elementId: el.id, startX: e.clientX, startY: e.clientY, origX: n.x, origY: n.y };
+                      }}
+                      onPointerEnter={() => {
+                        if (!linkDrag) return;
+                        if (n.elementId === linkDrag.sourceElementId) return;
+                        setLinkDrag((prev) => (prev ? { ...prev, targetElementId: n.elementId } : prev));
+                      }}
+                      onPointerLeave={() => {
+                        if (!linkDrag) return;
+                        setLinkDrag((prev) => (prev && prev.targetElementId === n.elementId ? { ...prev, targetElementId: null } : prev));
                       }}
                     >
                       <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
                       <div className="diagramNodeMeta">{el.type}</div>
                       {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
+
+                      {/* Outgoing relationship handle */}
+                      <button
+                        type="button"
+                        className="diagramRelHandle"
+                        aria-label={`Create relationship from ${el.name || '(unnamed)'}`}
+                        title="Drag to another element to create a relationship"
+                        onPointerDown={(e) => {
+                          if (!activeView) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
+
+                          const sourcePoint: Point = { x: n.x + n.width, y: n.y + n.height / 2 };
+                          const p = clientToModelPoint(e.clientX, e.clientY) ?? sourcePoint;
+                          setLinkDrag({
+                            viewId: activeView.id,
+                            sourceElementId: el.id,
+                            sourcePoint,
+                            currentPoint: p,
+                            targetElementId: null,
+                          });
+                        }}
+                      >
+                        ↗
+                      </button>
                     </div>
                   );
                 })}
@@ -390,6 +605,53 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           </div>
         )}
       </div>
+
+	      {/* Relationship type picker ("stereotype") shown after drag-drop */}
+	      <Dialog
+	        title="Create relationship"
+	        isOpen={Boolean(pendingCreateRel)}
+	        onClose={closePendingRelationshipDialog}
+	        footer={
+	          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+	            <button type="button" className="shellButton" onClick={closePendingRelationshipDialog}>
+	              Cancel
+	            </button>
+	            <button type="button" className="shellButton" onClick={confirmCreatePendingRelationship}>
+	              Create
+	            </button>
+	          </div>
+	        }
+	      >
+	        {pendingCreateRel && model ? (
+	          <div>
+	            <div style={{ opacity: 0.9, marginBottom: 10 }}>
+	              <div>
+	                <b>From:</b> {model.elements[pendingCreateRel.sourceElementId]?.name ?? '—'}
+	              </div>
+	              <div>
+	                <b>To:</b> {model.elements[pendingCreateRel.targetElementId]?.name ?? '—'}
+	              </div>
+	            </div>
+
+	            <label htmlFor="diagram-rel-type" style={{ display: 'block', marginBottom: 6 }}>
+	              Stereotype (relationship type)
+	            </label>
+	            <select id="diagram-rel-type" className="selectInput" value={pendingRelType} onChange={(e) => setPendingRelType(e.target.value as RelationshipType)}>
+	              {pendingRelTypeOptions.map((rt) => (
+	                <option key={rt} value={rt}>
+	                  {rt}
+	                </option>
+	              ))}
+	            </select>
+
+	            {pendingRelError ? (
+	              <div className="errorText" role="alert" style={{ marginTop: 10 }}>
+	                {pendingRelError}
+	              </div>
+	            ) : null}
+	          </div>
+	        ) : null}
+	      </Dialog>
     </div>
   );
 }

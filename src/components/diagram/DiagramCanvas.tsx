@@ -102,6 +102,64 @@ function offsetPolyline(points: Point[], perp: Point, offset: number): Point[] {
   return points.map((p) => ({ x: p.x + perp.x * offset, y: p.y + perp.y * offset }));
 }
 
+type RelationshipVisual = {
+  markerStart?: string;
+  markerEnd?: string;
+  dasharray?: string;
+  showInfluenceLabel?: boolean;
+};
+
+function relationshipVisual(type: RelationshipType): RelationshipVisual {
+  switch (type) {
+    case 'Association':
+      return {};
+    case 'Composition':
+      return { markerStart: 'url(#diamondFilled)' };
+    case 'Aggregation':
+      return { markerStart: 'url(#diamondOpen)' };
+    case 'Specialization':
+      return { markerEnd: 'url(#triangleOpen)' };
+    case 'Realization':
+      return { markerEnd: 'url(#triangleOpen)', dasharray: '6 5' };
+    case 'Serving':
+      return { markerEnd: 'url(#arrowOpen)', dasharray: '6 5' };
+    case 'Flow':
+      return { markerEnd: 'url(#arrowOpen)', dasharray: '6 5' };
+    case 'Triggering':
+      return { markerEnd: 'url(#arrowOpen)' };
+    case 'Assignment':
+      return { markerEnd: 'url(#arrowFilled)' };
+    case 'Access':
+      return { markerEnd: 'url(#arrowOpen)' };
+    case 'Influence':
+      return { markerEnd: 'url(#arrowOpen)', dasharray: '2 4', showInfluenceLabel: true };
+    default:
+      return { markerEnd: 'url(#arrowOpen)' };
+  }
+}
+
+function polylineMidPoint(points: Point[]): Point {
+  if (points.length === 0) return { x: 0, y: 0 };
+  if (points.length === 1) return points[0];
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    total += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+  }
+  const half = total / 2;
+  let acc = 0;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (acc + seg >= half && seg > 1e-6) {
+      const t = (half - acc) / seg;
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    acc += seg;
+  }
+  return points[Math.max(0, points.length - 1)];
+}
+
 export function DiagramCanvas({ selection, onSelect }: Props) {
   const model = useModelStore((s) => s.model);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
@@ -556,8 +614,27 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   aria-label="Diagram relationships"
                 >
                   <defs>
-                    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                    {/* Open arrow (dependency/triggering/flow/serving/access/influence) */}
+                    <marker id="arrowOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth="1.6" strokeLinejoin="round" />
+                    </marker>
+
+                    {/* Filled arrow (assignment) */}
+                    <marker id="arrowFilled" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
                       <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(0,0,0,0.55)" />
+                    </marker>
+
+                    {/* Open triangle (realization/specialization) */}
+                    <marker id="triangleOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth="1.6" strokeLinejoin="round" />
+                    </marker>
+
+                    {/* Diamonds (composition/aggregation) at the source side */}
+                    <marker id="diamondOpen" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+                      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth="1.6" strokeLinejoin="round" />
+                    </marker>
+                    <marker id="diamondFilled" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
+                      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="rgba(0,0,0,0.55)" />
                     </marker>
                   </defs>
 
@@ -601,6 +678,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                     const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
                     const isSelected = selection.kind === 'relationship' && selection.relationshipId === relId;
+                    const v = relationshipVisual(rel.type);
+                    const mid = v.showInfluenceLabel ? polylineMidPoint(points) : null;
 
                     return (
                       <g key={relId}>
@@ -622,8 +701,25 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         <path
                           className={'diagramRelLine' + (isSelected ? ' isSelected' : '')}
                           d={d}
-                          markerEnd="url(#arrow)"
+                          markerStart={v.markerStart}
+                          markerEnd={v.markerEnd}
+                          strokeDasharray={v.dasharray ?? undefined}
                         />
+
+                        {mid ? (
+                          <text
+                            x={mid.x}
+                            y={mid.y - 6}
+                            fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+                            fontSize={12}
+                            fontWeight={800}
+                            fill="rgba(0,0,0,0.65)"
+                            textAnchor="middle"
+                            pointerEvents="none"
+                          >
+                            ±
+                          </text>
+                        ) : null}
                       </g>
                     );
                   })}
@@ -646,7 +742,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         stroke="rgba(0,0,0,0.35)"
                         strokeWidth={2}
                         strokeDasharray="6 5"
-                        markerEnd="url(#arrow)"
+                        markerEnd="url(#arrowOpen)"
                       />
                     );
                   })() : null}

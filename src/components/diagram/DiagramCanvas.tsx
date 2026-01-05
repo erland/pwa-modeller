@@ -7,6 +7,7 @@ import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
 import { Dialog } from '../dialog/Dialog';
 import { createViewSvg } from './exportSvg';
+import { ArchimateSymbol } from './archimateSymbols';
 
 type Props = {
   selection: Selection;
@@ -692,7 +693,12 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         setLinkDrag((prev) => (prev && prev.targetElementId === n.elementId ? { ...prev, targetElementId: null } : prev));
                       }}
                     >
-                      <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
+                      <div className="diagramNodeHeader">
+                        <div className="diagramNodeSymbol" aria-hidden="true">
+                          <ArchimateSymbol type={el.type} />
+                        </div>
+                        <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
+                      </div>
                       <div className="diagramNodeMeta">{el.type}</div>
                       {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
 

@@ -18,12 +18,24 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
   const rel = model.relationships[relationshipId];
   if (!rel) return <p className="panelHint">Relationship not found.</p>;
 
+  const relationshipTypeOptions = rel.type === 'Unknown' ? (['Unknown', ...RELATIONSHIP_TYPES] as any[]) : (RELATIONSHIP_TYPES as any[]);
+
   const elementOptions = Object.values(model.elements)
     .filter(Boolean)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
   const sourceName = model.elements[rel.sourceElementId]?.name ?? rel.sourceElementId;
   const targetName = model.elements[rel.targetElementId]?.name ?? rel.targetElementId;
+
+  const elementOptionLabel = (e: any): string => {
+    const typeLabel =
+      e.type === 'Unknown'
+        ? e.unknownType?.name
+          ? `Unknown: ${e.unknownType.name}`
+          : 'Unknown'
+        : e.type;
+    return `${e.name} (${typeLabel})`;
+  };
 
   const usedInViews = Object.values(model.views)
     .filter((v) => v.layout && v.layout.relationships.some((c) => c.relationshipId === rel.id))
@@ -46,7 +58,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
               value={rel.type}
               onChange={(e) => actions.updateRelationship(rel.id, { type: e.target.value as RelationshipType })}
             >
-              {RELATIONSHIP_TYPES.map((t) => (
+              {relationshipTypeOptions.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -54,6 +66,21 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
             </select>
           </div>
         </div>
+
+        {rel.type === 'Unknown' ? (
+          <div className="propertiesRow">
+            <div className="propertiesKey">Original type</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <div style={{ opacity: 0.9 }}>
+                {rel.unknownType?.ns ? `${rel.unknownType.ns}:` : ''}
+                {rel.unknownType?.name ?? 'Unknown'}
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+                Map this relationship to a known type using the Type dropdown.
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {rel.type === 'Access' && (
           <div className="propertiesRow">
@@ -139,7 +166,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
             >
               {elementOptions.map((e) => (
                 <option key={e.id} value={e.id}>
-                  {e.name} ({e.type})
+                  {elementOptionLabel(e)}
                 </option>
               ))}
             </select>
@@ -158,7 +185,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
             >
               {elementOptions.map((e) => (
                 <option key={e.id} value={e.id}>
-                  {e.name} ({e.type})
+                  {elementOptionLabel(e)}
                 </option>
               ))}
             </select>

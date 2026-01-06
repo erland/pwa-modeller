@@ -6,6 +6,7 @@ export * from './modelValidation';
 export * from './reports';
 export * from './taggedValues';
 export * from './relationshipAttrs';
+export * from './unknownTypes';
 
 export * from './config/viewpoints';
 export * from './config/catalog';

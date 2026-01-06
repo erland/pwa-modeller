@@ -169,4 +169,48 @@ describe('persistence', () => {
     expect((parsed.relationships as any)[other.id].attrs).toBeUndefined();
   });
 
+  test('deserializeModel sanitizes unknown types on load', () => {
+    const model = createEmptyModel({ name: 'UnknownTypes Model', description: 'desc' });
+
+    // Element: type Unknown with messy unknownType
+    const el = createElement({ name: 'Mystery', layer: 'Business', type: 'BusinessActor' }) as any;
+    el.type = 'Unknown';
+    el.unknownType = { ns: '  xmi  ', name: '  SomeVendorType  ' };
+    model.elements[el.id] = el;
+
+    // Element: known type but has unknownType set (should be cleared)
+    const knownEl = createElement({ name: 'Known', layer: 'Business', type: 'BusinessRole' }) as any;
+    knownEl.unknownType = { ns: 'x', name: 'ShouldDisappear' };
+    model.elements[knownEl.id] = knownEl;
+
+    // Relationship: Unknown type with missing/blank name -> normalized to "Unknown"
+    const rel = createRelationship({ sourceElementId: el.id, targetElementId: knownEl.id, type: 'Serving' }) as any;
+    rel.type = 'Unknown';
+    rel.unknownType = { ns: '  ', name: '   ' };
+    model.relationships[rel.id] = rel;
+
+    // Relationship: known type but has unknownType set (should be cleared)
+    const knownRel = createRelationship({ sourceElementId: el.id, targetElementId: knownEl.id, type: 'Serving' }) as any;
+    knownRel.unknownType = { ns: 'x', name: 'Nope' };
+    model.relationships[knownRel.id] = knownRel;
+
+    const parsed = deserializeModel(serializeModel(model));
+
+    const parsedEl: any = parsed.elements[el.id];
+    expect(parsedEl.type).toBe('Unknown');
+    expect(parsedEl.unknownType).toEqual({ ns: 'xmi', name: 'SomeVendorType' });
+
+    const parsedKnownEl: any = parsed.elements[knownEl.id];
+    expect(parsedKnownEl.type).toBe('BusinessRole');
+    expect(parsedKnownEl.unknownType).toBeUndefined();
+
+    const parsedRel: any = parsed.relationships[rel.id];
+    expect(parsedRel.type).toBe('Unknown');
+    expect(parsedRel.unknownType).toEqual({ name: 'Unknown' });
+
+    const parsedKnownRel: any = parsed.relationships[knownRel.id];
+    expect(parsedKnownRel.type).toBe('Serving');
+    expect(parsedKnownRel.unknownType).toBeUndefined();
+  });
+
 });

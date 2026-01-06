@@ -1,5 +1,5 @@
 import type { Folder, Model, TaggedValue, TaggedValueType } from '../domain';
-import { createId, sanitizeRelationshipAttrs } from '../domain';
+import { createId, sanitizeRelationshipAttrs, sanitizeUnknownTypeForElement, sanitizeUnknownTypeForRelationship } from '../domain';
 
 /**
  * Serialize a model to JSON.
@@ -134,6 +134,22 @@ function sanitizeModelRelationshipAttrs(model: Model): Model {
     const rel = model.relationships[id] as any;
     if (Object.prototype.hasOwnProperty.call(rel, 'attrs')) {
       rel.attrs = sanitizeRelationshipAttrs(rel.type, rel.attrs);
+    }
+  }
+  return model;
+}
+
+function sanitizeModelUnknownTypes(model: Model): Model {
+  for (const id of Object.keys(model.elements)) {
+    const el = model.elements[id] as any;
+    if (Object.prototype.hasOwnProperty.call(el, 'type') || Object.prototype.hasOwnProperty.call(el, 'unknownType')) {
+      model.elements[id] = sanitizeUnknownTypeForElement(el);
+    }
+  }
+  for (const id of Object.keys(model.relationships)) {
+    const rel = model.relationships[id] as any;
+    if (Object.prototype.hasOwnProperty.call(rel, 'type') || Object.prototype.hasOwnProperty.call(rel, 'unknownType')) {
+      model.relationships[id] = sanitizeUnknownTypeForRelationship(rel);
     }
   }
   return model;
@@ -274,5 +290,9 @@ export function deserializeModel(json: string): Model {
     throw new Error('Invalid model file (missing collections)');
   }
 
-  return sanitizeModelRelationshipAttrs(sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model)));
+  return sanitizeModelRelationshipAttrs(
+    sanitizeModelUnknownTypes(
+      sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model))
+    )
+  );
 }

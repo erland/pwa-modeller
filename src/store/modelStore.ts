@@ -18,7 +18,9 @@ import {
   createId,
   upsertTaggedValue,
   removeTaggedValue,
-  sanitizeRelationshipAttrs
+  sanitizeRelationshipAttrs,
+  sanitizeUnknownTypeForElement,
+  sanitizeUnknownTypeForRelationship
 } from '../domain';
 
 export type ModelStoreState = {
@@ -305,7 +307,8 @@ export class ModelStore {
     this.updateModel((model) => {
       const current = model.elements[elementId];
       if (!current) throw new Error(`Element not found: ${elementId}`);
-      model.elements[elementId] = { ...current, ...patch, id: current.id };
+      const merged = { ...current, ...patch, id: current.id };
+      model.elements[elementId] = sanitizeUnknownTypeForElement(merged);
     });
   };
 
@@ -374,7 +377,7 @@ export class ModelStore {
       if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
       const merged = { ...current, ...patch, id: current.id };
       merged.attrs = sanitizeRelationshipAttrs(merged.type, merged.attrs);
-      model.relationships[relationshipId] = merged;
+      model.relationships[relationshipId] = sanitizeUnknownTypeForRelationship(merged);
     });
   };
 

@@ -14,8 +14,16 @@ export type ArchimateLayer =
   | 'ImplementationMigration'
   | 'Motivation';
 
+export interface UnknownTypeInfo {
+  /** e.g. "archimate-exchange", "ea-xmi", "custom" */
+  ns?: string;
+  /** original type name from imported file */
+  name: string;
+}
+
+
 // NOTE: This is a pragmatic subset to start with. Add more as needed.
-export type ElementType =
+export type KnownElementType =
   // Strategy / Motivation
   | 'Capability'
   | 'CourseOfAction'
@@ -49,8 +57,11 @@ export type ElementType =
   | 'Plateau'
   | 'Gap';
 
+export type ElementType = KnownElementType | 'Unknown';
+
+
 // NOTE: Also a pragmatic subset for the MVP foundation.
-export type RelationshipType =
+export type KnownRelationshipType =
   | 'Association'
   | 'Realization'
   | 'Serving'
@@ -62,6 +73,9 @@ export type RelationshipType =
   | 'Influence'
   | 'Triggering'
   | 'Specialization';
+
+export type RelationshipType = KnownRelationshipType | 'Unknown';
+
 
 
 export type AccessType = 'Access' | 'Read' | 'Write' | 'ReadWrite';
@@ -131,6 +145,8 @@ export interface Element extends HasTaggedValues {
   description?: string;
   layer: ArchimateLayer;
   type: ElementType;
+  /** Present only when type === 'Unknown'. */
+  unknownType?: UnknownTypeInfo;
   documentation?: string;
 }
 
@@ -139,6 +155,8 @@ export interface Relationship extends HasTaggedValues {
   sourceElementId: string;
   targetElementId: string;
   type: RelationshipType;
+  /** Present only when type === 'Unknown'. */
+  unknownType?: UnknownTypeInfo;
   name?: string;
   description?: string;
   attrs?: RelationshipAttributes;

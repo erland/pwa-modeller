@@ -864,6 +864,13 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   const el = model.elements[n.elementId];
                   if (!el) return null;
 
+                  const typeLabel =
+                    el.type === 'Unknown'
+                      ? el.unknownType?.name
+                        ? `Unknown: ${el.unknownType.name}`
+                        : 'Unknown'
+                      : el.type;
+
                   const isRelTarget = Boolean(linkDrag && linkDrag.targetElementId === n.elementId && linkDrag.sourceElementId !== n.elementId);
                   const isRelSource = Boolean(linkDrag && linkDrag.sourceElementId === n.elementId);
 
@@ -904,11 +911,14 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                       <div className="diagramNodeContent" style={n.label ? { transform: `translate(${n.label.dx}px, ${n.label.dy}px)` } : undefined}>
                       <div className="diagramNodeHeader">
                         <div className="diagramNodeSymbol" aria-hidden="true">
-                          <ArchimateSymbol type={el.type} />
+                          <ArchimateSymbol
+                            type={el.type}
+                            title={el.type === 'Unknown' ? (el.unknownType?.name ? `Unknown: ${el.unknownType.name}` : 'Unknown') : el.type}
+                          />
                         </div>
                         <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
                       </div>
-                      <div className="diagramNodeMeta">{el.type}</div>
+                      <div className="diagramNodeMeta">{typeLabel}</div>
                       {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
                       </div>
 

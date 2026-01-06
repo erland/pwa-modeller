@@ -24,6 +24,8 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
   const el = model.elements[elementId];
   if (!el) return <p className="panelHint">Element not found.</p>;
 
+  const elementTypeOptions = el.type === 'Unknown' ? (['Unknown', ...ELEMENT_TYPES] as any[]) : (ELEMENT_TYPES as any[]);
+
   const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
 
   const [traceDirection, setTraceDirection] = useState<TraceDirection>('both');
@@ -60,6 +62,13 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
   const canCreateRelationship = Object.keys(model.elements).length >= 2;
   const onSelectSafe = onSelect ?? (() => undefined);
 
+  const relationshipTypeLabel = (r: any): string =>
+    r.type === 'Unknown'
+      ? r.unknownType?.name
+        ? `Unknown: ${r.unknownType.name}`
+        : 'Unknown'
+      : r.type;
+
   return (
     <div>
       <p className="panelHint">Element</p>
@@ -84,7 +93,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               value={el.type}
               onChange={(e) => actions.updateElement(el.id, { type: e.target.value as any })}
             >
-              {ELEMENT_TYPES.map((t) => (
+              {elementTypeOptions.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -92,6 +101,21 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
             </select>
           </div>
         </div>
+
+        {el.type === 'Unknown' ? (
+          <div className="propertiesRow">
+            <div className="propertiesKey">Original type</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <div style={{ opacity: 0.9 }}>
+                {el.unknownType?.ns ? `${el.unknownType.ns}:` : ''}
+                {el.unknownType?.name ?? 'Unknown'}
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+                Map this element to a known type using the Type dropdown.
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="propertiesRow">
           <div className="propertiesKey">Layer</div>
           <div className="propertiesValue" style={{ fontWeight: 400 }}>
@@ -207,7 +231,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                 <div style={{ display: 'grid', gap: 6 }}>
                   {outgoing.map((r) => {
                     const targetName = getElementLabel(model, r.targetElementId);
-                    const relLabel = `${r.type}${r.name ? ` — ${r.name}` : ''}`;
+                    const relLabel = `${relationshipTypeLabel(r)}${r.name ? ` — ${r.name}` : ''}`;
                     return (
                       <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                         <button
@@ -244,7 +268,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                 <div style={{ display: 'grid', gap: 6 }}>
                   {incoming.map((r) => {
                     const sourceName = getElementLabel(model, r.sourceElementId);
-                    const relLabel = `${r.type}${r.name ? ` — ${r.name}` : ''}`;
+                    const relLabel = `${relationshipTypeLabel(r)}${r.name ? ` — ${r.name}` : ''}`;
                     return (
                       <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                         <button
@@ -318,7 +342,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
             <div style={{ opacity: 0.7 }}>No trace results.</div>
           ) : (
             traceSteps.map((s, idx) => {
-              const relLabel = `${s.relationship.type}${s.relationship.name ? ` — ${s.relationship.name}` : ''}`;
+              const relLabel = `${relationshipTypeLabel(s.relationship)}${s.relationship.name ? ` — ${s.relationship.name}` : ''}`;
               const fromName = getElementLabel(model, s.fromId);
               const toName = getElementLabel(model, s.toId);
               return (

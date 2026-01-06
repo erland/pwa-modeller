@@ -3,8 +3,14 @@ import type { Folder, Model, Relationship } from '../../../domain';
 export function getElementLabel(model: Model, elementId: string): string {
   const el = model.elements[elementId];
   if (!el) return elementId;
+  const typeLabel =
+    el.type === 'Unknown'
+      ? el.unknownType?.name
+        ? `Unknown: ${el.unknownType.name}`
+        : 'Unknown'
+      : el.type;
   // Keep it stable for tests/UX: name (Type)
-  return `${el.name} (${el.type})`;
+  return `${el.name} (${typeLabel})`;
 }
 
 export function splitRelationshipsForElement(model: Model, elementId: string) {

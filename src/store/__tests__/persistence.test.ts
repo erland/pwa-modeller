@@ -81,4 +81,55 @@ describe('persistence', () => {
     expect(root!.viewIds).toContain(view.id);
   });
 
+
+
+  test('deserializeModel sanitizes taggedValues on load', () => {
+    const model = createEmptyModel({ name: 'Tagged Model', description: 'desc' });
+
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' }) as any;
+    el.taggedValues = [
+      { id: '  ', ns: '  xmi ', key: '  foo  ', type: 'boolean', value: 'TRUE' },
+      { id: 'id2', ns: 'xmi', key: 'foo', type: 'boolean', value: 'false' }, // duplicate (ns,key) - keep last
+      { id: 'id3', key: '   ', value: 'x' }, // invalid key - dropped
+      { id: 'id4', key: 'bar', type: 'json', value: '{ "a": 1 }' },
+      { id: 'id5', key: 'baz', type: 'number', value: ' 12 ' },
+    ];
+    model.elements[el.id] = el;
+
+    const rel = createRelationship({ sourceElementId: el.id, targetElementId: el.id, type: 'Serving' }) as any;
+    rel.taggedValues = { not: 'an array' };
+    model.relationships[rel.id] = rel;
+
+    const view = createView({ name: 'V1', viewpointId: 'layered' }) as any;
+    view.taggedValues = [{ id: 'v1', key: ' ', value: 'nope' }]; // becomes undefined
+    model.views[view.id] = view;
+
+    const json = serializeModel(model);
+    const parsed = deserializeModel(json);
+
+    const parsedEl: any = parsed.elements[el.id];
+    expect(Array.isArray(parsedEl.taggedValues)).toBe(true);
+    expect(parsedEl.taggedValues.length).toBe(3);
+
+    // (xmi, foo) kept last entry, canonicalized
+    const foo = parsedEl.taggedValues.find((t: any) => t.ns === 'xmi' && t.key === 'foo');
+    expect(foo).toBeTruthy();
+    expect(foo.id).toBe('id2');
+    expect(foo.value).toBe('false');
+
+    const bar = parsedEl.taggedValues.find((t: any) => t.key === 'bar');
+    expect(bar.type).toBe('json');
+    expect(bar.value).toBe('{"a":1}');
+
+    const baz = parsedEl.taggedValues.find((t: any) => t.key === 'baz');
+    expect(baz.type).toBe('number');
+    expect(baz.value).toBe('12');
+
+    const parsedRel: any = parsed.relationships[rel.id];
+    expect(parsedRel.taggedValues).toBeUndefined();
+
+    const parsedView: any = parsed.views[view.id];
+    expect(parsedView.taggedValues).toBeUndefined();
+  });
+
 });

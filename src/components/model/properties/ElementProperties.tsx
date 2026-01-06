@@ -8,6 +8,7 @@ import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { findFolderContaining, getElementLabel, splitRelationshipsForElement } from './utils';
 import { CreateRelationshipDialog } from '../navigator/dialogs/CreateRelationshipDialog';
+import { TaggedValuesEditor } from './TaggedValuesEditor';
 
 type TraceDirection = 'outgoing' | 'incoming' | 'both';
 
@@ -150,6 +151,11 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
           </div>
         </div>
       </div>
+
+      <TaggedValuesEditor
+        taggedValues={el.taggedValues}
+        onChange={(next) => actions.updateElement(el.id, { taggedValues: next })}
+      />
 
       <div style={{ marginTop: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>

@@ -311,14 +311,15 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   }
 
   const nodes: ViewNodeLayout[] = useMemo(
-    () =>
-      (activeView?.layout?.nodes ?? []).map((n) => ({
-        ...n,
-        width: n.width ?? 120,
-        height: n.height ?? 60,
-      })),
-    [activeView]
-  );
+  () =>
+    (activeView?.layout?.nodes ?? []).map((n, idx) => ({
+      ...n,
+      width: n.width ?? 120,
+      height: n.height ?? 60,
+      zIndex: typeof n.zIndex === 'number' ? n.zIndex : idx,
+    })),
+  [activeView]
+);
 
   const bounds = useMemo(() => boundsForNodes(nodes), [nodes]);
 
@@ -853,7 +854,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         (isRelTarget ? ' isRelTarget' : '') +
                         (isRelSource ? ' isRelSource' : '')
                       }
-                      style={{ left: n.x, top: n.y, width: n.width ?? 120, height: n.height ?? 60, '--diagram-node-bg': LAYER_BG_VAR[ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business'] } as React.CSSProperties}
+                      style={{ left: n.x, top: n.y, width: n.width ?? 120, height: n.height ?? 60, zIndex: (n.zIndex ?? 0) as any, '--diagram-node-bg': LAYER_BG_VAR[ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business'] } as React.CSSProperties}
                       role="button"
                       tabIndex={0}
                       aria-label={`Diagram node ${el.name || '(unnamed)'}`}
@@ -876,6 +877,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         setLinkDrag((prev) => (prev && prev.targetElementId === n.elementId ? { ...prev, targetElementId: null } : prev));
                       }}
                     >
+                      {/* Node content (label offsets apply here, not to the handle) */}
+                      <div className="diagramNodeContent" style={n.label ? { transform: `translate(${n.label.dx}px, ${n.label.dy}px)` } : undefined}>
                       <div className="diagramNodeHeader">
                         <div className="diagramNodeSymbol" aria-hidden="true">
                           <ArchimateSymbol type={el.type} />
@@ -884,6 +887,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                       </div>
                       <div className="diagramNodeMeta">{el.type}</div>
                       {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
+                      </div>
 
                       {/* Outgoing relationship handle */}
                       <button

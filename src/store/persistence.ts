@@ -86,10 +86,54 @@ function migrateV1ToV2(model: Model): Model {
   return model;
 }
 
+/**
+ * v2 -> v3 migration:
+ * - Add Folder.relationshipIds (default empty array).
+ * - Assign missing zIndex for view nodes and relationship layouts (stable order).
+ */
+function migrateV2ToV3(model: Model): Model {
+  // Add relationshipIds on all folders
+  for (const fid of Object.keys(model.folders)) {
+    const f = model.folders[fid] as any;
+    if (!Array.isArray(f.relationshipIds)) {
+      model.folders[fid] = { ...(f as Folder), relationshipIds: [] };
+    }
+  }
+
+  // Ensure view layout items have zIndex for stable stacking / round-trips.
+  for (const vid of Object.keys(model.views)) {
+    const v = model.views[vid];
+    if (!v.layout) continue;
+
+    const nextNodes = v.layout.nodes.map((n, idx) => ({
+      ...n,
+      zIndex: typeof (n as any).zIndex === 'number' ? (n as any).zIndex : idx,
+    }));
+    const nextRels = v.layout.relationships.map((r, idx) => ({
+      ...r,
+      zIndex: typeof (r as any).zIndex === 'number' ? (r as any).zIndex : idx,
+    }));
+
+    model.views[vid] = {
+      ...v,
+      layout: { nodes: nextNodes, relationships: nextRels },
+    };
+  }
+
+  model.schemaVersion = 3;
+  return model;
+}
+
 function migrateModel(model: Model): Model {
-  const v = getSchemaVersion(model);
-  if (v >= 2) return model;
-  return migrateV1ToV2(model);
+  let v = getSchemaVersion(model);
+  if (v < 2) {
+    model = migrateV1ToV2(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 3) {
+    model = migrateV2ToV3(model);
+  }
+  return model;
 }
 
 /**

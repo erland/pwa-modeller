@@ -134,9 +134,14 @@ export function createViewSvg(model: Model, viewId: string): string {
   const view = model.views[viewId];
   if (!view) throw new Error(`View not found: ${viewId}`);
   const nodes = view.layout?.nodes ?? [];
+  const orderedNodes = [...nodes].sort((a, b) => {
+    const za = typeof (a as any).zIndex === 'number' ? (a as any).zIndex : 0;
+    const zb = typeof (b as any).zIndex === 'number' ? (b as any).zIndex : 0;
+    return za - zb || a.elementId.localeCompare(b.elementId);
+  });
 
   const padding = 20;
-  const b = boundsForNodes(nodes);
+  const b = boundsForNodes(orderedNodes);
 
   // Minimum size for empty views.
   const width = Math.max(640, (b.maxX - b.minX) + padding * 2);
@@ -144,7 +149,7 @@ export function createViewSvg(model: Model, viewId: string): string {
   const offsetX = -b.minX + padding;
   const offsetY = -b.minY + padding;
 
-  const nodeByElement = new Map(nodes.map((n) => [n.elementId, n] as const));
+  const nodeByElement = new Map(orderedNodes.map((n) => [n.elementId, n] as const));
 
   // Relationships: draw only if both endpoints are present as nodes in this view.
   type RelItem = {
@@ -237,7 +242,7 @@ export function createViewSvg(model: Model, viewId: string): string {
     })
     .join('');
 
-  const nodesSvg = nodes
+  const nodesSvg = orderedNodes
     .map((n) => {
       const el = model.elements[n.elementId];
       if (!el) return '';

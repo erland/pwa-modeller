@@ -50,7 +50,8 @@ describe('domain factories', () => {
     expect(root!.folderIds).toEqual([]);
     expect(root!.elementIds).toEqual([]);
     expect(root!.viewIds).toEqual([]);
+    expect((root as any)!.relationshipIds).toEqual([]);
 
-    expect(model.schemaVersion).toBe(2);
+    expect(model.schemaVersion).toBe(3);
   });
 });

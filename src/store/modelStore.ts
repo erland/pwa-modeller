@@ -73,6 +73,38 @@ function deleteViewInModel(model: Model, viewId: string): void {
   }
 }
 
+function deleteRelationshipInModel(model: Model, relationshipId: string): void {
+  if (!model.relationships[relationshipId]) return;
+
+  const next = { ...model.relationships };
+  delete next[relationshipId];
+  model.relationships = next;
+
+  // Remove from any folder that contains it.
+  for (const fid of Object.keys(model.folders)) {
+    const f = model.folders[fid] as any;
+    const relIds: string[] | undefined = Array.isArray(f.relationshipIds) ? f.relationshipIds : undefined;
+    if (relIds && relIds.includes(relationshipId)) {
+      model.folders[fid] = { ...f, relationshipIds: relIds.filter((id) => id !== relationshipId) };
+    }
+  }
+
+  // Remove from any view layout connections.
+  for (const view of Object.values(model.views)) {
+    if (!view.layout) continue;
+    const nextConnections = view.layout.relationships.filter((c) => c.relationshipId !== relationshipId);
+    if (nextConnections.length !== view.layout.relationships.length) {
+      model.views[view.id] = {
+        ...view,
+        layout: {
+          nodes: view.layout.nodes,
+          relationships: nextConnections
+        }
+      };
+    }
+  }
+}
+
 function deleteElementInModel(model: Model, elementId: string): void {
   if (!model.elements[elementId]) return;
 
@@ -113,11 +145,7 @@ function deleteElementInModel(model: Model, elementId: string): void {
     .filter((r) => r.sourceElementId === elementId || r.targetElementId === elementId)
     .map((r) => r.id);
 
-  if (relIdsToDelete.length > 0) {
-    const nextRels = { ...model.relationships };
-    for (const rid of relIdsToDelete) delete nextRels[rid];
-    model.relationships = nextRels;
-  }
+  for (const rid of relIdsToDelete) deleteRelationshipInModel(model, rid);
 
   // Remove any view layout nodes that reference the element, and
   // remove any view connections that reference deleted relationships.
@@ -261,50 +289,10 @@ export class ModelStore {
 
   deleteElement = (elementId: string): void => {
     this.updateModel((model) => {
-      if (!model.elements[elementId]) return;
-
-      // Remove element itself
-      const nextElements = { ...model.elements };
-      delete nextElements[elementId];
-      model.elements = nextElements;
-
-      // Remove from any folder that contains it
-      for (const fid of Object.keys(model.folders)) {
-        const f = model.folders[fid];
-        if (f.elementIds.includes(elementId)) {
-          model.folders[fid] = { ...f, elementIds: f.elementIds.filter((id) => id !== elementId) };
-        }
-      }
-
-      // Remove relationships that reference it
-      const relIdsToDelete = Object.values(model.relationships)
-        .filter((r) => r.sourceElementId === elementId || r.targetElementId === elementId)
-        .map((r) => r.id);
-
-      if (relIdsToDelete.length > 0) {
-        const nextRels = { ...model.relationships };
-        for (const rid of relIdsToDelete) delete nextRels[rid];
-        model.relationships = nextRels;
-      }
-
-      // Remove any view layout nodes that reference the element, and
-      // remove any view connections that reference deleted relationships.
-      for (const view of Object.values(model.views)) {
-        if (!view.layout) continue;
-        const nextNodes = view.layout.nodes.filter((n) => n.elementId !== elementId);
-        const nextConnections = view.layout.relationships.filter((c) => model.relationships[c.relationshipId]);
-        if (nextNodes.length !== view.layout.nodes.length || nextConnections.length !== view.layout.relationships.length) {
-          model.views[view.id] = {
-            ...view,
-            layout: {
-              nodes: nextNodes,
-              relationships: nextConnections
-            }
-          };
-        }
-      }
+      deleteElementInModel(model, elementId);
     });
   };
+
 
   // -------------------------
   // Relationships
@@ -313,6 +301,14 @@ export class ModelStore {
   addRelationship = (relationship: Relationship): void => {
     this.updateModel((model) => {
       model.relationships[relationship.id] = relationship;
+
+      // Place the relationship in the same folder as the source element (fallback to root).
+      const targetFolderId = findFolderContainingElement(model, relationship.sourceElementId) ?? findFolderIdByKind(model, 'root');
+      const folder = getFolder(model, targetFolderId) as any;
+      const relIds: string[] = Array.isArray(folder.relationshipIds) ? folder.relationshipIds : [];
+      if (!relIds.includes(relationship.id)) {
+        model.folders[targetFolderId] = { ...folder, relationshipIds: [...relIds, relationship.id] };
+      }
     });
   };
 
@@ -326,25 +322,7 @@ export class ModelStore {
 
   deleteRelationship = (relationshipId: string): void => {
     this.updateModel((model) => {
-      if (!model.relationships[relationshipId]) return;
-      const next = { ...model.relationships };
-      delete next[relationshipId];
-      model.relationships = next;
-
-      // Remove from any view layout connections.
-      for (const view of Object.values(model.views)) {
-        if (!view.layout) continue;
-        const nextConnections = view.layout.relationships.filter((c) => c.relationshipId !== relationshipId);
-        if (nextConnections.length !== view.layout.relationships.length) {
-          model.views[view.id] = {
-            ...view,
-            layout: {
-              nodes: view.layout.nodes,
-              relationships: nextConnections
-            }
-          };
-        }
-      }
+      deleteRelationshipInModel(model, relationshipId);
     });
   };
 
@@ -526,7 +504,8 @@ export class ModelStore {
       const x = 24 + (i % cols) * 160;
       const y = 24 + Math.floor(i / cols) * 110;
 
-      const node: ViewNodeLayout = { elementId, x, y, width: 140, height: 70 };
+      const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
+      const node: ViewNodeLayout = { elementId, x, y, width: 140, height: 70, zIndex: maxZ + 1 };
       model.views[viewId] = {
         ...viewWithLayout,
         layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
@@ -570,7 +549,8 @@ export class ModelStore {
         return;
       }
 
-      const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH };
+      const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
+      const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: maxZ + 1 };
       model.views[viewId] = {
         ...viewWithLayout,
         layout: { nodes: [...layout.nodes, node], relationships: layout.relationships },
@@ -622,6 +602,7 @@ export class ModelStore {
         parentId,
         folderIds: [],
         elementIds: [],
+        relationshipIds: [],
         viewIds: []
       };
       model.folders = { ...model.folders, [folder.id]: folder };
@@ -735,17 +716,23 @@ export class ModelStore {
       if (options && 'mode' in options && options.mode === 'deleteContents') {
         const folderIdsToDelete = collectFolderSubtreeIds(model, folderId);
         const elementIds = new Set<string>();
+        const relationshipIds = new Set<string>();
         const viewIds = new Set<string>();
 
         for (const fid of folderIdsToDelete) {
           const f = model.folders[fid];
           if (!f) continue;
           for (const eid of f.elementIds) elementIds.add(eid);
+          for (const rid of (f as any).relationshipIds ?? []) relationshipIds.add(rid);
           for (const vid of f.viewIds) viewIds.add(vid);
         }
 
         // Delete elements first (also deletes related relationships and removes from views).
         for (const eid of elementIds) deleteElementInModel(model, eid);
+
+        // Delete relationships explicitly contained in the folder subtree (may include cross-folder relationships).
+        for (const rid of relationshipIds) deleteRelationshipInModel(model, rid);
+
         // Delete views next.
         for (const vid of viewIds) deleteViewInModel(model, vid);
 

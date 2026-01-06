@@ -69,6 +69,7 @@ export function createFolder(name: string, kind: FolderKind, parentId?: string, 
     parentId,
     folderIds: [],
     elementIds: [],
+    relationshipIds: [],
     viewIds: []
   };
 }
@@ -94,6 +95,6 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     folders: {
       [root.id]: root
     },
-    schemaVersion: 2
+    schemaVersion: 3
   };
 }

@@ -63,6 +63,18 @@ export type RelationshipType =
   | 'Triggering'
   | 'Specialization';
 
+export type LabelOffset = {
+  dx: number;
+  dy: number;
+};
+
+/** Label placement along a relationship polyline (t in [0..1]) plus pixel offset. */
+export type RelationshipLabelPlacement = {
+  t: number;
+  dx: number;
+  dy: number;
+};
+
 export interface Element {
   id: string;
   name: string;
@@ -101,12 +113,21 @@ export interface ViewNodeLayout {
   highlighted?: boolean;
   /** View-specific style tag badge (does not change the underlying element). */
   styleTag?: string;
+  /** Optional label offset (relative to default position) for the node's text. */
+  label?: LabelOffset;
+  /** Optional stacking order (higher renders on top). */
+  zIndex?: number;
 }
 
 export interface ViewRelationshipLayout {
   relationshipId: string;
   /** Optional polyline points for routing. */
   points?: Array<{ x: number; y: number }>;
+
+  /** Optional label placement for the relationship. */
+  label?: RelationshipLabelPlacement;
+  /** Optional stacking order (higher renders on top). */
+  zIndex?: number;
 }
 
 export interface ViewFormatting {
@@ -154,6 +175,7 @@ export interface Folder {
   parentId?: string;
   folderIds: string[];
   elementIds: string[];
+  relationshipIds: string[];
   viewIds: string[];
 }
 

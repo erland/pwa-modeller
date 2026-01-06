@@ -87,3 +87,59 @@ export function tidyExternalIds(list: ExternalIdRef[] | undefined): ExternalIdRe
   const d = dedupeExternalIds(list);
   return d.length ? d : undefined;
 }
+
+/** Normalize a scope string (trim and convert empty to undefined). */
+function normalizeScope(scope?: string): string | undefined {
+  const s = (scope ?? '').toString().trim();
+  return s ? s : undefined;
+}
+
+/** Find the first external id matching system+scope (scope compared after normalization). */
+export function findExternalId(
+  list: ExternalIdRef[] | undefined,
+  system: string,
+  scope?: string
+): ExternalIdRef | undefined {
+  const sys = (system ?? '').toString().trim();
+  if (!sys) return undefined;
+  const sc = normalizeScope(scope);
+
+  const normalized = dedupeExternalIds(list);
+  return normalized.find((r) => r.system === sys && normalizeScope(r.scope) === sc);
+}
+
+/** Default generator for new external IDs (browser + tests). */
+export function defaultGenerateExternalId(): string {
+  const c: any = (globalThis as any).crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  // Fallback: not cryptographically strong, but good enough for local identifiers.
+  return `ext_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
+}
+
+/**
+ * Ensure there is an external id for a given system+scope.
+ *
+ * - If it exists, it is returned unchanged.
+ * - Otherwise, a new id is generated, upserted, and returned.
+ */
+export function ensureExternalId(
+  list: ExternalIdRef[] | undefined,
+  system: string,
+  scope?: string,
+  generateId: () => string = defaultGenerateExternalId
+): { externalIds: ExternalIdRef[] | undefined; ref: ExternalIdRef } {
+  const sys = (system ?? '').toString().trim();
+  const sc = normalizeScope(scope);
+  if (!sys) {
+    // This should be a programmer error; we still behave predictably.
+    const ref: ExternalIdRef = { system: 'unknown-system', id: generateId(), scope: sc };
+    return { externalIds: tidyExternalIds(upsertExternalId(list, ref)), ref };
+  }
+
+  const existing = findExternalId(list, sys, sc);
+  if (existing) return { externalIds: tidyExternalIds(list), ref: existing };
+
+  const ref: ExternalIdRef = { system: sys, id: generateId(), scope: sc };
+  const next = tidyExternalIds(upsertExternalId(list, ref));
+  return { externalIds: next, ref };
+}

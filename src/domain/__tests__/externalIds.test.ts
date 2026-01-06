@@ -1,6 +1,7 @@
 import type { ExternalIdRef } from '../types';
 import {
   dedupeExternalIds,
+  ensureExternalId,
   externalKey,
   normalizeExternalIdRef,
   tidyExternalIds,
@@ -72,5 +73,20 @@ describe('domain externalIds helpers', () => {
     expect(tidyExternalIds(undefined)).toBeUndefined();
     expect(tidyExternalIds([])).toBeUndefined();
     expect(tidyExternalIds([{ system: ' ', id: 'x' } as ExternalIdRef])).toBeUndefined();
+  });
+
+  test('ensureExternalId returns existing when present and creates when missing', () => {
+    const list: ExternalIdRef[] = [{ system: 'archimate-exchange', id: 'id-1' }];
+
+    const existing = ensureExternalId(list, 'archimate-exchange');
+    expect(existing.ref).toEqual({ system: 'archimate-exchange', id: 'id-1' });
+    expect(existing.externalIds).toEqual([{ system: 'archimate-exchange', id: 'id-1' }]);
+
+    const created = ensureExternalId(list, 'ea-xmi', 'model1', () => 'GEN');
+    expect(created.ref).toEqual({ system: 'ea-xmi', id: 'GEN', scope: 'model1' });
+    expect(created.externalIds).toEqual([
+      { system: 'archimate-exchange', id: 'id-1' },
+      { system: 'ea-xmi', id: 'GEN', scope: 'model1' }
+    ]);
   });
 });

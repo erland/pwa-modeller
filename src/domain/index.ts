@@ -8,6 +8,7 @@ export * from './taggedValues';
 export * from './relationshipAttrs';
 export * from './unknownTypes';
 export * from './externalIds';
+export * from './externalIdIndex';
 
 export * from './config/viewpoints';
 export * from './config/catalog';

@@ -7,6 +7,7 @@ export * from './reports';
 export * from './taggedValues';
 export * from './relationshipAttrs';
 export * from './unknownTypes';
+export * from './unknownTypeReport';
 export * from './externalIds';
 export * from './externalIdIndex';
 
@@ -16,3 +17,5 @@ export * from './config/catalog';
 export * from './selectors/folders';
 
 export * from './graph/trace';
+
+export * from './unknownExportPolicy';

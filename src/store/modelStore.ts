@@ -1,5 +1,24 @@
-import type { Element, Folder, Model, ModelMetadata, Relationship, View, ViewLayout, ViewRelationshipLayout, ViewNodeLayout, ViewFormatting } from '../domain';
-import { createEmptyModel, createView, collectFolderSubtreeIds } from '../domain';
+import type {
+  Element,
+  Folder,
+  Model,
+  ModelMetadata,
+  Relationship,
+  View,
+  ViewLayout,
+  ViewRelationshipLayout,
+  ViewNodeLayout,
+  ViewFormatting,
+  TaggedValue
+} from '../domain';
+import {
+  createEmptyModel,
+  createView,
+  collectFolderSubtreeIds,
+  createId,
+  upsertTaggedValue,
+  removeTaggedValue
+} from '../domain';
 
 export type ModelStoreState = {
   model: Model | null;
@@ -12,6 +31,8 @@ export type ModelStoreState = {
 type Listener = () => void;
 
 type ViewWithLayout = View & { layout: ViewLayout };
+
+type TaggedValueInput = Omit<TaggedValue, 'id'> & { id?: string };
 
 function findFolderIdByKind(model: Model, kind: Folder['kind']): string {
   const folder = Object.values(model.folders).find((f) => f.kind === kind);
@@ -287,6 +308,40 @@ export class ModelStore {
     });
   };
 
+  upsertElementTaggedValue = (elementId: string, entry: TaggedValueInput): void => {
+    this.updateModel((model) => {
+      const current = model.elements[elementId];
+      if (!current) throw new Error(`Element not found: ${elementId}`);
+
+      const withId: TaggedValue = {
+        id: (entry.id && entry.id.trim()) ? entry.id : createId('tag'),
+        ns: entry.ns,
+        key: entry.key,
+        type: entry.type,
+        value: entry.value
+      };
+
+      const nextTaggedValues = upsertTaggedValue(current.taggedValues, withId);
+      model.elements[elementId] = {
+        ...current,
+        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
+      };
+    });
+  };
+
+  removeElementTaggedValue = (elementId: string, taggedValueId: string): void => {
+    this.updateModel((model) => {
+      const current = model.elements[elementId];
+      if (!current) throw new Error(`Element not found: ${elementId}`);
+
+      const nextTaggedValues = removeTaggedValue(current.taggedValues, taggedValueId);
+      model.elements[elementId] = {
+        ...current,
+        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
+      };
+    });
+  };
+
   deleteElement = (elementId: string): void => {
     this.updateModel((model) => {
       deleteElementInModel(model, elementId);
@@ -317,6 +372,40 @@ export class ModelStore {
       const current = model.relationships[relationshipId];
       if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
       model.relationships[relationshipId] = { ...current, ...patch, id: current.id };
+    });
+  };
+
+  upsertRelationshipTaggedValue = (relationshipId: string, entry: TaggedValueInput): void => {
+    this.updateModel((model) => {
+      const current = model.relationships[relationshipId];
+      if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
+
+      const withId: TaggedValue = {
+        id: (entry.id && entry.id.trim()) ? entry.id : createId('tag'),
+        ns: entry.ns,
+        key: entry.key,
+        type: entry.type,
+        value: entry.value
+      };
+
+      const nextTaggedValues = upsertTaggedValue(current.taggedValues, withId);
+      model.relationships[relationshipId] = {
+        ...current,
+        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
+      };
+    });
+  };
+
+  removeRelationshipTaggedValue = (relationshipId: string, taggedValueId: string): void => {
+    this.updateModel((model) => {
+      const current = model.relationships[relationshipId];
+      if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
+
+      const nextTaggedValues = removeTaggedValue(current.taggedValues, taggedValueId);
+      model.relationships[relationshipId] = {
+        ...current,
+        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
+      };
     });
   };
 
@@ -382,6 +471,40 @@ export class ModelStore {
       }
 
       model.views[viewId] = next;
+    });
+  };
+
+  upsertViewTaggedValue = (viewId: string, entry: TaggedValueInput): void => {
+    this.updateModel((model) => {
+      const current = model.views[viewId];
+      if (!current) throw new Error(`View not found: ${viewId}`);
+
+      const withId: TaggedValue = {
+        id: (entry.id && entry.id.trim()) ? entry.id : createId('tag'),
+        ns: entry.ns,
+        key: entry.key,
+        type: entry.type,
+        value: entry.value
+      };
+
+      const nextTaggedValues = upsertTaggedValue(current.taggedValues, withId);
+      model.views[viewId] = {
+        ...current,
+        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
+      };
+    });
+  };
+
+  removeViewTaggedValue = (viewId: string, taggedValueId: string): void => {
+    this.updateModel((model) => {
+      const current = model.views[viewId];
+      if (!current) throw new Error(`View not found: ${viewId}`);
+
+      const nextTaggedValues = removeTaggedValue(current.taggedValues, taggedValueId);
+      model.views[viewId] = {
+        ...current,
+        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
+      };
     });
   };
 

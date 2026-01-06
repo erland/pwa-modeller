@@ -1,5 +1,11 @@
 import type { Folder, Model, TaggedValue, TaggedValueType } from '../domain';
-import { createId, sanitizeRelationshipAttrs, sanitizeUnknownTypeForElement, sanitizeUnknownTypeForRelationship } from '../domain';
+import {
+  createId,
+  sanitizeRelationshipAttrs,
+  sanitizeUnknownTypeForElement,
+  sanitizeUnknownTypeForRelationship,
+  tidyExternalIds
+} from '../domain';
 
 /**
  * Serialize a model to JSON.
@@ -124,6 +130,31 @@ function sanitizeModelTaggedValues(model: Model): Model {
     const v = model.views[id] as any;
     if (Object.prototype.hasOwnProperty.call(v, 'taggedValues')) {
       v.taggedValues = sanitizeTaggedValues(v.taggedValues);
+    }
+  }
+  return model;
+}
+
+function sanitizeModelExternalIds(model: Model): Model {
+  for (const id of Object.keys(model.elements)) {
+    const el = model.elements[id] as any;
+    if (Object.prototype.hasOwnProperty.call(el, 'externalIds')) {
+      const raw = el.externalIds;
+      el.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
+    }
+  }
+  for (const id of Object.keys(model.relationships)) {
+    const rel = model.relationships[id] as any;
+    if (Object.prototype.hasOwnProperty.call(rel, 'externalIds')) {
+      const raw = rel.externalIds;
+      rel.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
+    }
+  }
+  for (const id of Object.keys(model.views)) {
+    const v = model.views[id] as any;
+    if (Object.prototype.hasOwnProperty.call(v, 'externalIds')) {
+      const raw = v.externalIds;
+      v.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
     }
   }
   return model;
@@ -292,7 +323,9 @@ export function deserializeModel(json: string): Model {
 
   return sanitizeModelRelationshipAttrs(
     sanitizeModelUnknownTypes(
-      sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model))
+      sanitizeModelExternalIds(
+        sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model))
+      )
     )
   );
 }

@@ -139,7 +139,26 @@ export interface HasTaggedValues {
   taggedValues?: TaggedValue[];
 }
 
-export interface Element extends HasTaggedValues {
+/**
+ * External identifier mapping used for stable import/export round-trips and merges.
+ *
+ * - `system` identifies the source format/tool (e.g. "archimate-exchange", "ea-xmi").
+ * - `scope` is an optional discriminator (e.g. model/package/file id) to avoid collisions.
+ */
+export interface ExternalIdRef {
+  /** Format/tool namespace, e.g. "archimate-exchange", "ea-xmi". */
+  system: string;
+  /** Identifier inside that system (XML id, UUID, xmi:id, etc.). */
+  id: string;
+  /** Optional discriminator to avoid collisions across different sources. */
+  scope?: string;
+}
+
+export interface HasExternalIds {
+  externalIds?: ExternalIdRef[];
+}
+
+export interface Element extends HasTaggedValues, HasExternalIds {
   id: string;
   name: string;
   description?: string;
@@ -150,7 +169,7 @@ export interface Element extends HasTaggedValues {
   documentation?: string;
 }
 
-export interface Relationship extends HasTaggedValues {
+export interface Relationship extends HasTaggedValues, HasExternalIds {
   id: string;
   sourceElementId: string;
   targetElementId: string;
@@ -213,7 +232,7 @@ export interface ViewLayout {
   relationships: ViewRelationshipLayout[];
 }
 
-export interface View extends HasTaggedValues {
+export interface View extends HasTaggedValues, HasExternalIds {
   id: string;
   name: string;
   viewpointId: string;

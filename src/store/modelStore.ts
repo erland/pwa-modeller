@@ -18,6 +18,7 @@ import {
   createId,
   upsertTaggedValue,
   removeTaggedValue,
+  tidyExternalIds,
   sanitizeRelationshipAttrs,
   sanitizeUnknownTypeForElement,
   sanitizeUnknownTypeForRelationship
@@ -308,7 +309,9 @@ export class ModelStore {
       const current = model.elements[elementId];
       if (!current) throw new Error(`Element not found: ${elementId}`);
       const merged = { ...current, ...patch, id: current.id };
-      model.elements[elementId] = sanitizeUnknownTypeForElement(merged);
+      const sanitized = sanitizeUnknownTypeForElement(merged);
+      sanitized.externalIds = tidyExternalIds(sanitized.externalIds);
+      model.elements[elementId] = sanitized;
     });
   };
 
@@ -377,7 +380,9 @@ export class ModelStore {
       if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
       const merged = { ...current, ...patch, id: current.id };
       merged.attrs = sanitizeRelationshipAttrs(merged.type, merged.attrs);
-      model.relationships[relationshipId] = sanitizeUnknownTypeForRelationship(merged);
+      const sanitized = sanitizeUnknownTypeForRelationship(merged);
+      sanitized.externalIds = tidyExternalIds(sanitized.externalIds);
+      model.relationships[relationshipId] = sanitized;
     });
   };
 
@@ -476,6 +481,7 @@ export class ModelStore {
         }
       }
 
+      next.externalIds = tidyExternalIds(next.externalIds);
       model.views[viewId] = next;
     });
   };

@@ -213,4 +213,42 @@ describe('persistence', () => {
     expect(parsedKnownRel.unknownType).toBeUndefined();
   });
 
+  test('deserializeModel sanitizes externalIds on load', () => {
+    const model = createEmptyModel({ name: 'ExternalIds Model', description: 'desc' });
+
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' }) as any;
+    el.externalIds = [
+      { system: '  archimate-exchange  ', id: '  1  ', scope: '   ' },
+      { system: 'archimate-exchange', id: '1' }, // duplicate -> keep last
+      { system: 'ea-xmi', id: '  EAID_1  ', scope: '  modelA  ' },
+      { system: '', id: 'x' }, // invalid -> dropped
+    ];
+    model.elements[el.id] = el;
+
+    const rel = createRelationship({ sourceElementId: el.id, targetElementId: el.id, type: 'Serving' }) as any;
+    rel.externalIds = { not: 'an array' };
+    model.relationships[rel.id] = rel;
+
+    const view = createView({ name: 'V1', viewpointId: 'layered' }) as any;
+    view.externalIds = [
+      { system: 'archimate-exchange', id: 'v1', scope: '' },
+      { system: 'archimate-exchange', id: 'v1' }, // duplicate -> keep last
+    ];
+    model.views[view.id] = view;
+
+    const parsed = deserializeModel(serializeModel(model));
+
+    const parsedEl: any = parsed.elements[el.id];
+    expect(parsedEl.externalIds).toEqual([
+      { system: 'archimate-exchange', id: '1' },
+      { system: 'ea-xmi', id: 'EAID_1', scope: 'modelA' },
+    ]);
+
+    const parsedRel: any = parsed.relationships[rel.id];
+    expect(parsedRel.externalIds).toBeUndefined();
+
+    const parsedView: any = parsed.views[view.id];
+    expect(parsedView.externalIds).toEqual([{ system: 'archimate-exchange', id: 'v1' }]);
+  });
+
 });

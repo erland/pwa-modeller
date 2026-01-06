@@ -4,6 +4,7 @@ export * from './factories';
 export * from './validation';
 export * from './modelValidation';
 export * from './reports';
+export * from './taggedValues';
 
 export * from './config/viewpoints';
 export * from './config/catalog';

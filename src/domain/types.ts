@@ -75,7 +75,42 @@ export type RelationshipLabelPlacement = {
   dy: number;
 };
 
-export interface Element {
+/**
+ * Generic tagged values / properties bag.
+ *
+ * - Designed for lossless import/export (e.g. tool/vendor extensions, extra attributes).
+ * - Stored as an ordered array to preserve user intent and reduce JSON diff noise.
+ * - Values are stored as strings for simple persistence; `type` guides UI/validation.
+ */
+export type TaggedValueType = 'string' | 'number' | 'boolean' | 'json';
+
+export interface TaggedValue {
+  /** Stable id for UI operations (edit/delete/reorder). */
+  id: string;
+
+  /** Optional namespace to avoid collisions across sources/tools. */
+  ns?: string;
+
+  /** Key/name of the property. */
+  key: string;
+
+  /** Declared type for UI rendering + optional validation. */
+  type?: TaggedValueType;
+
+  /**
+   * Canonical string value.
+   * - type=number: "123.45"
+   * - type=boolean: "true" | "false"
+   * - type=json: JSON string
+   */
+  value: string;
+}
+
+export interface HasTaggedValues {
+  taggedValues?: TaggedValue[];
+}
+
+export interface Element extends HasTaggedValues {
   id: string;
   name: string;
   description?: string;
@@ -84,7 +119,7 @@ export interface Element {
   documentation?: string;
 }
 
-export interface Relationship {
+export interface Relationship extends HasTaggedValues {
   id: string;
   sourceElementId: string;
   targetElementId: string;
@@ -144,7 +179,7 @@ export interface ViewLayout {
   relationships: ViewRelationshipLayout[];
 }
 
-export interface View {
+export interface View extends HasTaggedValues {
   id: string;
   name: string;
   viewpointId: string;

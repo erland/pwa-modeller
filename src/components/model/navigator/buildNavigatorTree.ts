@@ -95,7 +95,13 @@ export function buildNavigatorTreeData(args: {
   };
 
   // Relationships are intentionally not shown in the navigator tree.
-  const rootNodes: NavNode[] = [buildFolder(rootFolderId)];
+  const rootFolderNode = buildFolder(rootFolderId);
+  // Hide the technical Root container in the UI: show its direct children as top-level nodes.
+  // The underlying model still keeps the root folder for migrations and organization.
+  const rootNodes: NavNode[] =
+    model.folders[rootFolderId]?.kind === 'root'
+      ? (rootFolderNode.children ?? [])
+      : [rootFolderNode];
 
   if (!searchTerm) return rootNodes;
 

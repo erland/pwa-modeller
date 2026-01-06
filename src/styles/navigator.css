@@ -60,6 +60,7 @@
 }
 
 .navTreeRow {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -87,19 +88,19 @@
   height: 18px;
   align-self: stretch;
   display: inline-block;
-  /* Vertical guide lines every 14px (Explorer-like). */
+  /* Vertical guide lines every 12px (compact, Explorer-like). */
   background-image: linear-gradient(to right, var(--border-1) 0 1px, transparent 1px);
-  background-size: 14px 100%;
+  background-size: 12px 100%;
   background-repeat: repeat-x;
   opacity: 0.9;
 }
 
 .navTreeConnector {
-  width: 12px;
+  width: 8px;
   height: 1px;
   background: var(--border-1);
   display: inline-block;
-  margin-right: 2px;
+  margin-right: 1px;
 }
 
 .navTreeChevron,
@@ -160,6 +161,12 @@
   text-overflow: ellipsis;
 }
 
+/* When actions are visible, reserve a little space so the overlay doesn't cover the label text. */
+.navTreeRow:hover .navTreeLabel,
+.navAriaTree [data-selected="true"] .navTreeLabel {
+  padding-right: 44px;
+}
+
 .navTreeSecondary {
   font-size: 11px;
   opacity: 0.72;
@@ -170,10 +177,17 @@
 }
 
 .navTreeActions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   gap: 6px;
   opacity: 0;
   pointer-events: none;
+  /* Subtle fade so labels remain readable behind the actions overlay. */
+  padding-left: 10px;
+  background: linear-gradient(to left, var(--panel-bg, var(--surface-1)) 70%, transparent);
 }
 
 .navTreeRow:hover .navTreeActions,

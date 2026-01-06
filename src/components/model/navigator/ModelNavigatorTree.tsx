@@ -37,7 +37,6 @@ type Props = {
   // Create actions
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string) => void;
-  onRequestDeleteFolder: (folderId: string) => void;
   openCreateView: (targetFolderId?: string) => void;
   openCreateCenteredView: (elementId: string) => void;
 
@@ -113,7 +112,6 @@ export function ModelNavigatorTree({
   clearEditing,
   openCreateFolder,
   openCreateElement,
-  onRequestDeleteFolder,
   openCreateView,
   openCreateCenteredView,
   onMoveElementToFolder
@@ -210,7 +208,8 @@ export function ModelNavigatorTree({
     const hasChildren = !!node.children && node.children.length > 0;
     const isExpanded = hasChildren && expandedKeys.has(node.key);
     const showBadge = !!node.secondary && (node.kind === 'folder' || node.kind === 'section');
-    const title = node.tooltip ?? node.label;
+    // Keep tooltip simple: always show the full label (useful when the label is ellipsized).
+    const title = node.label;
 
     return (
       <TreeItem id={node.key} textValue={node.label} key={node.key}>
@@ -235,9 +234,7 @@ export function ModelNavigatorTree({
             openCreateFolder={openCreateFolder}
             openCreateElement={openCreateElement}
             openCreateView={openCreateView}
-            openCreateCenteredView={openCreateCenteredView}
-            onRequestDeleteFolder={onRequestDeleteFolder}
-          />
+            openCreateCenteredView={openCreateCenteredView}          />
         </TreeItemContent>
 
         {hasChildren

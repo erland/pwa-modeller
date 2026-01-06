@@ -44,7 +44,6 @@ type Props = {
   openCreateElement: (targetFolderId?: string) => void;
   openCreateView: (targetFolderId?: string) => void;
   openCreateCenteredView: (elementId: string) => void;
-  onRequestDeleteFolder: (folderId: string) => void;
 };
 
 export function NavigatorNodeRow({
@@ -67,8 +66,7 @@ export function NavigatorNodeRow({
   openCreateFolder,
   openCreateElement,
   openCreateView,
-  openCreateCenteredView,
-  onRequestDeleteFolder
+  openCreateCenteredView
 }: Props) {
   // Single "Create…" button (Explorer/Finder-like) with a menu for all create actions
   // relevant to this node.
@@ -115,30 +113,6 @@ export function NavigatorNodeRow({
             </Menu>
           </Popover>
         </MenuTrigger>
-      ) : null}
-
-      {node.canRename ? (
-        <Button
-          className="miniButton"
-          aria-label="Rename"
-          onPress={() => {
-            startEditing(node);
-          }}
-        >
-          ✎
-        </Button>
-      ) : null}
-
-      {node.canDelete && node.folderId ? (
-        <Button
-          className="miniButton"
-          aria-label="Delete folder"
-          onPress={() => {
-            onRequestDeleteFolder(node.folderId!);
-          }}
-        >
-          🗑
-        </Button>
       ) : null}
     </span>
   );
@@ -244,7 +218,7 @@ export function NavigatorNodeRow({
     >
       {depth > 0 ? (
         <>
-          <span className="navTreeIndent" aria-hidden style={{ width: depth * 14 }} />
+          <span className="navTreeIndent" aria-hidden style={{ width: depth * 12 }} />
           <span className="navTreeConnector" aria-hidden />
         </>
       ) : null}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import App from '../App';
@@ -35,9 +35,7 @@ describe('Model management UI', () => {
     await user.type(screen.getByLabelText('Name'), 'Folder Test Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    // Select the model root, then create a folder via the navigator "Create…" menu.
-    await user.click(screen.getByRole('row', { name: 'Model' }));
-
+    // Create a folder via the navigator "Create…" menu. (Root is hidden in the UI.)
     const searchInput = screen.getByRole('textbox', { name: 'Search model' });
     // eslint-disable-next-line testing-library/no-node-access
     const headerRow = searchInput.parentElement as HTMLElement;
@@ -48,15 +46,16 @@ describe('Model management UI', () => {
 
     expect(screen.getByText('Foo')).toBeInTheDocument();
 
-    const deleteButtons = screen.getAllByRole('button', { name: 'Delete folder' });
-    // The last delete button should be for the new folder
-    await user.click(deleteButtons[deleteButtons.length - 1]);
+    // Delete via the properties pane (tree rows no longer contain delete buttons).
+    await user.click(screen.getByRole('row', { name: /Foo/ }));
+    const properties = screen.getByRole('complementary', { name: 'Properties panel' });
+    await user.click(within(properties).getByRole('button', { name: 'Delete' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Delete folder' });
-    // Default is "Move contents to", so just confirm delete.
-    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
-
-    expect(screen.queryByText('Foo')).not.toBeInTheDocument();
+    // Folder deletion uses window.confirm (mocked to true in beforeEach), no dialog.
+    // Assert removal by role to avoid matching the aria-live announcer ("Foo selected.").
+    await waitFor(() => {
+      expect(screen.queryByRole('row', { name: /Foo/ })).not.toBeInTheDocument();
+    });
   });
 
   it('opens a model from a JSON file', async () => {

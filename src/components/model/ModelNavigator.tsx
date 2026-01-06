@@ -123,7 +123,6 @@ export function ModelNavigator({ selection, onSelect }: Props) {
           openCreateElement={openCreateElement}
           openCreateView={openCreateView}
           openCreateCenteredView={openCreateCenteredView}
-          onRequestDeleteFolder={(id) => setDeleteFolderId(id)}
           onMoveElementToFolder={(elementId, targetFolderId) => {
             // Action is on the store instance (not part of the Zustand state snapshot).
             modelStore.moveElementToFolder(elementId, targetFolderId);

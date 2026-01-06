@@ -1,5 +1,6 @@
 import type {
   Element,
+  Folder,
   Relationship,
   RelationshipType,
   View,
@@ -10,6 +11,7 @@ import type {
 export type ModelActions = {
   renameFolder: (folderId: string, name: string) => void;
   deleteFolder: (folderId: string) => void;
+  updateFolder: (folderId: string, patch: Partial<Omit<Folder, 'id'>>) => void;
 
   updateViewNodeLayout: (viewId: string, elementId: string, patch: Partial<ViewNodeLayout>) => void;
 

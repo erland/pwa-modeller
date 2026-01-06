@@ -6,6 +6,7 @@ import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { findFolderContaining } from './utils';
 import { TaggedValuesSummary } from './TaggedValuesSummary';
+import { ExternalIdsSummary } from './ExternalIdsSummary';
 
 type Props = {
   model: Model;
@@ -229,6 +230,8 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
           </div>
         </div>
       </div>
+
+      <ExternalIdsSummary externalIds={view.externalIds} />
 
       <TaggedValuesSummary
         taggedValues={view.taggedValues}

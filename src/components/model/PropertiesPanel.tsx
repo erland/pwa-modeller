@@ -36,6 +36,7 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
     // Wrap store methods so `this` stays bound to modelStore (some store methods use `this.updateModel`).
     renameFolder: (folderId, name) => modelStore.renameFolder(folderId, name),
     deleteFolder: (folderId) => modelStore.deleteFolder(folderId),
+    updateFolder: (folderId, patch) => modelStore.updateFolder(folderId, patch),
 
     updateViewNodeLayout: (viewId, elementId, patch) => modelStore.updateViewNodeLayout(viewId, elementId, patch),
 

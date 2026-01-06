@@ -256,7 +256,7 @@ export interface ModelMetadata {
 
 export type FolderKind = 'root' | 'elements' | 'views' | 'custom';
 
-export interface Folder {
+export interface Folder extends HasTaggedValues, HasExternalIds {
   id: string;
   name: string;
   kind: FolderKind;
@@ -267,7 +267,7 @@ export interface Folder {
   viewIds: string[];
 }
 
-export interface Model {
+export interface Model extends HasTaggedValues, HasExternalIds {
   id: string;
   metadata: ModelMetadata;
   elements: Record<string, Element>;

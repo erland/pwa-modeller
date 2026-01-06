@@ -1,6 +1,8 @@
 import type { Model } from '../../../domain';
 import type { ModelActions } from './actions';
 import { folderPathLabel } from './utils';
+import { ExternalIdsSummary } from './ExternalIdsSummary';
+import { TaggedValuesSummary } from './TaggedValuesSummary';
 
 type Props = {
   model: Model;
@@ -71,6 +73,13 @@ export function FolderProperties({ model, folderId, actions }: Props) {
           Delete
         </button>
       </div>
+
+      <ExternalIdsSummary externalIds={folder.externalIds} />
+      <TaggedValuesSummary
+        taggedValues={folder.taggedValues}
+        onChange={(next) => actions.updateFolder(folder.id, { taggedValues: next })}
+        dialogTitle={`Folder tagged values — ${folder.name || folder.id}`}
+      />
     </div>
   );
 }

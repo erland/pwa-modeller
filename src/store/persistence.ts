@@ -114,6 +114,20 @@ function sanitizeTaggedValues(raw: unknown): TaggedValue[] | undefined {
 }
 
 function sanitizeModelTaggedValues(model: Model): Model {
+  // Model-level tagged values
+  const m: any = model as any;
+  if (Object.prototype.hasOwnProperty.call(m, 'taggedValues')) {
+    m.taggedValues = sanitizeTaggedValues(m.taggedValues);
+  }
+
+  // Folder-level tagged values
+  for (const id of Object.keys(model.folders)) {
+    const f = model.folders[id] as any;
+    if (Object.prototype.hasOwnProperty.call(f, 'taggedValues')) {
+      f.taggedValues = sanitizeTaggedValues(f.taggedValues);
+    }
+  }
+
   for (const id of Object.keys(model.elements)) {
     const el = model.elements[id] as any;
     if (Object.prototype.hasOwnProperty.call(el, 'taggedValues')) {
@@ -136,6 +150,22 @@ function sanitizeModelTaggedValues(model: Model): Model {
 }
 
 function sanitizeModelExternalIds(model: Model): Model {
+  // Model-level external IDs
+  const m: any = model as any;
+  if (Object.prototype.hasOwnProperty.call(m, 'externalIds')) {
+    const raw = m.externalIds;
+    m.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
+  }
+
+  // Folder-level external IDs
+  for (const id of Object.keys(model.folders)) {
+    const f = model.folders[id] as any;
+    if (Object.prototype.hasOwnProperty.call(f, 'externalIds')) {
+      const raw = f.externalIds;
+      f.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
+    }
+  }
+
   for (const id of Object.keys(model.elements)) {
     const el = model.elements[id] as any;
     if (Object.prototype.hasOwnProperty.call(el, 'externalIds')) {
@@ -291,6 +321,26 @@ function migrateV2ToV3(model: Model): Model {
   return model;
 }
 
+/**
+ * v3 -> v4 migration:
+ * - Add Model.externalIds + Model.taggedValues (default empty arrays).
+ * - Add Folder.externalIds + Folder.taggedValues (default empty arrays).
+ */
+function migrateV3ToV4(model: Model): Model {
+  const m: any = model as any;
+  if (!Array.isArray(m.externalIds)) m.externalIds = [];
+  if (!Array.isArray(m.taggedValues)) m.taggedValues = [];
+
+  for (const fid of Object.keys(model.folders)) {
+    const f: any = model.folders[fid] as any;
+    if (!Array.isArray(f.externalIds)) f.externalIds = [];
+    if (!Array.isArray(f.taggedValues)) f.taggedValues = [];
+  }
+
+  model.schemaVersion = 4;
+  return model;
+}
+
 function migrateModel(model: Model): Model {
   let v = getSchemaVersion(model);
   if (v < 2) {
@@ -299,6 +349,27 @@ function migrateModel(model: Model): Model {
   }
   if (v < 3) {
     model = migrateV2ToV3(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 4) {
+    model = migrateV3ToV4(model);
+  }
+  return model;
+}
+
+/**
+ * Ensure new optional array fields are present as arrays at runtime.
+ * This makes the rest of the codebase simpler (no `?.` needed).
+ */
+function ensureModelFolderExtensions(model: Model): Model {
+  const m: any = model as any;
+  if (!Array.isArray(m.externalIds)) m.externalIds = [];
+  if (!Array.isArray(m.taggedValues)) m.taggedValues = [];
+
+  for (const fid of Object.keys(model.folders)) {
+    const f: any = model.folders[fid] as any;
+    if (!Array.isArray(f.externalIds)) f.externalIds = [];
+    if (!Array.isArray(f.taggedValues)) f.taggedValues = [];
   }
   return model;
 }
@@ -321,10 +392,12 @@ export function deserializeModel(json: string): Model {
     throw new Error('Invalid model file (missing collections)');
   }
 
-  return sanitizeModelRelationshipAttrs(
-    sanitizeModelUnknownTypes(
-      sanitizeModelExternalIds(
-        sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model))
+  return ensureModelFolderExtensions(
+    sanitizeModelRelationshipAttrs(
+      sanitizeModelUnknownTypes(
+        sanitizeModelExternalIds(
+          sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model))
+        )
       )
     )
   );

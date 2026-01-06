@@ -46,4 +46,29 @@ describe('validateModel', () => {
     const issues = validateModel(model);
     expect(issues.some((i) => i.message.includes(`Duplicate id detected in model: ${model.id}`))).toBe(true);
   });
+
+it('reports invalid externalIds/taggedValues on folders and model', () => {
+  const model = createEmptyModel({ name: 'M' });
+
+  // Add invalid entries
+  (model as any).externalIds = [{ system: '', id: 'x' }, { system: 'ea-xmi', id: '1' }, { system: 'ea-xmi', id: '1' }];
+  (model as any).taggedValues = [{ ns: 'x', key: '', type: 'string', value: 'v' }];
+
+  const rootFolder = Object.values(model.folders).find((f) => f.kind === 'root');
+  if (!rootFolder) throw new Error('Missing root folder');
+
+  (rootFolder as any).externalIds = [{ system: '', id: 'x' }, { system: 'ea-xmi', id: 'A' }, { system: 'ea-xmi', id: 'A' }];
+  (rootFolder as any).taggedValues = [{ ns: 'x', key: '', type: 'string', value: 'v' }];
+
+  const issues = validateModel(model);
+
+  expect(issues.some((i) => i.message.includes('Model has') && i.message.includes('invalid external id'))).toBe(true);
+  expect(issues.some((i) => i.message.includes('Model has') && i.message.includes('duplicate external ids'))).toBe(true);
+  expect(issues.some((i) => i.message.includes('Model has') && i.message.includes('invalid tagged value'))).toBe(true);
+
+  expect(issues.some((i) => i.message.includes('Folder') && i.message.includes('invalid external id'))).toBe(true);
+  expect(issues.some((i) => i.message.includes('Folder') && i.message.includes('duplicate external ids'))).toBe(true);
+  expect(issues.some((i) => i.message.includes('Folder') && i.message.includes('invalid tagged value'))).toBe(true);
+});
+
 });

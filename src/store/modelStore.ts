@@ -18,6 +18,7 @@ import {
   createId,
   upsertTaggedValue,
   removeTaggedValue,
+  validateTaggedValue,
   tidyExternalIds,
   sanitizeRelationshipAttrs,
   sanitizeUnknownTypeForElement,
@@ -37,6 +38,42 @@ type Listener = () => void;
 type ViewWithLayout = View & { layout: ViewLayout };
 
 type TaggedValueInput = Omit<TaggedValue, 'id'> & { id?: string };
+
+function tidyTaggedValuesFromUi(list: TaggedValue[] | undefined): TaggedValue[] | undefined {
+  if (!list || list.length === 0) return undefined;
+
+  // Normalize + drop invalid entries.
+  const normalized: TaggedValue[] = [];
+  for (const raw of list) {
+    if (!raw || typeof raw !== 'object') continue;
+
+    const withId: TaggedValue = {
+      ...raw,
+      id: typeof (raw as any).id === 'string' && (raw as any).id.trim().length > 0 ? (raw as any).id.trim() : createId('tag')
+    };
+
+    const { normalized: tv, errors } = validateTaggedValue(withId);
+    if (errors.length) continue;
+    normalized.push(tv);
+  }
+
+  if (normalized.length === 0) return undefined;
+
+  // De-dup by (ns,key), keeping the LAST occurrence.
+  const lastIndex = new Map<string, number>();
+  for (let i = 0; i < normalized.length; i++) {
+    const t = normalized[i];
+    lastIndex.set(`${t.ns ?? ''}::${t.key}`, i);
+  }
+
+  const deduped: TaggedValue[] = [];
+  for (let i = 0; i < normalized.length; i++) {
+    const t = normalized[i];
+    if (lastIndex.get(`${t.ns ?? ''}::${t.key}`) === i) deduped.push(t);
+  }
+
+  return deduped.length ? deduped : undefined;
+}
 
 function findFolderIdByKind(model: Model, kind: Folder['kind']): string {
   const folder = Object.values(model.folders).find((f) => f.kind === kind);
@@ -230,6 +267,17 @@ export class ModelStore {
     // Shallow clone the model; inner objects are cloned as needed by operations.
     const nextModel: Model = {
       ...current,
+      // Clone extension collections to avoid sharing references across state updates.
+      externalIds: current.externalIds ? current.externalIds.map((r) => ({ ...r })) : undefined,
+      taggedValues: current.taggedValues
+        ? current.taggedValues.map((t) => {
+            if (t.type === 'json' && t.value && typeof t.value === 'object') {
+              // TaggedValue JSON values should be plain JSON; deep-clone defensively.
+              return { ...t, value: JSON.parse(JSON.stringify(t.value)) };
+            }
+            return { ...t };
+          })
+        : undefined,
       metadata: { ...current.metadata },
       elements: { ...current.elements },
       relationships: { ...current.relationships },
@@ -285,6 +333,12 @@ export class ModelStore {
   updateModelMetadata = (patch: Partial<ModelMetadata>): void => {
     this.updateModel((model) => {
       model.metadata = { ...model.metadata, ...patch };
+    });
+  };
+
+  updateModelTaggedValues = (taggedValues: TaggedValue[] | undefined): void => {
+    this.updateModel((model) => {
+      model.taggedValues = tidyTaggedValuesFromUi(taggedValues);
     });
   };
 
@@ -817,7 +871,24 @@ export class ModelStore {
     });
   };
 
-    renameFolder = (folderId: string, name: string): void => {
+  // -------------------------
+  // Folder extensions (taggedValues/externalIds)
+  // -------------------------
+
+  updateFolder = (folderId: string, patch: Partial<Omit<Folder, 'id'>>): void => {
+    this.updateModel((model) => {
+      const current = getFolder(model, folderId);
+      const merged: Folder = { ...current, ...patch, id: current.id };
+
+      model.folders[folderId] = {
+        ...merged,
+        externalIds: tidyExternalIds(merged.externalIds),
+        taggedValues: tidyTaggedValuesFromUi(merged.taggedValues)
+      };
+    });
+  };
+
+  renameFolder = (folderId: string, name: string): void => {
     this.updateModel((model) => {
       const folder = getFolder(model, folderId);
       if (folder.kind === 'root') {

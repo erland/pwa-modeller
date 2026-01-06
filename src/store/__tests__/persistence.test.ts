@@ -69,7 +69,7 @@ describe('persistence', () => {
 
     const parsed = deserializeModel(serializeModel(modelV1));
 
-    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.schemaVersion).toBe(4);
 
     const folders = Object.values(parsed.folders);
     expect(folders.find((f) => f.kind === 'elements')).toBeUndefined();
@@ -249,6 +249,41 @@ describe('persistence', () => {
 
     const parsedView: any = parsed.views[view.id];
     expect(parsedView.externalIds).toEqual([{ system: 'archimate-exchange', id: 'v1' }]);
+  });
+
+  test('deserializeModel sanitizes model + folder taggedValues/externalIds on load', () => {
+    const model = createEmptyModel({ name: 'Extensions Model', description: 'desc' }) as any;
+
+    model.externalIds = [
+      { system: '  ea-xmi  ', id: '  EAID_ROOT  ', scope: '   ' },
+      { system: 'ea-xmi', id: 'EAID_ROOT' }, // duplicate -> keep last
+      { system: '', id: 'x' } // invalid -> dropped
+    ];
+    model.taggedValues = [
+      { id: 't1', ns: '  xmi ', key: '  foo  ', type: 'boolean', value: 'TRUE' },
+      { id: 't2', ns: 'xmi', key: 'foo', type: 'boolean', value: 'false' } // duplicate (ns,key) -> keep last
+    ];
+
+    const rootId = Object.values(model.folders).find((f: any) => f.kind === 'root')!.id;
+    model.folders[rootId].externalIds = [
+      { system: '  archimate-exchange ', id: '  pkg1  ', scope: '  modelA  ' },
+      { system: 'archimate-exchange', id: 'pkg1', scope: 'modelA' }
+    ];
+    model.folders[rootId].taggedValues = [
+      { id: 'f1', key: '  color  ', value: ' blue ' },
+      { id: 'f2', key: 'color', value: 'red' } // duplicate -> keep last
+    ];
+
+    const parsed = deserializeModel(serializeModel(model));
+
+    expect(parsed.externalIds).toEqual([{ system: 'ea-xmi', id: 'EAID_ROOT' }]);
+    expect(parsed.taggedValues.find((t: any) => t.ns === 'xmi' && t.key === 'foo')?.id).toBe('t2');
+    expect(parsed.taggedValues.find((t: any) => t.ns === 'xmi' && t.key === 'foo')?.value).toBe('false');
+
+    const parsedRoot: any = parsed.folders[rootId];
+    expect(parsedRoot.externalIds).toEqual([{ system: 'archimate-exchange', id: 'pkg1', scope: 'modelA' }]);
+    expect(parsedRoot.taggedValues.find((t: any) => t.key === 'color')?.id).toBe('f2');
+    expect(parsedRoot.taggedValues.find((t: any) => t.key === 'color')?.value).toBe('red');
   });
 
 });

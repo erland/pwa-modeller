@@ -4,6 +4,7 @@ import { RELATIONSHIP_TYPES } from '../../../domain';
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { TaggedValuesSummary } from './TaggedValuesSummary';
+import { ExternalIdsSummary } from './ExternalIdsSummary';
 
 const ACCESS_TYPES: AccessType[] = ['Access', 'Read', 'Write', 'ReadWrite'];
 
@@ -241,6 +242,8 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
           </div>
         </div>
       </div>
+
+      <ExternalIdsSummary externalIds={rel.externalIds} />
 
       <TaggedValuesSummary
         taggedValues={rel.taggedValues}

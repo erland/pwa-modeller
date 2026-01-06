@@ -70,7 +70,9 @@ export function createFolder(name: string, kind: FolderKind, parentId?: string, 
     folderIds: [],
     elementIds: [],
     relationshipIds: [],
-    viewIds: []
+    viewIds: [],
+    externalIds: [],
+    taggedValues: []
   };
 }
 
@@ -89,12 +91,14 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
       version: metadata.version?.trim() || undefined,
       owner: metadata.owner?.trim() || undefined
     },
+    externalIds: [],
+    taggedValues: [],
     elements: {},
     relationships: {},
     views: {},
     folders: {
       [root.id]: root
     },
-    schemaVersion: 3
+    schemaVersion: 4
   };
 }

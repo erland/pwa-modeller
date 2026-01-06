@@ -1,4 +1,8 @@
 import type { Model } from '../../../domain';
+import { modelStore } from '../../../store';
+
+import { ExternalIdsSummary } from './ExternalIdsSummary';
+import { TaggedValuesSummary } from './TaggedValuesSummary';
 
 type Props = {
   model: Model;
@@ -31,6 +35,13 @@ export function ModelProperties({ model, onEditModelProps }: Props) {
           Edit model properties
         </button>
       </div>
+
+      <ExternalIdsSummary externalIds={model.externalIds} />
+      <TaggedValuesSummary
+        taggedValues={model.taggedValues}
+        onChange={(next) => modelStore.updateModelTaggedValues(next)}
+        dialogTitle={`Model tagged values — ${model.metadata.name}`}
+      />
     </div>
   );
 }

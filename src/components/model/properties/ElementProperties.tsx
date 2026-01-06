@@ -9,6 +9,7 @@ import type { ModelActions } from './actions';
 import { findFolderContaining, getElementLabel, splitRelationshipsForElement } from './utils';
 import { CreateRelationshipDialog } from '../navigator/dialogs/CreateRelationshipDialog';
 import { TaggedValuesSummary } from './TaggedValuesSummary';
+import { ExternalIdsSummary } from './ExternalIdsSummary';
 
 type TraceDirection = 'outgoing' | 'incoming' | 'both';
 
@@ -175,6 +176,8 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
           </div>
         </div>
       </div>
+
+      <ExternalIdsSummary externalIds={el.externalIds} />
 
       <TaggedValuesSummary
         taggedValues={el.taggedValues}

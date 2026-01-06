@@ -61,4 +61,23 @@ describe('ModelStore', () => {
     store.deleteView(view.id);
     expect(store.getState().model?.views[view.id]).toBeUndefined();
   });
+
+  test('updateModel clones model-level externalIds and taggedValues arrays', () => {
+    const store = createModelStore();
+    store.createEmptyModel({ name: 'My Model' });
+
+    const m1 = store.getState().model!;
+    expect(m1.externalIds).toBeDefined();
+    expect(m1.taggedValues).toBeDefined();
+    const ext1 = m1.externalIds as any;
+    const tv1 = m1.taggedValues as any;
+
+    store.updateModelMetadata({ description: 'Hello' });
+
+    const m2 = store.getState().model!;
+    expect(m2.externalIds).not.toBe(ext1);
+    expect(m2.taggedValues).not.toBe(tv1);
+    expect(m2.externalIds).toEqual(ext1);
+    expect(m2.taggedValues).toEqual(tv1);
+  });
 });

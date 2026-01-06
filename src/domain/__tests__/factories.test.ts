@@ -52,6 +52,14 @@ describe('domain factories', () => {
     expect(root!.viewIds).toEqual([]);
     expect((root as any)!.relationshipIds).toEqual([]);
 
-    expect(model.schemaVersion).toBe(3);
+    // v4+: root folder supports external IDs + tagged values (default empty arrays)
+    expect((root as any)!.externalIds).toEqual([]);
+    expect((root as any)!.taggedValues).toEqual([]);
+
+    // v4+: model supports external IDs + tagged values (default empty arrays)
+    expect((model as any).externalIds).toEqual([]);
+    expect((model as any).taggedValues).toEqual([]);
+
+    expect(model.schemaVersion).toBe(4);
   });
 });

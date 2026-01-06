@@ -87,6 +87,7 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
           elementId={selection.elementId}
           actions={actions}
           elementFolders={options.elementFolders}
+          onSelect={onSelect}
         />
       );
     case 'element':

@@ -3,7 +3,7 @@ import { RELATIONSHIP_TYPES } from '../../../domain';
 
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
-import { TaggedValuesEditor } from './TaggedValuesEditor';
+import { TaggedValuesSummary } from './TaggedValuesSummary';
 
 type Props = {
   model: Model;
@@ -140,9 +140,10 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
         </div>
       </div>
 
-      <TaggedValuesEditor
+      <TaggedValuesSummary
         taggedValues={rel.taggedValues}
         onChange={(next) => actions.updateRelationship(rel.id, { taggedValues: next })}
+        dialogTitle={`Relationship tagged values — ${rel.name || rel.id}`}
       />
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

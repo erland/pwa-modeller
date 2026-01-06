@@ -124,7 +124,7 @@ export function TaggedValuesEditor({
 
     if (type === 'boolean') {
       return (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
             type="checkbox"
             checked={isTrueString(tv.value)}
@@ -140,7 +140,7 @@ export function TaggedValuesEditor({
       return (
         <textarea
           className="textArea"
-          style={{ minHeight: 72 }}
+          style={{ minHeight: 64 }}
           value={tv.value ?? ''}
           onChange={(e) => updateRow(tv.id, { value: e.target.value })}
           aria-label="Tagged value json"
@@ -157,6 +157,66 @@ export function TaggedValuesEditor({
         aria-label="Tagged value value"
         placeholder={type === 'number' ? '123' : ''}
       />
+    );
+  }
+
+  function renderHeaderControls(tv: TaggedValue) {
+    // The properties panel / dialog can be narrow. Use a wrapping flex layout to avoid overlap.
+    // Also force minWidth: 0 so inputs can shrink inside flex/grid containers.
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 6,
+          alignItems: 'center'
+        }}
+      >
+        {allowNamespaces ? (
+          <input
+            className="textInput"
+            style={{ flex: '1 1 120px', minWidth: 0 }}
+            value={tv.ns ?? ''}
+            onChange={(e) => onNsChange(tv.id, e)}
+            aria-label="Tagged value namespace"
+            placeholder="ns"
+          />
+        ) : null}
+
+        <input
+          className="textInput"
+          style={{ flex: '2 1 160px', minWidth: 0 }}
+          value={tv.key}
+          onChange={(e) => onKeyChange(tv.id, e)}
+          aria-label="Tagged value key"
+          placeholder="key"
+        />
+
+        <select
+          className="selectInput"
+          style={{ flex: '0 1 120px', minWidth: 0 }}
+          value={(tv.type ?? 'string') as TaggedValueType}
+          onChange={(e) => onTypeChange(tv.id, e)}
+          aria-label="Tagged value type"
+        >
+          {TAG_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          className="miniButton"
+          style={{ flex: '0 0 auto' }}
+          onClick={() => removeRow(tv.id)}
+          aria-label="Remove tagged value"
+          title="Remove"
+        >
+          Remove
+        </button>
+      </div>
     );
   }
 
@@ -183,53 +243,8 @@ export function TaggedValuesEditor({
               <div key={tv.id} className="propertiesRow">
                 <div className="propertiesKey">Tag {idx + 1}</div>
                 <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: allowNamespaces ? '1fr 1fr 140px auto' : '1fr 140px auto',
-                        gap: 8,
-                        alignItems: 'center'
-                      }}
-                    >
-                      {allowNamespaces ? (
-                        <input
-                          className="textInput"
-                          value={tv.ns ?? ''}
-                          onChange={(e) => onNsChange(tv.id, e)}
-                          aria-label="Tagged value namespace"
-                          placeholder="ns"
-                        />
-                      ) : null}
-                      <input
-                        className="textInput"
-                        value={tv.key}
-                        onChange={(e) => onKeyChange(tv.id, e)}
-                        aria-label="Tagged value key"
-                        placeholder="key"
-                      />
-                      <select
-                        className="selectInput"
-                        value={(tv.type ?? 'string') as TaggedValueType}
-                        onChange={(e) => onTypeChange(tv.id, e)}
-                        aria-label="Tagged value type"
-                      >
-                        {TAG_TYPES.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        className="miniButton"
-                        onClick={() => removeRow(tv.id)}
-                        aria-label="Remove tagged value"
-                        title="Remove"
-                      >
-                        Remove
-                      </button>
-                    </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {renderHeaderControls(tv)}
                     <div>{renderValueEditor(tv)}</div>
                     {validation ? (
                       <p className="hintText" style={{ margin: 0 }}>

@@ -5,7 +5,7 @@ import type { FolderOption } from '../../../domain';
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { findFolderContaining } from './utils';
-import { TaggedValuesEditor } from './TaggedValuesEditor';
+import { TaggedValuesSummary } from './TaggedValuesSummary';
 
 type Props = {
   model: Model;
@@ -230,9 +230,10 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
         </div>
       </div>
 
-      <TaggedValuesEditor
+      <TaggedValuesSummary
         taggedValues={view.taggedValues}
         onChange={(next) => actions.updateView(view.id, { taggedValues: next })}
+        dialogTitle={`View tagged values — ${view.name || view.id}`}
       />
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

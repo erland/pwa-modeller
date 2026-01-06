@@ -1,0 +1,43 @@
+import { sanitizeRelationshipAttrs } from '../relationshipAttrs';
+
+describe('domain relationshipAttrs helpers', () => {
+  test('returns undefined when attrs is undefined', () => {
+    expect(sanitizeRelationshipAttrs('Access', undefined)).toBeUndefined();
+  });
+
+  test('Access keeps only valid accessType', () => {
+    expect(
+      sanitizeRelationshipAttrs('Access', { accessType: 'ReadWrite', isDirected: true, influenceStrength: '++' })
+    ).toEqual({ accessType: 'ReadWrite' });
+
+    // invalid accessType should be dropped
+    expect(sanitizeRelationshipAttrs('Access', { accessType: 'Nope' as any })).toBeUndefined();
+  });
+
+  test('Association keeps only boolean isDirected', () => {
+    expect(
+      sanitizeRelationshipAttrs('Association', { isDirected: true, accessType: 'Read' as any, influenceStrength: 'x' })
+    ).toEqual({ isDirected: true });
+
+    // non-boolean should be dropped
+    expect(sanitizeRelationshipAttrs('Association', { isDirected: 'true' as any })).toBeUndefined();
+  });
+
+  test('Influence keeps only non-empty influenceStrength and trims it', () => {
+    expect(
+      sanitizeRelationshipAttrs('Influence', { influenceStrength: '  ++  ', isDirected: true, accessType: 'Read' as any })
+    ).toEqual({ influenceStrength: '++' });
+
+    // empty/whitespace should be dropped
+    expect(sanitizeRelationshipAttrs('Influence', { influenceStrength: '   ' })).toBeUndefined();
+
+    // non-string should be coerced to string (best effort)
+    expect(sanitizeRelationshipAttrs('Influence', { influenceStrength: 5 as any })).toEqual({ influenceStrength: '5' });
+  });
+
+  test('Other relationship types drop all attributes', () => {
+    expect(
+      sanitizeRelationshipAttrs('Serving', { accessType: 'ReadWrite', isDirected: true, influenceStrength: '++' })
+    ).toBeUndefined();
+  });
+});

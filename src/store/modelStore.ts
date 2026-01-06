@@ -17,7 +17,8 @@ import {
   collectFolderSubtreeIds,
   createId,
   upsertTaggedValue,
-  removeTaggedValue
+  removeTaggedValue,
+  sanitizeRelationshipAttrs
 } from '../domain';
 
 export type ModelStoreState = {
@@ -371,7 +372,9 @@ export class ModelStore {
     this.updateModel((model) => {
       const current = model.relationships[relationshipId];
       if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
-      model.relationships[relationshipId] = { ...current, ...patch, id: current.id };
+      const merged = { ...current, ...patch, id: current.id };
+      merged.attrs = sanitizeRelationshipAttrs(merged.type, merged.attrs);
+      model.relationships[relationshipId] = merged;
     });
   };
 

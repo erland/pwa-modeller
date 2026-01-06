@@ -63,6 +63,21 @@ export type RelationshipType =
   | 'Triggering'
   | 'Specialization';
 
+
+export type AccessType = 'Access' | 'Read' | 'Write' | 'ReadWrite';
+
+export interface RelationshipAttributes {
+  /** Only meaningful when relationship.type === 'Access'. */
+  accessType?: AccessType;
+
+  /** Only meaningful when relationship.type === 'Association'. */
+  isDirected?: boolean;
+
+  /** Only meaningful when relationship.type === 'Influence'. */
+  influenceStrength?: string;
+}
+
+
 export type LabelOffset = {
   dx: number;
   dy: number;
@@ -126,6 +141,7 @@ export interface Relationship extends HasTaggedValues {
   type: RelationshipType;
   name?: string;
   description?: string;
+  attrs?: RelationshipAttributes;
 }
 
 export interface Viewpoint {

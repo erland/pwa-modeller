@@ -125,15 +125,23 @@ type RelationshipVisual = {
   markerStart?: string;
   markerEnd?: string;
   dasharray?: string;
-  showInfluenceLabel?: boolean;
+  /** Optional label rendered around the mid point of the polyline. */
+  midLabel?: string;
 };
 
-function relationshipVisual(type: RelationshipType, isSelected: boolean): RelationshipVisual {
+function relationshipVisual(
+  rel: { type: RelationshipType; attrs?: { isDirected?: boolean; accessType?: string; influenceStrength?: string } },
+  isSelected: boolean
+): RelationshipVisual {
   const suffix = isSelected ? 'Sel' : '';
 
-  switch (type) {
+  const accessType = (rel.attrs?.accessType ?? '').trim();
+  const influenceStrength = (rel.attrs?.influenceStrength ?? '').trim();
+
+  switch (rel.type) {
     case 'Association':
-      return {};
+      // ArchiMate 3.1+ supports directed associations.
+      return rel.attrs?.isDirected ? { markerEnd: `url(#arrowOpen${suffix})` } : {};
     case 'Composition':
       return { markerStart: `url(#diamondFilled${suffix})` };
     case 'Aggregation':
@@ -151,9 +159,24 @@ function relationshipVisual(type: RelationshipType, isSelected: boolean): Relati
     case 'Assignment':
       return { markerEnd: `url(#arrowFilled${suffix})` };
     case 'Access':
-      return { markerEnd: `url(#arrowOpen${suffix})` };
+      // Keep the default access visual (open arrow). Optionally show a compact access-mode label.
+      return {
+        markerEnd: `url(#arrowOpen${suffix})`,
+        midLabel:
+          accessType === 'Read'
+            ? 'R'
+            : accessType === 'Write'
+              ? 'W'
+              : accessType === 'ReadWrite'
+                ? 'RW'
+                : undefined,
+      };
     case 'Influence':
-      return { markerEnd: `url(#arrowOpen${suffix})`, dasharray: '2 4', showInfluenceLabel: true };
+      return {
+        markerEnd: `url(#arrowOpen${suffix})`,
+        dasharray: '2 4',
+        midLabel: influenceStrength || '±',
+      };
     default:
       return { markerEnd: `url(#arrowOpen${suffix})` };
   }
@@ -766,8 +789,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                     const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
                     const isSelected = selection.kind === 'relationship' && selection.relationshipId === relId;
-                    const v = relationshipVisual(rel.type, isSelected);
-                    const mid = v.showInfluenceLabel ? polylineMidPoint(points) : null;
+                    const v = relationshipVisual(rel, isSelected);
+                    const mid = v.midLabel ? polylineMidPoint(points) : null;
 
                     return (
                       <g key={relId}>
@@ -805,7 +828,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                             textAnchor="middle"
                             pointerEvents="none"
                           >
-                            ±
+                            {v.midLabel}
                           </text>
                         ) : null}
                       </g>

@@ -1,5 +1,5 @@
 import type { Folder, Model, TaggedValue, TaggedValueType } from '../domain';
-import { createId } from '../domain';
+import { createId, sanitizeRelationshipAttrs } from '../domain';
 
 /**
  * Serialize a model to JSON.
@@ -124,6 +124,16 @@ function sanitizeModelTaggedValues(model: Model): Model {
     const v = model.views[id] as any;
     if (Object.prototype.hasOwnProperty.call(v, 'taggedValues')) {
       v.taggedValues = sanitizeTaggedValues(v.taggedValues);
+    }
+  }
+  return model;
+}
+
+function sanitizeModelRelationshipAttrs(model: Model): Model {
+  for (const id of Object.keys(model.relationships)) {
+    const rel = model.relationships[id] as any;
+    if (Object.prototype.hasOwnProperty.call(rel, 'attrs')) {
+      rel.attrs = sanitizeRelationshipAttrs(rel.type, rel.attrs);
     }
   }
   return model;
@@ -264,5 +274,5 @@ export function deserializeModel(json: string): Model {
     throw new Error('Invalid model file (missing collections)');
   }
 
-  return sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model));
+  return sanitizeModelRelationshipAttrs(sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model)));
 }

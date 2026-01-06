@@ -132,4 +132,41 @@ describe('persistence', () => {
     expect(parsedView.taggedValues).toBeUndefined();
   });
 
+  test('deserializeModel sanitizes relationship attrs on load', () => {
+    const model = createEmptyModel({ name: 'RelAttrs Model', description: 'desc' });
+
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    model.elements[el.id] = el;
+
+    const access = createRelationship({ sourceElementId: el.id, targetElementId: el.id, type: 'Access' }) as any;
+    access.attrs = {
+      accessType: 'Read',
+      // should be dropped because not relevant for Access
+      isDirected: true,
+      influenceStrength: '++',
+    };
+    model.relationships[access.id] = access;
+
+    const assoc = createRelationship({ sourceElementId: el.id, targetElementId: el.id, type: 'Association' }) as any;
+    // invalid type (string), should be dropped
+    assoc.attrs = { isDirected: 'true' };
+    model.relationships[assoc.id] = assoc;
+
+    const infl = createRelationship({ sourceElementId: el.id, targetElementId: el.id, type: 'Influence' }) as any;
+    infl.attrs = { influenceStrength: '  --  ' };
+    model.relationships[infl.id] = infl;
+
+    const other = createRelationship({ sourceElementId: el.id, targetElementId: el.id, type: 'Serving' }) as any;
+    // attrs not supported for this relationship type
+    other.attrs = { accessType: 'Write' };
+    model.relationships[other.id] = other;
+
+    const parsed = deserializeModel(serializeModel(model));
+
+    expect((parsed.relationships as any)[access.id].attrs).toEqual({ accessType: 'Read' });
+    expect((parsed.relationships as any)[assoc.id].attrs).toBeUndefined();
+    expect((parsed.relationships as any)[infl.id].attrs).toEqual({ influenceStrength: '--' });
+    expect((parsed.relationships as any)[other.id].attrs).toBeUndefined();
+  });
+
 });

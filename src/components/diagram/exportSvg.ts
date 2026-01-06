@@ -26,13 +26,16 @@ type RelationshipVisual = {
   markerStartId?: string;
   markerEndId?: string;
   dasharray?: string;
-  showInfluenceLabel?: boolean;
+  /** Optional label rendered near the relationship mid point (e.g. Influence strength). */
+  midLabel?: string;
 };
 
-function relationshipVisual(type: RelationshipType): RelationshipVisual {
-  switch (type) {
+function relationshipVisual(rel: { type: RelationshipType; attrs?: { isDirected?: boolean; influenceStrength?: string } }): RelationshipVisual {
+  const influenceStrength = (rel.attrs?.influenceStrength ?? '').trim();
+
+  switch (rel.type) {
     case 'Association':
-      return {};
+      return rel.attrs?.isDirected ? { markerEndId: 'arrowOpen' } : {};
     case 'Composition':
       return { markerStartId: 'diamondFilled' };
     case 'Aggregation':
@@ -52,7 +55,7 @@ function relationshipVisual(type: RelationshipType): RelationshipVisual {
     case 'Access':
       return { markerEndId: 'arrowOpen' };
     case 'Influence':
-      return { markerEndId: 'arrowOpen', dasharray: '2 4', showInfluenceLabel: true };
+      return { markerEndId: 'arrowOpen', dasharray: '2 4', midLabel: influenceStrength || '±' };
     default:
       return { markerEndId: 'arrowOpen' };
   }
@@ -216,7 +219,7 @@ export function createViewSvg(model: Model, viewId: string): string {
 
       const pts: Point[] = [start, end];
       const d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
-      const visual = relationshipVisual(rel.type);
+      const visual = relationshipVisual(rel);
       const mid = polylineMidPoint(pts);
       relItems.push({ relId, type: rel.type, d, label: rel.type, visual, mid });
     }
@@ -227,16 +230,18 @@ export function createViewSvg(model: Model, viewId: string): string {
       const markerStart = it.visual.markerStartId ? ` marker-start="url(#${it.visual.markerStartId})"` : '';
       const markerEnd = it.visual.markerEndId ? ` marker-end="url(#${it.visual.markerEndId})"` : '';
       const dash = it.visual.dasharray ? ` stroke-dasharray="${it.visual.dasharray}"` : '';
-      const influence = it.visual.showInfluenceLabel
-        ? `<text x="${it.mid.x}" y="${it.mid.y - 6}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" font-weight="800" fill="rgba(0,0,0,0.65)" text-anchor="middle">±</text>`
+      const midLabel = it.visual.midLabel
+        ? `<text x="${it.mid.x}" y="${it.mid.y - 6}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" font-weight="800" fill="rgba(0,0,0,0.65)" text-anchor="middle">${escapeXml(it.visual.midLabel)}</text>`
         : '';
 
       // Keep the type label in exports (helps interpretation if arrow styles are unfamiliar).
-      const label = `<text x="${it.mid.x}" y="${it.mid.y - 4}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#334155" text-anchor="middle">${escapeXml(it.label)}</text>`;
+      // If we also render a midLabel, push the type label down a bit to avoid overlap.
+      const labelY = it.visual.midLabel ? it.mid.y + 10 : it.mid.y - 4;
+      const label = `<text x="${it.mid.x}" y="${labelY}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#334155" text-anchor="middle">${escapeXml(it.label)}</text>`;
 
       return [
         `<path d="${it.d}" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="2"${dash}${markerStart}${markerEnd} />`,
-        influence,
+        midLabel,
         label,
       ].join('');
     })

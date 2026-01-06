@@ -1,9 +1,11 @@
-import type { Model, RelationshipType } from '../../../domain';
+import type { AccessType, Model, RelationshipType } from '../../../domain';
 import { RELATIONSHIP_TYPES } from '../../../domain';
 
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { TaggedValuesSummary } from './TaggedValuesSummary';
+
+const ACCESS_TYPES: AccessType[] = ['Access', 'Read', 'Write', 'ReadWrite'];
 
 type Props = {
   model: Model;
@@ -52,6 +54,79 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
             </select>
           </div>
         </div>
+
+        {rel.type === 'Access' && (
+          <div className="propertiesRow">
+            <div className="propertiesKey">Access type</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <select
+                className="selectInput"
+                aria-label="Relationship property access type"
+                value={rel.attrs?.accessType ?? 'Access'}
+                onChange={(e) =>
+                  actions.updateRelationship(rel.id, {
+                    attrs: { ...(rel.attrs ?? {}), accessType: e.target.value as AccessType }
+                  })
+                }
+              >
+                {ACCESS_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                Access specifies whether data is read, written, or both.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {rel.type === 'Influence' && (
+          <div className="propertiesRow">
+            <div className="propertiesKey">Strength</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <input
+                className="textInput"
+                aria-label="Relationship property influence strength"
+                placeholder="e.g. +, ++, -, --, 5"
+                value={rel.attrs?.influenceStrength ?? ''}
+                onChange={(e) =>
+                  actions.updateRelationship(rel.id, {
+                    attrs: { ...(rel.attrs ?? {}), influenceStrength: e.target.value || undefined }
+                  })
+                }
+              />
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                Optional: use a sign or scale that matches your organization.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {rel.type === 'Association' && (
+          <div className="propertiesRow">
+            <div className="propertiesKey">Directed</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  aria-label="Relationship property association directed"
+                  checked={!!rel.attrs?.isDirected}
+                  onChange={(e) =>
+                    actions.updateRelationship(rel.id, {
+                      attrs: { ...(rel.attrs ?? {}), isDirected: e.target.checked ? true : undefined }
+                    })
+                  }
+                />
+                Directed association
+              </label>
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                When enabled, the association is shown as an arrow from source to target.
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="propertiesRow">
           <div className="propertiesKey">From</div>

@@ -12,6 +12,7 @@ import { ModelProperties } from './properties/ModelProperties';
 import { ConnectorProperties } from './properties/ConnectorProperties';
 import { RelationshipProperties } from './properties/RelationshipProperties';
 import { ViewNodeProperties } from './properties/ViewNodeProperties';
+import { ViewObjectProperties } from './properties/ViewObjectProperties';
 import { ViewProperties } from './properties/ViewProperties';
 import { findFolderByKind } from './properties/utils';
 
@@ -50,6 +51,9 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
 
     updateConnector: (connectorId, patch) => modelStore.updateConnector(connectorId, patch),
     deleteConnector: (connectorId) => modelStore.deleteConnector(connectorId),
+
+    updateViewObject: (viewId, objectId, patch) => modelStore.updateViewObject(viewId, objectId, patch),
+    deleteViewObject: (viewId, objectId) => modelStore.deleteViewObject(viewId, objectId),
 
     updateView: (viewId, patch) => modelStore.updateView(viewId, patch),
     moveViewToFolder: (viewId, folderId) => modelStore.moveViewToFolder(viewId, folderId),
@@ -91,6 +95,16 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
           elementId={selection.elementId}
           actions={actions}
           elementFolders={options.elementFolders}
+          onSelect={onSelect}
+        />
+      );
+    case 'viewObject':
+      return (
+        <ViewObjectProperties
+          model={model}
+          viewId={selection.viewId}
+          objectId={selection.objectId}
+          actions={actions}
           onSelect={onSelect}
         />
       );

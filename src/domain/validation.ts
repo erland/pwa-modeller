@@ -29,13 +29,20 @@ export function validateRelationship(rel: Relationship): ValidationResult {
 }
 
 export function getAllModelIds(model: Model): string[] {
+  // View-local objects (notes/labels/group boxes, etc.) still need globally unique ids
+  // to avoid collisions in persistence, selection, and future interchange formats.
+  const viewObjectIds: string[] = [];
+  for (const view of Object.values(model.views)) {
+    for (const id of Object.keys(view.objects ?? {})) viewObjectIds.push(id);
+  }
   return [
     model.id,
     ...Object.keys(model.elements),
     ...Object.keys(model.relationships),
     ...Object.keys(model.connectors ?? {}),
     ...Object.keys(model.views),
-    ...Object.keys(model.folders)
+    ...Object.keys(model.folders),
+    ...viewObjectIds
   ];
 }
 

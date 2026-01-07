@@ -173,15 +173,18 @@ function validateTaggedValuesForTarget(
 function listDuplicatesInLayout(layout: ViewLayout | undefined): {
   nodeElementIds: string[];
   nodeConnectorIds: string[];
+  nodeObjectIds: string[];
   relationshipIds: string[];
 } {
-  if (!layout) return { nodeElementIds: [], nodeConnectorIds: [], relationshipIds: [] };
+  if (!layout) return { nodeElementIds: [], nodeConnectorIds: [], nodeObjectIds: [], relationshipIds: [] };
   const nodeElementIds = layout.nodes.flatMap((n) => (n.elementId ? [n.elementId] : []));
   const nodeConnectorIds = layout.nodes.flatMap((n) => (n.connectorId ? [n.connectorId] : []));
+  const nodeObjectIds = layout.nodes.flatMap((n) => (n.objectId ? [n.objectId] : []));
   const relIds = layout.relationships.map((r) => r.relationshipId);
   return {
     nodeElementIds: findDuplicateIds(nodeElementIds),
     nodeConnectorIds: findDuplicateIds(nodeConnectorIds),
+    nodeObjectIds: findDuplicateIds(nodeObjectIds),
     relationshipIds: findDuplicateIds(relIds)
   };
 }
@@ -409,6 +412,16 @@ for (const folder of Object.values(model.folders)) {
         )
       );
     }
+    for (const objId of dupes.nodeObjectIds) {
+      issues.push(
+        makeIssue(
+          'warning',
+          `View ${view.name} (${view.id}) contains duplicate node for view object: ${objId}`,
+          { kind: 'view', viewId: view.id },
+          `view-dupe-object-node:${view.id}:${objId}`
+        )
+      );
+    }
     for (const relId of dupes.relationshipIds) {
       issues.push(
         makeIssue(
@@ -426,18 +439,20 @@ for (const folder of Object.values(model.folders)) {
     const nodeConnectorIds = layout.nodes.flatMap((n) => (n.connectorId ? [n.connectorId] : []));
     const nodeElementSet = new Set(nodeElementIds);
     const nodeConnectorSet = new Set(nodeConnectorIds);
-
     // Node layout invariants + orphan nodes
     for (const n of layout.nodes) {
       const hasEl = !!n.elementId;
       const hasCo = !!n.connectorId;
-      if (hasEl === hasCo) {
+      const hasObj = !!n.objectId;
+
+      const endpointCount = (hasEl ? 1 : 0) + (hasCo ? 1 : 0) + (hasObj ? 1 : 0);
+      if (endpointCount !== 1) {
         issues.push(
           makeIssue(
             'error',
-            `View ${view.name} (${view.id}) has an invalid node layout entry (must reference exactly one of elementId/connectorId).`,
+            `View ${view.name} (${view.id}) has an invalid node layout entry (must reference exactly one of elementId/connectorId/objectId).`,
             { kind: 'view', viewId: view.id },
-            `view-node-xor:${view.id}:${(n.elementId ?? n.connectorId ?? 'unknown')}:${n.x},${n.y}`
+            `view-node-xor:${view.id}:${(n.elementId ?? n.connectorId ?? n.objectId ?? 'unknown')}:${n.x},${n.y}`
           )
         );
         continue;
@@ -462,6 +477,17 @@ for (const folder of Object.values(model.folders)) {
               `View ${view.name} (${view.id}) contains a node for missing connector: ${n.connectorId}`,
               { kind: 'view', viewId: view.id },
               `view-missing-node-connector:${view.id}:${n.connectorId}`
+            )
+          );
+        }
+      } else if (n.objectId) {
+        if (!(view.objects ?? {})[n.objectId]) {
+          issues.push(
+            makeIssue(
+              'warning',
+              `View ${view.name} (${view.id}) contains a node for missing view object: ${n.objectId}`,
+              { kind: 'view', viewId: view.id },
+              `view-missing-node-object:${view.id}:${n.objectId}`
             )
           );
         }

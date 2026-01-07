@@ -1021,8 +1021,13 @@ export class ModelStore {
     });
   };
 
-  /** Updates position of an element-node or connector-node in a view. */
-  updateViewNodePositionAny = (viewId: string, ref: { elementId?: string; connectorId?: string }, x: number, y: number): void => {
+  /** Updates position of an element-node, connector-node, or view-object node in a view. */
+  updateViewNodePositionAny = (
+    viewId: string,
+    ref: { elementId?: string; connectorId?: string; objectId?: string },
+    x: number,
+    y: number
+  ): void => {
     this.updateModel((model) => {
       const view = getView(model, viewId);
       if (!view.layout) return;
@@ -1031,8 +1036,39 @@ export class ModelStore {
       const nextNodes = layout.nodes.map((n) => {
         const matchesElement = ref.elementId && n.elementId === ref.elementId;
         const matchesConnector = ref.connectorId && n.connectorId === ref.connectorId;
-        if (!matchesElement && !matchesConnector) return n;
+        const matchesObject = ref.objectId && n.objectId === ref.objectId;
+        if (!matchesElement && !matchesConnector && !matchesObject) return n;
         return { ...n, x, y };
+      });
+
+      model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
+    });
+  };
+
+  /** Updates layout properties on an element-node, connector-node, or view-object node in a view. */
+  updateViewNodeLayoutAny = (
+    viewId: string,
+    ref: { elementId?: string; connectorId?: string; objectId?: string },
+    patch: Partial<Omit<ViewNodeLayout, 'elementId' | 'connectorId' | 'objectId'>>
+  ): void => {
+    this.updateModel((model) => {
+      const view = getView(model, viewId);
+      if (!view.layout) return;
+      const layout = view.layout;
+
+      const nextNodes = layout.nodes.map((n) => {
+        const matchesElement = ref.elementId && n.elementId === ref.elementId;
+        const matchesConnector = ref.connectorId && n.connectorId === ref.connectorId;
+        const matchesObject = ref.objectId && n.objectId === ref.objectId;
+        if (!matchesElement && !matchesConnector && !matchesObject) return n;
+
+        // Preserve whichever identity field this node uses.
+        const idFields: Pick<ViewNodeLayout, 'elementId' | 'connectorId' | 'objectId'> = {
+          elementId: n.elementId,
+          connectorId: n.connectorId,
+          objectId: n.objectId,
+        };
+        return { ...n, ...patch, ...idFields };
       });
 
       model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };

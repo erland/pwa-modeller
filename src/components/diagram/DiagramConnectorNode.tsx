@@ -76,10 +76,13 @@ export function DiagramConnectorNode({
         onBeginNodeDrag({
           viewId: activeViewId,
           ref: selfRef,
+          action: 'move',
           startX: e.clientX,
           startY: e.clientY,
           origX: n.x,
           origY: n.y,
+          origW: w,
+          origH: h,
         });
       }}
       onPointerEnter={() => {

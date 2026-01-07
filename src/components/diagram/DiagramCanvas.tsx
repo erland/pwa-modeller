@@ -1,7 +1,7 @@
 import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout, ArchimateLayer, ElementType } from '../../domain';
-import { RELATIONSHIP_TYPES, createRelationship, createConnector, getViewpointById, validateRelationship, ELEMENT_TYPES_BY_LAYER } from '../../domain';
+import { RELATIONSHIP_TYPES, createRelationship, createConnector, getDefaultViewObjectSize, getViewpointById, validateRelationship, ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
@@ -14,6 +14,7 @@ import { relationshipVisual } from './relationshipVisual';
 import { RelationshipMarkers } from './RelationshipMarkers';
 import { DiagramNode, type DiagramLinkDrag, type DiagramNodeDragState } from './DiagramNode';
 import { DiagramConnectorNode } from './DiagramConnectorNode';
+import { DiagramViewObjectNode } from './DiagramViewObjectNode';
 import type { ConnectableRef } from './connectable';
 import { refKey, sameRef } from './connectable';
 
@@ -65,10 +66,24 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       setActiveViewId(selection.viewId);
       return;
     }
+    if (selection.kind === 'viewObject') {
+      setActiveViewId(selection.viewId);
+      return;
+    }
     if (activeViewId && model.views[activeViewId]) return;
     setActiveViewId(views[0]?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, selection.kind === 'view' ? selection.viewId : selection.kind === 'viewNode' ? selection.viewId : null, views.length]);
+  }, [
+    model,
+    selection.kind === 'view'
+      ? selection.viewId
+      : selection.kind === 'viewNode'
+        ? selection.viewId
+        : selection.kind === 'viewObject'
+          ? selection.viewId
+          : null,
+    views.length,
+  ]);
 
   const activeView = model && activeViewId ? model.views[activeViewId] : null;
 
@@ -170,12 +185,30 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     () =>
       (activeView?.layout?.nodes ?? []).map((n, idx) => {
         const isConn = Boolean(n.connectorId);
-        return {
-          ...n,
-          width: n.width ?? (isConn ? 24 : 120),
-          height: n.height ?? (isConn ? 24 : 60),
-          zIndex: typeof n.zIndex === 'number' ? n.zIndex : idx,
-        };
+        const isObj = Boolean(n.objectId);
+        const objects = (activeView?.objects ?? {}) as Record<string, any>;
+        const obj = isObj ? objects[n.objectId!] : undefined;
+
+        let width = n.width;
+        let height = n.height;
+        if (typeof width !== 'number' || typeof height !== 'number') {
+          if (isConn) {
+            width = typeof width === 'number' ? width : 24;
+            height = typeof height === 'number' ? height : 24;
+          } else if (isObj && obj) {
+            const d = getDefaultViewObjectSize(obj.type);
+            width = typeof width === 'number' ? width : d.width;
+            height = typeof height === 'number' ? height : d.height;
+          } else {
+            width = typeof width === 'number' ? width : 120;
+            height = typeof height === 'number' ? height : 60;
+          }
+        }
+
+        let zIndex = typeof n.zIndex === 'number' ? n.zIndex : idx;
+        if (isObj && obj?.type === 'GroupBox' && typeof n.zIndex !== 'number') zIndex = idx - 10000;
+
+        return { ...n, width, height, zIndex };
       }),
     [activeView]
   );
@@ -259,6 +292,47 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       const snap = Boolean(view?.formatting?.snapToGrid);
       const grid = view?.formatting?.gridSize ?? 20;
 
+      const ref =
+        d.ref.kind === 'element'
+          ? { elementId: d.ref.id }
+          : d.ref.kind === 'connector'
+            ? { connectorId: d.ref.id }
+            : { objectId: d.ref.id };
+
+      if (d.action === 'resize') {
+        // MVP: bottom-right resize. Clamp to reasonable minimums.
+        let minW = 40;
+        let minH = 24;
+        if (d.ref.kind === 'connector') {
+          minW = 16;
+          minH = 16;
+        }
+        if (d.ref.kind === 'object') {
+          const obj = view?.objects?.[d.ref.id];
+          if (obj?.type === 'GroupBox') {
+            minW = 160;
+            minH = 120;
+          } else if (obj?.type === 'Note') {
+            minW = 140;
+            minH = 90;
+          } else {
+            // Label
+            minW = 80;
+            minH = 24;
+          }
+        }
+
+        let w = Math.max(minW, d.origW + dx);
+        let h = Math.max(minH, d.origH + dy);
+        if (snap && grid > 1) {
+          w = Math.round(w / grid) * grid;
+          h = Math.round(h / grid) * grid;
+        }
+
+        modelStore.updateViewNodeLayoutAny(d.viewId, ref, { width: w, height: h });
+        return;
+      }
+
       let x = d.origX + dx;
       let y = d.origY + dy;
       if (snap && grid > 1) {
@@ -266,12 +340,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
         y = Math.round(y / grid) * grid;
       }
 
-      modelStore.updateViewNodePositionAny(
-        d.viewId,
-        d.ref.kind === 'element' ? { elementId: d.ref.id } : { connectorId: d.ref.id },
-        x,
-        y
-      );
+      modelStore.updateViewNodePositionAny(d.viewId, ref, x, y);
     }
     function onUp() {
       dragRef.current = null;
@@ -771,6 +840,27 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                         clientToModelPoint={clientToModelPoint}
                         onStartLinkDrag={(drag) => {
                           setLinkDrag(drag);
+                        }}
+                      />
+                    );
+                  }
+
+                  if (n.objectId) {
+                    const objects = (activeView.objects ?? {}) as Record<string, any>;
+                    const obj = objects[n.objectId];
+                    if (!obj) return null;
+                    const isSelected =
+                      selection.kind === 'viewObject' && selection.viewId === activeView.id && selection.objectId === n.objectId;
+                    return (
+                      <DiagramViewObjectNode
+                        key={`${activeView.id}:${n.objectId}`}
+                        node={n}
+                        object={obj}
+                        activeViewId={activeView.id}
+                        isSelected={isSelected}
+                        onSelect={onSelect}
+                        onBeginNodeDrag={(state) => {
+                          dragRef.current = state;
                         }}
                       />
                     );

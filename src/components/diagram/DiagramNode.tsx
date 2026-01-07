@@ -14,13 +14,23 @@ export type DiagramLinkDrag = {
   targetRef: ConnectableRef | null;
 };
 
+export type DiagramDragRef =
+  | ConnectableRef
+  | {
+      kind: 'object';
+      id: string;
+    };
+
 export type DiagramNodeDragState = {
   viewId: string;
-  ref: ConnectableRef;
+  ref: DiagramDragRef;
+  action: 'move' | 'resize';
   startX: number;
   startY: number;
   origX: number;
   origY: number;
+  origW: number;
+  origH: number;
 };
 
 type Props = {
@@ -93,13 +103,18 @@ export function DiagramNode({
       onPointerDown={(e) => {
         if (linkDrag) return;
         e.currentTarget.setPointerCapture(e.pointerId);
+        const w = n.width ?? 120;
+        const h = n.height ?? 60;
         onBeginNodeDrag({
           viewId: activeViewId,
           ref: selfRef,
+          action: 'move',
           startX: e.clientX,
           startY: e.clientY,
           origX: n.x,
           origY: n.y,
+          origW: w,
+          origH: h,
         });
       }}
       onPointerEnter={() => {

@@ -114,58 +114,95 @@ function sanitizeTaggedValues(raw: unknown): TaggedValue[] | undefined {
 }
 
 function sanitizeModelTaggedValues(model: Model): Model {
-  // Model-level tagged values
+  // Model-level tagged values (v4+: always present, keep empty arrays)
   const m: any = model as any;
   if (Object.prototype.hasOwnProperty.call(m, 'taggedValues')) {
-    m.taggedValues = sanitizeTaggedValues(m.taggedValues);
-  }
-
-  // Folder-level tagged values
-  for (const id of Object.keys(model.folders)) {
-    const f = model.folders[id] as any;
-    if (Object.prototype.hasOwnProperty.call(f, 'taggedValues')) {
-      f.taggedValues = sanitizeTaggedValues(f.taggedValues);
+    const raw = m.taggedValues;
+    if (Array.isArray(raw)) {
+      const s = sanitizeTaggedValues(raw);
+      m.taggedValues = s ?? (raw.length === 0 ? [] : []);
+    } else {
+      // Keep runtime shape predictable for the model object.
+      m.taggedValues = [];
     }
   }
 
+  // Folder-level tagged values (v4+: always present, keep empty arrays)
+  for (const id of Object.keys(model.folders)) {
+    const f = model.folders[id] as any;
+    if (Object.prototype.hasOwnProperty.call(f, 'taggedValues')) {
+      const raw = f.taggedValues;
+      if (Array.isArray(raw)) {
+        const s = sanitizeTaggedValues(raw);
+        f.taggedValues = s ?? (raw.length === 0 ? [] : []);
+      } else {
+        f.taggedValues = [];
+      }
+    }
+  }
+
+  // Elements: optional extensions; keep undefined when empty/invalid.
   for (const id of Object.keys(model.elements)) {
     const el = model.elements[id] as any;
     if (Object.prototype.hasOwnProperty.call(el, 'taggedValues')) {
       el.taggedValues = sanitizeTaggedValues(el.taggedValues);
     }
   }
+
+  // Relationships: factories default to [], preserve empty arrays when present.
   for (const id of Object.keys(model.relationships)) {
     const rel = model.relationships[id] as any;
     if (Object.prototype.hasOwnProperty.call(rel, 'taggedValues')) {
-      rel.taggedValues = sanitizeTaggedValues(rel.taggedValues);
+      const raw = rel.taggedValues;
+      if (Array.isArray(raw)) {
+        const s = sanitizeTaggedValues(raw);
+        rel.taggedValues = s ?? (raw.length === 0 ? [] : undefined);
+      } else {
+        rel.taggedValues = undefined;
+      }
     }
   }
+
+  // Views: optional extensions; keep undefined when empty/invalid.
   for (const id of Object.keys(model.views)) {
     const v = model.views[id] as any;
     if (Object.prototype.hasOwnProperty.call(v, 'taggedValues')) {
       v.taggedValues = sanitizeTaggedValues(v.taggedValues);
     }
   }
+
   return model;
 }
 
+
 function sanitizeModelExternalIds(model: Model): Model {
-  // Model-level external IDs
+  // Model-level external IDs (v4+: always present, keep empty arrays)
   const m: any = model as any;
   if (Object.prototype.hasOwnProperty.call(m, 'externalIds')) {
     const raw = m.externalIds;
-    m.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
+    if (Array.isArray(raw)) {
+      const t = tidyExternalIds(raw);
+      m.externalIds = t ?? (raw.length === 0 ? [] : []);
+    } else {
+      m.externalIds = [];
+    }
   }
 
-  // Folder-level external IDs
+  // Folder-level external IDs (v4+: always present, keep empty arrays)
   for (const id of Object.keys(model.folders)) {
     const f = model.folders[id] as any;
     if (Object.prototype.hasOwnProperty.call(f, 'externalIds')) {
       const raw = f.externalIds;
-      f.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
+      if (Array.isArray(raw)) {
+        const t = tidyExternalIds(raw);
+        f.externalIds = t ?? (raw.length === 0 ? [] : []);
+      } else {
+        f.externalIds = [];
+      }
     }
   }
 
+  // Elements: optional extensions; keep undefined when empty/invalid.
   for (const id of Object.keys(model.elements)) {
     const el = model.elements[id] as any;
     if (Object.prototype.hasOwnProperty.call(el, 'externalIds')) {
@@ -173,13 +210,22 @@ function sanitizeModelExternalIds(model: Model): Model {
       el.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
     }
   }
+
+  // Relationships: factories default to [], preserve empty arrays when present.
   for (const id of Object.keys(model.relationships)) {
     const rel = model.relationships[id] as any;
     if (Object.prototype.hasOwnProperty.call(rel, 'externalIds')) {
       const raw = rel.externalIds;
-      rel.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
+      if (Array.isArray(raw)) {
+        const t = tidyExternalIds(raw);
+        rel.externalIds = t ?? (raw.length === 0 ? [] : undefined);
+      } else {
+        rel.externalIds = undefined;
+      }
     }
   }
+
+  // Views: optional extensions; keep undefined when empty/invalid.
   for (const id of Object.keys(model.views)) {
     const v = model.views[id] as any;
     if (Object.prototype.hasOwnProperty.call(v, 'externalIds')) {
@@ -187,8 +233,10 @@ function sanitizeModelExternalIds(model: Model): Model {
       v.externalIds = Array.isArray(raw) ? tidyExternalIds(raw) : undefined;
     }
   }
+
   return model;
 }
+
 
 function sanitizeModelRelationshipAttrs(model: Model): Model {
   for (const id of Object.keys(model.relationships)) {
@@ -366,11 +414,19 @@ function ensureModelFolderExtensions(model: Model): Model {
   if (!Array.isArray(m.externalIds)) m.externalIds = [];
   if (!Array.isArray(m.taggedValues)) m.taggedValues = [];
 
+  // Connectors (introduced later): keep runtime shape predictable.
+  if (!isRecord((m as any).connectors)) (m as any).connectors = {};
+
   for (const fid of Object.keys(model.folders)) {
     const f: any = model.folders[fid] as any;
     if (!Array.isArray(f.externalIds)) f.externalIds = [];
     if (!Array.isArray(f.taggedValues)) f.taggedValues = [];
+    if (!Array.isArray(f.relationshipIds)) f.relationshipIds = [];
   }
+
+  // Note: Elements and Views may have external IDs / tagged values, but those are optional.
+  // Relationships may also have these, but we preserve the loaded shape (do not force defaults here).
+  // (Factories provide defaults for new objects; older files are sanitized in the passes above.)
   return model;
 }
 

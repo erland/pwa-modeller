@@ -57,8 +57,8 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
     return Object.values(model.relationships).map((r) => {
       return {
         r,
-        source: model.elements[r.sourceElementId] ?? null,
-        target: model.elements[r.targetElementId] ?? null
+        source: r.sourceElementId ? model.elements[r.sourceElementId] ?? null : null,
+        target: r.targetElementId ? model.elements[r.targetElementId] ?? null : null
       };
     });
   }, [model]);

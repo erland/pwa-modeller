@@ -174,7 +174,7 @@ function listDuplicatesInLayout(layout: ViewLayout | undefined): {
   relationshipIds: string[];
 } {
   if (!layout) return { nodeElementIds: [], relationshipIds: [] };
-  const nodeIds = layout.nodes.map((n) => n.elementId);
+  const nodeIds = layout.nodes.flatMap((n) => (n.elementId ? [n.elementId] : []));
   const relIds = layout.relationships.map((r) => r.relationshipId);
   return {
     nodeElementIds: findDuplicateIds(nodeIds),
@@ -219,26 +219,31 @@ for (const folder of Object.values(model.folders)) {
   // Relationship consistency + rules
   // ------------------------------
   for (const rel of Object.values(model.relationships)) {
-    const source = model.elements[rel.sourceElementId];
-    const target = model.elements[rel.targetElementId];
+    const sourceElId = rel.sourceElementId;
+    const targetElId = rel.targetElementId;
 
-    if (!source) {
+    // For now, relationship rules are evaluated only for element-to-element relationships.
+    // Connector endpoints (junctions) will be validated more strictly once connectors are first-class in the UI.
+    const source = sourceElId ? model.elements[sourceElId] : undefined;
+    const target = targetElId ? model.elements[targetElId] : undefined;
+
+    if (sourceElId && !source) {
       issues.push(
         makeIssue(
           'error',
-          `Relationship ${rel.id} references missing source element: ${rel.sourceElementId}`,
+          `Relationship ${rel.id} references missing source element: ${sourceElId}`,
           { kind: 'relationship', relationshipId: rel.id },
-          `rel-missing-source:${rel.id}`
+          `rel-src-missing:${rel.id}`
         )
       );
     }
-    if (!target) {
+    if (targetElId && !target) {
       issues.push(
         makeIssue(
           'error',
-          `Relationship ${rel.id} references missing target element: ${rel.targetElementId}`,
+          `Relationship ${rel.id} references missing target element: ${targetElId}`,
           { kind: 'relationship', relationshipId: rel.id },
-          `rel-missing-target:${rel.id}`
+          `rel-tgt-missing:${rel.id}`
         )
       );
     }
@@ -345,11 +350,12 @@ for (const folder of Object.values(model.folders)) {
 
     if (!layout) continue;
 
-    const nodeElementIds = layout.nodes.map((n) => n.elementId);
+    const nodeElementIds = layout.nodes.flatMap((n) => (n.elementId ? [n.elementId] : []));
     const nodeSet = new Set(nodeElementIds);
 
     // Orphan nodes
     for (const n of layout.nodes) {
+      if (!n.elementId) continue;
       if (!model.elements[n.elementId]) {
         issues.push(
           makeIssue(
@@ -379,7 +385,9 @@ for (const folder of Object.values(model.folders)) {
 
       // If relationship exists but its endpoints are not present in the view nodes,
       // warn (diagram won't be able to render it meaningfully).
-      if (!nodeSet.has(rel.sourceElementId) || !nodeSet.has(rel.targetElementId)) {
+      const srcId = rel.sourceElementId;
+      const tgtId = rel.targetElementId;
+      if (srcId && tgtId && (!nodeSet.has(srcId) || !nodeSet.has(tgtId))) {
         issues.push(
           makeIssue(
             'warning',

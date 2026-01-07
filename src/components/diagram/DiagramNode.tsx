@@ -58,8 +58,8 @@ export function DiagramNode({
         : 'Unknown'
       : el.type;
 
-  const isRelTarget = Boolean(linkDrag && linkDrag.targetElementId === n.elementId && linkDrag.sourceElementId !== n.elementId);
-  const isRelSource = Boolean(linkDrag && linkDrag.sourceElementId === n.elementId);
+  const isRelTarget = Boolean(linkDrag && linkDrag.targetElementId === n.elementId! && linkDrag.sourceElementId !== n.elementId!);
+  const isRelSource = Boolean(linkDrag && linkDrag.sourceElementId === n.elementId!);
 
   return (
     <div
@@ -101,12 +101,12 @@ export function DiagramNode({
       }}
       onPointerEnter={() => {
         if (!linkDrag) return;
-        if (n.elementId === linkDrag.sourceElementId) return;
-        onHoverAsRelationshipTarget(n.elementId);
+        if (n.elementId! === linkDrag.sourceElementId) return;
+        onHoverAsRelationshipTarget(n.elementId!);
       }}
       onPointerLeave={() => {
         if (!linkDrag) return;
-        if (linkDrag.targetElementId === n.elementId) onHoverAsRelationshipTarget(null);
+        if (linkDrag.targetElementId === n.elementId!) onHoverAsRelationshipTarget(null);
       }}
     >
       {/* Node content (label offsets apply here, not to the handle) */}

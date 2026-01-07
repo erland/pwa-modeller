@@ -194,6 +194,17 @@ export interface HasExternalIds {
   externalIds?: ExternalIdRef[];
 }
 
+export type ConnectorType = 'AndJunction' | 'OrJunction';
+
+export interface RelationshipConnector extends HasTaggedValues, HasExternalIds {
+  id: string;
+  type: ConnectorType;
+  /** Optional label; usually empty for junctions. */
+  name?: string;
+  description?: string;
+  documentation?: string;
+}
+
 export interface Element extends HasTaggedValues, HasExternalIds {
   id: string;
   name: string;
@@ -207,8 +218,12 @@ export interface Element extends HasTaggedValues, HasExternalIds {
 
 export interface Relationship extends HasTaggedValues, HasExternalIds {
   id: string;
-  sourceElementId: string;
-  targetElementId: string;
+  /** Exactly one of sourceElementId / sourceConnectorId must be set. */
+  sourceElementId?: string;
+  sourceConnectorId?: string;
+  /** Exactly one of targetElementId / targetConnectorId must be set. */
+  targetElementId?: string;
+  targetConnectorId?: string;
   type: RelationshipType;
   /** Present only when type === 'Unknown'. */
   unknownType?: UnknownTypeInfo;
@@ -228,7 +243,9 @@ export interface Viewpoint {
 
 // Diagram placeholders (layout for nodes and connections; we keep it intentionally simple for now)
 export interface ViewNodeLayout {
-  elementId: string;
+  /** Either elementId or connectorId must be set (exactly one). */
+  elementId?: string;
+  connectorId?: string;
   x: number;
   y: number;
   width: number;
@@ -308,7 +325,8 @@ export interface Model extends HasTaggedValues, HasExternalIds {
   metadata: ModelMetadata;
   elements: Record<string, Element>;
   relationships: Record<string, Relationship>;
-  views: Record<string, View>;
+    connectors?: Record<string, RelationshipConnector>;
+views: Record<string, View>;
   folders: Record<string, Folder>;
   /** Optional schema version for migrations in the future. */
   schemaVersion?: number;

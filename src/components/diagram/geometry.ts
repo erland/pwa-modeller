@@ -27,10 +27,11 @@ export function hitTestNodeId(nodes: ViewNodeLayout[], p: Point, excludeElementI
   // Iterate from end to start so later-rendered nodes win if they overlap.
   for (let i = nodes.length - 1; i >= 0; i -= 1) {
     const n = nodes[i];
+    if (!n.elementId) continue;
     if (excludeElementId && n.elementId === excludeElementId) continue;
     const w = n.width ?? 120;
     const h = n.height ?? 60;
-    if (p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h) return n.elementId;
+    if (p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h) return n.elementId!;
   }
   return null;
 }

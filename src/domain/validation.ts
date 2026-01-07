@@ -17,8 +17,8 @@ export function validateElement(element: Element): ValidationResult {
 export function validateRelationship(rel: Relationship): ValidationResult {
   const errors: string[] = [];
   if (!rel.id) errors.push('Relationship.id is required');
-  if (!rel.sourceElementId) errors.push('Relationship.sourceElementId is required');
-  if (!rel.targetElementId) errors.push('Relationship.targetElementId is required');
+  if (!rel.sourceElementId && !rel.sourceConnectorId) errors.push('Relationship source endpoint is required');
+  if (!rel.targetElementId && !rel.targetConnectorId) errors.push('Relationship target endpoint is required');
   if (!rel.type) errors.push('Relationship.type is required');
   return { ok: errors.length === 0, errors };
 }

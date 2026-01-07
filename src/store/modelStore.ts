@@ -419,7 +419,10 @@ export class ModelStore {
       model.relationships[relationship.id] = relationship;
 
       // Place the relationship in the same folder as the source element (fallback to root).
-      const targetFolderId = findFolderContainingElement(model, relationship.sourceElementId) ?? findFolderIdByKind(model, 'root');
+      const sourceId = relationship.sourceElementId;
+      const targetFolderId = sourceId
+        ? findFolderContainingElement(model, sourceId) ?? findFolderIdByKind(model, 'root')
+        : findFolderIdByKind(model, 'root');
       const folder = getFolder(model, targetFolderId) as any;
       const relIds: string[] = Array.isArray(folder.relationshipIds) ? folder.relationshipIds : [];
       if (!relIds.includes(relationship.id)) {

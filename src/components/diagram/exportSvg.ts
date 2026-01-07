@@ -137,10 +137,10 @@ export function createViewSvg(model: Model, viewId: string): string {
   const view = model.views[viewId];
   if (!view) throw new Error(`View not found: ${viewId}`);
   const nodes = view.layout?.nodes ?? [];
-  const orderedNodes = [...nodes].sort((a, b) => {
+  const orderedNodes = [...nodes].filter((n) => !!n.elementId).sort((a, b) => {
     const za = typeof (a as any).zIndex === 'number' ? (a as any).zIndex : 0;
     const zb = typeof (b as any).zIndex === 'number' ? (b as any).zIndex : 0;
-    return za - zb || a.elementId.localeCompare(b.elementId);
+    return za - zb || a.elementId!.localeCompare(b.elementId!);
   });
 
   const padding = 20;
@@ -152,7 +152,7 @@ export function createViewSvg(model: Model, viewId: string): string {
   const offsetX = -b.minX + padding;
   const offsetY = -b.minY + padding;
 
-  const nodeByElement = new Map(orderedNodes.map((n) => [n.elementId, n] as const));
+  const nodeByElement = new Map(orderedNodes.map((n) => [n.elementId!, n] as const));
 
   // Relationships: draw only if both endpoints are present as nodes in this view.
   type RelItem = {
@@ -166,10 +166,13 @@ export function createViewSvg(model: Model, viewId: string): string {
 
   const relItemsRaw: Array<{ relId: string; aId: string; bId: string }> = [];
   for (const rel of Object.values(model.relationships)) {
-    const s = nodeByElement.get(rel.sourceElementId);
-    const t = nodeByElement.get(rel.targetElementId);
+    const se = rel.sourceElementId;
+    const te = rel.targetElementId;
+    if (!se || !te) continue;
+    const s = nodeByElement.get(se);
+    const t = nodeByElement.get(te);
     if (!s || !t) continue;
-    const a = [rel.sourceElementId, rel.targetElementId].sort();
+    const a = [se, te].sort();
     relItemsRaw.push({ relId: rel.id, aId: a[0], bId: a[1] });
   }
 
@@ -188,8 +191,11 @@ export function createViewSvg(model: Model, viewId: string): string {
       const relId = relIds[i];
       const rel = model.relationships[relId];
       if (!rel) continue;
-      const s0 = nodeByElement.get(rel.sourceElementId);
-      const t0 = nodeByElement.get(rel.targetElementId);
+      const se = rel.sourceElementId;
+      const te = rel.targetElementId;
+      if (!se || !te) continue;
+      const s0 = nodeByElement.get(se);
+      const t0 = nodeByElement.get(te);
       if (!s0 || !t0) continue;
 
       const s: ViewNodeLayout = { ...s0, x: s0.x + offsetX, y: s0.y + offsetY };
@@ -249,7 +255,7 @@ export function createViewSvg(model: Model, viewId: string): string {
 
   const nodesSvg = orderedNodes
     .map((n) => {
-      const el = model.elements[n.elementId];
+      const el = model.elements[n.elementId!];
       if (!el) return '';
       const x = n.x + offsetX;
       const y = n.y + offsetY;

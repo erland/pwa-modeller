@@ -1,5 +1,5 @@
 import { createId } from './id';
-import type { Element, Relationship, View, Model, ModelMetadata, Folder, FolderKind } from './types';
+import type { Element, Relationship, View, Model, ModelMetadata, Folder, FolderKind, RelationshipConnector } from './types';
 
 function requireNonBlank(value: string, field: string): void {
   if (value.trim().length === 0) {
@@ -26,17 +26,40 @@ export function createElement(input: CreateElementInput): Element {
 
 export type CreateRelationshipInput = Omit<Relationship, 'id'> & { id?: string };
 export function createRelationship(input: CreateRelationshipInput): Relationship {
-  if (!input.sourceElementId) throw new Error('Relationship.sourceElementId is required');
-  if (!input.targetElementId) throw new Error('Relationship.targetElementId is required');
+  const hasSource = !!(input.sourceElementId || input.sourceConnectorId);
+  const hasTarget = !!(input.targetElementId || input.targetConnectorId);
+  if (!hasSource) throw new Error('Relationship source endpoint is required');
+  if (!hasTarget) throw new Error('Relationship target endpoint is required');
   if (!input.type) throw new Error('Relationship.type is required');
 
   return {
     id: input.id ?? createId('rel'),
     sourceElementId: input.sourceElementId,
+    sourceConnectorId: input.sourceConnectorId,
     targetElementId: input.targetElementId,
+    targetConnectorId: input.targetConnectorId,
+    type: input.type,
+    unknownType: input.unknownType,
+    name: input.name?.trim() || undefined,
+    description: input.description?.trim() || undefined,
+    attrs: input.attrs,
+    externalIds: input.externalIds ?? [],
+    taggedValues: input.taggedValues ?? []
+  };
+}
+
+export type CreateConnectorInput = Omit<RelationshipConnector, 'id'> & { id?: string };
+export function createConnector(input: CreateConnectorInput): RelationshipConnector {
+  if (!input.type) throw new Error('RelationshipConnector.type is required');
+
+  return {
+    id: input.id ?? createId('conn'),
     type: input.type,
     name: input.name?.trim() || undefined,
-    description: input.description?.trim() || undefined
+    description: input.description?.trim() || undefined,
+    documentation: input.documentation?.trim() || undefined,
+    externalIds: input.externalIds ?? [],
+    taggedValues: input.taggedValues ?? []
   };
 }
 
@@ -95,6 +118,7 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     taggedValues: [],
     elements: {},
     relationships: {},
+    connectors: {},
     views: {},
     folders: {
       [root.id]: root

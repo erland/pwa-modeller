@@ -25,8 +25,10 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
     .filter(Boolean)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
-  const sourceName = model.elements[rel.sourceElementId]?.name ?? rel.sourceElementId;
-  const targetName = model.elements[rel.targetElementId]?.name ?? rel.targetElementId;
+  const sourceId = rel.sourceElementId ?? rel.sourceConnectorId ?? '';
+  const targetId = rel.targetElementId ?? rel.targetConnectorId ?? '';
+  const sourceName = (rel.sourceElementId ? model.elements[rel.sourceElementId]?.name : undefined) ?? sourceId;
+  const targetName = (rel.targetElementId ? model.elements[rel.targetElementId]?.name : undefined) ?? targetId;
 
   const elementOptionLabel = (e: any): string => {
     const typeLabel =
@@ -162,7 +164,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
             <select
               className="selectInput"
               aria-label="Relationship property source"
-              value={rel.sourceElementId}
+              value={rel.sourceElementId ?? ''}
               onChange={(e) => actions.updateRelationship(rel.id, { sourceElementId: e.target.value })}
             >
               {elementOptions.map((e) => (
@@ -181,7 +183,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
             <select
               className="selectInput"
               aria-label="Relationship property target"
-              value={rel.targetElementId}
+              value={rel.targetElementId ?? ''}
               onChange={(e) => actions.updateRelationship(rel.id, { targetElementId: e.target.value })}
             >
               {elementOptions.map((e) => (

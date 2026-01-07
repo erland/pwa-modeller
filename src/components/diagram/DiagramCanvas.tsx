@@ -317,9 +317,9 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     if (!model || !activeView) return [] as string[];
     const explicit = activeView.layout?.relationships ?? [];
     if (explicit.length > 0) return explicit.map((r) => r.relationshipId);
-    const nodeSet = new Set(nodes.map((n) => n.elementId));
+    const nodeSet = new Set(nodes.flatMap((n) => (n.elementId ? [n.elementId] : [])));
     return Object.values(model.relationships)
-      .filter((r) => nodeSet.has(r.sourceElementId) && nodeSet.has(r.targetElementId))
+      .filter((r) => !!r.sourceElementId && !!r.targetElementId && nodeSet.has(r.sourceElementId) && nodeSet.has(r.targetElementId))
       .map((r) => r.id);
   }, [model, activeView, nodes]);
 
@@ -348,13 +348,14 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       if (!rel) continue;
       const a = rel.sourceElementId;
       const b = rel.targetElementId;
+      if (!a || !b) continue;
       const key = a < b ? `${a}|${b}` : `${b}|${a}`;
       const list = groups.get(key) ?? [];
       list.push(relId);
       groups.set(key, list);
     }
 
-    const byElementId = new Map(nodes.map((n) => [n.elementId, n] as const));
+    const byElementId = new Map(nodes.filter((n) => !!n.elementId).map((n) => [n.elementId!, n] as const));
 
     const items: RelRenderItem[] = [];
     for (const [groupKey, relIds] of groups.entries()) {
@@ -364,8 +365,11 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
         const relId = stable[i];
         const rel = model.relationships[relId];
         if (!rel) continue;
-        const s = byElementId.get(rel.sourceElementId);
-        const t = byElementId.get(rel.targetElementId);
+        const se = rel.sourceElementId;
+        const te = rel.targetElementId;
+        if (!se || !te) continue;
+        const s = byElementId.get(se);
+        const t = byElementId.get(te);
         if (!s || !t) continue;
         items.push({ relId, source: s, target: t, indexInGroup: i, totalInGroup: stable.length, groupKey });
       }
@@ -609,18 +613,18 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
 
                 {nodes.map((n) => {
-                  const el = model.elements[n.elementId];
+                  const el = n.elementId ? model.elements[n.elementId] : undefined;
                   if (!el) return null;
 
                   const layer = ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business';
                   const bgVar = LAYER_BG_VAR[layer];
 
                   const isSelected =
-                    selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId;
+                    selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId!;
 
                   return (
                     <DiagramNode
-                      key={`${activeView.id}:${n.elementId}`}
+                      key={`${activeView.id}:${n.elementId ?? n.connectorId ?? 'unknown'}`}
                       node={n}
                       element={el}
                       activeViewId={activeView.id}

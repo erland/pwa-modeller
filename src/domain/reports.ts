@@ -97,14 +97,16 @@ export function generateViewInventoryReport(model: Model): ViewInventoryRow[] {
 export function generateRelationshipReport(model: Model): RelationshipReportRow[] {
   return Object.values(model.relationships)
     .map((r) => {
-      const src = model.elements[r.sourceElementId];
-      const tgt = model.elements[r.targetElementId];
+      const srcId = r.sourceElementId ?? r.sourceConnectorId;
+      const tgtId = r.targetElementId ?? r.targetConnectorId;
+      const src = r.sourceElementId ? model.elements[r.sourceElementId] : undefined;
+      const tgt = r.targetElementId ? model.elements[r.targetElementId] : undefined;
       return {
         id: r.id,
         name: r.name ?? '',
         type: r.type,
-        source: src?.name || r.sourceElementId,
-        target: tgt?.name || r.targetElementId,
+        source: src?.name || srcId || '',
+        target: tgt?.name || tgtId || '',
         description: r.description ?? ''
       };
     })

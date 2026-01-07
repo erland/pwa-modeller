@@ -233,7 +233,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               ) : (
                 <div style={{ display: 'grid', gap: 6 }}>
                   {outgoing.map((r) => {
-                    const targetName = getElementLabel(model, r.targetElementId);
+                    const targetName = getElementLabel(model, r.targetElementId!);
                     const relLabel = `${relationshipTypeLabel(r)}${r.name ? ` — ${r.name}` : ''}`;
                     return (
                       <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -250,7 +250,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                           type="button"
                           className="miniButton"
                           aria-label={`Select target element ${targetName}`}
-                          onClick={() => onSelect?.({ kind: 'element', elementId: r.targetElementId })}
+                          onClick={() => onSelect?.({ kind: 'element', elementId: r.targetElementId! })}
                         >
                           {targetName}
                         </button>
@@ -270,7 +270,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               ) : (
                 <div style={{ display: 'grid', gap: 6 }}>
                   {incoming.map((r) => {
-                    const sourceName = getElementLabel(model, r.sourceElementId);
+                    const sourceName = getElementLabel(model, r.sourceElementId!);
                     const relLabel = `${relationshipTypeLabel(r)}${r.name ? ` — ${r.name}` : ''}`;
                     return (
                       <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -278,7 +278,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                           type="button"
                           className="miniButton"
                           aria-label={`Select source element ${sourceName}`}
-                          onClick={() => onSelect?.({ kind: 'element', elementId: r.sourceElementId })}
+                          onClick={() => onSelect?.({ kind: 'element', elementId: r.sourceElementId! })}
                         >
                           {sourceName}
                         </button>

@@ -18,20 +18,52 @@ export const ARCHIMATE_LAYERS: ArchimateLayer[] = [
 ];
 
 export const ELEMENT_TYPES_BY_LAYER: Record<ArchimateLayer, ElementType[]> = {
-  Strategy: ['Capability', 'CourseOfAction', 'Resource', 'Outcome'],
-  Motivation: ['Goal', 'Requirement'],
+  Strategy: ['Capability', 'CourseOfAction', 'Resource', 'Outcome', 'ValueStream'],
+  Motivation: ['Stakeholder', 'Driver', 'Assessment', 'Constraint', 'Principle', 'Value', 'Meaning', 'Goal', 'Requirement'],
   Business: [
     'BusinessActor',
     'BusinessRole',
+    'BusinessCollaboration',
+    'BusinessInterface',
     'BusinessProcess',
     'BusinessFunction',
+    'BusinessInteraction',
+    'BusinessEvent',
     'BusinessService',
-    'Product'
+    'BusinessObject',
+    'Contract',
+    'Representation',
+    'Product',
+    'Grouping'
   ],
-  Application: ['ApplicationComponent', 'ApplicationFunction', 'ApplicationService', 'DataObject'],
-  Technology: ['Node', 'Device', 'SystemSoftware', 'TechnologyService', 'Artifact'],
-  Physical: ['Facility', 'Equipment'],
-  ImplementationMigration: ['WorkPackage', 'Deliverable', 'Plateau', 'Gap']
+  Application: [
+    'ApplicationComponent',
+    'ApplicationCollaboration',
+    'ApplicationInterface',
+    'ApplicationProcess',
+    'ApplicationFunction',
+    'ApplicationInteraction',
+    'ApplicationEvent',
+    'ApplicationService',
+    'DataObject'
+  ],
+  Technology: [
+    'Node',
+    'Device',
+    'SystemSoftware',
+    'TechnologyCollaboration',
+    'TechnologyInterface',
+    'TechnologyProcess',
+    'TechnologyFunction',
+    'TechnologyInteraction',
+    'TechnologyEvent',
+    'TechnologyService',
+    'Path',
+    'CommunicationNetwork',
+    'Artifact'
+  ],
+  Physical: ['Facility', 'Equipment', 'DistributionNetwork', 'Material', 'Location'],
+  ImplementationMigration: ['WorkPackage', 'ImplementationEvent', 'Deliverable', 'Plateau', 'Gap']
 };
 
 export const RELATIONSHIP_TYPES: RelationshipType[] = [
@@ -53,14 +85,14 @@ export const RELATIONSHIP_TYPES: RelationshipType[] = [
 // ------------------------------
 
 const SERVICE_TYPES: Set<ElementType> = new Set(['BusinessService', 'ApplicationService', 'TechnologyService']);
-const DATA_TYPES: Set<ElementType> = new Set(['DataObject', 'Artifact']);
+const DATA_TYPES: Set<ElementType> = new Set(['DataObject', 'Artifact', 'BusinessObject', 'Representation', 'Contract', 'Material']);
 
-const BUSINESS_BEHAVIOR: Set<ElementType> = new Set(['BusinessProcess', 'BusinessFunction']);
-const APPLICATION_BEHAVIOR: Set<ElementType> = new Set(['ApplicationFunction']);
+const BUSINESS_BEHAVIOR: Set<ElementType> = new Set(['BusinessProcess', 'BusinessFunction', 'BusinessInteraction', 'BusinessEvent']);
+const APPLICATION_BEHAVIOR: Set<ElementType> = new Set(['ApplicationProcess', 'ApplicationFunction', 'ApplicationInteraction', 'ApplicationEvent']);
 
-const BUSINESS_ACTIVE: Set<ElementType> = new Set(['BusinessActor', 'BusinessRole']);
-const APPLICATION_ACTIVE: Set<ElementType> = new Set(['ApplicationComponent']);
-const TECHNOLOGY_ACTIVE: Set<ElementType> = new Set(['Node', 'Device', 'SystemSoftware']);
+const BUSINESS_ACTIVE: Set<ElementType> = new Set(['BusinessActor', 'BusinessRole', 'BusinessCollaboration', 'BusinessInterface']);
+const APPLICATION_ACTIVE: Set<ElementType> = new Set(['ApplicationComponent', 'ApplicationCollaboration', 'ApplicationInterface']);
+const TECHNOLOGY_ACTIVE: Set<ElementType> = new Set(['Node', 'Device', 'SystemSoftware', 'TechnologyCollaboration', 'TechnologyInterface', 'Path', 'CommunicationNetwork']);
 
 const IMPLEMENTATION_ACTIVE: Set<ElementType> = new Set(['WorkPackage']);
 
@@ -130,7 +162,10 @@ export function validateRelationship(
     const accessors = new Set<ElementType>([
       ...Array.from(BUSINESS_BEHAVIOR),
       ...Array.from(APPLICATION_BEHAVIOR),
-      ...Array.from(APPLICATION_ACTIVE)
+      ...Array.from(APPLICATION_ACTIVE),
+      ...Array.from(BUSINESS_ACTIVE),
+      ...Array.from(TECHNOLOGY_ACTIVE),
+      ...Array.from(IMPLEMENTATION_ACTIVE)
     ]);
     if (!accessors.has(sourceType) || !DATA_TYPES.has(targetType)) {
       return { allowed: false, reason: 'Access is only allowed from behavior/active elements to data objects/artifacts.' };
@@ -143,7 +178,9 @@ export function validateRelationship(
     const behaviorish = new Set<ElementType>([
       ...Array.from(BUSINESS_BEHAVIOR),
       ...Array.from(APPLICATION_BEHAVIOR),
-      'WorkPackage'
+      'WorkPackage',
+      'ImplementationEvent',
+      'ValueStream'
     ]);
     if (!behaviorish.has(sourceType) || !behaviorish.has(targetType)) {
       return { allowed: false, reason: 'Triggering is only allowed between behavior-like elements (minimal rule set).' };
@@ -166,7 +203,7 @@ export function validateRelationship(
   }
 
   if (relationshipType === 'Influence') {
-    const influencers = new Set<ElementType>(['Goal', 'Requirement', 'Outcome', 'CourseOfAction']);
+    const influencers = new Set<ElementType>(['Stakeholder', 'Driver', 'Assessment', 'Constraint', 'Principle', 'Value', 'Meaning', 'Goal', 'Requirement', 'Outcome', 'CourseOfAction', 'ValueStream']);
     if (!influencers.has(sourceType)) {
       return { allowed: false, reason: 'Influence must originate from a motivation/strategy element (minimal rule set).' };
     }

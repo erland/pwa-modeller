@@ -24,38 +24,74 @@ export interface UnknownTypeInfo {
 
 // NOTE: This is a pragmatic subset to start with. Add more as needed.
 export type KnownElementType =
-  // Strategy / Motivation
+  // Strategy
   | 'Capability'
   | 'CourseOfAction'
   | 'Resource'
   | 'Outcome'
+  | 'ValueStream'
+  // Motivation
+  | 'Stakeholder'
+  | 'Driver'
+  | 'Assessment'
+  | 'Constraint'
+  | 'Principle'
+  | 'Value'
+  | 'Meaning'
   | 'Goal'
   | 'Requirement'
   // Business
   | 'BusinessActor'
   | 'BusinessRole'
+  | 'BusinessCollaboration'
+  | 'BusinessInterface'
   | 'BusinessProcess'
   | 'BusinessFunction'
+  | 'BusinessInteraction'
+  | 'BusinessEvent'
   | 'BusinessService'
+  | 'BusinessObject'
+  | 'Contract'
+  | 'Representation'
   | 'Product'
   // Application
   | 'ApplicationComponent'
+  | 'ApplicationCollaboration'
+  | 'ApplicationInterface'
+  | 'ApplicationProcess'
   | 'ApplicationFunction'
+  | 'ApplicationInteraction'
+  | 'ApplicationEvent'
   | 'ApplicationService'
   | 'DataObject'
-  // Technology / Physical
+  // Technology
   | 'Node'
   | 'Device'
   | 'SystemSoftware'
+  | 'TechnologyCollaboration'
+  | 'TechnologyInterface'
+  | 'TechnologyProcess'
+  | 'TechnologyFunction'
+  | 'TechnologyInteraction'
+  | 'TechnologyEvent'
   | 'TechnologyService'
+  | 'Path'
+  | 'CommunicationNetwork'
   | 'Artifact'
+  // Physical
   | 'Facility'
   | 'Equipment'
+  | 'DistributionNetwork'
+  | 'Material'
   // Implementation & Migration
   | 'WorkPackage'
+  | 'ImplementationEvent'
   | 'Deliverable'
   | 'Plateau'
-  | 'Gap';
+  | 'Gap'
+  // Composite (cross-layer)
+  | 'Location'
+  | 'Grouping';
 
 export type ElementType = KnownElementType | 'Unknown';
 

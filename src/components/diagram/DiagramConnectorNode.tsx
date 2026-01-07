@@ -68,8 +68,7 @@ export function DiagramConnectorNode({
       title={c.type}
       onClick={() => {
         if (linkDrag) return;
-        // No dedicated connector selection UI yet; selecting the view keeps focus on the diagram.
-        onSelect({ kind: 'view', viewId: activeViewId });
+        onSelect({ kind: 'connector', connectorId: c.id });
       }}
       onPointerDown={(e) => {
         if (linkDrag) return;

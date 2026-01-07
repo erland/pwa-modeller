@@ -233,7 +233,21 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               ) : (
                 <div style={{ display: 'grid', gap: 6 }}>
                   {outgoing.map((r) => {
-                    const targetName = getElementLabel(model, r.targetElementId!);
+                    const targetSelection: Selection | null = r.targetElementId
+                      ? { kind: 'element', elementId: r.targetElementId }
+                      : r.targetConnectorId
+                        ? { kind: 'connector', connectorId: r.targetConnectorId }
+                        : null;
+
+                    const targetName = r.targetElementId
+                      ? getElementLabel(model, r.targetElementId)
+                      : r.targetConnectorId
+                        ? (() => {
+                            const c = model.connectors?.[r.targetConnectorId];
+                            const typeLabel = c?.type ?? 'Connector';
+                            return c?.name ? `${c.name} (${typeLabel})` : typeLabel;
+                          })()
+                        : '(missing endpoint)';
                     const relLabel = `${relationshipTypeLabel(r)}${r.name ? ` — ${r.name}` : ''}`;
                     return (
                       <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -246,14 +260,18 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                           {relLabel}
                         </button>
                         <span style={{ opacity: 0.7 }}>→</span>
-                        <button
-                          type="button"
-                          className="miniButton"
-                          aria-label={`Select target element ${targetName}`}
-                          onClick={() => onSelect?.({ kind: 'element', elementId: r.targetElementId! })}
-                        >
-                          {targetName}
-                        </button>
+                        {targetSelection ? (
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Select target ${targetName}`}
+                            onClick={() => onSelect?.(targetSelection)}
+                          >
+                            {targetName}
+                          </button>
+                        ) : (
+                          <span style={{ opacity: 0.8 }}>{targetName}</span>
+                        )}
                       </div>
                     );
                   })}
@@ -270,18 +288,36 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               ) : (
                 <div style={{ display: 'grid', gap: 6 }}>
                   {incoming.map((r) => {
-                    const sourceName = getElementLabel(model, r.sourceElementId!);
+                    const sourceSelection: Selection | null = r.sourceElementId
+                      ? { kind: 'element', elementId: r.sourceElementId }
+                      : r.sourceConnectorId
+                        ? { kind: 'connector', connectorId: r.sourceConnectorId }
+                        : null;
+
+                    const sourceName = r.sourceElementId
+                      ? getElementLabel(model, r.sourceElementId)
+                      : r.sourceConnectorId
+                        ? (() => {
+                            const c = model.connectors?.[r.sourceConnectorId];
+                            const typeLabel = c?.type ?? 'Connector';
+                            return c?.name ? `${c.name} (${typeLabel})` : typeLabel;
+                          })()
+                        : '(missing endpoint)';
                     const relLabel = `${relationshipTypeLabel(r)}${r.name ? ` — ${r.name}` : ''}`;
                     return (
                       <div key={r.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          className="miniButton"
-                          aria-label={`Select source element ${sourceName}`}
-                          onClick={() => onSelect?.({ kind: 'element', elementId: r.sourceElementId! })}
-                        >
-                          {sourceName}
-                        </button>
+                        {sourceSelection ? (
+                          <button
+                            type="button"
+                            className="miniButton"
+                            aria-label={`Select source ${sourceName}`}
+                            onClick={() => onSelect?.(sourceSelection)}
+                          >
+                            {sourceName}
+                          </button>
+                        ) : (
+                          <span style={{ opacity: 0.8 }}>{sourceName}</span>
+                        )}
                         <span style={{ opacity: 0.7 }}>→</span>
                         <button
                           type="button"

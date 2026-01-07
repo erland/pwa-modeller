@@ -27,6 +27,9 @@ export function selectionToKey(selection: Selection): string | null {
     case 'viewNode':
       // In the navigator we highlight the parent view.
       return makeKey('view', selection.viewId);
+    case 'connector':
+      // Connectors are not currently shown in the navigator.
+      return null;
     case 'model':
     default:
       return null;

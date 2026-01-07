@@ -510,9 +510,15 @@ export class ModelStore {
   deleteConnector = (connectorId: string): void => {
     this.updateModel((model) => {
       if (!model.connectors?.[connectorId]) return;
-      const next = { ...(model.connectors ?? {}) };
-      delete next[connectorId];
-      model.connectors = next;
+      // Delete any relationships connected to this connector. Keeping them would violate
+      // the Step 4 endpoint invariants and doesn't make sense semantically.
+      const relIdsToDelete = Object.keys(model.relationships).filter((relId) => {
+        const rel = model.relationships[relId];
+        return rel.sourceConnectorId === connectorId || rel.targetConnectorId === connectorId;
+      });
+      for (const relId of relIdsToDelete) {
+        deleteRelationshipInModel(model, relId);
+      }
 
       // Remove connector nodes from all views.
       for (const viewId of Object.keys(model.views)) {
@@ -524,17 +530,10 @@ export class ModelStore {
         }
       }
 
-      // Clear relationship endpoints that reference the deleted connector.
-      for (const relId of Object.keys(model.relationships)) {
-        const rel = model.relationships[relId];
-        if (rel.sourceConnectorId === connectorId || rel.targetConnectorId === connectorId) {
-          model.relationships[relId] = {
-            ...rel,
-            sourceConnectorId: rel.sourceConnectorId === connectorId ? undefined : rel.sourceConnectorId,
-            targetConnectorId: rel.targetConnectorId === connectorId ? undefined : rel.targetConnectorId,
-          };
-        }
-      }
+      // Finally remove the connector itself.
+      const next = { ...(model.connectors ?? {}) };
+      delete next[connectorId];
+      model.connectors = next;
     });
   };
 

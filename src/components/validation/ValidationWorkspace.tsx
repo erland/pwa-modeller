@@ -60,8 +60,7 @@ export function ValidationWorkspace({ onSelect, onGoToDiagram }: Props) {
         onSelect({ kind: 'element', elementId: issue.target.elementId });
         break;
       case 'connector':
-        // Connector selection is not yet a first-class UI target; fall back to model.
-        onSelect({ kind: 'model' });
+        onSelect({ kind: 'connector', connectorId: issue.target.connectorId });
         break;
       case 'relationship':
         onSelect({ kind: 'relationship', relationshipId: issue.target.relationshipId });

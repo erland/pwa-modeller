@@ -1,6 +1,7 @@
 import type {
   Element,
   Folder,
+  RelationshipConnector,
   Relationship,
   RelationshipType,
   View,
@@ -21,6 +22,9 @@ export type ModelActions = {
 
   updateRelationship: (relationshipId: string, patch: Partial<Relationship> & { type?: RelationshipType }) => void;
   deleteRelationship: (relationshipId: string) => void;
+
+  updateConnector: (connectorId: string, patch: Partial<Omit<RelationshipConnector, 'id'>>) => void;
+  deleteConnector: (connectorId: string) => void;
 
   updateView: (viewId: string, patch: Partial<View>) => void;
   moveViewToFolder: (viewId: string, folderId: string) => void;

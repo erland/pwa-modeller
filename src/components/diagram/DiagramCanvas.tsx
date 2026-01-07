@@ -752,13 +752,14 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   if (n.connectorId) {
                     const conn = model.connectors?.[n.connectorId];
                     if (!conn) return null;
+                    const isSelected = selection.kind === 'connector' && selection.connectorId === n.connectorId;
                     return (
                       <DiagramConnectorNode
                         key={`${activeView.id}:${n.connectorId}`}
                         node={n}
                         connector={conn}
                         activeViewId={activeView.id}
-                        isSelected={false}
+                        isSelected={isSelected}
                         linkDrag={linkDrag}
                         onSelect={onSelect}
                         onBeginNodeDrag={(state) => {

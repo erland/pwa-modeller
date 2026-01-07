@@ -1,4 +1,4 @@
-import { createEmptyModel, createElement } from '../factories';
+import { createConnector, createEmptyModel, createElement } from '../factories';
 import { validateElement, validateModelIdsUnique } from '../validation';
 
 describe('domain validation', () => {
@@ -25,6 +25,15 @@ describe('domain validation', () => {
       layer: 'Business',
       type: 'BusinessActor'
     });
+
+    const res = validateModelIdsUnique(model);
+    expect(res.ok).toBe(false);
+    expect(res.duplicates).toEqual(expect.arrayContaining(['same']));
+  });
+
+  test('validateModelIdsUnique includes connectors in duplicate detection', () => {
+    const model = createEmptyModel({ name: 'Dupes' }, 'same');
+    model.connectors['same'] = createConnector({ id: 'same', type: 'AndJunction' });
 
     const res = validateModelIdsUnique(model);
     expect(res.ok).toBe(false);

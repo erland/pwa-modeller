@@ -1,4 +1,4 @@
-import { createEmptyModel, createElement, createRelationship, createView } from '../../domain/factories';
+import { createConnector, createEmptyModel, createElement, createRelationship, createView } from '../../domain/factories';
 import { deserializeModel, serializeModel } from '../persistence';
 import { stripUndefinedDeep } from '../../test/stripUndefinedDeep';
 
@@ -22,6 +22,55 @@ describe('persistence', () => {
 
     expect(stripUndefinedDeep(parsed)).toEqual(stripUndefinedDeep(model));
   });
+
+  test('serializeModel + deserializeModel round-trip preserves connectors and connector endpoints', () => {
+    const model = createEmptyModel({ name: 'Connectors', description: 'desc' });
+
+    const a = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    const b = createElement({ name: 'B', layer: 'Application', type: 'ApplicationComponent' });
+    model.elements[a.id] = a;
+    model.elements[b.id] = b;
+
+    const and = createConnector({ type: 'AndJunction' });
+    model.connectors[and.id] = and;
+
+    const r1 = createRelationship({ sourceElementId: a.id, targetConnectorId: and.id, type: 'Flow' });
+    const r2 = createRelationship({ sourceConnectorId: and.id, targetElementId: b.id, type: 'Flow' });
+    model.relationships[r1.id] = r1;
+    model.relationships[r2.id] = r2;
+
+    const view = createView({
+      name: 'Main',
+      viewpointId: 'layered',
+      layout: {
+        nodes: [
+          { elementId: a.id, x: 0, y: 0, w: 120, h: 70, zIndex: 0 },
+          { connectorId: and.id, x: 200, y: 20, w: 20, h: 20, zIndex: 1 },
+          { elementId: b.id, x: 300, y: 0, w: 120, h: 70, zIndex: 2 }
+        ],
+        relationships: [
+          { relationshipId: r1.id, points: [], zIndex: 0 },
+          { relationshipId: r2.id, points: [], zIndex: 1 }
+        ]
+      }
+    });
+    model.views[view.id] = view;
+
+    const parsed = deserializeModel(serializeModel(model));
+    expect(stripUndefinedDeep(parsed)).toEqual(stripUndefinedDeep(model));
+  });
+
+  test('deserializeModel migrates v4 models by adding connectors container', () => {
+    const modelV4 = createEmptyModel({ name: 'Legacy v4' }) as any;
+    // Force a v4-like shape: remove connectors and downgrade schemaVersion.
+    delete modelV4.connectors;
+    modelV4.schemaVersion = 4;
+
+    const parsed = deserializeModel(serializeModel(modelV4));
+    expect(parsed.schemaVersion).toBe(5);
+    expect(parsed.connectors).toEqual({});
+  });
+
   test('deserializeModel migrates v1 models by removing legacy Elements/Views root folders', () => {
     // Minimal v1-like model structure (as produced by older createEmptyModel()).
     const modelV1 = createEmptyModel({ name: 'Legacy' }) as any;
@@ -79,6 +128,16 @@ describe('persistence', () => {
     expect(root).toBeTruthy();
     expect(root!.elementIds).toContain(a.id);
     expect(root!.viewIds).toContain(view.id);
+  });
+
+  test('deserializeModel migrates v4 models by adding connectors container', () => {
+    const modelV4 = createEmptyModel({ name: 'Legacy v4' }) as any;
+    modelV4.schemaVersion = 4;
+    delete modelV4.connectors;
+
+    const parsed = deserializeModel(serializeModel(modelV4));
+    expect(parsed.schemaVersion).toBe(5);
+    expect(parsed.connectors).toEqual({});
   });
 
 

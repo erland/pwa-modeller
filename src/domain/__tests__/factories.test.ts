@@ -1,4 +1,4 @@
-import { createElement, createRelationship, createEmptyModel } from '../factories';
+import { createConnector, createElement, createRelationship, createEmptyModel } from '../factories';
 
 describe('domain factories', () => {
   test('createElement creates an element with generated id and trimmed fields', () => {
@@ -36,6 +36,50 @@ describe('domain factories', () => {
 
     expect(rel.id).toMatch(/^rel_/);
     expect(rel.name).toBe('relates');
+  });
+
+  test('createRelationship supports connector endpoints', () => {
+    const rel = createRelationship({
+      sourceConnectorId: 'conn_1',
+      targetElementId: 'el_2',
+      type: 'Flow'
+    });
+
+    expect(rel.id).toMatch(/^rel_/);
+    expect(rel.sourceConnectorId).toBe('conn_1');
+    expect(rel.targetElementId).toBe('el_2');
+  });
+
+  test('createRelationship enforces that endpoints are present', () => {
+    expect(() =>
+      createRelationship({
+        // no endpoints
+        type: 'Association'
+      } as any)
+    ).toThrow(/source endpoint is required/i);
+
+    expect(() =>
+      createRelationship({
+        sourceElementId: 'el_1',
+        // missing target
+        type: 'Association'
+      } as any)
+    ).toThrow(/target endpoint is required/i);
+  });
+
+  test('createConnector creates a connector with generated id and trimmed fields', () => {
+    const c = createConnector({
+      type: 'AndJunction',
+      name: '  AND  ',
+      documentation: '  docs  '
+    });
+
+    expect(c.id).toMatch(/^conn_/);
+    expect(c.type).toBe('AndJunction');
+    expect(c.name).toBe('AND');
+    expect(c.documentation).toBe('docs');
+    expect(c.externalIds).toEqual([]);
+    expect(c.taggedValues).toEqual([]);
   });
 
   test('createEmptyModel creates a single root folder (v2+)', () => {

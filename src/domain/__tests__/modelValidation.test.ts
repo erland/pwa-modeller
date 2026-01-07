@@ -1,4 +1,4 @@
-import { createElement, createEmptyModel, createRelationship } from '../factories';
+import { createConnector, createElement, createEmptyModel, createRelationship, createView } from '../factories';
 import { validateModel } from '../modelValidation';
 
 describe('validateModel', () => {
@@ -16,6 +16,36 @@ describe('validateModel', () => {
 
     const issues = validateModel(model);
     expect(issues.some((i) => i.message.includes('missing source element'))).toBe(true);
+  });
+
+  it('reports relationships that violate endpoint XOR invariants', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    model.elements[el.id] = el;
+    const c = createConnector({ type: 'AndJunction' });
+    model.connectors[c.id] = c;
+
+    // Force an invalid relationship: both sourceElementId and sourceConnectorId are set.
+    const rel = createRelationship({ sourceElementId: el.id, targetElementId: el.id, type: 'Association' }) as any;
+    rel.sourceConnectorId = c.id;
+    model.relationships[rel.id] = rel;
+
+    const issues = validateModel(model);
+    expect(
+      issues.some((i) => i.message.includes('must have exactly one source endpoint'))
+    ).toBe(true);
+  });
+
+  it('reports relationships that reference missing connectors', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    model.elements[el.id] = el;
+
+    const rel = createRelationship({ sourceConnectorId: 'missing_conn', targetElementId: el.id, type: 'Flow' });
+    model.relationships[rel.id] = rel;
+
+    const issues = validateModel(model);
+    expect(issues.some((i) => i.message.includes('missing source connector'))).toBe(true);
   });
 
   it('reports invalid ArchiMate structural combinations', () => {
@@ -45,6 +75,32 @@ describe('validateModel', () => {
 
     const issues = validateModel(model);
     expect(issues.some((i) => i.message.includes(`Duplicate id detected in model: ${model.id}`))).toBe(true);
+  });
+
+  it('reports invalid view node layout entries (elementId/connectorId XOR)', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    model.elements[el.id] = el;
+    const c = createConnector({ type: 'OrJunction' });
+    model.connectors[c.id] = c;
+
+    const view = createView({
+      name: 'V',
+      viewpointId: 'layered',
+      layout: {
+        nodes: [
+          // Invalid: has BOTH ids
+          { elementId: el.id, connectorId: c.id, x: 0, y: 0, w: 100, h: 60, zIndex: 0 } as any,
+          // Invalid: has NEITHER id
+          { x: 10, y: 10, w: 10, h: 10, zIndex: 1 } as any
+        ],
+        relationships: []
+      }
+    });
+    model.views[view.id] = view;
+
+    const issues = validateModel(model);
+    expect(issues.some((i) => i.message.includes('invalid node layout entry'))).toBe(true);
   });
 
 it('reports invalid externalIds/taggedValues on folders and model', () => {

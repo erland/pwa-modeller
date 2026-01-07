@@ -17,8 +17,13 @@ export function validateElement(element: Element): ValidationResult {
 export function validateRelationship(rel: Relationship): ValidationResult {
   const errors: string[] = [];
   if (!rel.id) errors.push('Relationship.id is required');
-  if (!rel.sourceElementId && !rel.sourceConnectorId) errors.push('Relationship source endpoint is required');
-  if (!rel.targetElementId && !rel.targetConnectorId) errors.push('Relationship target endpoint is required');
+  const hasSrcEl = !!rel.sourceElementId;
+  const hasSrcCo = !!rel.sourceConnectorId;
+  const hasTgtEl = !!rel.targetElementId;
+  const hasTgtCo = !!rel.targetConnectorId;
+
+  if (hasSrcEl === hasSrcCo) errors.push('Relationship must have exactly one source endpoint (element or connector)');
+  if (hasTgtEl === hasTgtCo) errors.push('Relationship must have exactly one target endpoint (element or connector)');
   if (!rel.type) errors.push('Relationship.type is required');
   return { ok: errors.length === 0, errors };
 }
@@ -28,6 +33,7 @@ export function getAllModelIds(model: Model): string[] {
     model.id,
     ...Object.keys(model.elements),
     ...Object.keys(model.relationships),
+    ...Object.keys(model.connectors ?? {}),
     ...Object.keys(model.views),
     ...Object.keys(model.folders)
   ];

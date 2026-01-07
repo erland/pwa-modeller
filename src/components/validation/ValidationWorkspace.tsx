@@ -19,6 +19,8 @@ function describeTarget(issue: ValidationIssue): string {
       return `Folder ${issue.target.folderId}`;
     case 'element':
       return `Element ${issue.target.elementId}`;
+    case 'connector':
+      return `Connector ${issue.target.connectorId}`;
     case 'relationship':
       return `Relationship ${issue.target.relationshipId}`;
     case 'view':
@@ -56,6 +58,10 @@ export function ValidationWorkspace({ onSelect, onGoToDiagram }: Props) {
         break;
       case 'element':
         onSelect({ kind: 'element', elementId: issue.target.elementId });
+        break;
+      case 'connector':
+        // Connector selection is not yet a first-class UI target; fall back to model.
+        onSelect({ kind: 'model' });
         break;
       case 'relationship':
         onSelect({ kind: 'relationship', relationshipId: issue.target.relationshipId });

@@ -7,15 +7,17 @@ import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
 import { Dialog } from '../dialog/Dialog';
 import { createViewSvg } from './exportSvg';
-import { ArchimateSymbol } from './archimateSymbols';
+import type { Point } from './geometry';
+import { boundsForNodes, clamp, hitTestNodeId, offsetPolyline, polylineMidPoint, rectEdgeAnchor, unitPerp } from './geometry';
+import { dataTransferHasElement, readDraggedElementId } from './dragDrop';
+import { relationshipVisual } from './relationshipVisual';
+import { RelationshipMarkers } from './RelationshipMarkers';
+import { DiagramNode, type DiagramLinkDrag, type DiagramNodeDragState } from './DiagramNode';
 
 type Props = {
   selection: Selection;
   onSelect: (sel: Selection) => void;
 };
-
-// Drag payload for dragging an element from the tree into a view.
-const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
 
 const ELEMENT_TYPE_TO_LAYER: Partial<Record<ElementType, ArchimateLayer>> = (() => {
   const map: Partial<Record<ElementType, ArchimateLayer>> = {};
@@ -36,173 +38,10 @@ const LAYER_BG_VAR: Record<ArchimateLayer, string> = {
 };
 
 
-function dataTransferHasElement(dt: DataTransfer | null): boolean {
-  if (!dt) return false;
-  const types = Array.from(dt.types ?? []);
-  return types.includes(DND_ELEMENT_MIME) || types.includes('text/plain');
-}
-
-function readDraggedElementId(dt: DataTransfer | null): string | null {
-  if (!dt) return null;
-  const id = dt.getData(DND_ELEMENT_MIME) || dt.getData('text/plain');
-  return id ? String(id) : null;
-}
-
 function sortViews(views: Record<string, View>): View[] {
   return Object.values(views).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function clamp(v: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, v));
-}
-
-type Point = { x: number; y: number };
-
-type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
-
-function boundsForNodes(nodes: ViewNodeLayout[]): Bounds {
-  if (nodes.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (const n of nodes) {
-    minX = Math.min(minX, n.x);
-    minY = Math.min(minY, n.y);
-    maxX = Math.max(maxX, n.x + (n.width ?? 120));
-    maxY = Math.max(maxY, n.y + (n.height ?? 60));
-  }
-  return { minX, minY, maxX, maxY };
-}
-
-function hitTestNodeId(nodes: ViewNodeLayout[], p: Point, excludeElementId: string | null): string | null {
-  // Iterate from end to start so later-rendered nodes win if they overlap.
-  for (let i = nodes.length - 1; i >= 0; i -= 1) {
-    const n = nodes[i];
-    if (excludeElementId && n.elementId === excludeElementId) continue;
-    const w = n.width ?? 120;
-    const h = n.height ?? 60;
-    if (p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h) return n.elementId;
-  }
-  return null;
-}
-
-function rectEdgeAnchor(n: ViewNodeLayout, toward: Point): Point {
-  // Returns a point on the rectangle border of node n in the direction of `toward`.
-  const w = n.width ?? 120;
-  const h = n.height ?? 60;
-  const cx = n.x + w / 2;
-  const cy = n.y + h / 2;
-  const dx = toward.x - cx;
-  const dy = toward.y - cy;
-
-  // If the target is exactly at the center, just return center.
-  if (dx === 0 && dy === 0) return { x: cx, y: cy };
-
-  const adx = Math.abs(dx);
-  const ady = Math.abs(dy);
-  const sx = adx === 0 ? Number.POSITIVE_INFINITY : (w / 2) / adx;
-  const sy = ady === 0 ? Number.POSITIVE_INFINITY : (h / 2) / ady;
-  const s = Math.min(sx, sy);
-  return { x: cx + dx * s, y: cy + dy * s };
-}
-
-function unitPerp(from: Point, to: Point): Point {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const len = Math.hypot(dx, dy);
-  if (!Number.isFinite(len) || len < 1e-6) return { x: 0, y: -1 };
-  // Perpendicular (rotate 90 degrees).
-  return { x: -dy / len, y: dx / len };
-}
-
-function offsetPolyline(points: Point[], perp: Point, offset: number): Point[] {
-  if (offset === 0) return points;
-  return points.map((p) => ({ x: p.x + perp.x * offset, y: p.y + perp.y * offset }));
-}
-
-type RelationshipVisual = {
-  markerStart?: string;
-  markerEnd?: string;
-  dasharray?: string;
-  /** Optional label rendered around the mid point of the polyline. */
-  midLabel?: string;
-};
-
-function relationshipVisual(
-  rel: { type: RelationshipType; attrs?: { isDirected?: boolean; accessType?: string; influenceStrength?: string } },
-  isSelected: boolean
-): RelationshipVisual {
-  const suffix = isSelected ? 'Sel' : '';
-
-  const accessType = (rel.attrs?.accessType ?? '').trim();
-  const influenceStrength = (rel.attrs?.influenceStrength ?? '').trim();
-
-  switch (rel.type) {
-    case 'Association':
-      // ArchiMate 3.1+ supports directed associations.
-      return rel.attrs?.isDirected ? { markerEnd: `url(#arrowOpen${suffix})` } : {};
-    case 'Composition':
-      return { markerStart: `url(#diamondFilled${suffix})` };
-    case 'Aggregation':
-      return { markerStart: `url(#diamondOpen${suffix})` };
-    case 'Specialization':
-      return { markerEnd: `url(#triangleOpen${suffix})` };
-    case 'Realization':
-      return { markerEnd: `url(#triangleOpen${suffix})`, dasharray: '6 5' };
-    case 'Serving':
-      return { markerEnd: `url(#arrowOpen${suffix})`, dasharray: '6 5' };
-    case 'Flow':
-      return { markerEnd: `url(#arrowOpen${suffix})`, dasharray: '6 5' };
-    case 'Triggering':
-      return { markerEnd: `url(#arrowOpen${suffix})` };
-    case 'Assignment':
-      return { markerEnd: `url(#arrowFilled${suffix})` };
-    case 'Access':
-      // Keep the default access visual (open arrow). Optionally show a compact access-mode label.
-      return {
-        markerEnd: `url(#arrowOpen${suffix})`,
-        midLabel:
-          accessType === 'Read'
-            ? 'R'
-            : accessType === 'Write'
-              ? 'W'
-              : accessType === 'ReadWrite'
-                ? 'RW'
-                : undefined,
-      };
-    case 'Influence':
-      return {
-        markerEnd: `url(#arrowOpen${suffix})`,
-        dasharray: '2 4',
-        midLabel: influenceStrength || '±',
-      };
-    default:
-      return { markerEnd: `url(#arrowOpen${suffix})` };
-  }
-}
-
-function polylineMidPoint(points: Point[]): Point {
-  if (points.length === 0) return { x: 0, y: 0 };
-  if (points.length === 1) return points[0];
-  let total = 0;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    total += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
-  }
-  const half = total / 2;
-  let acc = 0;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const a = points[i];
-    const b = points[i + 1];
-    const seg = Math.hypot(b.x - a.x, b.y - a.y);
-    if (acc + seg >= half && seg > 1e-6) {
-      const t = (half - acc) / seg;
-      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-    }
-    acc += seg;
-  }
-  return points[Math.max(0, points.length - 1)];
-}
 
 export function DiagramCanvas({ selection, onSelect }: Props) {
   const model = useModelStore((s) => s.model);
@@ -271,16 +110,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   );
 
   // Relationship "wire" creation (drag from a node handle to another node).
-  const [linkDrag, setLinkDrag] = useState<
-    | {
-        viewId: string;
-        sourceElementId: string;
-        sourcePoint: Point;
-        currentPoint: Point;
-        targetElementId: string | null;
-      }
-    | null
-  >(null);
+  const [linkDrag, setLinkDrag] = useState<DiagramLinkDrag | null>(null);
 
   const [pendingCreateRel, setPendingCreateRel] = useState<
     | {
@@ -409,14 +239,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   }, [activeViewId]);
 
   // Basic drag handling (in model coordinates; convert pointer delta by zoom)
-  const dragRef = useRef<{
-    viewId: string;
-    elementId: string;
-    startX: number;
-    startY: number;
-    origX: number;
-    origY: number;
-  } | null>(null);
+  const dragRef = useRef<DiagramNodeDragState | null>(null);
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
@@ -672,82 +495,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   height={surfaceHeightModel}
                   aria-label="Diagram relationships"
                 >
-                  <defs>
-                    {/* Open arrow (dependency/triggering/flow/serving/access/influence) */}
-                    <marker id="arrowOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                      <path
-                        d="M 0 0 L 10 5 L 0 10"
-                        fill="none"
-                        stroke="var(--diagram-rel-stroke)"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                    </marker>
-                    <marker id="arrowOpenSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                      <path
-                        d="M 0 0 L 10 5 L 0 10"
-                        fill="none"
-                        stroke="var(--diagram-rel-stroke-selected)"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                    </marker>
-
-                    {/* Filled arrow (assignment) */}
-                    <marker id="arrowFilled" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-rel-stroke)" />
-                    </marker>
-                    <marker id="arrowFilledSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-rel-stroke-selected)" />
-                    </marker>
-
-                    {/* Open triangle (realization/specialization) */}
-                    <marker id="triangleOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path
-                        d="M 0 0 L 10 5 L 0 10 z"
-                        fill="none"
-                        stroke="var(--diagram-rel-stroke)"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                    </marker>
-                    <marker id="triangleOpenSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path
-                        d="M 0 0 L 10 5 L 0 10 z"
-                        fill="none"
-                        stroke="var(--diagram-rel-stroke-selected)"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                    </marker>
-
-                    {/* Diamonds (composition/aggregation) at the source side */}
-                    <marker id="diamondOpen" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path
-                        d="M 0 5 L 5 0 L 10 5 L 5 10 z"
-                        fill="none"
-                        stroke="var(--diagram-rel-stroke)"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                    </marker>
-                    <marker id="diamondOpenSel" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path
-                        d="M 0 5 L 5 0 L 10 5 L 5 10 z"
-                        fill="none"
-                        stroke="var(--diagram-rel-stroke-selected)"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                    </marker>
-
-                    <marker id="diamondFilled" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="var(--diagram-rel-stroke)" />
-                    </marker>
-                    <marker id="diamondFilledSel" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="var(--diagram-rel-stroke-selected)" />
-                    </marker>
-                  </defs>
+                  <RelationshipMarkers />
 
                   {relRenderItems.map((item) => {
                     const relId = item.relId;
@@ -864,91 +612,33 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   const el = model.elements[n.elementId];
                   if (!el) return null;
 
-                  const typeLabel =
-                    el.type === 'Unknown'
-                      ? el.unknownType?.name
-                        ? `Unknown: ${el.unknownType.name}`
-                        : 'Unknown'
-                      : el.type;
+                  const layer = ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business';
+                  const bgVar = LAYER_BG_VAR[layer];
 
-                  const isRelTarget = Boolean(linkDrag && linkDrag.targetElementId === n.elementId && linkDrag.sourceElementId !== n.elementId);
-                  const isRelSource = Boolean(linkDrag && linkDrag.sourceElementId === n.elementId);
+                  const isSelected =
+                    selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId;
 
                   return (
-                    <div
-                      key={n.elementId}
-                      className={
-                        'diagramNode' +
-                        (selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId ? ' isSelected' : '') +
-                        (n.highlighted ? ' isHighlighted' : '') +
-                        (isRelTarget ? ' isRelTarget' : '') +
-                        (isRelSource ? ' isRelSource' : '')
-                      }
-                      style={{ left: n.x, top: n.y, width: n.width ?? 120, height: n.height ?? 60, zIndex: (n.zIndex ?? 0) as any, '--diagram-node-bg': LAYER_BG_VAR[ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business'] } as React.CSSProperties}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Diagram node ${el.name || '(unnamed)'}`}
-                      onClick={() => {
-                        if (linkDrag) return;
-                        onSelect({ kind: 'viewNode', viewId: activeView.id, elementId: el.id });
+                    <DiagramNode
+                      key={`${activeView.id}:${n.elementId}`}
+                      node={n}
+                      element={el}
+                      activeViewId={activeView.id}
+                      isSelected={isSelected}
+                      linkDrag={linkDrag}
+                      bgVar={bgVar}
+                      onSelect={onSelect}
+                      onBeginNodeDrag={(state) => {
+                        dragRef.current = state;
                       }}
-                      onPointerDown={(e) => {
-                        if (linkDrag) return;
-                        e.currentTarget.setPointerCapture(e.pointerId);
-                        dragRef.current = { viewId: activeView.id, elementId: el.id, startX: e.clientX, startY: e.clientY, origX: n.x, origY: n.y };
+                      onHoverAsRelationshipTarget={(elementId) => {
+                        setLinkDrag((prev) => (prev ? { ...prev, targetElementId: elementId } : prev));
                       }}
-                      onPointerEnter={() => {
-                        if (!linkDrag) return;
-                        if (n.elementId === linkDrag.sourceElementId) return;
-                        setLinkDrag((prev) => (prev ? { ...prev, targetElementId: n.elementId } : prev));
+                      clientToModelPoint={clientToModelPoint}
+                      onStartLinkDrag={(drag) => {
+                        setLinkDrag(drag);
                       }}
-                      onPointerLeave={() => {
-                        if (!linkDrag) return;
-                        setLinkDrag((prev) => (prev && prev.targetElementId === n.elementId ? { ...prev, targetElementId: null } : prev));
-                      }}
-                    >
-                      {/* Node content (label offsets apply here, not to the handle) */}
-                      <div className="diagramNodeContent" style={n.label ? { transform: `translate(${n.label.dx}px, ${n.label.dy}px)` } : undefined}>
-                      <div className="diagramNodeHeader">
-                        <div className="diagramNodeSymbol" aria-hidden="true">
-                          <ArchimateSymbol
-                            type={el.type}
-                            title={el.type === 'Unknown' ? (el.unknownType?.name ? `Unknown: ${el.unknownType.name}` : 'Unknown') : el.type}
-                          />
-                        </div>
-                        <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
-                      </div>
-                      <div className="diagramNodeMeta">{typeLabel}</div>
-                      {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
-                      </div>
-
-                      {/* Outgoing relationship handle */}
-                      <button
-                        type="button"
-                        className="diagramRelHandle"
-                        aria-label={`Create relationship from ${el.name || '(unnamed)'}`}
-                        title="Drag to another element to create a relationship"
-                        onPointerDown={(e) => {
-                          if (!activeView) return;
-                          e.preventDefault();
-                          e.stopPropagation();
-                          (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
-
-                          // Start the drag from the bottom-right corner (matches the handle position)
-                          const sourcePoint: Point = { x: n.x + n.width, y: n.y + n.height };
-                          const p = clientToModelPoint(e.clientX, e.clientY) ?? sourcePoint;
-                          setLinkDrag({
-                            viewId: activeView.id,
-                            sourceElementId: el.id,
-                            sourcePoint,
-                            currentPoint: p,
-                            targetElementId: null,
-                          });
-                        }}
-                      >
-                        ↗
-                      </button>
-                    </div>
+                    />
                   );
                 })}
               </div>

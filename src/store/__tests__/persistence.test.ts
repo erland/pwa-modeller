@@ -67,8 +67,21 @@ describe('persistence', () => {
     modelV4.schemaVersion = 4;
 
     const parsed = deserializeModel(serializeModel(modelV4));
-    expect(parsed.schemaVersion).toBe(5);
+    expect(parsed.schemaVersion).toBe(6);
     expect(parsed.connectors).toEqual({});
+  });
+
+  test('deserializeModel migrates v5 models by adding view.objects containers', () => {
+    const modelV5 = createEmptyModel({ name: 'Legacy v5' }) as any;
+    modelV5.schemaVersion = 5;
+
+    const view = createView({ name: 'Main', viewpointId: 'layered' }) as any;
+    delete view.objects;
+    modelV5.views[view.id] = view;
+
+    const parsed = deserializeModel(serializeModel(modelV5));
+    expect(parsed.schemaVersion).toBe(6);
+    expect((parsed.views[view.id] as any).objects).toEqual({});
   });
 
   test('deserializeModel migrates v1 models by removing legacy Elements/Views root folders', () => {
@@ -118,7 +131,7 @@ describe('persistence', () => {
 
     const parsed = deserializeModel(serializeModel(modelV1));
 
-    expect(parsed.schemaVersion).toBe(5);
+    expect(parsed.schemaVersion).toBe(6);
 
     const folders = Object.values(parsed.folders);
     expect(folders.find((f) => f.kind === 'elements')).toBeUndefined();
@@ -136,7 +149,7 @@ describe('persistence', () => {
     delete modelV4.connectors;
 
     const parsed = deserializeModel(serializeModel(modelV4));
-    expect(parsed.schemaVersion).toBe(5);
+    expect(parsed.schemaVersion).toBe(6);
     expect(parsed.connectors).toEqual({});
   });
 

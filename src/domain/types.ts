@@ -205,6 +205,37 @@ export interface RelationshipConnector extends HasTaggedValues, HasExternalIds {
   documentation?: string;
 }
 
+// ------------------------------------
+// View-only (diagram) objects
+// ------------------------------------
+
+/**
+ * View-local objects used only for diagram presentation.
+ *
+ * These are NOT ArchiMate model concepts and should not appear in `model.elements`.
+ * They live inside a `View`.
+ */
+export type ViewObjectType = 'Note' | 'Label' | 'GroupBox';
+
+export type ViewObjectTextAlign = 'left' | 'center' | 'right';
+
+export interface ViewObjectStyle {
+  fill?: string;
+  stroke?: string;
+  textAlign?: ViewObjectTextAlign;
+}
+
+export interface ViewObject {
+  id: string;
+  type: ViewObjectType;
+  /** Optional title/name (useful for GroupBox). */
+  name?: string;
+  /** Primary text content (used by Note/Label). */
+  text?: string;
+  /** Optional view-local styling. Keep intentionally small for now. */
+  style?: ViewObjectStyle;
+}
+
 export interface Element extends HasTaggedValues, HasExternalIds {
   id: string;
   name: string;
@@ -243,9 +274,11 @@ export interface Viewpoint {
 
 // Diagram placeholders (layout for nodes and connections; we keep it intentionally simple for now)
 export interface ViewNodeLayout {
-  /** Either elementId or connectorId must be set (exactly one). */
+  /** Exactly one of elementId / connectorId / objectId must be set. */
   elementId?: string;
   connectorId?: string;
+  /** View-local diagram object id (e.g. Note/Label/GroupBox). */
+  objectId?: string;
   x: number;
   y: number;
   width: number;
@@ -294,6 +327,9 @@ export interface View extends HasTaggedValues, HasExternalIds {
   stakeholders?: string[];
   formatting?: ViewFormatting;
 
+  /** View-local diagram objects (notes/labels/group boxes, etc.). */
+  objects?: Record<string, ViewObject>;
+
   /** If set, the view is nested under (and conceptually centered around) this element in the navigator. */
   centerElementId?: string;
 
@@ -325,8 +361,8 @@ export interface Model extends HasTaggedValues, HasExternalIds {
   metadata: ModelMetadata;
   elements: Record<string, Element>;
   relationships: Record<string, Relationship>;
-    connectors?: Record<string, RelationshipConnector>;
-views: Record<string, View>;
+  connectors?: Record<string, RelationshipConnector>;
+  views: Record<string, View>;
   folders: Record<string, Folder>;
   /** Optional schema version for migrations in the future. */
   schemaVersion?: number;

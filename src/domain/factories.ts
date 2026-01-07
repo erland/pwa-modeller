@@ -1,5 +1,18 @@
 import { createId } from './id';
-import type { Element, Relationship, View, Model, ModelMetadata, Folder, FolderKind, RelationshipConnector } from './types';
+import type {
+  Element,
+  Relationship,
+  View,
+  Model,
+  ModelMetadata,
+  Folder,
+  FolderKind,
+  RelationshipConnector,
+  ViewObject,
+  ViewObjectType,
+  ViewNodeLayout,
+  ViewObjectTextAlign
+} from './types';
 
 function requireNonBlank(value: string, field: string): void {
   if (value.trim().length === 0) {
@@ -78,8 +91,86 @@ export function createView(input: CreateViewInput): View {
     documentation: input.documentation?.trim() || undefined,
     stakeholders: input.stakeholders,
     formatting,
+    // View-local diagram objects (notes/labels/group boxes). Optional in the schema, but
+    // new views should start with an empty map for a predictable runtime shape.
+    objects: input.objects ?? {},
     centerElementId: input.centerElementId,
     layout: input.layout
+  };
+}
+
+// ------------------------------------
+// View-only (diagram) objects
+// ------------------------------------
+
+export type CreateViewObjectInput = Omit<ViewObject, 'id'> & { id?: string };
+
+function sanitizeTextAlign(raw: unknown): ViewObjectTextAlign | undefined {
+  if (raw === 'left' || raw === 'center' || raw === 'right') return raw;
+  return undefined;
+}
+
+/**
+ * Create a view-local diagram object (Note/Label/GroupBox).
+ * These objects are NOT part of the ArchiMate model; they only live inside a view.
+ */
+export function createViewObject(input: CreateViewObjectInput): ViewObject {
+  if (!input.type) throw new Error('ViewObject.type is required');
+
+  const id = input.id ?? createId('obj');
+  const name = input.name?.trim();
+  const text = input.text?.trim();
+
+  const defaultName = input.type === 'GroupBox' ? 'Group' : undefined;
+  const defaultText = input.type === 'Note' ? 'Note' : input.type === 'Label' ? 'Label' : undefined;
+
+  const styleRaw: any = input.style ?? undefined;
+  const style =
+    styleRaw && typeof styleRaw === 'object'
+      ? {
+          fill: typeof styleRaw.fill === 'string' ? styleRaw.fill : undefined,
+          stroke: typeof styleRaw.stroke === 'string' ? styleRaw.stroke : undefined,
+          textAlign: sanitizeTextAlign(styleRaw.textAlign)
+        }
+      : undefined;
+
+  return {
+    id,
+    type: input.type,
+    name: name && name.length > 0 ? name : defaultName,
+    text: text && text.length > 0 ? text : defaultText,
+    style
+  };
+}
+
+export function getDefaultViewObjectSize(type: ViewObjectType): { width: number; height: number } {
+  switch (type) {
+    case 'Label':
+      return { width: 160, height: 36 };
+    case 'GroupBox':
+      return { width: 320, height: 200 };
+    case 'Note':
+    default:
+      return { width: 220, height: 140 };
+  }
+}
+
+/** Create a `ViewNodeLayout` that places a view-local object in a view. */
+export function createViewObjectNodeLayout(
+  objectId: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  zIndex?: number
+): ViewNodeLayout {
+  return {
+    objectId,
+    x,
+    y,
+    width,
+    height,
+    zIndex
   };
 }
 
@@ -125,6 +216,7 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     },
     // Bump when the persisted schema changes.
     // v5 introduces model.connectors (relationship connectors / junctions).
-    schemaVersion: 5
+    // v6 introduces view.objects + view-only layout nodes (notes/labels/group boxes).
+    schemaVersion: 6
   };
 }

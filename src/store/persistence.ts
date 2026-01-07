@@ -401,6 +401,22 @@ function migrateV4ToV5(model: Model): Model {
   return model;
 }
 
+/**
+ * v5 -> v6 migration:
+ * - Add View.objects (default empty object) on all views.
+ */
+function migrateV5ToV6(model: Model): Model {
+  for (const vid of Object.keys(model.views)) {
+    const v: any = model.views[vid] as any;
+    if (!isRecord(v.objects)) {
+      model.views[vid] = { ...(v as any), objects: {} };
+    }
+  }
+
+  model.schemaVersion = 6;
+  return model;
+}
+
 function migrateModel(model: Model): Model {
   let v = getSchemaVersion(model);
   if (v < 2) {
@@ -417,6 +433,10 @@ function migrateModel(model: Model): Model {
   }
   if (v < 5) {
     model = migrateV4ToV5(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 6) {
+    model = migrateV5ToV6(model);
   }
   return model;
 }
@@ -443,6 +463,14 @@ function ensureModelFolderExtensions(model: Model): Model {
   // Note: Elements and Views may have external IDs / tagged values, but those are optional.
   // Relationships may also have these, but we preserve the loaded shape (do not force defaults here).
   // (Factories provide defaults for new objects; older files are sanitized in the passes above.)
+
+  // View-only objects (introduced in v6): keep runtime shape predictable.
+  for (const vid of Object.keys(model.views)) {
+    const v: any = model.views[vid] as any;
+    if (!isRecord(v.objects)) {
+      model.views[vid] = { ...(v as any), objects: {} };
+    }
+  }
   return model;
 }
 

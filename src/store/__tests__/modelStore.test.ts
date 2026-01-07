@@ -1,4 +1,4 @@
-import { createElement, createRelationship, createView } from '../../domain/factories';
+import { createElement, createRelationship, createView, createViewObject, createViewObjectNodeLayout } from '../../domain/factories';
 import { createModelStore } from '../modelStore';
 
 describe('ModelStore', () => {
@@ -60,6 +60,27 @@ describe('ModelStore', () => {
 
     store.deleteView(view.id);
     expect(store.getState().model?.views[view.id]).toBeUndefined();
+  });
+
+  test('deleteViewObject removes the view object and any layout nodes referencing it', () => {
+    const store = createModelStore();
+    store.createEmptyModel({ name: 'My Model' });
+
+    const view = createView({ name: 'Main', viewpointId: 'layered' });
+    store.addView(view);
+
+    const obj = createViewObject({ type: 'Note', text: 'Hello' });
+    const node = createViewObjectNodeLayout(obj.id, 10, 20, 200, 120, 0);
+    store.addViewObject(view.id, obj, node);
+
+    const v1 = store.getState().model!.views[view.id];
+    expect(v1.objects && v1.objects[obj.id]).toBeTruthy();
+    expect(v1.layout?.nodes.some((n) => n.objectId === obj.id)).toBe(true);
+
+    store.deleteViewObject(view.id, obj.id);
+    const v2 = store.getState().model!.views[view.id];
+    expect(v2.objects && (v2.objects as any)[obj.id]).toBeUndefined();
+    expect(v2.layout?.nodes.some((n) => n.objectId === obj.id)).toBe(false);
   });
 
   test('updateModel clones model-level externalIds and taggedValues arrays', () => {

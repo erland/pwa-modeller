@@ -1,4 +1,12 @@
-import { createConnector, createEmptyModel, createElement, createRelationship, createView } from '../../domain/factories';
+import {
+  createConnector,
+  createEmptyModel,
+  createElement,
+  createRelationship,
+  createView,
+  createViewObject,
+  createViewObjectNodeLayout
+} from '../../domain/factories';
 import { deserializeModel, serializeModel } from '../persistence';
 import { stripUndefinedDeep } from '../../test/stripUndefinedDeep';
 
@@ -44,14 +52,74 @@ describe('persistence', () => {
       viewpointId: 'layered',
       layout: {
         nodes: [
-          { elementId: a.id, x: 0, y: 0, w: 120, h: 70, zIndex: 0 },
-          { connectorId: and.id, x: 200, y: 20, w: 20, h: 20, zIndex: 1 },
-          { elementId: b.id, x: 300, y: 0, w: 120, h: 70, zIndex: 2 }
+          { elementId: a.id, x: 0, y: 0, width: 120, height: 70, zIndex: 0 },
+          { connectorId: and.id, x: 200, y: 20, width: 20, height: 20, zIndex: 1 },
+          { elementId: b.id, x: 300, y: 0, width: 120, height: 70, zIndex: 2 }
         ],
         relationships: [
           { relationshipId: r1.id, points: [], zIndex: 0 },
           { relationshipId: r2.id, points: [], zIndex: 1 }
         ]
+      }
+    });
+    model.views[view.id] = view;
+
+    const parsed = deserializeModel(serializeModel(model));
+    expect(stripUndefinedDeep(parsed)).toEqual(stripUndefinedDeep(model));
+  });
+
+  test('serializeModel + deserializeModel round-trip preserves view objects and their layout nodes', () => {
+    const model = createEmptyModel({ name: 'View Objects', description: 'desc' });
+
+    const note = createViewObject({ type: 'Note', text: 'Hello note' });
+    const label = createViewObject({ type: 'Label', text: 'Title' });
+    const group = createViewObject({ type: 'GroupBox', name: 'Scope' });
+
+    const view = createView({
+      name: 'Main',
+      viewpointId: 'layered',
+      objects: {
+        [note.id]: note,
+        [label.id]: label,
+        [group.id]: group
+      },
+      layout: {
+        nodes: [
+          createViewObjectNodeLayout(group.id, 0, 0, 400, 240, -100),
+          createViewObjectNodeLayout(note.id, 40, 40, 220, 140, 0),
+          createViewObjectNodeLayout(label.id, 60, 10, 160, 36, 1)
+        ],
+        relationships: []
+      }
+    });
+    model.views[view.id] = view;
+
+    const parsed = deserializeModel(serializeModel(model));
+    expect(stripUndefinedDeep(parsed)).toEqual(stripUndefinedDeep(model));
+  });
+
+  test('serializeModel + deserializeModel round-trip preserves view objects and object node layouts', () => {
+    const model = createEmptyModel({ name: 'ViewObjects', description: 'desc' });
+
+    const note = createViewObject({ type: 'Note', text: 'Hello note' });
+    const label = createViewObject({ type: 'Label', text: 'Header' });
+    const group = createViewObject({ type: 'GroupBox', name: 'Scope' });
+
+    const view = createView({
+      name: 'Main',
+      viewpointId: 'layered',
+      objects: {
+        [note.id]: note,
+        [label.id]: label,
+        [group.id]: group
+      },
+      layout: {
+        nodes: [
+          { ...createViewObjectNodeLayout(group.id, 0, 0, 400, 260, 0) },
+          { ...createViewObjectNodeLayout(label.id, 20, 20, 200, 36, 1) },
+          { ...createViewObjectNodeLayout(note.id, 30, 80, 220, 140, 2) }
+        ],
+        relationships: []
       }
     });
     model.views[view.id] = view;

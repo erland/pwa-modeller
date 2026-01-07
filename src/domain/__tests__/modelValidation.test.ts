@@ -103,6 +103,34 @@ describe('validateModel', () => {
     expect(issues.some((i) => i.message.includes('invalid node layout entry'))).toBe(true);
   });
 
+  it('reports invalid view node layout entries involving view objects and missing view objects', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    model.elements[el.id] = el;
+
+    const view = createView({
+      name: 'V',
+      viewpointId: 'layered',
+      objects: {
+        obj_ok: { id: 'obj_ok', type: 'Note', text: 'Hello' }
+      },
+      layout: {
+        nodes: [
+          // Invalid: both elementId and objectId
+          { elementId: el.id, objectId: 'obj_ok', x: 0, y: 0, width: 100, height: 60, zIndex: 0 } as any,
+          // Warning: references missing object
+          { objectId: 'obj_missing', x: 10, y: 10, width: 200, height: 100, zIndex: 1 }
+        ],
+        relationships: []
+      }
+    });
+    model.views[view.id] = view;
+
+    const issues = validateModel(model);
+    expect(issues.some((i) => i.message.includes('invalid node layout entry'))).toBe(true);
+    expect(issues.some((i) => i.message.includes('missing view object'))).toBe(true);
+  });
+
 it('reports invalid externalIds/taggedValues on folders and model', () => {
   const model = createEmptyModel({ name: 'M' });
 

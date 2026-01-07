@@ -60,6 +60,6 @@ describe('domain factories', () => {
     expect((model as any).externalIds).toEqual([]);
     expect((model as any).taggedValues).toEqual([]);
 
-    expect(model.schemaVersion).toBe(4);
+    expect(model.schemaVersion).toBe(5);
   });
 });

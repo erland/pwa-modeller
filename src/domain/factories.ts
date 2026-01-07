@@ -123,6 +123,8 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     folders: {
       [root.id]: root
     },
-    schemaVersion: 4
+    // Bump when the persisted schema changes.
+    // v5 introduces model.connectors (relationship connectors / junctions).
+    schemaVersion: 5
   };
 }

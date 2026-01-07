@@ -69,7 +69,7 @@ describe('persistence', () => {
 
     const parsed = deserializeModel(serializeModel(modelV1));
 
-    expect(parsed.schemaVersion).toBe(4);
+    expect(parsed.schemaVersion).toBe(5);
 
     const folders = Object.values(parsed.folders);
     expect(folders.find((f) => f.kind === 'elements')).toBeUndefined();

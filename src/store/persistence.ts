@@ -389,6 +389,18 @@ function migrateV3ToV4(model: Model): Model {
   return model;
 }
 
+/**
+ * v4 -> v5 migration:
+ * - Add Model.connectors (default empty object).
+ */
+function migrateV4ToV5(model: Model): Model {
+  const m: any = model as any;
+  if (!isRecord(m.connectors)) m.connectors = {};
+
+  model.schemaVersion = 5;
+  return model;
+}
+
 function migrateModel(model: Model): Model {
   let v = getSchemaVersion(model);
   if (v < 2) {
@@ -401,6 +413,10 @@ function migrateModel(model: Model): Model {
   }
   if (v < 4) {
     model = migrateV3ToV4(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 5) {
+    model = migrateV4ToV5(model);
   }
   return model;
 }

@@ -890,3 +890,17 @@
     z-index: 15;
   }
 }
+
+
+/* Active/toggled buttons */
+.shellButton.isActive {
+  background: var(--surface-3);
+  border-color: var(--border-3);
+}
+
+.diagramToolbarTools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}

@@ -1,7 +1,7 @@
 import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout, ArchimateLayer, ElementType } from '../../domain';
-import { RELATIONSHIP_TYPES, createRelationship, createConnector, getDefaultViewObjectSize, getViewpointById, validateRelationship, ELEMENT_TYPES_BY_LAYER } from '../../domain';
+import { RELATIONSHIP_TYPES, createRelationship, createConnector, getDefaultViewObjectSize, getViewpointById, validateRelationship, ELEMENT_TYPES_BY_LAYER, createViewObject, createViewObjectNodeLayout } from '../../domain';
 import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
@@ -42,6 +42,15 @@ const LAYER_BG_VAR: Record<ArchimateLayer, string> = {
 };
 
 
+type ToolMode = 'select' | 'addNote' | 'addLabel' | 'addGroupBox';
+
+type GroupBoxDraft = {
+  start: Point;
+  current: Point;
+};
+
+
+
 function sortViews(views: Record<string, View>): View[] {
   return Object.values(views).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -50,6 +59,10 @@ function sortViews(views: Record<string, View>): View[] {
 export function DiagramCanvas({ selection, onSelect }: Props) {
   const model = useModelStore((s) => s.model);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
+
+  const [toolMode, setToolMode] = useState<ToolMode>('select');
+  const [groupBoxDraft, setGroupBoxDraft] = useState<GroupBoxDraft | null>(null);
+  const groupBoxDraftRef = useRef<GroupBoxDraft | null>(null);
 
   const views = useMemo(() => (model ? sortViews(model.views) : []), [model]);
 
@@ -85,6 +98,18 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     views.length,
   ]);
 
+  // Tool mode: Escape cancels placement / returns to select.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setGroupBoxDraft(null);
+        setToolMode('select');
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const activeView = model && activeViewId ? model.views[activeViewId] : null;
 
   const canExportImage = Boolean(model && activeViewId && activeView);
@@ -97,7 +122,91 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     downloadTextFile(fileName, svg, 'image/svg+xml');
   }
 
-  // Zoom & fit
+  const beginGroupBoxDraft = useCallback(
+    (start: Point) => {
+      if (!activeViewId) return;
+      const initial: GroupBoxDraft = { start, current: start };
+      groupBoxDraftRef.current = initial;
+      setGroupBoxDraft(initial);
+
+      function onMove(e: PointerEvent) {
+        const p = clientToModelPoint(e.clientX, e.clientY);
+        if (!p) return;
+        const next = { start, current: p };
+        groupBoxDraftRef.current = next;
+        setGroupBoxDraft(next);
+      }
+
+      function onUp(e: PointerEvent) {
+        const end = clientToModelPoint(e.clientX, e.clientY);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+
+        const draft = groupBoxDraftRef.current;
+        groupBoxDraftRef.current = null;
+        setGroupBoxDraft(null);
+
+        if (!draft || !activeViewId) return;
+
+        const p1 = draft.start;
+        const p2 = end ?? draft.current;
+
+        const x0 = Math.min(p1.x, p2.x);
+        const y0 = Math.min(p1.y, p2.y);
+        const w0 = Math.abs(p1.x - p2.x);
+        const h0 = Math.abs(p1.y - p2.y);
+
+        const minSize = 10;
+        const useDefault = w0 < minSize && h0 < minSize;
+        const size = useDefault
+          ? getDefaultViewObjectSize('GroupBox')
+          : { width: Math.max(minSize, w0), height: Math.max(minSize, h0) };
+
+        const obj = createViewObject({ type: 'GroupBox' });
+        const node = { ...createViewObjectNodeLayout(obj.id, x0, y0, size.width, size.height), zIndex: -100 };
+        modelStore.addViewObject(activeViewId, obj, node);
+        onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: obj.id });
+        setToolMode('select');
+      }
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [activeViewId, onSelect]
+  );
+
+  const onSurfacePointerDownCapture = useCallback(
+    (e: React.PointerEvent) => {
+      if (!model || !activeViewId || !activeView) return;
+      if (toolMode === 'select') return;
+
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.diagramNode, .diagramConnectorNode, .diagramViewObjectNode')) {
+        return;
+      }
+
+      const p = clientToModelPoint(e.clientX, e.clientY);
+      if (!p) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (toolMode === 'addNote') {
+        const id = modelStore.createViewObjectInViewAt(activeViewId, 'Note', p.x, p.y);
+        onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: id });
+        setToolMode('select');
+      } else if (toolMode === 'addLabel') {
+        const id = modelStore.createViewObjectInViewAt(activeViewId, 'Label', p.x, p.y);
+        onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: id });
+        setToolMode('select');
+      } else if (toolMode === 'addGroupBox') {
+        beginGroupBoxDraft(p);
+      }
+    },
+    [model, activeViewId, activeView, toolMode, beginGroupBoxDraft, onSelect]
+  );
+
+// Zoom & fit
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState<number>(1);
@@ -568,7 +677,46 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   return (
     <div className="diagramWrap">
       <div aria-label="Diagram toolbar" className="diagramToolbar">
-        <div className="diagramToolbarButtons">
+                <div className="diagramToolbarTools" role="group" aria-label="Diagram tools">
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'select' ? ' isActive' : '')}
+            onClick={() => setToolMode('select')}
+            disabled={!activeViewId}
+            title="Select tool"
+          >
+            Select
+          </button>
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'addNote' ? ' isActive' : '')}
+            onClick={() => setToolMode('addNote')}
+            disabled={!activeViewId}
+            title="Place a Note (click to drop)"
+          >
+            Note
+          </button>
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'addLabel' ? ' isActive' : '')}
+            onClick={() => setToolMode('addLabel')}
+            disabled={!activeViewId}
+            title="Place a Label (click to drop)"
+          >
+            Label
+          </button>
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'addGroupBox' ? ' isActive' : '')}
+            onClick={() => setToolMode('addGroupBox')}
+            disabled={!activeViewId}
+            title="Place a Group box (drag to size)"
+          >
+            Group
+          </button>
+        </div>
+
+<div className="diagramToolbarButtons">
           <button className="shellButton" type="button" onClick={zoomOut} aria-label="Zoom out">
             −
           </button>
@@ -647,6 +795,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
               <div
                 className="diagramSurface"
                 ref={surfaceRef}
+                onPointerDownCapture={onSurfacePointerDownCapture}
                 style={{
                   width: surfaceWidthModel,
                   height: surfaceHeightModel,
@@ -661,6 +810,19 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   aria-label="Diagram relationships"
                 >
                   <RelationshipMarkers />
+                  {groupBoxDraft ? (
+                    <rect
+                      x={Math.min(groupBoxDraft.start.x, groupBoxDraft.current.x)}
+                      y={Math.min(groupBoxDraft.start.y, groupBoxDraft.current.y)}
+                      width={Math.abs(groupBoxDraft.start.x - groupBoxDraft.current.x)}
+                      height={Math.abs(groupBoxDraft.start.y - groupBoxDraft.current.y)}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeDasharray="6 4"
+                      opacity={0.55}
+                    />
+                  ) : null}
+
 
                   {relRenderItems.map((item) => {
                     const relId = item.relId;

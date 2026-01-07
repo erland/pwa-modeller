@@ -147,6 +147,8 @@ export function getDefaultViewObjectSize(type: ViewObjectType): { width: number;
   switch (type) {
     case 'Label':
       return { width: 160, height: 36 };
+    case 'Divider':
+      return { width: 240, height: 10 };
     case 'GroupBox':
       return { width: 320, height: 200 };
     case 'Note':

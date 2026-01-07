@@ -18,6 +18,8 @@ function titleFor(obj: ViewObject): string {
       return 'Label';
     case 'GroupBox':
       return 'Group box';
+    case 'Divider':
+      return 'Divider';
     default:
       return 'View object';
   }

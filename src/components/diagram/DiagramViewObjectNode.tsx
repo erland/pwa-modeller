@@ -14,6 +14,7 @@ type Props = {
 
 function nodeText(obj: ViewObject): string {
   if (obj.type === 'GroupBox') return obj.name?.trim() || 'Group';
+  if (obj.type === 'Divider') return '';
   return obj.text?.trim() || (obj.type === 'Label' ? 'Label' : 'Note');
 }
 
@@ -23,6 +24,9 @@ export function DiagramViewObjectNode({ node: n, object: obj, activeViewId, isSe
 
   const text = nodeText(obj);
   const isGroup = obj.type === 'GroupBox';
+  const isDivider = obj.type === 'Divider';
+  // Auto-orientation: a divider becomes vertical when its bounding box is taller than it is wide.
+  const isDividerVertical = isDivider && h > w;
   const isLabel = obj.type === 'Label';
   const isNote = obj.type === 'Note';
 
@@ -43,7 +47,8 @@ export function DiagramViewObjectNode({ node: n, object: obj, activeViewId, isSe
     (n.highlighted ? ' isHighlighted' : '') +
     (isGroup ? ' diagramViewObjectNode--groupBox' : '') +
     (isLabel ? ' diagramViewObjectNode--label' : '') +
-    (isNote ? ' diagramViewObjectNode--note' : '');
+    (isNote ? ' diagramViewObjectNode--note' : '') +
+    (isDivider ? ' diagramViewObjectNode--divider' : '');
 
   return (
     <div
@@ -70,7 +75,29 @@ export function DiagramViewObjectNode({ node: n, object: obj, activeViewId, isSe
         });
       }}
     >
-      {isGroup ? <div className="diagramViewObjectTitle">{text}</div> : <div className="diagramViewObjectText">{text}</div>}
+      {isDivider ? (
+        <div
+          className="diagramDividerLine"
+          style={
+            isDividerVertical
+              ? {
+                  background: obj.style?.stroke || undefined,
+                  left: '50%',
+                  top: 0,
+                  width: 2,
+                  height: '100%',
+                  transform: 'translateX(-1px)',
+                }
+              : {
+                  background: obj.style?.stroke || undefined,
+                }
+          }
+        />
+      ) : isGroup ? (
+        <div className="diagramViewObjectTitle">{text}</div>
+      ) : (
+        <div className="diagramViewObjectText">{text}</div>
+      )}
 
       {/* Resize handle (MVP: note + group box) */}
       {!isLabel ? (

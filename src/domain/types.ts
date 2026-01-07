@@ -215,7 +215,7 @@ export interface RelationshipConnector extends HasTaggedValues, HasExternalIds {
  * These are NOT ArchiMate model concepts and should not appear in `model.elements`.
  * They live inside a `View`.
  */
-export type ViewObjectType = 'Note' | 'Label' | 'GroupBox';
+export type ViewObjectType = 'Note' | 'Label' | 'GroupBox' | 'Divider';
 
 export type ViewObjectTextAlign = 'left' | 'center' | 'right';
 

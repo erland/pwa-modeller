@@ -42,7 +42,7 @@ const LAYER_BG_VAR: Record<ArchimateLayer, string> = {
 };
 
 
-type ToolMode = 'select' | 'addNote' | 'addLabel' | 'addGroupBox';
+type ToolMode = 'select' | 'addNote' | 'addLabel' | 'addGroupBox' | 'addDivider';
 
 type GroupBoxDraft = {
   start: Point;
@@ -197,6 +197,10 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
         setToolMode('select');
       } else if (toolMode === 'addLabel') {
         const id = modelStore.createViewObjectInViewAt(activeViewId, 'Label', p.x, p.y);
+        onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: id });
+        setToolMode('select');
+      } else if (toolMode === 'addDivider') {
+        const id = modelStore.createViewObjectInViewAt(activeViewId, 'Divider', p.x, p.y);
         onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: id });
         setToolMode('select');
       } else if (toolMode === 'addGroupBox') {
@@ -424,6 +428,14 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           } else if (obj?.type === 'Note') {
             minW = 140;
             minH = 90;
+          } else if (obj?.type === 'Divider') {
+            // Auto-orientation divider: allow both horizontal and vertical.
+            // Decide desired orientation based on the *proposed* size (before clamping).
+            const proposedW = d.origW + dx;
+            const proposedH = d.origH + dy;
+            const vertical = proposedH > proposedW;
+            minW = vertical ? 6 : 80;
+            minH = vertical ? 80 : 6;
           } else {
             // Label
             minW = 80;
@@ -705,7 +717,17 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           >
             Label
           </button>
+          
           <button
+            type="button"
+            className={'shellButton' + (toolMode === 'addDivider' ? ' isActive' : '')}
+            onClick={() => setToolMode('addDivider')}
+            disabled={!activeViewId}
+            title="Place a Divider/Separator (click to drop)"
+          >
+            Divider
+          </button>
+<button
             type="button"
             className={'shellButton' + (toolMode === 'addGroupBox' ? ' isActive' : '')}
             onClick={() => setToolMode('addGroupBox')}

@@ -531,6 +531,56 @@
   cursor: grab;
 }
 
+.diagramConnectorNode {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  user-select: none;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diagramConnectorShape {
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.90);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+}
+
+.diagramConnectorShape--diamond {
+  border-radius: 6px;
+  transform: rotate(45deg) scale(0.76);
+}
+
+.diagramConnectorNode.isRelTarget {
+  outline: 2px solid rgba(34, 197, 94, 0.85);
+  outline-offset: 2px;
+}
+
+.diagramConnectorNode.isRelSource {
+  outline: 2px solid rgba(59, 130, 246, 0.70);
+  outline-offset: 2px;
+}
+
+.diagramConnectorNode.isSelected {
+  outline: 2px solid #7aa6ff;
+  outline-offset: 2px;
+}
+
+.diagramRelHandle--connector {
+  right: -10px;
+  bottom: -10px;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+}
+
 .diagramNode.isRelTarget {
   outline: 2px solid rgba(34, 197, 94, 0.85);
   outline-offset: 2px;

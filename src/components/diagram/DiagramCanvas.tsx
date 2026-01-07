@@ -1,18 +1,21 @@
 import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout, ArchimateLayer, ElementType } from '../../domain';
-import {RELATIONSHIP_TYPES, createRelationship, getViewpointById, validateRelationship, ELEMENT_TYPES_BY_LAYER } from '../../domain';
+import type { RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout, ArchimateLayer, ElementType } from '../../domain';
+import { RELATIONSHIP_TYPES, createRelationship, createConnector, getViewpointById, validateRelationship, ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
 import { Dialog } from '../dialog/Dialog';
 import { createViewSvg } from './exportSvg';
 import type { Point } from './geometry';
-import { boundsForNodes, clamp, hitTestNodeId, offsetPolyline, polylineMidPoint, rectEdgeAnchor, unitPerp } from './geometry';
+import { boundsForNodes, clamp, hitTestConnectable, nodeRefFromLayout, offsetPolyline, polylineMidPoint, rectEdgeAnchor, unitPerp } from './geometry';
 import { dataTransferHasElement, readDraggedElementId } from './dragDrop';
 import { relationshipVisual } from './relationshipVisual';
 import { RelationshipMarkers } from './RelationshipMarkers';
 import { DiagramNode, type DiagramLinkDrag, type DiagramNodeDragState } from './DiagramNode';
+import { DiagramConnectorNode } from './DiagramConnectorNode';
+import type { ConnectableRef } from './connectable';
+import { refKey, sameRef } from './connectable';
 
 type Props = {
   selection: Selection;
@@ -115,8 +118,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   const [pendingCreateRel, setPendingCreateRel] = useState<
     | {
         viewId: string;
-        sourceElementId: string;
-        targetElementId: string;
+        sourceRef: ConnectableRef;
+        targetRef: ConnectableRef;
       }
     | null
   >(null);
@@ -164,15 +167,18 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   }
 
   const nodes: ViewNodeLayout[] = useMemo(
-  () =>
-    (activeView?.layout?.nodes ?? []).map((n, idx) => ({
-      ...n,
-      width: n.width ?? 120,
-      height: n.height ?? 60,
-      zIndex: typeof n.zIndex === 'number' ? n.zIndex : idx,
-    })),
-  [activeView]
-);
+    () =>
+      (activeView?.layout?.nodes ?? []).map((n, idx) => {
+        const isConn = Boolean(n.connectorId);
+        return {
+          ...n,
+          width: n.width ?? (isConn ? 24 : 120),
+          height: n.height ?? (isConn ? 24 : 60),
+          zIndex: typeof n.zIndex === 'number' ? n.zIndex : idx,
+        };
+      }),
+    [activeView]
+  );
 
   const bounds = useMemo(() => boundsForNodes(nodes), [nodes]);
 
@@ -260,7 +266,12 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
         y = Math.round(y / grid) * grid;
       }
 
-      modelStore.updateViewNodePosition(d.viewId, d.elementId, x, y);
+      modelStore.updateViewNodePositionAny(
+        d.viewId,
+        d.ref.kind === 'element' ? { elementId: d.ref.id } : { connectorId: d.ref.id },
+        x,
+        y
+      );
     }
     function onUp() {
       dragRef.current = null;
@@ -285,8 +296,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       // in model coordinates to detect the current drop target.
       setLinkDrag((prev) => {
         if (!prev) return prev;
-        const targetId = hitTestNodeId(nodes, p, prev.sourceElementId);
-        return { ...prev, currentPoint: p, targetElementId: targetId };
+        const targetRef = hitTestConnectable(nodes, p, prev.sourceRef);
+        return { ...prev, currentPoint: p, targetRef };
       });
     }
 
@@ -294,9 +305,9 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       const p = clientToModelPoint(e.clientX, e.clientY);
       setLinkDrag((prev) => {
         if (!prev) return prev;
-        const target = p ? hitTestNodeId(nodes, p, prev.sourceElementId) : prev.targetElementId;
-        if (target && target !== prev.sourceElementId) {
-          setPendingCreateRel({ viewId: prev.viewId, sourceElementId: prev.sourceElementId, targetElementId: target });
+        const target = p ? hitTestConnectable(nodes, p, prev.sourceRef) : prev.targetRef;
+        if (target && !sameRef(target, prev.sourceRef)) {
+          setPendingCreateRel({ viewId: prev.viewId, sourceRef: prev.sourceRef, targetRef: target });
           setPendingRelType(lastRelType);
           setPendingRelError(null);
         }
@@ -317,9 +328,30 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     if (!model || !activeView) return [] as string[];
     const explicit = activeView.layout?.relationships ?? [];
     if (explicit.length > 0) return explicit.map((r) => r.relationshipId);
-    const nodeSet = new Set(nodes.flatMap((n) => (n.elementId ? [n.elementId] : [])));
+    const nodeSet = new Set(
+      nodes
+        .map((n) => nodeRefFromLayout(n))
+        .filter((r): r is ConnectableRef => Boolean(r))
+        .map((r) => refKey(r))
+    );
+
+    function sourceRefForRel(r: any): ConnectableRef | null {
+      if (typeof r.sourceElementId === 'string') return { kind: 'element', id: r.sourceElementId };
+      if (typeof r.sourceConnectorId === 'string') return { kind: 'connector', id: r.sourceConnectorId };
+      return null;
+    }
+    function targetRefForRel(r: any): ConnectableRef | null {
+      if (typeof r.targetElementId === 'string') return { kind: 'element', id: r.targetElementId };
+      if (typeof r.targetConnectorId === 'string') return { kind: 'connector', id: r.targetConnectorId };
+      return null;
+    }
+
     return Object.values(model.relationships)
-      .filter((r) => !!r.sourceElementId && !!r.targetElementId && nodeSet.has(r.sourceElementId) && nodeSet.has(r.targetElementId))
+      .filter((r) => {
+        const s = sourceRefForRel(r);
+        const t = targetRefForRel(r);
+        return Boolean(s && t && nodeSet.has(refKey(s)) && nodeSet.has(refKey(t)));
+      })
       .map((r) => r.id);
   }, [model, activeView, nodes]);
 
@@ -340,40 +372,58 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
   const relRenderItems: RelRenderItem[] = useMemo(() => {
     if (!model || !activeView) return [];
-    // Group relationships by unordered (A,B) element pair so parallel lines are drawn
-    // when multiple relationships exist between the same two elements.
+    // Group relationships by unordered (A,B) endpoint pair so parallel lines are drawn
+    // when multiple relationships exist between the same two nodes.
     const groups = new Map<string, string[]>();
+
+    const nodeByKey = new Map<string, ViewNodeLayout>();
+    for (const n of nodes) {
+      const r = nodeRefFromLayout(n);
+      if (r) nodeByKey.set(refKey(r), n);
+    }
+
+    const sourceRefForRel = (r: any): ConnectableRef | null => {
+      if (typeof r.sourceElementId === 'string') return { kind: 'element', id: r.sourceElementId };
+      if (typeof r.sourceConnectorId === 'string') return { kind: 'connector', id: r.sourceConnectorId };
+      return null;
+    };
+    const targetRefForRel = (r: any): ConnectableRef | null => {
+      if (typeof r.targetElementId === 'string') return { kind: 'element', id: r.targetElementId };
+      if (typeof r.targetConnectorId === 'string') return { kind: 'connector', id: r.targetConnectorId };
+      return null;
+    };
+
     for (const relId of relationshipIdsToRender) {
       const rel = model.relationships[relId];
       if (!rel) continue;
-      const a = rel.sourceElementId;
-      const b = rel.targetElementId;
-      if (!a || !b) continue;
+      const s = sourceRefForRel(rel);
+      const t = targetRefForRel(rel);
+      if (!s || !t) continue;
+      const a = refKey(s);
+      const b = refKey(t);
       const key = a < b ? `${a}|${b}` : `${b}|${a}`;
       const list = groups.get(key) ?? [];
       list.push(relId);
       groups.set(key, list);
     }
 
-    const byElementId = new Map(nodes.filter((n) => !!n.elementId).map((n) => [n.elementId!, n] as const));
-
     const items: RelRenderItem[] = [];
     for (const [groupKey, relIds] of groups.entries()) {
-      // Keep stable order within group: by relationship id (consistent across renders)
       const stable = [...relIds].sort((x, y) => x.localeCompare(y));
       for (let i = 0; i < stable.length; i += 1) {
         const relId = stable[i];
         const rel = model.relationships[relId];
         if (!rel) continue;
-        const se = rel.sourceElementId;
-        const te = rel.targetElementId;
-        if (!se || !te) continue;
-        const s = byElementId.get(se);
-        const t = byElementId.get(te);
+        const sRef = sourceRefForRel(rel);
+        const tRef = targetRefForRel(rel);
+        if (!sRef || !tRef) continue;
+        const s = nodeByKey.get(refKey(sRef));
+        const t = nodeByKey.get(refKey(tRef));
         if (!s || !t) continue;
         items.push({ relId, source: s, target: t, indexInGroup: i, totalInGroup: stable.length, groupKey });
       }
     }
+
     return items;
   }, [model, activeView, nodes, relationshipIdsToRender]);
 
@@ -402,27 +452,35 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     if (!model || !pendingCreateRel) return;
     setPendingRelError(null);
 
-    const { sourceElementId, targetElementId } = pendingCreateRel;
-    if (!model.elements[sourceElementId] || !model.elements[targetElementId]) {
-      setPendingRelError('Both source and target elements must exist.');
+    const { sourceRef, targetRef } = pendingCreateRel;
+
+    const sourceOk = sourceRef.kind === 'element' ? Boolean(model.elements[sourceRef.id]) : Boolean(model.connectors?.[sourceRef.id]);
+    const targetOk = targetRef.kind === 'element' ? Boolean(model.elements[targetRef.id]) : Boolean(model.connectors?.[targetRef.id]);
+    if (!sourceOk || !targetOk) {
+      setPendingRelError('Both source and target endpoints must exist.');
       return;
     }
 
-    const validation = validateRelationship({
-      id: 'tmp',
-      type: pendingRelType,
-      sourceElementId,
-      targetElementId
-    });
-    if (!validation.ok) {
-      setPendingRelError(validation.errors[0] ?? 'Invalid relationship');
-      return;
+    // Only apply ArchiMate relationship rule validation when both endpoints are elements.
+    if (sourceRef.kind === 'element' && targetRef.kind === 'element') {
+      const validation = validateRelationship({
+        id: 'tmp',
+        type: pendingRelType,
+        sourceElementId: sourceRef.id,
+        targetElementId: targetRef.id,
+      });
+      if (!validation.ok) {
+        setPendingRelError(validation.errors[0] ?? 'Invalid relationship');
+        return;
+      }
     }
 
     const rel = createRelationship({
-      sourceElementId,
-      targetElementId,
-      type: pendingRelType
+      type: pendingRelType,
+      sourceElementId: sourceRef.kind === 'element' ? sourceRef.id : undefined,
+      sourceConnectorId: sourceRef.kind === 'connector' ? sourceRef.id : undefined,
+      targetElementId: targetRef.kind === 'element' ? targetRef.id : undefined,
+      targetConnectorId: targetRef.kind === 'connector' ? targetRef.id : undefined,
     });
     modelStore.addRelationship(rel);
     setLastRelType(pendingRelType);
@@ -456,6 +514,40 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           </button>
           <button className="shellButton" type="button" onClick={fitToView} aria-label="Fit to view" disabled={!activeView || nodes.length === 0}>
             Fit
+          </button>
+          <button
+            className="shellButton"
+            type="button"
+            disabled={!activeViewId}
+            title="Add AND junction"
+            onClick={() => {
+              if (!model || !activeViewId) return;
+              const conn = createConnector({ type: 'AndJunction' });
+              modelStore.addConnector(conn);
+              const vp = viewportRef.current;
+              const cx = vp ? (vp.scrollLeft + vp.clientWidth / 2) / zoom : 100;
+              const cy = vp ? (vp.scrollTop + vp.clientHeight / 2) / zoom : 100;
+              modelStore.addConnectorToViewAt(activeViewId, conn.id, cx, cy);
+            }}
+          >
+            +AND
+          </button>
+          <button
+            className="shellButton"
+            type="button"
+            disabled={!activeViewId}
+            title="Add OR junction"
+            onClick={() => {
+              if (!model || !activeViewId) return;
+              const conn = createConnector({ type: 'OrJunction' });
+              modelStore.addConnector(conn);
+              const vp = viewportRef.current;
+              const cx = vp ? (vp.scrollLeft + vp.clientWidth / 2) / zoom : 100;
+              const cy = vp ? (vp.scrollTop + vp.clientHeight / 2) / zoom : 100;
+              modelStore.addConnectorToViewAt(activeViewId, conn.id, cx, cy);
+            }}
+          >
+            +OR
           </button>
           <button className="shellButton" type="button" onClick={handleExportImage} disabled={!canExportImage}>
             Export as Image
@@ -530,8 +622,14 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                       // Use a stable perpendicular based on the unordered group key so
                       // relationships in opposite directions still spread apart consistently.
                       const parts = item.groupKey.split('|');
-                      const aNode = nodes.find((n) => n.elementId === parts[0]);
-                      const bNode = nodes.find((n) => n.elementId === parts[1]);
+                      const aNode = nodes.find((n) => {
+                        const r = nodeRefFromLayout(n);
+                        return r ? refKey(r) === parts[0] : false;
+                      });
+                      const bNode = nodes.find((n) => {
+                        const r = nodeRefFromLayout(n);
+                        return r ? refKey(r) === parts[1] : false;
+                      });
                       const aC: Point | null = aNode ? { x: aNode.x + (aNode.width ?? 120) / 2, y: aNode.y + (aNode.height ?? 60) / 2 } : null;
                       const bC: Point | null = bNode ? { x: bNode.x + (bNode.width ?? 120) / 2, y: bNode.y + (bNode.height ?? 60) / 2 } : null;
                       const perp = aC && bC ? unitPerp(aC, bC) : unitPerp(sc, tc);
@@ -592,8 +690,12 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   {linkDrag ? (() => {
                     const start = linkDrag.sourcePoint;
                     let end = linkDrag.currentPoint;
-                    if (linkDrag.targetElementId) {
-                      const t = nodes.find((n) => n.elementId === linkDrag.targetElementId);
+                    if (linkDrag.targetRef) {
+                      const key = refKey(linkDrag.targetRef);
+                      const t = nodes.find((n) => {
+                        const r = nodeRefFromLayout(n);
+                        return r ? refKey(r) === key : false;
+                      });
                       if (t) end = { x: t.x + t.width / 2, y: t.y + t.height / 2 };
                     }
                     const d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
@@ -613,37 +715,67 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
 
                 {nodes.map((n) => {
-                  const el = n.elementId ? model.elements[n.elementId] : undefined;
-                  if (!el) return null;
+                  if (n.elementId) {
+                    const el = model.elements[n.elementId];
+                    if (!el) return null;
 
-                  const layer = ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business';
-                  const bgVar = LAYER_BG_VAR[layer];
+                    const layer = ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business';
+                    const bgVar = LAYER_BG_VAR[layer];
 
-                  const isSelected =
-                    selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId!;
+                    const isSelected =
+                      selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId;
 
-                  return (
-                    <DiagramNode
-                      key={`${activeView.id}:${n.elementId ?? n.connectorId ?? 'unknown'}`}
-                      node={n}
-                      element={el}
-                      activeViewId={activeView.id}
-                      isSelected={isSelected}
-                      linkDrag={linkDrag}
-                      bgVar={bgVar}
-                      onSelect={onSelect}
-                      onBeginNodeDrag={(state) => {
-                        dragRef.current = state;
-                      }}
-                      onHoverAsRelationshipTarget={(elementId) => {
-                        setLinkDrag((prev) => (prev ? { ...prev, targetElementId: elementId } : prev));
-                      }}
-                      clientToModelPoint={clientToModelPoint}
-                      onStartLinkDrag={(drag) => {
-                        setLinkDrag(drag);
-                      }}
-                    />
-                  );
+                    return (
+                      <DiagramNode
+                        key={`${activeView.id}:${n.elementId}`}
+                        node={n}
+                        element={el}
+                        activeViewId={activeView.id}
+                        isSelected={isSelected}
+                        linkDrag={linkDrag}
+                        bgVar={bgVar}
+                        onSelect={onSelect}
+                        onBeginNodeDrag={(state) => {
+                          dragRef.current = state;
+                        }}
+                        onHoverAsRelationshipTarget={(ref) => {
+                          setLinkDrag((prev) => (prev ? { ...prev, targetRef: ref } : prev));
+                        }}
+                        clientToModelPoint={clientToModelPoint}
+                        onStartLinkDrag={(drag) => {
+                          setLinkDrag(drag);
+                        }}
+                      />
+                    );
+                  }
+
+                  if (n.connectorId) {
+                    const conn = model.connectors?.[n.connectorId];
+                    if (!conn) return null;
+                    return (
+                      <DiagramConnectorNode
+                        key={`${activeView.id}:${n.connectorId}`}
+                        node={n}
+                        connector={conn}
+                        activeViewId={activeView.id}
+                        isSelected={false}
+                        linkDrag={linkDrag}
+                        onSelect={onSelect}
+                        onBeginNodeDrag={(state) => {
+                          dragRef.current = state;
+                        }}
+                        onHoverAsRelationshipTarget={(ref) => {
+                          setLinkDrag((prev) => (prev ? { ...prev, targetRef: ref } : prev));
+                        }}
+                        clientToModelPoint={clientToModelPoint}
+                        onStartLinkDrag={(drag) => {
+                          setLinkDrag(drag);
+                        }}
+                      />
+                    );
+                  }
+
+                  return null;
                 })}
               </div>
             </div>
@@ -671,10 +803,16 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 	          <div>
 	            <div style={{ opacity: 0.9, marginBottom: 10 }}>
 	              <div>
-	                <b>From:</b> {model.elements[pendingCreateRel.sourceElementId]?.name ?? '—'}
+	                <b>From:</b>{' '}
+	                {pendingCreateRel.sourceRef.kind === 'element'
+	                  ? (model.elements[pendingCreateRel.sourceRef.id]?.name ?? '—')
+	                  : (model.connectors?.[pendingCreateRel.sourceRef.id]?.type ?? 'Connector')}
 	              </div>
 	              <div>
-	                <b>To:</b> {model.elements[pendingCreateRel.targetElementId]?.name ?? '—'}
+	                <b>To:</b>{' '}
+	                {pendingCreateRel.targetRef.kind === 'element'
+	                  ? (model.elements[pendingCreateRel.targetRef.id]?.name ?? '—')
+	                  : (model.connectors?.[pendingCreateRel.targetRef.id]?.type ?? 'Connector')}
 	              </div>
 	            </div>
 

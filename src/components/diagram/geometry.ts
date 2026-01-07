@@ -1,4 +1,5 @@
 import type { ViewNodeLayout } from '../../domain';
+import type { ConnectableRef } from './connectable';
 
 export function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
@@ -32,6 +33,26 @@ export function hitTestNodeId(nodes: ViewNodeLayout[], p: Point, excludeElementI
     const w = n.width ?? 120;
     const h = n.height ?? 60;
     if (p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h) return n.elementId!;
+  }
+  return null;
+}
+
+export function nodeRefFromLayout(n: ViewNodeLayout): ConnectableRef | null {
+  if (n.elementId) return { kind: 'element', id: n.elementId };
+  if (n.connectorId) return { kind: 'connector', id: n.connectorId };
+  return null;
+}
+
+export function hitTestConnectable(nodes: ViewNodeLayout[], p: Point, exclude: ConnectableRef | null): ConnectableRef | null {
+  // Iterate from end to start so later-rendered nodes win if they overlap.
+  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+    const n = nodes[i];
+    const r = nodeRefFromLayout(n);
+    if (!r) continue;
+    if (exclude && exclude.kind === r.kind && exclude.id === r.id) continue;
+    const w = n.width ?? (n.connectorId ? 24 : 120);
+    const h = n.height ?? (n.connectorId ? 24 : 60);
+    if (p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h) return r;
   }
   return null;
 }

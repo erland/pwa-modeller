@@ -1,36 +1,17 @@
 import type * as React from 'react';
-import type { Element, ViewNodeLayout } from '../../domain';
+import type { RelationshipConnector, ViewNodeLayout } from '../../domain';
 import type { Selection } from '../model/selection';
-import { ArchimateSymbol } from './archimateSymbols';
 import type { Point } from './geometry';
 import type { ConnectableRef } from './connectable';
 import { sameRef } from './connectable';
-
-export type DiagramLinkDrag = {
-  viewId: string;
-  sourceRef: ConnectableRef;
-  sourcePoint: Point;
-  currentPoint: Point;
-  targetRef: ConnectableRef | null;
-};
-
-export type DiagramNodeDragState = {
-  viewId: string;
-  ref: ConnectableRef;
-  startX: number;
-  startY: number;
-  origX: number;
-  origY: number;
-};
+import type { DiagramLinkDrag, DiagramNodeDragState } from './DiagramNode';
 
 type Props = {
   node: ViewNodeLayout;
-  element: Element;
+  connector: RelationshipConnector;
   activeViewId: string;
   isSelected: boolean;
   linkDrag: DiagramLinkDrag | null;
-  /** Value assigned to CSS var --diagram-node-bg */
-  bgVar: string;
   onSelect: (selection: Selection) => void;
 
   onBeginNodeDrag: (state: DiagramNodeDragState) => void;
@@ -40,34 +21,33 @@ type Props = {
   onStartLinkDrag: (drag: DiagramLinkDrag) => void;
 };
 
-export function DiagramNode({
+export function DiagramConnectorNode({
   node: n,
-  element: el,
+  connector: c,
   activeViewId,
   isSelected,
   linkDrag,
-  bgVar,
   onSelect,
   onBeginNodeDrag,
   onHoverAsRelationshipTarget,
   clientToModelPoint,
   onStartLinkDrag,
 }: Props) {
-  const typeLabel =
-    el.type === 'Unknown'
-      ? el.unknownType?.name
-        ? `Unknown: ${el.unknownType.name}`
-        : 'Unknown'
-      : el.type;
+  const selfRef: ConnectableRef = { kind: 'connector', id: c.id };
 
-  const selfRef: ConnectableRef = { kind: 'element', id: el.id };
   const isRelTarget = Boolean(linkDrag && sameRef(linkDrag.targetRef, selfRef) && !sameRef(linkDrag.sourceRef, selfRef));
   const isRelSource = Boolean(linkDrag && sameRef(linkDrag.sourceRef, selfRef));
+
+  const w = n.width ?? 24;
+  const h = n.height ?? 24;
+
+  // Minimal representation: AND junction = circle; OR junction = diamond.
+  const shape = c.type === 'OrJunction' ? 'diamond' : 'circle';
 
   return (
     <div
       className={
-        'diagramNode' +
+        'diagramConnectorNode' +
         (isSelected ? ' isSelected' : '') +
         (n.highlighted ? ' isHighlighted' : '') +
         (isRelTarget ? ' isRelTarget' : '') +
@@ -77,18 +57,19 @@ export function DiagramNode({
         {
           left: n.x,
           top: n.y,
-          width: n.width ?? 120,
-          height: n.height ?? 60,
+          width: w,
+          height: h,
           zIndex: n.zIndex,
-          '--diagram-node-bg': bgVar,
         } as React.CSSProperties
       }
       role="button"
       tabIndex={0}
-      aria-label={`Diagram node ${el.name || '(unnamed)'}`}
+      aria-label={`Connector ${c.type}`}
+      title={c.type}
       onClick={() => {
         if (linkDrag) return;
-        onSelect({ kind: 'viewNode', viewId: activeViewId, elementId: el.id });
+        // No dedicated connector selection UI yet; selecting the view keeps focus on the diagram.
+        onSelect({ kind: 'view', viewId: activeViewId });
       }}
       onPointerDown={(e) => {
         if (linkDrag) return;
@@ -112,43 +93,19 @@ export function DiagramNode({
         if (sameRef(linkDrag.targetRef, selfRef)) onHoverAsRelationshipTarget(null);
       }}
     >
-      {/* Node content (label offsets apply here, not to the handle) */}
-      <div
-        className="diagramNodeContent"
-        style={n.label ? { transform: `translate(${n.label.dx}px, ${n.label.dy}px)` } : undefined}
-      >
-        <div className="diagramNodeHeader">
-          <div className="diagramNodeSymbol" aria-hidden="true">
-            <ArchimateSymbol
-              type={el.type}
-              title={
-                el.type === 'Unknown'
-                  ? el.unknownType?.name
-                    ? `Unknown: ${el.unknownType.name}`
-                    : 'Unknown'
-                  : el.type
-              }
-            />
-          </div>
-          <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
-        </div>
-        <div className="diagramNodeMeta">{typeLabel}</div>
-        {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
-      </div>
+      <div className={'diagramConnectorShape diagramConnectorShape--' + shape} aria-hidden="true" />
 
-      {/* Outgoing relationship handle */}
       <button
         type="button"
-        className="diagramRelHandle"
-        aria-label={`Create relationship from ${el.name || '(unnamed)'}`}
-        title="Drag to another element to create a relationship"
+        className="diagramRelHandle diagramRelHandle--connector"
+        aria-label={`Create relationship from ${c.type}`}
+        title="Drag to a node to create a relationship"
         onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
           (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
 
-          // Start the drag from the bottom-right corner (matches the handle position)
-          const sourcePoint: Point = { x: n.x + (n.width ?? 120), y: n.y + (n.height ?? 60) };
+          const sourcePoint: Point = { x: n.x + w, y: n.y + h };
           const p = clientToModelPoint(e.clientX, e.clientY) ?? sourcePoint;
 
           onStartLinkDrag({

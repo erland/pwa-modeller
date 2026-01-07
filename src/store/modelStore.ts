@@ -9,7 +9,8 @@ import type {
   ViewRelationshipLayout,
   ViewNodeLayout,
   ViewFormatting,
-  TaggedValue
+  TaggedValue,
+  RelationshipConnector
 } from '../domain';
 import {
   createEmptyModel,
@@ -484,6 +485,60 @@ export class ModelStore {
   };
 
   // -------------------------
+  // Relationship connectors (junctions)
+  // -------------------------
+
+  addConnector = (connector: RelationshipConnector): void => {
+    this.updateModel((model) => {
+      // Ensure the container exists (older models may have been normalized already, but be defensive).
+      const nextConnectors = model.connectors ?? {};
+      nextConnectors[connector.id] = connector;
+      model.connectors = nextConnectors;
+    });
+  };
+
+  updateConnector = (connectorId: string, patch: Partial<Omit<RelationshipConnector, 'id'>>): void => {
+    this.updateModel((model) => {
+      const current = model.connectors?.[connectorId];
+      if (!current) throw new Error(`Connector not found: ${connectorId}`);
+      const merged: RelationshipConnector = { ...current, ...patch, id: current.id };
+      merged.externalIds = tidyExternalIds(merged.externalIds);
+      model.connectors = { ...(model.connectors ?? {}), [connectorId]: merged };
+    });
+  };
+
+  deleteConnector = (connectorId: string): void => {
+    this.updateModel((model) => {
+      if (!model.connectors?.[connectorId]) return;
+      const next = { ...(model.connectors ?? {}) };
+      delete next[connectorId];
+      model.connectors = next;
+
+      // Remove connector nodes from all views.
+      for (const viewId of Object.keys(model.views)) {
+        const view = model.views[viewId];
+        if (!view.layout) continue;
+        const nextNodes = view.layout.nodes.filter((n) => n.connectorId !== connectorId);
+        if (nextNodes.length !== view.layout.nodes.length) {
+          model.views[viewId] = { ...view, layout: { ...view.layout, nodes: nextNodes } };
+        }
+      }
+
+      // Clear relationship endpoints that reference the deleted connector.
+      for (const relId of Object.keys(model.relationships)) {
+        const rel = model.relationships[relId];
+        if (rel.sourceConnectorId === connectorId || rel.targetConnectorId === connectorId) {
+          model.relationships[relId] = {
+            ...rel,
+            sourceConnectorId: rel.sourceConnectorId === connectorId ? undefined : rel.sourceConnectorId,
+            targetConnectorId: rel.targetConnectorId === connectorId ? undefined : rel.targetConnectorId,
+          };
+        }
+      }
+    });
+  };
+
+  // -------------------------
   // Views
   // -------------------------
   addView = (view: View, folderId?: string): void => {
@@ -752,6 +807,48 @@ export class ModelStore {
     return elementId;
   };
 
+  /** Adds a connector (junction) to a view at a specific position (idempotent). */
+  addConnectorToViewAt = (viewId: string, connectorId: string, x: number, y: number): string => {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) throw new Error(`View not found: ${viewId}`);
+      const connector = model.connectors?.[connectorId];
+      if (!connector) throw new Error(`Connector not found: ${connectorId}`);
+
+      const viewWithLayout = ensureViewLayout(view);
+      const layout = viewWithLayout.layout!;
+
+      const snap = Boolean(viewWithLayout.formatting?.snapToGrid);
+      const grid = viewWithLayout.formatting?.gridSize ?? 20;
+
+      const nodeW = 24;
+      const nodeH = 24;
+      // Drop position is interpreted as the cursor position; center the node under it.
+      let nx = Math.max(0, x - nodeW / 2);
+      let ny = Math.max(0, y - nodeH / 2);
+      if (snap && grid > 1) {
+        nx = Math.round(nx / grid) * grid;
+        ny = Math.round(ny / grid) * grid;
+      }
+
+      const existing = layout.nodes.find((n) => n.connectorId === connectorId);
+      if (existing) {
+        const nextNodes = layout.nodes.map((n) => (n.connectorId === connectorId ? { ...n, x: nx, y: ny, width: nodeW, height: nodeH } : n));
+        model.views[viewId] = { ...viewWithLayout, layout: { nodes: nextNodes, relationships: layout.relationships } };
+        return;
+      }
+
+      const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
+      const node: ViewNodeLayout = { connectorId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: maxZ + 1 };
+      model.views[viewId] = {
+        ...viewWithLayout,
+        layout: { nodes: [...layout.nodes, node], relationships: layout.relationships },
+      };
+    });
+
+    return connectorId;
+  };
+
   removeElementFromView = (viewId: string, elementId: string): void => {
     this.updateModel((model) => {
       const view = getView(model, viewId);
@@ -775,6 +872,24 @@ export class ModelStore {
       const node = layout.nodes.find((n) => n.elementId === elementId);
       if (!node) return;
       const nextNodes = layout.nodes.map((n) => (n.elementId === elementId ? { ...n, x, y } : n));
+      model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
+    });
+  };
+
+  /** Updates position of an element-node or connector-node in a view. */
+  updateViewNodePositionAny = (viewId: string, ref: { elementId?: string; connectorId?: string }, x: number, y: number): void => {
+    this.updateModel((model) => {
+      const view = getView(model, viewId);
+      if (!view.layout) return;
+      const layout = view.layout;
+
+      const nextNodes = layout.nodes.map((n) => {
+        const matchesElement = ref.elementId && n.elementId === ref.elementId;
+        const matchesConnector = ref.connectorId && n.connectorId === ref.connectorId;
+        if (!matchesElement && !matchesConnector) return n;
+        return { ...n, x, y };
+      });
+
       model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
     });
   };

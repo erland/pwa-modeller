@@ -99,6 +99,14 @@ export default function WorkspacePage() {
           modelStore.removeElementFromView(selection.viewId, selection.elementId);
           setSelection({ kind: 'view', viewId: selection.viewId });
           return;
+        case 'viewObject': {
+          const ok = window.confirm('Delete this diagram object?');
+          if (ok) {
+            modelStore.deleteViewObject(selection.viewId, selection.objectId);
+            setSelection({ kind: 'view', viewId: selection.viewId });
+          }
+          return;
+        }
         case 'relationship': {
           const ok = window.confirm('Delete this relationship?');
           if (ok) {

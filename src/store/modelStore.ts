@@ -4,6 +4,8 @@ import type {
   Model,
   ModelMetadata,
   Relationship,
+  ViewObject,
+  ViewObjectType,
   View,
   ViewLayout,
   ViewRelationshipLayout,
@@ -15,6 +17,9 @@ import type {
 import {
   createEmptyModel,
   createView,
+  createViewObject,
+  createViewObjectNodeLayout,
+  getDefaultViewObjectSize,
   collectFolderSubtreeIds,
   createId,
   upsertTaggedValue,
@@ -282,6 +287,7 @@ export class ModelStore {
       metadata: { ...current.metadata },
       elements: { ...current.elements },
       relationships: { ...current.relationships },
+      connectors: current.connectors ? { ...current.connectors } : undefined,
       views: { ...current.views },
       folders: { ...current.folders }
     };
@@ -664,6 +670,25 @@ export class ModelStore {
         name = `${name} (${i})`;
       }
 
+      // NOTE: view-local objects must get new ids when cloning, since ids are globally unique.
+      const origObjects = (original.objects ?? {}) as Record<string, ViewObject>;
+      const objectIdMap = new Map<string, string>();
+      const nextObjects: Record<string, ViewObject> = {};
+      for (const o of Object.values(origObjects)) {
+        const nextId = createId('obj');
+        objectIdMap.set(o.id, nextId);
+        nextObjects[nextId] = { ...(JSON.parse(JSON.stringify(o)) as ViewObject), id: nextId };
+      }
+
+      const nextLayout: ViewLayout | undefined = original.layout ? (JSON.parse(JSON.stringify(original.layout)) as ViewLayout) : undefined;
+      if (nextLayout && objectIdMap.size > 0) {
+        nextLayout.nodes = nextLayout.nodes.map((n) => {
+          if (!n.objectId) return n;
+          const mapped = objectIdMap.get(n.objectId);
+          return mapped ? { ...n, objectId: mapped } : n;
+        });
+      }
+
       const clone = createView({
         name,
         viewpointId: original.viewpointId,
@@ -672,7 +697,8 @@ export class ModelStore {
         stakeholders: original.stakeholders ? [...original.stakeholders] : undefined,
         formatting: original.formatting ? JSON.parse(JSON.stringify(original.formatting)) : undefined,
         centerElementId: original.centerElementId,
-        layout: original.layout ? JSON.parse(JSON.stringify(original.layout)) : undefined
+        objects: nextObjects,
+        layout: nextLayout
       });
 
       model.views[clone.id] = clone;
@@ -690,6 +716,126 @@ export class ModelStore {
     });
 
     return created;
+  };
+
+  // -------------------------
+  // View-only (diagram) objects
+  // -------------------------
+
+  /**
+   * Add a view-local object to a view (and optionally a layout node). This does not touch the model element graph.
+   */
+  addViewObject = (viewId: string, obj: ViewObject, node?: ViewNodeLayout): void => {
+    this.updateModel((model) => {
+      const view = getView(model, viewId);
+      const viewWithLayout = ensureViewLayout(view);
+      const layout = viewWithLayout.layout;
+
+      const nextObjects = { ...(viewWithLayout.objects ?? {}) };
+      nextObjects[obj.id] = obj;
+
+      let nextNodes = layout.nodes;
+      if (node) {
+        const existingIdx = layout.nodes.findIndex((n) => n.objectId === obj.id);
+        if (existingIdx >= 0) {
+          nextNodes = layout.nodes.map((n) => (n.objectId === obj.id ? { ...n, ...node, objectId: obj.id } : n));
+        } else {
+          const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
+          nextNodes = [...layout.nodes, { ...node, objectId: obj.id, zIndex: typeof node.zIndex === 'number' ? node.zIndex : maxZ + 1 }];
+        }
+      }
+
+      model.views[viewId] = {
+        ...viewWithLayout,
+        objects: nextObjects,
+        layout: { nodes: nextNodes, relationships: layout.relationships }
+      };
+    });
+  };
+
+  /** Create a new view-local object and place it into the view at the given cursor position. Returns the object id. */
+  createViewObjectInViewAt = (viewId: string, type: ViewObjectType, x: number, y: number): string => {
+    const obj = createViewObject({ type });
+    const size = getDefaultViewObjectSize(type);
+
+    this.updateModel((model) => {
+      const view = getView(model, viewId);
+      const viewWithLayout = ensureViewLayout(view);
+      const layout = viewWithLayout.layout;
+
+      const snap = Boolean(viewWithLayout.formatting?.snapToGrid);
+      const grid = viewWithLayout.formatting?.gridSize ?? 20;
+
+      // Cursor position is treated as the center.
+      let nx = Math.max(0, x - size.width / 2);
+      let ny = Math.max(0, y - size.height / 2);
+      if (snap && grid > 1) {
+        nx = Math.round(nx / grid) * grid;
+        ny = Math.round(ny / grid) * grid;
+      }
+
+      const node = createViewObjectNodeLayout(obj.id, nx, ny, size.width, size.height);
+      const nextObjects = { ...(viewWithLayout.objects ?? {}) };
+      nextObjects[obj.id] = obj;
+
+      const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
+      const nextNodes = [...layout.nodes, { ...node, zIndex: maxZ + 1 }];
+
+      model.views[viewId] = {
+        ...viewWithLayout,
+        objects: nextObjects,
+        layout: { nodes: nextNodes, relationships: layout.relationships }
+      };
+    });
+
+    return obj.id;
+  };
+
+  updateViewObject = (viewId: string, objectId: string, patch: Partial<Omit<ViewObject, 'id'>>): void => {
+    this.updateModel((model) => {
+      const view = getView(model, viewId);
+      const objects = (view.objects ?? {}) as Record<string, ViewObject>;
+      const current = objects[objectId];
+      if (!current) throw new Error(`ViewObject not found: ${objectId}`);
+
+      const merged: ViewObject = {
+        ...current,
+        ...patch,
+        id: current.id,
+        name: typeof (patch as any).name === 'string' ? ((patch as any).name as string).trim() || undefined : current.name,
+        text: typeof (patch as any).text === 'string' ? ((patch as any).text as string).trim() || undefined : current.text,
+        style: patch.style ? { ...(current.style ?? {}), ...(patch.style ?? {}) } : current.style
+      };
+
+      model.views[viewId] = {
+        ...view,
+        objects: { ...objects, [objectId]: merged }
+      };
+    });
+  };
+
+  deleteViewObject = (viewId: string, objectId: string): void => {
+    this.updateModel((model) => {
+      const view = getView(model, viewId);
+      const objects = (view.objects ?? {}) as Record<string, ViewObject>;
+      if (!objects[objectId]) return;
+
+      const nextObjects = { ...objects };
+      delete nextObjects[objectId];
+
+      if (!view.layout) {
+        model.views[viewId] = { ...view, objects: nextObjects };
+        return;
+      }
+
+      const layout = view.layout;
+      const nextNodes = layout.nodes.filter((n) => n.objectId !== objectId);
+      model.views[viewId] = {
+        ...view,
+        objects: nextObjects,
+        layout: { nodes: nextNodes, relationships: layout.relationships }
+      };
+    });
   };
 
   updateViewNodeLayout = (viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void => {

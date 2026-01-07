@@ -6,6 +6,7 @@ export type Selection =
   | { kind: 'connector'; connectorId: string }
   | { kind: 'relationship'; relationshipId: string }
   | { kind: 'view'; viewId: string }
-  | { kind: 'viewNode'; viewId: string; elementId: string };
+  | { kind: 'viewNode'; viewId: string; elementId: string }
+  | { kind: 'viewObject'; viewId: string; objectId: string };
 
 export const noSelection: Selection = { kind: 'none' };

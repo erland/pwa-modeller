@@ -135,7 +135,7 @@ describe('persistence', () => {
     modelV4.schemaVersion = 4;
 
     const parsed = deserializeModel(serializeModel(modelV4));
-    expect(parsed.schemaVersion).toBe(6);
+    expect(parsed.schemaVersion).toBe(7);
     expect(parsed.connectors).toEqual({});
   });
 
@@ -148,7 +148,7 @@ describe('persistence', () => {
     modelV5.views[view.id] = view;
 
     const parsed = deserializeModel(serializeModel(modelV5));
-    expect(parsed.schemaVersion).toBe(6);
+    expect(parsed.schemaVersion).toBe(7);
     expect((parsed.views[view.id] as any).objects).toEqual({});
   });
 
@@ -199,7 +199,7 @@ describe('persistence', () => {
 
     const parsed = deserializeModel(serializeModel(modelV1));
 
-    expect(parsed.schemaVersion).toBe(6);
+    expect(parsed.schemaVersion).toBe(7);
 
     const folders = Object.values(parsed.folders);
     expect(folders.find((f) => f.kind === 'elements')).toBeUndefined();
@@ -217,7 +217,7 @@ describe('persistence', () => {
     delete modelV4.connectors;
 
     const parsed = deserializeModel(serializeModel(modelV4));
-    expect(parsed.schemaVersion).toBe(6);
+    expect(parsed.schemaVersion).toBe(7);
     expect(parsed.connectors).toEqual({});
   });
 

@@ -18,7 +18,7 @@ type Props = {
 
 export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId, onClose, onSelect }: Props) {
   const [nameDraft, setNameDraft] = useState('');
-  const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [documentationDraft, setDocumentationDraft] = useState('');
   const [sourceId, setSourceId] = useState('');
   const [targetId, setTargetId] = useState('');
   const [typeDraft, setTypeDraft] = useState<RelationshipType>((RELATIONSHIP_TYPES[2] ?? 'Association') as RelationshipType);
@@ -29,7 +29,7 @@ export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId
   useEffect(() => {
     if (!isOpen) return;
     setNameDraft('');
-    setDescriptionDraft('');
+    setDocumentationDraft('');
 
     const ids = elementIdsInOrder;
     const validSource = prefillSourceElementId && ids.includes(prefillSourceElementId) ? prefillSourceElementId : ids[0];
@@ -88,7 +88,7 @@ export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId
                 targetElementId: targetId,
                 type: typeDraft,
                 name: nameDraft.trim() || undefined,
-                description: descriptionDraft.trim() || undefined
+                documentation: documentationDraft.trim() || undefined
               });
               modelStore.addRelationship(created);
               onClose();
@@ -132,13 +132,13 @@ export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId
         </div>
 
         <div className="propertiesRow">
-          <div className="propertiesKey">Description</div>
+          <div className="propertiesKey">Documentation</div>
           <div className="propertiesValue" style={{ fontWeight: 400 }}>
             <input
               className="textInput"
-              aria-label="Relationship description"
-              value={descriptionDraft}
-              onChange={(e) => setDescriptionDraft(e.target.value)}
+              aria-label="Relationship documentation"
+              value={documentationDraft}
+              onChange={(e) => setDocumentationDraft(e.target.value)}
             />
           </div>
         </div>

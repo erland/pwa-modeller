@@ -154,6 +154,68 @@ function migrateV5ToV6(model: Model): Model {
   return model;
 }
 
+/**
+ * v6 -> v7 migration:
+ * - Phase out `description` on concept objects (elements, relationships, views, connectors).
+ * - If `documentation` is empty but `description` exists, move it into `documentation`.
+ */
+function migrateV6ToV7(model: Model): Model {
+  // Elements
+  for (const id of Object.keys(model.elements)) {
+    const el: any = model.elements[id] as any;
+    if (!el) continue;
+    if (typeof el.documentation !== 'string' || el.documentation.trim().length === 0) {
+      if (typeof el.description === 'string' && el.description.trim().length > 0) {
+        el.documentation = el.description;
+      }
+    }
+    if ('description' in el) delete el.description;
+  }
+
+  // Relationships
+  for (const id of Object.keys(model.relationships)) {
+    const rel: any = model.relationships[id] as any;
+    if (!rel) continue;
+    if (typeof rel.documentation !== 'string' || rel.documentation.trim().length === 0) {
+      if (typeof rel.description === 'string' && rel.description.trim().length > 0) {
+        rel.documentation = rel.description;
+      }
+    }
+    if ('description' in rel) delete rel.description;
+  }
+
+  // Views
+  for (const id of Object.keys(model.views)) {
+    const v: any = model.views[id] as any;
+    if (!v) continue;
+    if (typeof v.documentation !== 'string' || v.documentation.trim().length === 0) {
+      if (typeof v.description === 'string' && v.description.trim().length > 0) {
+        v.documentation = v.description;
+      }
+    }
+    if ('description' in v) delete v.description;
+  }
+
+  // Connectors
+  const m: any = model as any;
+  if (isRecord(m.connectors)) {
+    for (const id of Object.keys(m.connectors)) {
+      const c: any = m.connectors[id] as any;
+      if (!c) continue;
+      if (typeof c.documentation !== 'string' || c.documentation.trim().length === 0) {
+        if (typeof c.description === 'string' && c.description.trim().length > 0) {
+          c.documentation = c.description;
+        }
+      }
+      if ('description' in c) delete c.description;
+    }
+  }
+
+  model.schemaVersion = 7;
+  return model;
+}
+
+
 export function migrateModel(model: Model): Model {
   let v = getSchemaVersion(model);
   if (v < 2) {
@@ -174,6 +236,10 @@ export function migrateModel(model: Model): Model {
   }
   if (v < 6) {
     model = migrateV5ToV6(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 7) {
+    model = migrateV6ToV7(model);
   }
   return model;
 }

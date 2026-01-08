@@ -129,7 +129,6 @@ export function cloneView(model: Model, viewId: string): string | null {
     objectIdMap.set(o.id, nextId);
     nextObjects[nextId] = { ...(JSON.parse(JSON.stringify(o)) as ViewObject), id: nextId };
   }
-
   const nextLayout: ViewLayout | undefined = original.layout ? (JSON.parse(JSON.stringify(original.layout)) as ViewLayout) : undefined;
   if (nextLayout && objectIdMap.size > 0) {
     nextLayout.nodes = nextLayout.nodes.map((n) => {
@@ -142,7 +141,6 @@ export function cloneView(model: Model, viewId: string): string | null {
   const clone = createView({
     name,
     viewpointId: original.viewpointId,
-    description: original.description,
     documentation: original.documentation,
     stakeholders: original.stakeholders ? [...original.stakeholders] : undefined,
     formatting: original.formatting ? JSON.parse(JSON.stringify(original.formatting)) : undefined,

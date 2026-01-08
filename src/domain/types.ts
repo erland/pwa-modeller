@@ -201,7 +201,6 @@ export interface RelationshipConnector extends HasTaggedValues, HasExternalIds {
   type: ConnectorType;
   /** Optional label; usually empty for junctions. */
   name?: string;
-  description?: string;
   documentation?: string;
 }
 
@@ -239,7 +238,6 @@ export interface ViewObject {
 export interface Element extends HasTaggedValues, HasExternalIds {
   id: string;
   name: string;
-  description?: string;
   layer: ArchimateLayer;
   type: ElementType;
   /** Present only when type === 'Unknown'. */
@@ -259,7 +257,7 @@ export interface Relationship extends HasTaggedValues, HasExternalIds {
   /** Present only when type === 'Unknown'. */
   unknownType?: UnknownTypeInfo;
   name?: string;
-  description?: string;
+  documentation?: string;
   attrs?: RelationshipAttributes;
 }
 
@@ -267,6 +265,7 @@ export interface Viewpoint {
   /** Stable identifier (e.g. "layered", "capability-map"). */
   id: string;
   name: string;
+  /** Optional summary shown in viewpoint pickers. */
   description?: string;
   allowedElementTypes: ElementType[];
   allowedRelationshipTypes: RelationshipType[];
@@ -322,7 +321,6 @@ export interface View extends HasTaggedValues, HasExternalIds {
   id: string;
   name: string;
   viewpointId: string;
-  description?: string;
   documentation?: string;
   stakeholders?: string[];
   formatting?: ViewFormatting;

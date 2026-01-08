@@ -42,7 +42,6 @@ export function ElementsWorkspace({ selection, onSelect }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
   const [documentation, setDocumentation] = useState('');
 
   const typesForLayer = useMemo(() => ELEMENT_TYPES_BY_LAYER[layer], [layer]);
@@ -68,7 +67,6 @@ export function ElementsWorkspace({ selection, onSelect }: Props) {
 
   function resetElementForm(e?: Partial<Element>) {
     setName(e?.name ?? '');
-    setDescription(e?.description ?? '');
     setDocumentation(e?.documentation ?? '');
   }
 
@@ -84,8 +82,7 @@ export function ElementsWorkspace({ selection, onSelect }: Props) {
 
     const el = createElement({
       name: nm,
-      description: description.trim() || undefined,
-      documentation: documentation.trim() || undefined,
+documentation: documentation.trim() || undefined,
       layer,
       type: elementType
     });
@@ -114,8 +111,7 @@ export function ElementsWorkspace({ selection, onSelect }: Props) {
     if (!nm) return;
     modelStore.updateElement(editId, {
       name: nm,
-      description: description.trim() || undefined,
-      documentation: documentation.trim() || undefined
+documentation: documentation.trim() || undefined
     });
     setEditId(null);
   }
@@ -288,8 +284,6 @@ export function ElementsWorkspace({ selection, onSelect }: Props) {
             />
           </div>
           <div className="formRow">
-            <label htmlFor="el-desc">Description</label>
-            <textarea id="el-desc" className="textArea" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div className="formRow">
             <label htmlFor="el-doc">Documentation</label>
@@ -322,8 +316,6 @@ export function ElementsWorkspace({ selection, onSelect }: Props) {
             <input id="edit-el-name" className="textInput" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
           <div className="formRow">
-            <label htmlFor="edit-el-desc">Description</label>
-            <textarea id="edit-el-desc" className="textArea" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div className="formRow">
             <label htmlFor="edit-el-doc">Documentation</label>

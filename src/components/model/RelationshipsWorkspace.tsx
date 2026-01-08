@@ -34,7 +34,7 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
 
   const [editId, setEditId] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [documentation, setDocumentation] = useState('');
 
   const typeOptions = useMemo(() => RELATIONSHIP_TYPES, []);
 
@@ -99,7 +99,7 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
     const r = model.relationships[relationshipId];
     if (!r) return;
     setName(r.name ?? '');
-    setDescription(r.description ?? '');
+    setDocumentation((r as any).documentation ?? '');
     setEditId(relationshipId);
   }
 
@@ -107,7 +107,7 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
     if (!editId) return;
     modelStore.updateRelationship(editId, {
       name: name.trim() || undefined,
-      description: description.trim() || undefined
+      documentation: documentation.trim() || undefined
     });
     setEditId(null);
   }
@@ -280,8 +280,8 @@ export function RelationshipsWorkspace({ selection, onSelect }: Props) {
             <input id="rel-name" className="textInput" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
           <div className="formRow">
-            <label htmlFor="rel-desc">Description</label>
-            <textarea id="rel-desc" className="textArea" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <label htmlFor="rel-doc">Documentation</label>
+            <textarea id="rel-doc" className="textArea" value={documentation} onChange={(e) => setDocumentation(e.target.value)} />
           </div>
         </div>
       </Dialog>

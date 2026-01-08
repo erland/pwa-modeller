@@ -12,7 +12,6 @@ describe('domain factories', () => {
 
     expect(el.id).toMatch(/^el_/);
     expect(el.name).toBe('My Actor');
-    expect(el.description).toBe('desc');
     expect(el.documentation).toBe('docs');
   });
 
@@ -104,6 +103,6 @@ describe('domain factories', () => {
     expect((model as any).externalIds).toEqual([]);
     expect((model as any).taggedValues).toEqual([]);
 
-    expect(model.schemaVersion).toBe(6);
+    expect(model.schemaVersion).toBe(7);
   });
 });

@@ -4,7 +4,7 @@ import { RELATIONSHIP_TYPES } from '../../../domain';
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { NameEditorRow } from './editors/NameEditorRow';
-import { TextAreaRow } from './editors/TextAreaRow';
+import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
 import { PropertyRow } from './editors/PropertyRow';
 import { ExternalIdsSection } from './sections/ExternalIdsSection';
 import { TaggedValuesSection } from './sections/TaggedValuesSection';
@@ -192,13 +192,12 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
           value={rel.name}
           onChange={(next) => actions.updateRelationship(rel.id, { name: next })}
         />
-        <TextAreaRow
-          label="Description"
-          ariaLabel="Relationship property description"
-          value={rel.description ?? ''}
-          onChange={(next) => actions.updateRelationship(rel.id, { description: next || undefined })}
+        <DocumentationEditorRow
+          label="Documentation"
+          ariaLabel="Relationship property documentation"
+          value={rel.documentation}
+          onChange={(next) => actions.updateRelationship(rel.id, { documentation: next })}
         />
-
         <div className="propertiesRow">
           <div className="propertiesKey">Used in views</div>
           <div className="propertiesValue" style={{ fontWeight: 400 }}>

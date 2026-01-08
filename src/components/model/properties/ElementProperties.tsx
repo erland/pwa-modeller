@@ -10,7 +10,6 @@ import { findFolderContaining, getElementLabel, splitRelationshipsForElement } f
 import { CreateRelationshipDialog } from '../navigator/dialogs/CreateRelationshipDialog';
 import { NameEditorRow } from './editors/NameEditorRow';
 import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
-import { TextAreaRow } from './editors/TextAreaRow';
 import { ExternalIdsSection } from './sections/ExternalIdsSection';
 import { TaggedValuesSection } from './sections/TaggedValuesSection';
 import { PropertyRow } from './editors/PropertyRow';
@@ -126,15 +125,8 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                 </option>
               ))}
             </select>
-        </PropertyRow>
-        <TextAreaRow
-          label="Description"
-          ariaLabel="Element property description"
-          value={el.description ?? ''}
-          onChange={(next) => actions.updateElement(el.id, { description: next || undefined })}
-        />
-        <DocumentationEditorRow
-          label="Docs"
+        </PropertyRow>        <DocumentationEditorRow
+          label="Documentation"
           ariaLabel="Element property documentation"
           value={el.documentation}
           onChange={(next) => actions.updateElement(el.id, { documentation: next })}

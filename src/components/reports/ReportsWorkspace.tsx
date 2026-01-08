@@ -103,7 +103,7 @@ export function ReportsWorkspace() {
     const csv = rowsToCsv(viewRows, [
       { key: 'name', header: 'Name' },
       { key: 'viewpoint', header: 'Viewpoint' },
-      { key: 'description', header: 'Description' },
+      { key: 'documentation', header: 'Documentation' },
       { key: 'folderPath', header: 'Folder' }
     ]);
     const base = `${model.metadata.name}-views`;
@@ -117,7 +117,7 @@ export function ReportsWorkspace() {
       { key: 'type', header: 'Type' },
       { key: 'source', header: 'Source' },
       { key: 'target', header: 'Target' },
-      { key: 'description', header: 'Description' }
+      { key: 'documentation', header: 'Documentation' }
     ]);
     const base = `${model.metadata.name}-relationships`;
     downloadTextFile(sanitizeFileNameWithExtension(base, 'csv'), csv, 'text/csv');
@@ -259,7 +259,7 @@ export function ReportsWorkspace() {
               <tr>
                 <th {...thSortProps('views', 'name')}><SortHeader tab="views" colKey="name" label="Name" /></th>
                 <th {...thSortProps('views', 'viewpoint')}><SortHeader tab="views" colKey="viewpoint" label="Viewpoint" /></th>
-                <th {...thSortProps('views', 'description')}><SortHeader tab="views" colKey="description" label="Description" /></th>
+                <th {...thSortProps('views', 'documentation')}><SortHeader tab="views" colKey="documentation" label="Documentation" /></th>
                 <th {...thSortProps('views', 'folderPath')}><SortHeader tab="views" colKey="folderPath" label="Folder" /></th>
               </tr>
             </thead>
@@ -275,7 +275,7 @@ export function ReportsWorkspace() {
                   <tr key={r.id}>
                     <td>{r.name || '(unnamed)'}</td>
                     <td>{r.viewpoint}</td>
-                    <td>{r.description}</td>
+                    <td>{r.documentation}</td>
                     <td>{r.folderPath}</td>
                   </tr>
                 ))
@@ -304,7 +304,7 @@ export function ReportsWorkspace() {
                 <th {...thSortProps('relationships', 'type')}><SortHeader tab="relationships" colKey="type" label="Type" /></th>
                 <th {...thSortProps('relationships', 'source')}><SortHeader tab="relationships" colKey="source" label="Source" /></th>
                 <th {...thSortProps('relationships', 'target')}><SortHeader tab="relationships" colKey="target" label="Target" /></th>
-                <th {...thSortProps('relationships', 'description')}><SortHeader tab="relationships" colKey="description" label="Description" /></th>
+                <th {...thSortProps('relationships', 'documentation')}><SortHeader tab="relationships" colKey="documentation" label="Documentation" /></th>
               </tr>
             </thead>
             <tbody>
@@ -321,7 +321,7 @@ export function ReportsWorkspace() {
                     <td className="mono">{r.type}</td>
                     <td>{r.source}</td>
                     <td>{r.target}</td>
-                    <td>{r.description}</td>
+                    <td>{r.documentation}</td>
                   </tr>
                 ))
               )}

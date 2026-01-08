@@ -19,7 +19,7 @@ export type ViewInventoryRow = {
   id: string;
   name: string;
   viewpoint: string;
-  description: string;
+  documentation: string;
   folderPath: string;
 };
 
@@ -29,7 +29,7 @@ export type RelationshipReportRow = {
   type: string;
   source: string;
   target: string;
-  description: string;
+  documentation: string;
 };
 
 function findFolderContainingElement(model: Model, elementId: string): string | null {
@@ -87,7 +87,7 @@ export function generateViewInventoryReport(model: Model): ViewInventoryRow[] {
         id: v.id,
         name: v.name,
         viewpoint: vp?.name ?? v.viewpointId,
-        description: v.description ?? '',
+        documentation: v.documentation ?? '',
         folderPath: folderPath(model, findFolderContainingView(model, v.id))
       };
     })
@@ -107,7 +107,7 @@ export function generateRelationshipReport(model: Model): RelationshipReportRow[
         type: r.type,
         source: src?.name || srcId || '',
         target: tgt?.name || tgtId || '',
-        description: r.description ?? ''
+        documentation: r.documentation ?? ''
       };
     })
     .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }));

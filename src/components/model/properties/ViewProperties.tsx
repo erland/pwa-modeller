@@ -7,7 +7,6 @@ import type { ModelActions } from './actions';
 import { findFolderContaining } from './utils';
 import { NameEditorRow } from './editors/NameEditorRow';
 import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
-import { TextAreaRow } from './editors/TextAreaRow';
 import { PropertyRow } from './editors/PropertyRow';
 import { ExternalIdsSection } from './sections/ExternalIdsSection';
 import { TaggedValuesSection } from './sections/TaggedValuesSection';
@@ -60,15 +59,8 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
             <p className="panelHint" style={{ marginTop: 6 }}>
               {viewpointLabel(view.viewpointId)}
             </p>
-        </PropertyRow>
-        <TextAreaRow
-          label="Description"
-          ariaLabel="View property description"
-          value={view.description ?? ''}
-          onChange={(next) => actions.updateView(view.id, { description: next || undefined })}
-        />
-        <DocumentationEditorRow
-          label="Docs"
+        </PropertyRow>        <DocumentationEditorRow
+          label="Documentation"
           ariaLabel="View property documentation"
           value={view.documentation}
           onChange={(next) => actions.updateView(view.id, { documentation: next })}

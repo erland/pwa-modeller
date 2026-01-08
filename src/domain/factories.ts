@@ -30,10 +30,9 @@ export function createElement(input: CreateElementInput): Element {
   return {
     id: input.id ?? createId('el'),
     name: input.name.trim(),
-    description: input.description?.trim() || undefined,
     layer: input.layer,
     type: input.type,
-    documentation: input.documentation?.trim() || undefined
+    documentation: (input.documentation ?? (input as any).description)?.trim() || undefined
   };
 }
 
@@ -54,7 +53,7 @@ export function createRelationship(input: CreateRelationshipInput): Relationship
     type: input.type,
     unknownType: input.unknownType,
     name: input.name?.trim() || undefined,
-    description: input.description?.trim() || undefined,
+    documentation: ((input as any).documentation ?? (input as any).description)?.trim() || undefined,
     attrs: input.attrs,
     externalIds: input.externalIds ?? [],
     taggedValues: input.taggedValues ?? []
@@ -69,8 +68,7 @@ export function createConnector(input: CreateConnectorInput): RelationshipConnec
     id: input.id ?? createId('conn'),
     type: input.type,
     name: input.name?.trim() || undefined,
-    description: input.description?.trim() || undefined,
-    documentation: input.documentation?.trim() || undefined,
+    documentation: (input.documentation ?? (input as any).description)?.trim() || undefined,
     externalIds: input.externalIds ?? [],
     taggedValues: input.taggedValues ?? []
   };
@@ -87,8 +85,7 @@ export function createView(input: CreateViewInput): View {
     id: input.id ?? createId('view'),
     name: input.name.trim(),
     viewpointId: input.viewpointId.trim(),
-    description: input.description?.trim() || undefined,
-    documentation: input.documentation?.trim() || undefined,
+    documentation: (input.documentation ?? (input as any).description)?.trim() || undefined,
     stakeholders: input.stakeholders,
     formatting,
     // View-local diagram objects (notes/labels/group boxes). Optional in the schema, but
@@ -219,6 +216,6 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     // Bump when the persisted schema changes.
     // v5 introduces model.connectors (relationship connectors / junctions).
     // v6 introduces view.objects + view-only layout nodes (notes/labels/group boxes).
-    schemaVersion: 6
+    schemaVersion: 7
   };
 }

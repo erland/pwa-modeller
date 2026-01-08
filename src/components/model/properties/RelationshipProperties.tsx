@@ -3,8 +3,11 @@ import { RELATIONSHIP_TYPES } from '../../../domain';
 
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
-import { TaggedValuesSummary } from './TaggedValuesSummary';
-import { ExternalIdsSummary } from './ExternalIdsSummary';
+import { NameEditorRow } from './editors/NameEditorRow';
+import { TextAreaRow } from './editors/TextAreaRow';
+import { PropertyRow } from './editors/PropertyRow';
+import { ExternalIdsSection } from './sections/ExternalIdsSection';
+import { TaggedValuesSection } from './sections/TaggedValuesSection';
 
 const ACCESS_TYPES: AccessType[] = ['Access', 'Read', 'Write', 'ReadWrite'];
 
@@ -52,9 +55,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
     <div>
       <p className="panelHint">Relationship</p>
       <div className="propertiesGrid">
-        <div className="propertiesRow">
-          <div className="propertiesKey">Type</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
+        <PropertyRow label="Type">
             <select
               className="selectInput"
               aria-label="Relationship property type"
@@ -67,8 +68,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
                 </option>
               ))}
             </select>
-          </div>
-        </div>
+        </PropertyRow>
 
         {rel.type === 'Unknown' ? (
           <div className="propertiesRow">
@@ -157,10 +157,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
             </div>
           </div>
         )}
-
-        <div className="propertiesRow">
-          <div className="propertiesKey">From</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
+        <PropertyRow label="From">
             <select
               className="selectInput"
               aria-label="Relationship property source"
@@ -174,12 +171,8 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
               ))}
             </select>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Current: {sourceName}</div>
-          </div>
-        </div>
-
-        <div className="propertiesRow">
-          <div className="propertiesKey">To</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
+        </PropertyRow>
+        <PropertyRow label="To">
             <select
               className="selectInput"
               aria-label="Relationship property target"
@@ -193,32 +186,18 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
               ))}
             </select>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Current: {targetName}</div>
-          </div>
-        </div>
-
-        <div className="propertiesRow">
-          <div className="propertiesKey">Name</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <input
-              className="textInput"
-              aria-label="Relationship property name"
-              value={rel.name ?? ''}
-              onChange={(e) => actions.updateRelationship(rel.id, { name: e.target.value || undefined })}
-            />
-          </div>
-        </div>
-
-        <div className="propertiesRow">
-          <div className="propertiesKey">Description</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <textarea
-              className="textArea"
-              aria-label="Relationship property description"
-              value={rel.description ?? ''}
-              onChange={(e) => actions.updateRelationship(rel.id, { description: e.target.value || undefined })}
-            />
-          </div>
-        </div>
+        </PropertyRow>
+        <NameEditorRow
+          ariaLabel="Relationship property name"
+          value={rel.name}
+          onChange={(next) => actions.updateRelationship(rel.id, { name: next })}
+        />
+        <TextAreaRow
+          label="Description"
+          ariaLabel="Relationship property description"
+          value={rel.description ?? ''}
+          onChange={(next) => actions.updateRelationship(rel.id, { description: next || undefined })}
+        />
 
         <div className="propertiesRow">
           <div className="propertiesKey">Used in views</div>
@@ -245,9 +224,9 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
         </div>
       </div>
 
-      <ExternalIdsSummary externalIds={rel.externalIds} />
+      <ExternalIdsSection externalIds={rel.externalIds} />
 
-      <TaggedValuesSummary
+      <TaggedValuesSection
         taggedValues={rel.taggedValues}
         onChange={(next) => actions.updateRelationship(rel.id, { taggedValues: next })}
         dialogTitle={`Relationship tagged values — ${rel.name || rel.id}`}

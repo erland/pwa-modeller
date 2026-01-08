@@ -5,8 +5,12 @@ import type { FolderOption } from '../../../domain';
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { findFolderContaining } from './utils';
-import { TaggedValuesSummary } from './TaggedValuesSummary';
-import { ExternalIdsSummary } from './ExternalIdsSummary';
+import { NameEditorRow } from './editors/NameEditorRow';
+import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
+import { TextAreaRow } from './editors/TextAreaRow';
+import { PropertyRow } from './editors/PropertyRow';
+import { ExternalIdsSection } from './sections/ExternalIdsSection';
+import { TaggedValuesSection } from './sections/TaggedValuesSection';
 
 type Props = {
   model: Model;
@@ -34,20 +38,13 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
     <div>
       <p className="panelHint">View</p>
       <div className="propertiesGrid">
-        <div className="propertiesRow">
-          <div className="propertiesKey">Name</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <input
-              className="textInput"
-              aria-label="View property name"
-              value={view.name}
-              onChange={(e) => actions.updateView(view.id, { name: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Viewpoint</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
+        <NameEditorRow
+          ariaLabel="View property name"
+          required
+          value={view.name}
+          onChange={(next) => actions.updateView(view.id, { name: next ?? '' })}
+        />
+        <PropertyRow label="Viewpoint">
             <select
               className="selectInput"
               aria-label="View property viewpoint"
@@ -63,30 +60,19 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
             <p className="panelHint" style={{ marginTop: 6 }}>
               {viewpointLabel(view.viewpointId)}
             </p>
-          </div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Description</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <textarea
-              className="textArea"
-              aria-label="View property description"
-              value={view.description ?? ''}
-              onChange={(e) => actions.updateView(view.id, { description: e.target.value || undefined })}
-            />
-          </div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Docs</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <textarea
-              className="textArea"
-              aria-label="View property documentation"
-              value={view.documentation ?? ''}
-              onChange={(e) => actions.updateView(view.id, { documentation: e.target.value || undefined })}
-            />
-          </div>
-        </div>
+        </PropertyRow>
+        <TextAreaRow
+          label="Description"
+          ariaLabel="View property description"
+          value={view.description ?? ''}
+          onChange={(next) => actions.updateView(view.id, { description: next || undefined })}
+        />
+        <DocumentationEditorRow
+          label="Docs"
+          ariaLabel="View property documentation"
+          value={view.documentation}
+          onChange={(next) => actions.updateView(view.id, { documentation: next })}
+        />
         <div className="propertiesRow">
           <div className="propertiesKey">Placement</div>
           <div className="propertiesValue">
@@ -231,9 +217,9 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
         </div>
       </div>
 
-      <ExternalIdsSummary externalIds={view.externalIds} />
+      <ExternalIdsSection externalIds={view.externalIds} />
 
-      <TaggedValuesSummary
+      <TaggedValuesSection
         taggedValues={view.taggedValues}
         onChange={(next) => actions.updateView(view.id, { taggedValues: next })}
         dialogTitle={`View tagged values — ${view.name || view.id}`}

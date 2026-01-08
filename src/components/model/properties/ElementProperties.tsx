@@ -8,8 +8,12 @@ import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { findFolderContaining, getElementLabel, splitRelationshipsForElement } from './utils';
 import { CreateRelationshipDialog } from '../navigator/dialogs/CreateRelationshipDialog';
-import { TaggedValuesSummary } from './TaggedValuesSummary';
-import { ExternalIdsSummary } from './ExternalIdsSummary';
+import { NameEditorRow } from './editors/NameEditorRow';
+import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
+import { TextAreaRow } from './editors/TextAreaRow';
+import { ExternalIdsSection } from './sections/ExternalIdsSection';
+import { TaggedValuesSection } from './sections/TaggedValuesSection';
+import { PropertyRow } from './editors/PropertyRow';
 
 type TraceDirection = 'outgoing' | 'incoming' | 'both';
 
@@ -74,20 +78,13 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
     <div>
       <p className="panelHint">Element</p>
       <div className="propertiesGrid">
-        <div className="propertiesRow">
-          <div className="propertiesKey">Name</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <input
-              className="textInput"
-              aria-label="Element property name"
-              value={el.name}
-              onChange={(e) => actions.updateElement(el.id, { name: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Type</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
+        <NameEditorRow
+          ariaLabel="Element property name"
+          required
+          value={el.name}
+          onChange={(next) => actions.updateElement(el.id, { name: next ?? '' })}
+        />
+        <PropertyRow label="Type">
             <select
               className="selectInput"
               aria-label="Element property type"
@@ -100,8 +97,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                 </option>
               ))}
             </select>
-          </div>
-        </div>
+        </PropertyRow>
 
         {el.type === 'Unknown' ? (
           <div className="propertiesRow">
@@ -117,9 +113,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
             </div>
           </div>
         ) : null}
-        <div className="propertiesRow">
-          <div className="propertiesKey">Layer</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
+        <PropertyRow label="Layer">
             <select
               className="selectInput"
               aria-label="Element property layer"
@@ -132,33 +126,20 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                 </option>
               ))}
             </select>
-          </div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Description</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <textarea
-              className="textArea"
-              aria-label="Element property description"
-              value={el.description ?? ''}
-              onChange={(e) => actions.updateElement(el.id, { description: e.target.value || undefined })}
-            />
-          </div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Docs</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <textarea
-              className="textArea"
-              aria-label="Element property documentation"
-              value={el.documentation ?? ''}
-              onChange={(e) => actions.updateElement(el.id, { documentation: e.target.value || undefined })}
-            />
-          </div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Folder</div>
-          <div className="propertiesValue">
+        </PropertyRow>
+        <TextAreaRow
+          label="Description"
+          ariaLabel="Element property description"
+          value={el.description ?? ''}
+          onChange={(next) => actions.updateElement(el.id, { description: next || undefined })}
+        />
+        <DocumentationEditorRow
+          label="Docs"
+          ariaLabel="Element property documentation"
+          value={el.documentation}
+          onChange={(next) => actions.updateElement(el.id, { documentation: next })}
+        />
+        <PropertyRow label="Folder">
             <select
               className="selectInput"
               value={currentFolderId ?? ''}
@@ -173,13 +154,12 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                 </option>
               ))}
             </select>
-          </div>
-        </div>
+        </PropertyRow>
       </div>
 
-      <ExternalIdsSummary externalIds={el.externalIds} />
+      <ExternalIdsSection externalIds={el.externalIds} />
 
-      <TaggedValuesSummary
+      <TaggedValuesSection
         taggedValues={el.taggedValues}
         onChange={(next) => actions.updateElement(el.id, { taggedValues: next })}
         dialogTitle={`Element tagged values — ${el.name || el.id}`}

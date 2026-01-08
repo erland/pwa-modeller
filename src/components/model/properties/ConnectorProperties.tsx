@@ -1,8 +1,11 @@
 import type { Model, Relationship } from '../../../domain';
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
-import { ExternalIdsSummary } from './ExternalIdsSummary';
-import { TaggedValuesSummary } from './TaggedValuesSummary';
+import { NameEditorRow } from './editors/NameEditorRow';
+import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
+import { PropertyRow } from './editors/PropertyRow';
+import { ExternalIdsSection } from './sections/ExternalIdsSection';
+import { TaggedValuesSection } from './sections/TaggedValuesSection';
 
 type Props = {
   model: Model;
@@ -53,34 +56,17 @@ export function ConnectorProperties({ model, connectorId, actions, onSelect }: P
       <p className="panelHint">Connector</p>
 
       <div className="propertiesGrid">
-        <div className="propertiesRow">
-          <div className="propertiesKey">Type</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>{conn.type}</div>
-        </div>
-
-        <div className="propertiesRow">
-          <div className="propertiesKey">Name</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <input
-              className="textInput"
-              aria-label="Connector property name"
-              value={conn.name ?? ''}
-              onChange={(e) => actions.updateConnector(conn.id, { name: e.target.value || undefined })}
-            />
-          </div>
-        </div>
-
-        <div className="propertiesRow">
-          <div className="propertiesKey">Documentation</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <textarea
-              className="textArea"
-              aria-label="Connector property documentation"
-              value={conn.documentation ?? ''}
-              onChange={(e) => actions.updateConnector(conn.id, { documentation: e.target.value || undefined })}
-            />
-          </div>
-        </div>
+        <PropertyRow label="Type">{conn.type}</PropertyRow>
+        <NameEditorRow
+          ariaLabel="Connector property name"
+          value={conn.name}
+          onChange={(next) => actions.updateConnector(conn.id, { name: next })}
+        />
+        <DocumentationEditorRow
+          ariaLabel="Connector property documentation"
+          value={conn.documentation}
+          onChange={(next) => actions.updateConnector(conn.id, { documentation: next })}
+        />
 
         <div className="propertiesRow">
           <div className="propertiesKey">Used in views</div>
@@ -148,9 +134,9 @@ export function ConnectorProperties({ model, connectorId, actions, onSelect }: P
         )}
       </div>
 
-      <ExternalIdsSummary externalIds={conn.externalIds} />
+      <ExternalIdsSection externalIds={conn.externalIds} />
 
-      <TaggedValuesSummary
+      <TaggedValuesSection
         taggedValues={conn.taggedValues}
         onChange={(next) => actions.updateConnector(conn.id, { taggedValues: next })}
         dialogTitle={`Connector tagged values — ${conn.name || conn.id}`}

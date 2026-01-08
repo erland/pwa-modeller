@@ -1,8 +1,6 @@
 import type { Model } from '../../../domain';
 import type { ModelActions } from './actions';
-import { folderPathLabel } from './utils';
-import { ExternalIdsSummary } from './ExternalIdsSummary';
-import { TaggedValuesSummary } from './TaggedValuesSummary';
+import { PropertyRow } from './editors/PropertyRow';
 
 type Props = {
   model: Model;
@@ -20,31 +18,7 @@ export function FolderProperties({ model, folderId, actions }: Props) {
     <div>
       <p className="panelHint">Folder</p>
       <div className="propertiesGrid">
-        <div className="propertiesRow">
-          <div className="propertiesKey">Name</div>
-          <div className="propertiesValue">{folder.name}</div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Kind</div>
-          <div className="propertiesValue">{folder.kind}</div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Folders</div>
-          <div className="propertiesValue">{folder.folderIds.length}</div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Elements</div>
-          <div className="propertiesValue">{folder.elementIds.length}</div>
-        </div>
-        <div className="propertiesRow">
-          <div className="propertiesKey">Views</div>
-          <div className="propertiesValue">{folder.viewIds.length}</div>
-        </div>
-
-        <div className="propertiesRow">
-          <div className="propertiesKey">Path</div>
-          <div className="propertiesValue">{folderPathLabel(model, folder.id)}</div>
-        </div>
+        <PropertyRow label="Name">{folder.name}</PropertyRow>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -73,13 +47,6 @@ export function FolderProperties({ model, folderId, actions }: Props) {
           Delete
         </button>
       </div>
-
-      <ExternalIdsSummary externalIds={folder.externalIds} />
-      <TaggedValuesSummary
-        taggedValues={folder.taggedValues}
-        onChange={(next) => actions.updateFolder(folder.id, { taggedValues: next })}
-        dialogTitle={`Folder tagged values — ${folder.name || folder.id}`}
-      />
     </div>
   );
 }

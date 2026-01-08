@@ -1,0 +1,179 @@
+import type { Folder, Model } from '../../../domain';
+import { isRecord, uniquePush } from '../utils';
+
+function getSchemaVersion(model: Model): number {
+  return typeof model.schemaVersion === 'number' ? model.schemaVersion : 1;
+}
+
+function findRootFolder(model: Model): Folder | undefined {
+  const byKind = Object.values(model.folders).find((f) => f.kind === 'root');
+  if (byKind) return byKind;
+
+  // Fallback for very old/invalid files: pick a folder with no parent.
+  return Object.values(model.folders).find((f) => !f.parentId);
+}
+
+/**
+ * v1 -> v2 migration:
+ * - Remove the implicit 'Elements' and 'Views' root folders.
+ * - Move their content (elements/views + child folders) to the Root folder.
+ */
+function migrateV1ToV2(model: Model): Model {
+  const root = findRootFolder(model);
+  if (!root) {
+    // Nothing sensible we can do; keep it as-is but bump the version so we don't loop.
+    model.schemaVersion = 2;
+    return model;
+  }
+
+  const legacyRootFolders = Object.values(model.folders).filter((f) => f.kind === 'elements' || f.kind === 'views');
+  if (legacyRootFolders.length === 0) {
+    model.schemaVersion = 2;
+    return model;
+  }
+
+  const legacyIds = legacyRootFolders.map((f) => f.id);
+
+  // Move content into root + reparent children.
+  for (const legacy of legacyRootFolders) {
+    uniquePush(root.elementIds, legacy.elementIds);
+    uniquePush(root.viewIds, legacy.viewIds);
+
+    // Reparent declared children first.
+    for (const childId of legacy.folderIds) {
+      const child = model.folders[childId];
+      if (!child) continue;
+      child.parentId = root.id;
+      uniquePush(root.folderIds, [childId]);
+    }
+
+    // Defensive: also reparent any folder that points to this legacy folder.
+    for (const f of Object.values(model.folders)) {
+      if (f.parentId === legacy.id) {
+        f.parentId = root.id;
+        uniquePush(root.folderIds, [f.id]);
+      }
+    }
+  }
+
+  // Ensure legacy folder ids are not referenced from root anymore.
+  root.folderIds = root.folderIds.filter((id) => !legacyIds.includes(id));
+
+  // Drop legacy folders from the folders collection.
+  for (const id of legacyIds) {
+    delete model.folders[id];
+  }
+
+  model.schemaVersion = 2;
+  return model;
+}
+
+/**
+ * v2 -> v3 migration:
+ * - Add Folder.relationshipIds (default empty array).
+ * - Assign missing zIndex for view nodes and relationship layouts (stable order).
+ */
+function migrateV2ToV3(model: Model): Model {
+  // Add relationshipIds on all folders
+  for (const fid of Object.keys(model.folders)) {
+    const f = model.folders[fid] as any;
+    if (!Array.isArray(f.relationshipIds)) {
+      model.folders[fid] = { ...(f as Folder), relationshipIds: [] };
+    }
+  }
+
+  // Ensure view layout items have zIndex for stable stacking / round-trips.
+  for (const vid of Object.keys(model.views)) {
+    const v = model.views[vid];
+    if (!v.layout) continue;
+
+    const nextNodes = v.layout.nodes.map((n, idx) => ({
+      ...n,
+      zIndex: typeof (n as any).zIndex === 'number' ? (n as any).zIndex : idx,
+    }));
+    const nextRels = v.layout.relationships.map((r, idx) => ({
+      ...r,
+      zIndex: typeof (r as any).zIndex === 'number' ? (r as any).zIndex : idx,
+    }));
+
+    model.views[vid] = {
+      ...v,
+      layout: { nodes: nextNodes, relationships: nextRels },
+    };
+  }
+
+  model.schemaVersion = 3;
+  return model;
+}
+
+/**
+ * v3 -> v4 migration:
+ * - Add Model.externalIds + Model.taggedValues (default empty arrays).
+ * - Add Folder.externalIds + Folder.taggedValues (default empty arrays).
+ */
+function migrateV3ToV4(model: Model): Model {
+  const m: any = model as any;
+  if (!Array.isArray(m.externalIds)) m.externalIds = [];
+  if (!Array.isArray(m.taggedValues)) m.taggedValues = [];
+
+  for (const fid of Object.keys(model.folders)) {
+    const f: any = model.folders[fid] as any;
+    if (!Array.isArray(f.externalIds)) f.externalIds = [];
+    if (!Array.isArray(f.taggedValues)) f.taggedValues = [];
+  }
+
+  model.schemaVersion = 4;
+  return model;
+}
+
+/**
+ * v4 -> v5 migration:
+ * - Add Model.connectors (default empty object).
+ */
+function migrateV4ToV5(model: Model): Model {
+  const m: any = model as any;
+  if (!isRecord(m.connectors)) m.connectors = {};
+
+  model.schemaVersion = 5;
+  return model;
+}
+
+/**
+ * v5 -> v6 migration:
+ * - Add View.objects (default empty object) on all views.
+ */
+function migrateV5ToV6(model: Model): Model {
+  for (const vid of Object.keys(model.views)) {
+    const v: any = model.views[vid] as any;
+    if (!isRecord(v.objects)) {
+      model.views[vid] = { ...(v as any), objects: {} };
+    }
+  }
+
+  model.schemaVersion = 6;
+  return model;
+}
+
+export function migrateModel(model: Model): Model {
+  let v = getSchemaVersion(model);
+  if (v < 2) {
+    model = migrateV1ToV2(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 3) {
+    model = migrateV2ToV3(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 4) {
+    model = migrateV3ToV4(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 5) {
+    model = migrateV4ToV5(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 6) {
+    model = migrateV5ToV6(model);
+  }
+  return model;
+}

@@ -4,32 +4,27 @@ import type {
   Model,
   ModelMetadata,
   Relationship,
-  ViewObject,
-  ViewObjectType,
-  View,
-  ViewLayout,
-  ViewRelationshipLayout,
-  ViewNodeLayout,
-  ViewFormatting,
+  RelationshipConnector,
   TaggedValue,
-  RelationshipConnector
+  View,
+  ViewFormatting,
+  ViewNodeLayout,
+  ViewObject,
+  ViewObjectType
 } from '../domain';
+import { createEmptyModel } from '../domain';
 import {
-  createEmptyModel,
-  createView,
-  createViewObject,
-  createViewObjectNodeLayout,
-  getDefaultViewObjectSize,
-  collectFolderSubtreeIds,
-  createId,
-  upsertTaggedValue,
-  removeTaggedValue,
-  validateTaggedValue,
-  tidyExternalIds,
-  sanitizeRelationshipAttrs,
-  sanitizeUnknownTypeForElement,
-  sanitizeUnknownTypeForRelationship
-} from '../domain';
+  connectorMutations,
+  elementMutations,
+  folderMutations,
+  layoutMutations,
+  modelMutations,
+  relationshipMutations,
+  viewMutations,
+  viewObjectMutations
+} from './mutations';
+import type { TaggedValueInput } from './mutations';
+import { findFolderIdByKind } from './mutations/helpers';
 
 export type ModelStoreState = {
   model: Model | null;
@@ -40,199 +35,6 @@ export type ModelStoreState = {
 };
 
 type Listener = () => void;
-
-type ViewWithLayout = View & { layout: ViewLayout };
-
-type TaggedValueInput = Omit<TaggedValue, 'id'> & { id?: string };
-
-function tidyTaggedValuesFromUi(list: TaggedValue[] | undefined): TaggedValue[] | undefined {
-  if (!list || list.length === 0) return undefined;
-
-  // Normalize + drop invalid entries.
-  const normalized: TaggedValue[] = [];
-  for (const raw of list) {
-    if (!raw || typeof raw !== 'object') continue;
-
-    const withId: TaggedValue = {
-      ...raw,
-      id: typeof (raw as any).id === 'string' && (raw as any).id.trim().length > 0 ? (raw as any).id.trim() : createId('tag')
-    };
-
-    const { normalized: tv, errors } = validateTaggedValue(withId);
-    if (errors.length) continue;
-    normalized.push(tv);
-  }
-
-  if (normalized.length === 0) return undefined;
-
-  // De-dup by (ns,key), keeping the LAST occurrence.
-  const lastIndex = new Map<string, number>();
-  for (let i = 0; i < normalized.length; i++) {
-    const t = normalized[i];
-    lastIndex.set(`${t.ns ?? ''}::${t.key}`, i);
-  }
-
-  const deduped: TaggedValue[] = [];
-  for (let i = 0; i < normalized.length; i++) {
-    const t = normalized[i];
-    if (lastIndex.get(`${t.ns ?? ''}::${t.key}`) === i) deduped.push(t);
-  }
-
-  return deduped.length ? deduped : undefined;
-}
-
-function findFolderIdByKind(model: Model, kind: Folder['kind']): string {
-  const folder = Object.values(model.folders).find((f) => f.kind === kind);
-  if (!folder) throw new Error(`Model is missing required folder kind: ${kind}`);
-  return folder.id;
-}
-
-function findFolderContainingElement(model: Model, elementId: string): string | null {
-  for (const folder of Object.values(model.folders)) {
-    if (folder.elementIds.includes(elementId)) return folder.id;
-  }
-  return null;
-}
-
-function findFolderContainingView(model: Model, viewId: string): string | null {
-  for (const folder of Object.values(model.folders)) {
-    if (folder.viewIds.includes(viewId)) return folder.id;
-  }
-  return null;
-}
-
-function getFolder(model: Model, folderId: string): Folder {
-  const folder = model.folders[folderId];
-  if (!folder) throw new Error(`Folder not found: ${folderId}`);
-  return folder;
-}
-
-function getView(model: Model, viewId: string): View {
-  const view = model.views[viewId];
-  if (!view) throw new Error(`View not found: ${viewId}`);
-  return view;
-}
-
-function ensureViewLayout(view: View): ViewWithLayout {
-  if (view.layout) return view as ViewWithLayout;
-  return { ...view, layout: { nodes: [], relationships: [] } };
-}
-
-function assertCanDeleteFolder(model: Model, folderId: string): void {
-  const folder = getFolder(model, folderId);
-  if (folder.kind === 'root') {
-    throw new Error('Cannot delete root folder');
-  }
-}
-
-
-function deleteViewInModel(model: Model, viewId: string): void {
-  if (!model.views[viewId]) return;
-
-  const nextViews = { ...model.views };
-  delete nextViews[viewId];
-  model.views = nextViews;
-
-  for (const fid of Object.keys(model.folders)) {
-    const f = model.folders[fid];
-    if (f.viewIds.includes(viewId)) {
-      model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
-    }
-  }
-}
-
-function deleteRelationshipInModel(model: Model, relationshipId: string): void {
-  if (!model.relationships[relationshipId]) return;
-
-  const next = { ...model.relationships };
-  delete next[relationshipId];
-  model.relationships = next;
-
-  // Remove from any folder that contains it.
-  for (const fid of Object.keys(model.folders)) {
-    const f = model.folders[fid] as any;
-    const relIds: string[] | undefined = Array.isArray(f.relationshipIds) ? f.relationshipIds : undefined;
-    if (relIds && relIds.includes(relationshipId)) {
-      model.folders[fid] = { ...f, relationshipIds: relIds.filter((id) => id !== relationshipId) };
-    }
-  }
-
-  // Remove from any view layout connections.
-  for (const view of Object.values(model.views)) {
-    if (!view.layout) continue;
-    const nextConnections = view.layout.relationships.filter((c) => c.relationshipId !== relationshipId);
-    if (nextConnections.length !== view.layout.relationships.length) {
-      model.views[view.id] = {
-        ...view,
-        layout: {
-          nodes: view.layout.nodes,
-          relationships: nextConnections
-        }
-      };
-    }
-  }
-}
-
-function deleteElementInModel(model: Model, elementId: string): void {
-  if (!model.elements[elementId]) return;
-
-  // Remove element itself
-  const nextElements = { ...model.elements };
-  delete nextElements[elementId];
-  model.elements = nextElements;
-
-  // Remove from any folder that contains it
-  for (const fid of Object.keys(model.folders)) {
-    const f = model.folders[fid];
-    if (f.elementIds.includes(elementId)) {
-      model.folders[fid] = { ...f, elementIds: f.elementIds.filter((id) => id !== elementId) };
-    }
-  }
-
-  // If there are views centered on this element, move them back to the root folder.
-  const rootId = findFolderIdByKind(model, 'root');
-  const rootFolder = getFolder(model, rootId);
-  let rootViewIds = rootFolder.viewIds;
-  let rootChanged = false;
-  for (const view of Object.values(model.views)) {
-    if (view.centerElementId === elementId) {
-      model.views[view.id] = { ...view, centerElementId: undefined };
-      if (!rootViewIds.includes(view.id)) {
-        if (!rootChanged) rootViewIds = [...rootViewIds];
-        rootViewIds.push(view.id);
-        rootChanged = true;
-      }
-    }
-  }
-  if (rootChanged) {
-    model.folders[rootId] = { ...rootFolder, viewIds: rootViewIds };
-  }
-
-  // Remove relationships that reference it
-  const relIdsToDelete = Object.values(model.relationships)
-    .filter((r) => r.sourceElementId === elementId || r.targetElementId === elementId)
-    .map((r) => r.id);
-
-  for (const rid of relIdsToDelete) deleteRelationshipInModel(model, rid);
-
-  // Remove any view layout nodes that reference the element, and
-  // remove any view connections that reference deleted relationships.
-  for (const view of Object.values(model.views)) {
-    if (!view.layout) continue;
-    const nextNodes = view.layout.nodes.filter((n) => n.elementId !== elementId);
-    const nextConnections = view.layout.relationships.filter((c) => model.relationships[c.relationshipId]);
-    if (nextNodes.length !== view.layout.nodes.length || nextConnections.length !== view.layout.relationships.length) {
-      model.views[view.id] = {
-        ...view,
-        layout: {
-          nodes: nextNodes,
-          relationships: nextConnections
-        }
-      };
-    }
-  }
-}
-
 
 export class ModelStore {
   private state: ModelStoreState = {
@@ -251,7 +53,6 @@ export class ModelStore {
    * or point at another object, causing runtime errors like:
    *   `TypeError: this.updateModel is not a function`
    */
-
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -338,15 +139,11 @@ export class ModelStore {
   };
 
   updateModelMetadata = (patch: Partial<ModelMetadata>): void => {
-    this.updateModel((model) => {
-      model.metadata = { ...model.metadata, ...patch };
-    });
+    this.updateModel((model) => modelMutations.updateModelMetadata(model, patch));
   };
 
   updateModelTaggedValues = (taggedValues: TaggedValue[] | undefined): void => {
-    this.updateModel((model) => {
-      model.taggedValues = tidyTaggedValuesFromUi(taggedValues);
-    });
+    this.updateModel((model) => modelMutations.updateModelTaggedValues(model, taggedValues));
   };
 
   // -------------------------
@@ -354,140 +151,47 @@ export class ModelStore {
   // -------------------------
 
   addElement = (element: Element, folderId?: string): void => {
-    this.updateModel((model) => {
-      model.elements[element.id] = element;
-
-      const targetFolderId = folderId ?? findFolderIdByKind(model, 'root');
-      const folder = getFolder(model, targetFolderId);
-      if (!folder.elementIds.includes(element.id)) {
-        model.folders[targetFolderId] = { ...folder, elementIds: [...folder.elementIds, element.id] };
-      }
-    });
+    this.updateModel((model) => elementMutations.addElement(model, element, folderId));
   };
 
   updateElement = (elementId: string, patch: Partial<Omit<Element, 'id'>>): void => {
-    this.updateModel((model) => {
-      const current = model.elements[elementId];
-      if (!current) throw new Error(`Element not found: ${elementId}`);
-      const merged = { ...current, ...patch, id: current.id };
-      const sanitized = sanitizeUnknownTypeForElement(merged);
-      sanitized.externalIds = tidyExternalIds(sanitized.externalIds);
-      model.elements[elementId] = sanitized;
-    });
+    this.updateModel((model) => elementMutations.updateElement(model, elementId, patch));
   };
 
   upsertElementTaggedValue = (elementId: string, entry: TaggedValueInput): void => {
-    this.updateModel((model) => {
-      const current = model.elements[elementId];
-      if (!current) throw new Error(`Element not found: ${elementId}`);
-
-      const withId: TaggedValue = {
-        id: (entry.id && entry.id.trim()) ? entry.id : createId('tag'),
-        ns: entry.ns,
-        key: entry.key,
-        type: entry.type,
-        value: entry.value
-      };
-
-      const nextTaggedValues = upsertTaggedValue(current.taggedValues, withId);
-      model.elements[elementId] = {
-        ...current,
-        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
-      };
-    });
+    this.updateModel((model) => elementMutations.upsertElementTaggedValue(model, elementId, entry));
   };
 
   removeElementTaggedValue = (elementId: string, taggedValueId: string): void => {
-    this.updateModel((model) => {
-      const current = model.elements[elementId];
-      if (!current) throw new Error(`Element not found: ${elementId}`);
-
-      const nextTaggedValues = removeTaggedValue(current.taggedValues, taggedValueId);
-      model.elements[elementId] = {
-        ...current,
-        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
-      };
-    });
+    this.updateModel((model) => elementMutations.removeElementTaggedValue(model, elementId, taggedValueId));
   };
 
   deleteElement = (elementId: string): void => {
-    this.updateModel((model) => {
-      deleteElementInModel(model, elementId);
-    });
+    this.updateModel((model) => elementMutations.deleteElement(model, elementId));
   };
-
 
   // -------------------------
   // Relationships
   // -------------------------
 
   addRelationship = (relationship: Relationship): void => {
-    this.updateModel((model) => {
-      model.relationships[relationship.id] = relationship;
-
-      // Place the relationship in the same folder as the source element (fallback to root).
-      const sourceId = relationship.sourceElementId;
-      const targetFolderId = sourceId
-        ? findFolderContainingElement(model, sourceId) ?? findFolderIdByKind(model, 'root')
-        : findFolderIdByKind(model, 'root');
-      const folder = getFolder(model, targetFolderId) as any;
-      const relIds: string[] = Array.isArray(folder.relationshipIds) ? folder.relationshipIds : [];
-      if (!relIds.includes(relationship.id)) {
-        model.folders[targetFolderId] = { ...folder, relationshipIds: [...relIds, relationship.id] };
-      }
-    });
+    this.updateModel((model) => relationshipMutations.addRelationship(model, relationship));
   };
 
   updateRelationship = (relationshipId: string, patch: Partial<Omit<Relationship, 'id'>>): void => {
-    this.updateModel((model) => {
-      const current = model.relationships[relationshipId];
-      if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
-      const merged = { ...current, ...patch, id: current.id };
-      merged.attrs = sanitizeRelationshipAttrs(merged.type, merged.attrs);
-      const sanitized = sanitizeUnknownTypeForRelationship(merged);
-      sanitized.externalIds = tidyExternalIds(sanitized.externalIds);
-      model.relationships[relationshipId] = sanitized;
-    });
+    this.updateModel((model) => relationshipMutations.updateRelationship(model, relationshipId, patch));
   };
 
   upsertRelationshipTaggedValue = (relationshipId: string, entry: TaggedValueInput): void => {
-    this.updateModel((model) => {
-      const current = model.relationships[relationshipId];
-      if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
-
-      const withId: TaggedValue = {
-        id: (entry.id && entry.id.trim()) ? entry.id : createId('tag'),
-        ns: entry.ns,
-        key: entry.key,
-        type: entry.type,
-        value: entry.value
-      };
-
-      const nextTaggedValues = upsertTaggedValue(current.taggedValues, withId);
-      model.relationships[relationshipId] = {
-        ...current,
-        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
-      };
-    });
+    this.updateModel((model) => relationshipMutations.upsertRelationshipTaggedValue(model, relationshipId, entry));
   };
 
   removeRelationshipTaggedValue = (relationshipId: string, taggedValueId: string): void => {
-    this.updateModel((model) => {
-      const current = model.relationships[relationshipId];
-      if (!current) throw new Error(`Relationship not found: ${relationshipId}`);
-
-      const nextTaggedValues = removeTaggedValue(current.taggedValues, taggedValueId);
-      model.relationships[relationshipId] = {
-        ...current,
-        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
-      };
-    });
+    this.updateModel((model) => relationshipMutations.removeRelationshipTaggedValue(model, relationshipId, taggedValueId));
   };
 
   deleteRelationship = (relationshipId: string): void => {
-    this.updateModel((model) => {
-      deleteRelationshipInModel(model, relationshipId);
-    });
+    this.updateModel((model) => relationshipMutations.deleteRelationship(model, relationshipId));
   };
 
   // -------------------------
@@ -495,530 +199,120 @@ export class ModelStore {
   // -------------------------
 
   addConnector = (connector: RelationshipConnector): void => {
-    this.updateModel((model) => {
-      // Ensure the container exists (older models may have been normalized already, but be defensive).
-      const nextConnectors = model.connectors ?? {};
-      nextConnectors[connector.id] = connector;
-      model.connectors = nextConnectors;
-    });
+    this.updateModel((model) => connectorMutations.addConnector(model, connector));
   };
 
   updateConnector = (connectorId: string, patch: Partial<Omit<RelationshipConnector, 'id'>>): void => {
-    this.updateModel((model) => {
-      const current = model.connectors?.[connectorId];
-      if (!current) throw new Error(`Connector not found: ${connectorId}`);
-      const merged: RelationshipConnector = { ...current, ...patch, id: current.id };
-      merged.externalIds = tidyExternalIds(merged.externalIds);
-      model.connectors = { ...(model.connectors ?? {}), [connectorId]: merged };
-    });
+    this.updateModel((model) => connectorMutations.updateConnector(model, connectorId, patch));
   };
 
   deleteConnector = (connectorId: string): void => {
-    this.updateModel((model) => {
-      if (!model.connectors?.[connectorId]) return;
-      // Delete any relationships connected to this connector. Keeping them would violate
-      // the Step 4 endpoint invariants and doesn't make sense semantically.
-      const relIdsToDelete = Object.keys(model.relationships).filter((relId) => {
-        const rel = model.relationships[relId];
-        return rel.sourceConnectorId === connectorId || rel.targetConnectorId === connectorId;
-      });
-      for (const relId of relIdsToDelete) {
-        deleteRelationshipInModel(model, relId);
-      }
-
-      // Remove connector nodes from all views.
-      for (const viewId of Object.keys(model.views)) {
-        const view = model.views[viewId];
-        if (!view.layout) continue;
-        const nextNodes = view.layout.nodes.filter((n) => n.connectorId !== connectorId);
-        if (nextNodes.length !== view.layout.nodes.length) {
-          model.views[viewId] = { ...view, layout: { ...view.layout, nodes: nextNodes } };
-        }
-      }
-
-      // Finally remove the connector itself.
-      const next = { ...(model.connectors ?? {}) };
-      delete next[connectorId];
-      model.connectors = next;
-    });
+    this.updateModel((model) => connectorMutations.deleteConnector(model, connectorId));
   };
 
   // -------------------------
   // Views
   // -------------------------
+
   addView = (view: View, folderId?: string): void => {
-    this.updateModel((model) => {
-      model.views[view.id] = view;
-
-      // If the view is centered on an element, it should not live in any folder.
-      if (view.centerElementId) {
-        for (const fid of Object.keys(model.folders)) {
-          const f = model.folders[fid];
-          if (f.viewIds.includes(view.id)) {
-            model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== view.id) };
-          }
-        }
-        return;
-      }
-
-      const targetFolderId = folderId ?? findFolderIdByKind(model, 'root');
-      const folder = getFolder(model, targetFolderId);
-      if (!folder.viewIds.includes(view.id)) {
-        model.folders[targetFolderId] = { ...folder, viewIds: [...folder.viewIds, view.id] };
-      }
-    });
+    this.updateModel((model) => viewMutations.addView(model, view, folderId));
   };
+
   updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => {
-    this.updateModel((model) => {
-      const current = model.views[viewId];
-      if (!current) throw new Error(`View not found: ${viewId}`);
-
-      const next: View = { ...current, ...patch, id: current.id };
-
-      // Maintain placement invariant when centerElementId is modified.
-      if (Object.prototype.hasOwnProperty.call(patch, 'centerElementId')) {
-        const nextCenter = (patch as any).centerElementId as (string | undefined);
-
-        if (typeof nextCenter === 'string' && nextCenter) {
-          // Centered views should not be present in any folder list.
-          for (const fid of Object.keys(model.folders)) {
-            const f = model.folders[fid];
-            if (f.viewIds.includes(viewId)) {
-              model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
-            }
-          }
-        } else if (!nextCenter) {
-          // Clearing centering: ensure the view is in a folder (default to root).
-          const inFolder = Object.values(model.folders).some((f) => f.viewIds.includes(viewId));
-          if (!inFolder) {
-            const rootId = findFolderIdByKind(model, 'root');
-            const root = getFolder(model, rootId);
-            model.folders[rootId] = root.viewIds.includes(viewId) ? root : { ...root, viewIds: [...root.viewIds, viewId] };
-          }
-        }
-      }
-
-      next.externalIds = tidyExternalIds(next.externalIds);
-      model.views[viewId] = next;
-    });
+    this.updateModel((model) => viewMutations.updateView(model, viewId, patch));
   };
 
   upsertViewTaggedValue = (viewId: string, entry: TaggedValueInput): void => {
-    this.updateModel((model) => {
-      const current = model.views[viewId];
-      if (!current) throw new Error(`View not found: ${viewId}`);
-
-      const withId: TaggedValue = {
-        id: (entry.id && entry.id.trim()) ? entry.id : createId('tag'),
-        ns: entry.ns,
-        key: entry.key,
-        type: entry.type,
-        value: entry.value
-      };
-
-      const nextTaggedValues = upsertTaggedValue(current.taggedValues, withId);
-      model.views[viewId] = {
-        ...current,
-        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
-      };
-    });
+    this.updateModel((model) => viewMutations.upsertViewTaggedValue(model, viewId, entry));
   };
 
   removeViewTaggedValue = (viewId: string, taggedValueId: string): void => {
-    this.updateModel((model) => {
-      const current = model.views[viewId];
-      if (!current) throw new Error(`View not found: ${viewId}`);
-
-      const nextTaggedValues = removeTaggedValue(current.taggedValues, taggedValueId);
-      model.views[viewId] = {
-        ...current,
-        taggedValues: nextTaggedValues.length ? nextTaggedValues : undefined
-      };
-    });
+    this.updateModel((model) => viewMutations.removeViewTaggedValue(model, viewId, taggedValueId));
   };
 
   updateViewFormatting = (viewId: string, patch: Partial<ViewFormatting>): void => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) return;
-
-      const prev = view.formatting ?? { snapToGrid: true, gridSize: 20, layerStyleTags: {} };
-      const next: ViewFormatting = {
-        ...prev,
-        ...patch,
-        layerStyleTags: { ...(prev.layerStyleTags ?? {}), ...(patch.layerStyleTags ?? {}) }
-      };
-
-      model.views[viewId] = { ...view, formatting: next };
-    });
+    this.updateModel((model) => viewMutations.updateViewFormatting(model, viewId, patch));
   };
 
   /** Clone a view (including its layout) into the same folder as the original. Returns the new view id. */
   cloneView = (viewId: string): string | null => {
     let created: string | null = null;
-
     this.updateModel((model) => {
-      const original = model.views[viewId];
-      if (!original) return;
-
-      const baseName = original.name.trim() || 'View';
-      const existingNames = new Set(Object.values(model.views).map((v) => v.name));
-      let name = `Copy of ${baseName}`;
-      if (existingNames.has(name)) {
-        let i = 2;
-        while (existingNames.has(`${name} (${i})`)) i++;
-        name = `${name} (${i})`;
-      }
-
-      // NOTE: view-local objects must get new ids when cloning, since ids are globally unique.
-      const origObjects = (original.objects ?? {}) as Record<string, ViewObject>;
-      const objectIdMap = new Map<string, string>();
-      const nextObjects: Record<string, ViewObject> = {};
-      for (const o of Object.values(origObjects)) {
-        const nextId = createId('obj');
-        objectIdMap.set(o.id, nextId);
-        nextObjects[nextId] = { ...(JSON.parse(JSON.stringify(o)) as ViewObject), id: nextId };
-      }
-
-      const nextLayout: ViewLayout | undefined = original.layout ? (JSON.parse(JSON.stringify(original.layout)) as ViewLayout) : undefined;
-      if (nextLayout && objectIdMap.size > 0) {
-        nextLayout.nodes = nextLayout.nodes.map((n) => {
-          if (!n.objectId) return n;
-          const mapped = objectIdMap.get(n.objectId);
-          return mapped ? { ...n, objectId: mapped } : n;
-        });
-      }
-
-      const clone = createView({
-        name,
-        viewpointId: original.viewpointId,
-        description: original.description,
-        documentation: original.documentation,
-        stakeholders: original.stakeholders ? [...original.stakeholders] : undefined,
-        formatting: original.formatting ? JSON.parse(JSON.stringify(original.formatting)) : undefined,
-        centerElementId: original.centerElementId,
-        objects: nextObjects,
-        layout: nextLayout
-      });
-
-      model.views[clone.id] = clone;
-
-      // Preserve placement: if the original is centered on an element, keep the clone centered too.
-      if (!original.centerElementId) {
-        const folderId = findFolderContainingView(model, viewId) ?? findFolderIdByKind(model, 'root');
-        model.folders[folderId] = {
-          ...model.folders[folderId],
-          viewIds: [...model.folders[folderId].viewIds, clone.id]
-        };
-      }
-
-      created = clone.id;
+      created = viewMutations.cloneView(model, viewId);
     });
-
     return created;
+  };
+
+  deleteView = (viewId: string): void => {
+    this.updateModel((model) => viewMutations.deleteView(model, viewId));
   };
 
   // -------------------------
   // View-only (diagram) objects
   // -------------------------
 
-  /**
-   * Add a view-local object to a view (and optionally a layout node). This does not touch the model element graph.
-   */
+  /** Add a view-local object to a view (and optionally a layout node). This does not touch the model element graph. */
   addViewObject = (viewId: string, obj: ViewObject, node?: ViewNodeLayout): void => {
-    this.updateModel((model) => {
-      const view = getView(model, viewId);
-      const viewWithLayout = ensureViewLayout(view);
-      const layout = viewWithLayout.layout;
-
-      const nextObjects = { ...(viewWithLayout.objects ?? {}) };
-      nextObjects[obj.id] = obj;
-
-      let nextNodes = layout.nodes;
-      if (node) {
-        const existingIdx = layout.nodes.findIndex((n) => n.objectId === obj.id);
-        if (existingIdx >= 0) {
-          nextNodes = layout.nodes.map((n) => (n.objectId === obj.id ? { ...n, ...node, objectId: obj.id } : n));
-        } else {
-          const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
-          nextNodes = [...layout.nodes, { ...node, objectId: obj.id, zIndex: typeof node.zIndex === 'number' ? node.zIndex : maxZ + 1 }];
-        }
-      }
-
-      model.views[viewId] = {
-        ...viewWithLayout,
-        objects: nextObjects,
-        layout: { nodes: nextNodes, relationships: layout.relationships }
-      };
-    });
+    this.updateModel((model) => viewObjectMutations.addViewObject(model, viewId, obj, node));
   };
 
   /** Create a new view-local object and place it into the view at the given cursor position. Returns the object id. */
   createViewObjectInViewAt = (viewId: string, type: ViewObjectType, x: number, y: number): string => {
-    const obj = createViewObject({ type });
-    const size = getDefaultViewObjectSize(type);
-
+    let created = '';
     this.updateModel((model) => {
-      const view = getView(model, viewId);
-      const viewWithLayout = ensureViewLayout(view);
-      const layout = viewWithLayout.layout;
-
-      const snap = Boolean(viewWithLayout.formatting?.snapToGrid);
-      const grid = viewWithLayout.formatting?.gridSize ?? 20;
-
-      // Cursor position is treated as the center.
-      let nx = Math.max(0, x - size.width / 2);
-      let ny = Math.max(0, y - size.height / 2);
-      if (snap && grid > 1) {
-        nx = Math.round(nx / grid) * grid;
-        ny = Math.round(ny / grid) * grid;
-      }
-
-      const node = createViewObjectNodeLayout(obj.id, nx, ny, size.width, size.height);
-      const nextObjects = { ...(viewWithLayout.objects ?? {}) };
-      nextObjects[obj.id] = obj;
-
-      const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
-      const nextNodes = [...layout.nodes, { ...node, zIndex: maxZ + 1 }];
-
-      model.views[viewId] = {
-        ...viewWithLayout,
-        objects: nextObjects,
-        layout: { nodes: nextNodes, relationships: layout.relationships }
-      };
+      created = viewObjectMutations.createViewObjectInViewAt(model, viewId, type, x, y);
     });
-
-    return obj.id;
+    return created;
   };
 
   updateViewObject = (viewId: string, objectId: string, patch: Partial<Omit<ViewObject, 'id'>>): void => {
-    this.updateModel((model) => {
-      const view = getView(model, viewId);
-      const objects = (view.objects ?? {}) as Record<string, ViewObject>;
-      const current = objects[objectId];
-      if (!current) throw new Error(`ViewObject not found: ${objectId}`);
-
-      const merged: ViewObject = {
-        ...current,
-        ...patch,
-        id: current.id,
-        name: typeof (patch as any).name === 'string' ? ((patch as any).name as string).trim() || undefined : current.name,
-        text: typeof (patch as any).text === 'string' ? ((patch as any).text as string).trim() || undefined : current.text,
-        style: patch.style ? { ...(current.style ?? {}), ...(patch.style ?? {}) } : current.style
-      };
-
-      model.views[viewId] = {
-        ...view,
-        objects: { ...objects, [objectId]: merged }
-      };
-    });
+    this.updateModel((model) => viewObjectMutations.updateViewObject(model, viewId, objectId, patch));
   };
 
   deleteViewObject = (viewId: string, objectId: string): void => {
-    this.updateModel((model) => {
-      const view = getView(model, viewId);
-      const objects = (view.objects ?? {}) as Record<string, ViewObject>;
-      if (!objects[objectId]) return;
-
-      const nextObjects = { ...objects };
-      delete nextObjects[objectId];
-
-      if (!view.layout) {
-        model.views[viewId] = { ...view, objects: nextObjects };
-        return;
-      }
-
-      const layout = view.layout;
-      const nextNodes = layout.nodes.filter((n) => n.objectId !== objectId);
-      model.views[viewId] = {
-        ...view,
-        objects: nextObjects,
-        layout: { nodes: nextNodes, relationships: layout.relationships }
-      };
-    });
-  };
-
-  updateViewNodeLayout = (viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) return;
-
-      const viewWithLayout = ensureViewLayout(view);
-      const idx = viewWithLayout.layout.nodes.findIndex((n) => n.elementId === elementId);
-      if (idx < 0) return;
-
-      const prev = viewWithLayout.layout.nodes[idx];
-      const next: ViewNodeLayout = { ...prev, ...patch, elementId: prev.elementId };
-      const nextNodes = viewWithLayout.layout.nodes.slice();
-      nextNodes[idx] = next;
-
-      model.views[viewId] = { ...viewWithLayout, layout: { ...viewWithLayout.layout, nodes: nextNodes } };
-    });
-  };
-
-  deleteView = (viewId: string): void => {
-
-    this.updateModel((model) => {
-      if (!model.views[viewId]) return;
-
-      const nextViews = { ...model.views };
-      delete nextViews[viewId];
-      model.views = nextViews;
-
-      for (const fid of Object.keys(model.folders)) {
-        const f = model.folders[fid];
-        if (f.viewIds.includes(viewId)) {
-          model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
-        }
-      }
-    });
+    this.updateModel((model) => viewObjectMutations.deleteViewObject(model, viewId, objectId));
   };
 
   // -------------------------
   // Diagram layout (per view)
   // -------------------------
 
-  /** Adds an element to a view's layout as a positioned node (idempotent). */
-  addElementToView = (viewId: string, elementId: string): string => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) throw new Error(`View not found: ${viewId}`);
-      const element = model.elements[elementId];
-      if (!element) throw new Error(`Element not found: ${elementId}`);
-
-      const viewWithLayout = ensureViewLayout(view);
-      const layout = viewWithLayout.layout!;
-
-      if (layout.nodes.some((n) => n.elementId === elementId)) return;
-
-      const i = layout.nodes.length;
-      const cols = 4;
-      const x = 24 + (i % cols) * 160;
-      const y = 24 + Math.floor(i / cols) * 110;
-
-      const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
-      const node: ViewNodeLayout = { elementId, x, y, width: 140, height: 70, zIndex: maxZ + 1 };
-      model.views[viewId] = {
-        ...viewWithLayout,
-        layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
-      };
-    });
-
-    return elementId;
+  updateViewNodeLayout = (viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void => {
+    this.updateModel((model) => layoutMutations.updateViewNodeLayout(model, viewId, elementId, patch));
   };
 
-  /**
-   * Adds an element to a view at a specific position (idempotent).
-   * If the node already exists in the view, its position is updated.
-   */
-  addElementToViewAt = (viewId: string, elementId: string, x: number, y: number): string => {
+  /** Adds an element to a view's layout as a positioned node (idempotent). */
+  addElementToView = (viewId: string, elementId: string): string => {
+    let result = elementId;
     this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) throw new Error(`View not found: ${viewId}`);
-      const element = model.elements[elementId];
-      if (!element) throw new Error(`Element not found: ${elementId}`);
-
-      const viewWithLayout = ensureViewLayout(view);
-      const layout = viewWithLayout.layout!;
-
-      const snap = Boolean(viewWithLayout.formatting?.snapToGrid);
-      const grid = viewWithLayout.formatting?.gridSize ?? 20;
-
-      const nodeW = 140;
-      const nodeH = 70;
-      // Drop position is interpreted as the cursor position; center the node under it.
-      let nx = Math.max(0, x - nodeW / 2);
-      let ny = Math.max(0, y - nodeH / 2);
-      if (snap && grid > 1) {
-        nx = Math.round(nx / grid) * grid;
-        ny = Math.round(ny / grid) * grid;
-      }
-
-      const existing = layout.nodes.find((n) => n.elementId === elementId);
-      if (existing) {
-        const nextNodes = layout.nodes.map((n) => (n.elementId === elementId ? { ...n, x: nx, y: ny } : n));
-        model.views[viewId] = { ...viewWithLayout, layout: { nodes: nextNodes, relationships: layout.relationships } };
-        return;
-      }
-
-      const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
-      const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: maxZ + 1 };
-      model.views[viewId] = {
-        ...viewWithLayout,
-        layout: { nodes: [...layout.nodes, node], relationships: layout.relationships },
-      };
+      result = layoutMutations.addElementToView(model, viewId, elementId);
     });
+    return result;
+  };
 
-    return elementId;
+  addElementToViewAt = (viewId: string, elementId: string, x: number, y: number): string => {
+    let result = elementId;
+    this.updateModel((model) => {
+      result = layoutMutations.addElementToViewAt(model, viewId, elementId, x, y);
+    });
+    return result;
   };
 
   /** Adds a connector (junction) to a view at a specific position (idempotent). */
   addConnectorToViewAt = (viewId: string, connectorId: string, x: number, y: number): string => {
+    let result = connectorId;
     this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) throw new Error(`View not found: ${viewId}`);
-      const connector = model.connectors?.[connectorId];
-      if (!connector) throw new Error(`Connector not found: ${connectorId}`);
-
-      const viewWithLayout = ensureViewLayout(view);
-      const layout = viewWithLayout.layout!;
-
-      const snap = Boolean(viewWithLayout.formatting?.snapToGrid);
-      const grid = viewWithLayout.formatting?.gridSize ?? 20;
-
-      const nodeW = 24;
-      const nodeH = 24;
-      // Drop position is interpreted as the cursor position; center the node under it.
-      let nx = Math.max(0, x - nodeW / 2);
-      let ny = Math.max(0, y - nodeH / 2);
-      if (snap && grid > 1) {
-        nx = Math.round(nx / grid) * grid;
-        ny = Math.round(ny / grid) * grid;
-      }
-
-      const existing = layout.nodes.find((n) => n.connectorId === connectorId);
-      if (existing) {
-        const nextNodes = layout.nodes.map((n) => (n.connectorId === connectorId ? { ...n, x: nx, y: ny, width: nodeW, height: nodeH } : n));
-        model.views[viewId] = { ...viewWithLayout, layout: { nodes: nextNodes, relationships: layout.relationships } };
-        return;
-      }
-
-      const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
-      const node: ViewNodeLayout = { connectorId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: maxZ + 1 };
-      model.views[viewId] = {
-        ...viewWithLayout,
-        layout: { nodes: [...layout.nodes, node], relationships: layout.relationships },
-      };
+      result = layoutMutations.addConnectorToViewAt(model, viewId, connectorId, x, y);
     });
-
-    return connectorId;
+    return result;
   };
 
   removeElementFromView = (viewId: string, elementId: string): void => {
-    this.updateModel((model) => {
-      const view = getView(model, viewId);
-      if (!view.layout) return;
-      const layout = view.layout;
-      const nextNodes = layout.nodes.filter((n) => n.elementId !== elementId);
-
-      // Drop any connections whose relationship no longer exists.
-      const nextConnections: ViewRelationshipLayout[] = layout.relationships.filter((c) => Boolean(model.relationships[c.relationshipId]));
-
-      if (nextNodes.length === layout.nodes.length && nextConnections.length === layout.relationships.length) return;
-      model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: nextConnections } };
-    });
+    this.updateModel((model) => layoutMutations.removeElementFromView(model, viewId, elementId));
   };
 
   updateViewNodePosition = (viewId: string, elementId: string, x: number, y: number): void => {
-    this.updateModel((model) => {
-      const view = getView(model, viewId);
-      if (!view.layout) return;
-      const layout = view.layout;
-      const node = layout.nodes.find((n) => n.elementId === elementId);
-      if (!node) return;
-      const nextNodes = layout.nodes.map((n) => (n.elementId === elementId ? { ...n, x, y } : n));
-      model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
-    });
+    this.updateModel((model) => layoutMutations.updateViewNodePosition(model, viewId, elementId, x, y));
   };
 
   /** Updates position of an element-node, connector-node, or view-object node in a view. */
@@ -1028,21 +322,7 @@ export class ModelStore {
     x: number,
     y: number
   ): void => {
-    this.updateModel((model) => {
-      const view = getView(model, viewId);
-      if (!view.layout) return;
-      const layout = view.layout;
-
-      const nextNodes = layout.nodes.map((n) => {
-        const matchesElement = ref.elementId && n.elementId === ref.elementId;
-        const matchesConnector = ref.connectorId && n.connectorId === ref.connectorId;
-        const matchesObject = ref.objectId && n.objectId === ref.objectId;
-        if (!matchesElement && !matchesConnector && !matchesObject) return n;
-        return { ...n, x, y };
-      });
-
-      model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
-    });
+    this.updateModel((model) => layoutMutations.updateViewNodePositionAny(model, viewId, ref, x, y));
   };
 
   /** Updates layout properties on an element-node, connector-node, or view-object node in a view. */
@@ -1051,28 +331,7 @@ export class ModelStore {
     ref: { elementId?: string; connectorId?: string; objectId?: string },
     patch: Partial<Omit<ViewNodeLayout, 'elementId' | 'connectorId' | 'objectId'>>
   ): void => {
-    this.updateModel((model) => {
-      const view = getView(model, viewId);
-      if (!view.layout) return;
-      const layout = view.layout;
-
-      const nextNodes = layout.nodes.map((n) => {
-        const matchesElement = ref.elementId && n.elementId === ref.elementId;
-        const matchesConnector = ref.connectorId && n.connectorId === ref.connectorId;
-        const matchesObject = ref.objectId && n.objectId === ref.objectId;
-        if (!matchesElement && !matchesConnector && !matchesObject) return n;
-
-        // Preserve whichever identity field this node uses.
-        const idFields: Pick<ViewNodeLayout, 'elementId' | 'connectorId' | 'objectId'> = {
-          elementId: n.elementId,
-          connectorId: n.connectorId,
-          objectId: n.objectId,
-        };
-        return { ...n, ...patch, ...idFields };
-      });
-
-      model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
-    });
+    this.updateModel((model) => layoutMutations.updateViewNodeLayoutAny(model, viewId, ref, patch));
   };
 
   // -------------------------
@@ -1080,94 +339,23 @@ export class ModelStore {
   // -------------------------
 
   createFolder = (parentId: string, name: string): string => {
-    const id = `folder_${Math.random().toString(36).slice(2, 10)}`;
+    let created = '';
     this.updateModel((model) => {
-      const parent = getFolder(model, parentId);
-      const folder: Folder = {
-        id,
-        name: name.trim(),
-        kind: 'custom',
-        parentId,
-        folderIds: [],
-        elementIds: [],
-        relationshipIds: [],
-        viewIds: []
-      };
-      model.folders = { ...model.folders, [folder.id]: folder };
-      model.folders[parentId] = { ...parent, folderIds: [...parent.folderIds, folder.id] };
+      created = folderMutations.createFolder(model, parentId, name);
     });
-    return id;
+    return created;
   };
 
   moveElementToFolder = (elementId: string, targetFolderId: string): void => {
-    this.updateModel((model) => {
-      const fromId = findFolderContainingElement(model, elementId);
-      if (!fromId) throw new Error(`Element not found in any folder: ${elementId}`);
-      if (fromId === targetFolderId) return;
-
-      const from = getFolder(model, fromId);
-      const to = getFolder(model, targetFolderId);
-
-      model.folders[fromId] = { ...from, elementIds: from.elementIds.filter((id) => id !== elementId) };
-      model.folders[targetFolderId] = { ...to, elementIds: [...to.elementIds, elementId] };
-    });
+    this.updateModel((model) => folderMutations.moveElementToFolder(model, elementId, targetFolderId));
   };
+
   moveViewToFolder = (viewId: string, targetFolderId: string): void => {
-    this.updateModel((model) => {
-      const view = getView(model, viewId);
-      const fromId = findFolderContainingView(model, viewId);
-
-      // If the view is currently centered on an element, it might not be in any folder.
-      if (!fromId && !view.centerElementId) {
-        throw new Error(`View not found in any folder: ${viewId}`);
-      }
-
-      // If already in the target folder and not centered, nothing to do.
-      if (fromId === targetFolderId && !view.centerElementId) return;
-
-      // Remove from the previous folder (if any).
-      if (fromId) {
-        const from = getFolder(model, fromId);
-        model.folders[fromId] = { ...from, viewIds: from.viewIds.filter((id) => id !== viewId) };
-      }
-
-      // Clear centering when moving to a folder.
-      if (view.centerElementId) {
-        model.views[viewId] = { ...view, centerElementId: undefined };
-      }
-
-      // Ensure not duplicated in any folder list (defensive).
-      for (const fid of Object.keys(model.folders)) {
-        const f = model.folders[fid];
-        if (f.viewIds.includes(viewId) && fid != targetFolderId) {
-          model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
-        }
-      }
-
-      const to = getFolder(model, targetFolderId);
-      if (!to.viewIds.includes(viewId)) {
-        model.folders[targetFolderId] = { ...to, viewIds: [...to.viewIds, viewId] };
-      }
-    });
+    this.updateModel((model) => folderMutations.moveViewToFolder(model, viewId, targetFolderId));
   };
 
   moveViewToElement = (viewId: string, elementId: string): void => {
-    this.updateModel((model) => {
-      // Ensure both ids exist.
-      if (!model.elements[elementId]) throw new Error(`Element not found: ${elementId}`);
-      const view = getView(model, viewId);
-
-      // Remove from any folder it might currently be in.
-      for (const fid of Object.keys(model.folders)) {
-        const f = model.folders[fid];
-        if (f.viewIds.includes(viewId)) {
-          model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
-        }
-      }
-
-      // Update placement on the view.
-      model.views[viewId] = { ...view, centerElementId: elementId };
-    });
+    this.updateModel((model) => folderMutations.moveViewToElement(model, viewId, elementId));
   };
 
   // -------------------------
@@ -1175,131 +363,18 @@ export class ModelStore {
   // -------------------------
 
   updateFolder = (folderId: string, patch: Partial<Omit<Folder, 'id'>>): void => {
-    this.updateModel((model) => {
-      const current = getFolder(model, folderId);
-      const merged: Folder = { ...current, ...patch, id: current.id };
-
-      model.folders[folderId] = {
-        ...merged,
-        externalIds: tidyExternalIds(merged.externalIds),
-        taggedValues: tidyTaggedValuesFromUi(merged.taggedValues)
-      };
-    });
+    this.updateModel((model) => folderMutations.updateFolder(model, folderId, patch));
   };
 
   renameFolder = (folderId: string, name: string): void => {
-    this.updateModel((model) => {
-      const folder = getFolder(model, folderId);
-      if (folder.kind === 'root') {
-        throw new Error('Cannot rename root folder');
-      }
-      model.folders[folderId] = { ...folder, name: name.trim() };
-    });
+    this.updateModel((model) => folderMutations.renameFolder(model, folderId, name));
   };
 
-  /**
-   * Deletes a folder.
-   *
-   * Default behavior (no options): contents and child folders are moved to the parent folder.
-   *
-   * Options:
-   * - { mode: 'move', targetFolderId }: move contents and child folders to the given folder
-   *   (must not be inside the deleted folder subtree).
-   * - { mode: 'deleteContents' }: delete the entire folder subtree and all contained elements/views.
-   */
   deleteFolder = (
     folderId: string,
     options?: { mode?: 'move'; targetFolderId?: string } | { mode: 'deleteContents' }
   ): void => {
-    this.updateModel((model) => {
-      assertCanDeleteFolder(model, folderId);
-      const folder = getFolder(model, folderId);
-      const parentId = folder.parentId;
-      if (!parentId) throw new Error('Cannot delete folder without parent');
-
-      // Delete subtree contents (and the subtree folders themselves).
-      if (options && 'mode' in options && options.mode === 'deleteContents') {
-        const folderIdsToDelete = collectFolderSubtreeIds(model, folderId);
-        const elementIds = new Set<string>();
-        const relationshipIds = new Set<string>();
-        const viewIds = new Set<string>();
-
-        for (const fid of folderIdsToDelete) {
-          const f = model.folders[fid];
-          if (!f) continue;
-          for (const eid of f.elementIds) elementIds.add(eid);
-          for (const rid of (f as any).relationshipIds ?? []) relationshipIds.add(rid);
-          for (const vid of f.viewIds) viewIds.add(vid);
-        }
-
-        // Delete elements first (also deletes related relationships and removes from views).
-        for (const eid of elementIds) deleteElementInModel(model, eid);
-
-        // Delete relationships explicitly contained in the folder subtree (may include cross-folder relationships).
-        for (const rid of relationshipIds) deleteRelationshipInModel(model, rid);
-
-        // Delete views next.
-        for (const vid of viewIds) deleteViewInModel(model, vid);
-
-        // Remove from parent
-        const parent = getFolder(model, parentId);
-        model.folders[parentId] = { ...parent, folderIds: parent.folderIds.filter((id) => id !== folderId) };
-
-        // Remove folder objects
-        const nextFolders = { ...model.folders };
-        for (const fid of folderIdsToDelete) delete nextFolders[fid];
-        model.folders = nextFolders;
-        return;
-      }
-
-      // Otherwise: move contents/children to a target folder (default: parent).
-      const subtree = new Set(collectFolderSubtreeIds(model, folderId));
-      const requestedTargetId =
-        options && 'mode' in options && (options.mode ?? 'move') === 'move' ? options.targetFolderId : undefined;
-      const targetId = requestedTargetId && !subtree.has(requestedTargetId) ? requestedTargetId : parentId;
-
-      const parent = getFolder(model, parentId);
-
-      if (targetId === parentId) {
-        // Move children and contents to parent.
-        const nextParent: Folder = {
-          ...parent,
-          folderIds: [...parent.folderIds.filter((id) => id !== folderId), ...folder.folderIds],
-          elementIds: [...parent.elementIds, ...folder.elementIds],
-          viewIds: [...parent.viewIds, ...folder.viewIds]
-        };
-        model.folders[parentId] = nextParent;
-
-        // Reparent children folders.
-        for (const childId of folder.folderIds) {
-          const child = getFolder(model, childId);
-          model.folders[childId] = { ...child, parentId };
-        }
-      } else {
-        const target = getFolder(model, targetId);
-
-        // Remove folder from its parent list
-        model.folders[parentId] = { ...parent, folderIds: parent.folderIds.filter((id) => id !== folderId) };
-
-        // Move children and contents to target
-        model.folders[targetId] = {
-          ...target,
-          folderIds: [...target.folderIds, ...folder.folderIds],
-          elementIds: [...target.elementIds, ...folder.elementIds],
-          viewIds: [...target.viewIds, ...folder.viewIds]
-        };
-
-        // Reparent children folders.
-        for (const childId of folder.folderIds) {
-          const child = getFolder(model, childId);
-          model.folders[childId] = { ...child, parentId: targetId };
-        }
-      }
-
-      const rest = { ...model.folders };
-      delete rest[folderId];
-      model.folders = rest;
-    });
+    this.updateModel((model) => folderMutations.deleteFolder(model, folderId, options));
   };
 
   /** Ensure a model has the root folder structure (used by future migrations). */

@@ -1,22 +1,25 @@
 import type * as React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout, ArchimateLayer, ElementType } from '../../domain';
-import { RELATIONSHIP_TYPES, createRelationship, createConnector, getDefaultViewObjectSize, getViewpointById, validateRelationship, ELEMENT_TYPES_BY_LAYER, createViewObject, createViewObjectNodeLayout } from '../../domain';
+import { useCallback, useMemo, useState } from 'react';
+import type { ArchimateLayer, ElementType, Model, RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout } from '../../domain';
+import { ELEMENT_TYPES_BY_LAYER, createConnector, getDefaultViewObjectSize } from '../../domain';
 import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
 import { Dialog } from '../dialog/Dialog';
 import { createViewSvg } from './exportSvg';
-import type { Point } from './geometry';
-import { boundsForNodes, clamp, hitTestConnectable, nodeRefFromLayout, offsetPolyline, polylineMidPoint, rectEdgeAnchor, unitPerp } from './geometry';
+import { boundsForNodes, nodeRefFromLayout } from './geometry';
 import { dataTransferHasElement, readDraggedElementId } from './dragDrop';
-import { relationshipVisual } from './relationshipVisual';
-import { RelationshipMarkers } from './RelationshipMarkers';
-import { DiagramNode, type DiagramLinkDrag, type DiagramNodeDragState } from './DiagramNode';
-import { DiagramConnectorNode } from './DiagramConnectorNode';
-import { DiagramViewObjectNode } from './DiagramViewObjectNode';
 import type { ConnectableRef } from './connectable';
-import { refKey, sameRef } from './connectable';
+import { refKey } from './connectable';
+
+import { useActiveViewId } from './hooks/useActiveViewId';
+import { useDiagramViewport } from './hooks/useDiagramViewport';
+import { useDiagramToolState } from './hooks/useDiagramToolState';
+import { useDiagramNodeDrag } from './hooks/useDiagramNodeDrag';
+import { useDiagramRelationshipCreation } from './hooks/useDiagramRelationshipCreation';
+
+import { DiagramNodesLayer } from './layers/DiagramNodesLayer';
+import { DiagramRelationshipsLayer, type RelRenderItem } from './layers/DiagramRelationshipsLayer';
 
 type Props = {
   selection: Selection;
@@ -38,261 +41,30 @@ const LAYER_BG_VAR: Record<ArchimateLayer, string> = {
   Application: 'var(--arch-layer-application)',
   Technology: 'var(--arch-layer-technology)',
   Physical: 'var(--arch-layer-physical)',
-  ImplementationMigration: 'var(--arch-layer-implementation)'
+  ImplementationMigration: 'var(--arch-layer-implementation)',
 };
-
-
-type ToolMode = 'select' | 'addNote' | 'addLabel' | 'addGroupBox' | 'addDivider';
-
-type GroupBoxDraft = {
-  start: Point;
-  current: Point;
-};
-
-
 
 function sortViews(views: Record<string, View>): View[] {
   return Object.values(views).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-
 export function DiagramCanvas({ selection, onSelect }: Props) {
-  const model = useModelStore((s) => s.model);
-  const [activeViewId, setActiveViewId] = useState<string | null>(null);
-
-  const [toolMode, setToolMode] = useState<ToolMode>('select');
-  const [groupBoxDraft, setGroupBoxDraft] = useState<GroupBoxDraft | null>(null);
-  const groupBoxDraftRef = useRef<GroupBoxDraft | null>(null);
+  const model = useModelStore((s) => s.model) as Model | null;
 
   const views = useMemo(() => (model ? sortViews(model.views) : []), [model]);
 
-  useEffect(() => {
-    if (!model) {
-      setActiveViewId(null);
-      return;
-    }
-    if (selection.kind === 'view') {
-      setActiveViewId(selection.viewId);
-      return;
-    }
-    if (selection.kind === 'viewNode') {
-      setActiveViewId(selection.viewId);
-      return;
-    }
-    if (selection.kind === 'viewObject') {
-      setActiveViewId(selection.viewId);
-      return;
-    }
-    if (activeViewId && model.views[activeViewId]) return;
-    setActiveViewId(views[0]?.id ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    model,
-    selection.kind === 'view'
-      ? selection.viewId
-      : selection.kind === 'viewNode'
-        ? selection.viewId
-        : selection.kind === 'viewObject'
-          ? selection.viewId
-          : null,
-    views.length,
-  ]);
-
-  // Tool mode: Escape cancels placement / returns to select.
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        setGroupBoxDraft(null);
-        setToolMode('select');
-      }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
+  const { activeViewId } = useActiveViewId(model, views, selection);
   const activeView = model && activeViewId ? model.views[activeViewId] : null;
 
   const canExportImage = Boolean(model && activeViewId && activeView);
 
-  function handleExportImage() {
+  const handleExportImage = useCallback(() => {
     if (!model || !activeViewId) return;
     const svg = createViewSvg(model, activeViewId);
     const base = `${model.metadata.name}-${activeView?.name || 'view'}`;
     const fileName = sanitizeFileNameWithExtension(base, 'svg');
     downloadTextFile(fileName, svg, 'image/svg+xml');
-  }
-
-  const beginGroupBoxDraft = useCallback(
-    (start: Point) => {
-      if (!activeViewId) return;
-      const initial: GroupBoxDraft = { start, current: start };
-      groupBoxDraftRef.current = initial;
-      setGroupBoxDraft(initial);
-
-      function onMove(e: PointerEvent) {
-        const p = clientToModelPoint(e.clientX, e.clientY);
-        if (!p) return;
-        const next = { start, current: p };
-        groupBoxDraftRef.current = next;
-        setGroupBoxDraft(next);
-      }
-
-      function onUp(e: PointerEvent) {
-        const end = clientToModelPoint(e.clientX, e.clientY);
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-
-        const draft = groupBoxDraftRef.current;
-        groupBoxDraftRef.current = null;
-        setGroupBoxDraft(null);
-
-        if (!draft || !activeViewId) return;
-
-        const p1 = draft.start;
-        const p2 = end ?? draft.current;
-
-        const x0 = Math.min(p1.x, p2.x);
-        const y0 = Math.min(p1.y, p2.y);
-        const w0 = Math.abs(p1.x - p2.x);
-        const h0 = Math.abs(p1.y - p2.y);
-
-        const minSize = 10;
-        const useDefault = w0 < minSize && h0 < minSize;
-        const size = useDefault
-          ? getDefaultViewObjectSize('GroupBox')
-          : { width: Math.max(minSize, w0), height: Math.max(minSize, h0) };
-
-        const obj = createViewObject({ type: 'GroupBox' });
-        const node = { ...createViewObjectNodeLayout(obj.id, x0, y0, size.width, size.height), zIndex: -100 };
-        modelStore.addViewObject(activeViewId, obj, node);
-        onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: obj.id });
-        setToolMode('select');
-      }
-
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-    },
-    [activeViewId, onSelect]
-  );
-
-  const onSurfacePointerDownCapture = useCallback(
-    (e: React.PointerEvent) => {
-      if (!model || !activeViewId || !activeView) return;
-      if (toolMode === 'select') return;
-
-      const target = e.target as HTMLElement | null;
-      if (target?.closest('.diagramNode, .diagramConnectorNode, .diagramViewObjectNode')) {
-        return;
-      }
-
-      const p = clientToModelPoint(e.clientX, e.clientY);
-      if (!p) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (toolMode === 'addNote') {
-        const id = modelStore.createViewObjectInViewAt(activeViewId, 'Note', p.x, p.y);
-        onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: id });
-        setToolMode('select');
-      } else if (toolMode === 'addLabel') {
-        const id = modelStore.createViewObjectInViewAt(activeViewId, 'Label', p.x, p.y);
-        onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: id });
-        setToolMode('select');
-      } else if (toolMode === 'addDivider') {
-        const id = modelStore.createViewObjectInViewAt(activeViewId, 'Divider', p.x, p.y);
-        onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: id });
-        setToolMode('select');
-      } else if (toolMode === 'addGroupBox') {
-        beginGroupBoxDraft(p);
-      }
-    },
-    [model, activeViewId, activeView, toolMode, beginGroupBoxDraft, onSelect]
-  );
-
-// Zoom & fit
-  const viewportRef = useRef<HTMLDivElement | null>(null);
-  const surfaceRef = useRef<HTMLDivElement | null>(null);
-  const [zoom, setZoom] = useState<number>(1);
-
-  const clientToModelPoint = useCallback(
-    (clientX: number, clientY: number): Point | null => {
-      // Prefer converting relative to the scaled diagram surface.
-      // This avoids vertical offsets caused by sticky overlays inside the scroll viewport.
-      const surface = surfaceRef.current;
-      if (surface) {
-        const rect = surface.getBoundingClientRect();
-        return {
-          x: (clientX - rect.left) / zoom,
-          y: (clientY - rect.top) / zoom,
-        };
-      }
-
-      // Fallback (should rarely be needed): convert relative to the scroll viewport.
-      const vp = viewportRef.current;
-      if (!vp) return null;
-      const rect = vp.getBoundingClientRect();
-      return {
-        x: (vp.scrollLeft + (clientX - rect.left)) / zoom,
-        y: (vp.scrollTop + (clientY - rect.top)) / zoom,
-      };
-    },
-    [zoom]
-  );
-
-  // Relationship "wire" creation (drag from a node handle to another node).
-  const [linkDrag, setLinkDrag] = useState<DiagramLinkDrag | null>(null);
-
-  const [pendingCreateRel, setPendingCreateRel] = useState<
-    | {
-        viewId: string;
-        sourceRef: ConnectableRef;
-        targetRef: ConnectableRef;
-      }
-    | null
-  >(null);
-
-  const [lastRelType, setLastRelType] = useState<RelationshipType>('Association');
-  const [pendingRelType, setPendingRelType] = useState<RelationshipType>('Association');
-  const [pendingRelError, setPendingRelError] = useState<string | null>(null);
-
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  function handleViewportDragOver(e: React.DragEvent<HTMLDivElement>) {
-    if (!activeViewId) return;
-    if (!dataTransferHasElement(e.dataTransfer)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setIsDragOver(true);
-  }
-
-  function handleViewportDragLeave() {
-    setIsDragOver(false);
-  }
-
-  function handleViewportDrop(e: React.DragEvent<HTMLDivElement>) {
-    setIsDragOver(false);
-    if (!model || !activeViewId) return;
-    const elementId = readDraggedElementId(e.dataTransfer);
-    if (!elementId) return;
-    if (!model.elements[elementId]) return;
-
-    e.preventDefault();
-
-    const vp = viewportRef.current;
-    if (!vp) {
-      modelStore.addElementToView(activeViewId, elementId);
-      onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
-      return;
-    }
-
-    const rect = vp.getBoundingClientRect();
-    const x = (vp.scrollLeft + (e.clientX - rect.left)) / zoom;
-    const y = (vp.scrollTop + (e.clientY - rect.top)) / zoom;
-
-    modelStore.addElementToViewAt(activeViewId, elementId, x, y);
-    onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
-  }
+  }, [model, activeViewId, activeView]);
 
   const nodes: ViewNodeLayout[] = useMemo(
     () =>
@@ -332,186 +104,73 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   const surfaceWidthModel = Math.max(800, bounds.maxX + surfacePadding);
   const surfaceHeightModel = Math.max(420, bounds.maxY + surfacePadding);
 
-  function setZoomKeepingCenter(nextZoom: number) {
+  const { viewportRef, surfaceRef, zoom, zoomIn, zoomOut, zoomReset, fitToView, clientToModelPoint } = useDiagramViewport({
+    activeViewId,
+    activeView,
+    bounds,
+    hasNodes: nodes.length > 0,
+    surfacePadding,
+  });
+
+  const { toolMode, setToolMode, groupBoxDraft, onSurfacePointerDownCapture } = useDiagramToolState({
+    model,
+    activeViewId,
+    activeView,
+    clientToModelPoint,
+    onSelect,
+  });
+
+  const { beginNodeDrag } = useDiagramNodeDrag(zoom);
+
+  const rel = useDiagramRelationshipCreation({
+    model,
+    nodes,
+    clientToModelPoint,
+    onSelect,
+  });
+
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const getElementBgVar = useCallback((t: ElementType) => {
+    const layer = ELEMENT_TYPE_TO_LAYER[t] ?? 'Business';
+    return LAYER_BG_VAR[layer];
+  }, []);
+
+  function handleViewportDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (!activeViewId) return;
+    if (!dataTransferHasElement(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  }
+
+  function handleViewportDragLeave() {
+    setIsDragOver(false);
+  }
+
+  function handleViewportDrop(e: React.DragEvent<HTMLDivElement>) {
+    setIsDragOver(false);
+    if (!model || !activeViewId) return;
+    const elementId = readDraggedElementId(e.dataTransfer);
+    if (!elementId) return;
+    if (!model.elements[elementId]) return;
+
+    e.preventDefault();
+
     const vp = viewportRef.current;
     if (!vp) {
-      setZoom(nextZoom);
+      modelStore.addElementToView(activeViewId, elementId);
+      onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
       return;
     }
-    const cx = (vp.scrollLeft + vp.clientWidth / 2) / zoom;
-    const cy = (vp.scrollTop + vp.clientHeight / 2) / zoom;
-    setZoom(nextZoom);
-    requestAnimationFrame(() => {
-      vp.scrollLeft = Math.max(0, cx * nextZoom - vp.clientWidth / 2);
-      vp.scrollTop = Math.max(0, cy * nextZoom - vp.clientHeight / 2);
-    });
+
+    const rect = vp.getBoundingClientRect();
+    const x = (vp.scrollLeft + (e.clientX - rect.left)) / zoom;
+    const y = (vp.scrollTop + (e.clientY - rect.top)) / zoom;
+
+    modelStore.addElementToViewAt(activeViewId, elementId, x, y);
+    onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
   }
-
-  function zoomIn() {
-    setZoomKeepingCenter(clamp(Math.round((zoom + 0.1) * 10) / 10, 0.2, 3));
-  }
-  function zoomOut() {
-    setZoomKeepingCenter(clamp(Math.round((zoom - 0.1) * 10) / 10, 0.2, 3));
-  }
-  function zoomReset() {
-    setZoomKeepingCenter(1);
-  }
-
-  function fitToView() {
-    const vp = viewportRef.current;
-    if (!vp) return;
-    if (!activeView || nodes.length === 0) return;
-
-    const bw = bounds.maxX - bounds.minX + surfacePadding;
-    const bh = bounds.maxY - bounds.minY + surfacePadding;
-
-    const target = clamp(Math.min(vp.clientWidth / bw, vp.clientHeight / bh), 0.2, 3);
-    setZoom(target);
-
-    const cx = (bounds.minX + bounds.maxX) / 2;
-    const cy = (bounds.minY + bounds.maxY) / 2;
-    requestAnimationFrame(() => {
-      vp.scrollLeft = Math.max(0, cx * target - vp.clientWidth / 2);
-      vp.scrollTop = Math.max(0, cy * target - vp.clientHeight / 2);
-    });
-  }
-
-  // When switching views, reset zoom and center on content (no auto-fit).
-  useEffect(() => {
-    const vp = viewportRef.current;
-    if (!vp || !activeView) return;
-    setZoom(1);
-    const cx = (bounds.minX + bounds.maxX) / 2;
-    const cy = (bounds.minY + bounds.maxY) / 2;
-    requestAnimationFrame(() => {
-      vp.scrollLeft = Math.max(0, cx - vp.clientWidth / 2);
-      vp.scrollTop = Math.max(0, cy - vp.clientHeight / 2);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeViewId]);
-
-  // Basic drag handling (in model coordinates; convert pointer delta by zoom)
-  const dragRef = useRef<DiagramNodeDragState | null>(null);
-
-  useEffect(() => {
-    function onMove(e: PointerEvent) {
-      const d = dragRef.current;
-      if (!d) return;
-
-      const dx = (e.clientX - d.startX) / zoom;
-      const dy = (e.clientY - d.startY) / zoom;
-
-      const view = modelStore.getState().model?.views[d.viewId];
-      const snap = Boolean(view?.formatting?.snapToGrid);
-      const grid = view?.formatting?.gridSize ?? 20;
-
-      const ref =
-        d.ref.kind === 'element'
-          ? { elementId: d.ref.id }
-          : d.ref.kind === 'connector'
-            ? { connectorId: d.ref.id }
-            : { objectId: d.ref.id };
-
-      if (d.action === 'resize') {
-        // MVP: bottom-right resize. Clamp to reasonable minimums.
-        let minW = 40;
-        let minH = 24;
-        if (d.ref.kind === 'connector') {
-          minW = 16;
-          minH = 16;
-        }
-        if (d.ref.kind === 'object') {
-          const obj = view?.objects?.[d.ref.id];
-          if (obj?.type === 'GroupBox') {
-            minW = 160;
-            minH = 120;
-          } else if (obj?.type === 'Note') {
-            minW = 140;
-            minH = 90;
-          } else if (obj?.type === 'Divider') {
-            // Auto-orientation divider: allow both horizontal and vertical.
-            // Decide desired orientation based on the *proposed* size (before clamping).
-            const proposedW = d.origW + dx;
-            const proposedH = d.origH + dy;
-            const vertical = proposedH > proposedW;
-            minW = vertical ? 6 : 80;
-            minH = vertical ? 80 : 6;
-          } else {
-            // Label
-            minW = 80;
-            minH = 24;
-          }
-        }
-
-        let w = Math.max(minW, d.origW + dx);
-        let h = Math.max(minH, d.origH + dy);
-        if (snap && grid > 1) {
-          w = Math.round(w / grid) * grid;
-          h = Math.round(h / grid) * grid;
-        }
-
-        modelStore.updateViewNodeLayoutAny(d.viewId, ref, { width: w, height: h });
-        return;
-      }
-
-      let x = d.origX + dx;
-      let y = d.origY + dy;
-      if (snap && grid > 1) {
-        x = Math.round(x / grid) * grid;
-        y = Math.round(y / grid) * grid;
-      }
-
-      modelStore.updateViewNodePositionAny(d.viewId, ref, x, y);
-    }
-    function onUp() {
-      dragRef.current = null;
-    }
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-  }, [zoom]);
-
-  // Relationship creation: drag a "wire" from a node handle to another node.
-  useEffect(() => {
-    if (!linkDrag) return;
-
-    function onMove(e: PointerEvent) {
-      const p = clientToModelPoint(e.clientX, e.clientY);
-      if (!p) return;
-      // IMPORTANT: the relationship handle typically uses pointer capture.
-      // That prevents pointerenter/leave from firing on other nodes, so we hit-test
-      // in model coordinates to detect the current drop target.
-      setLinkDrag((prev) => {
-        if (!prev) return prev;
-        const targetRef = hitTestConnectable(nodes, p, prev.sourceRef);
-        return { ...prev, currentPoint: p, targetRef };
-      });
-    }
-
-    function onUp(e: PointerEvent) {
-      const p = clientToModelPoint(e.clientX, e.clientY);
-      setLinkDrag((prev) => {
-        if (!prev) return prev;
-        const target = p ? hitTestConnectable(nodes, p, prev.sourceRef) : prev.targetRef;
-        if (target && !sameRef(target, prev.sourceRef)) {
-          setPendingCreateRel({ viewId: prev.viewId, sourceRef: prev.sourceRef, targetRef: target });
-          setPendingRelType(lastRelType);
-          setPendingRelError(null);
-        }
-        return null;
-      });
-    }
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-  }, [linkDrag, clientToModelPoint, lastRelType, nodes]);
 
   // Relationships to render: explicit in view if present, otherwise infer from model relationships between nodes in view.
   const relationshipIdsToRender = useMemo(() => {
@@ -551,15 +210,6 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     return m;
   }, [activeView]);
 
-  type RelRenderItem = {
-    relId: string;
-    source: ViewNodeLayout;
-    target: ViewNodeLayout;
-    indexInGroup: number;
-    totalInGroup: number;
-    groupKey: string;
-  };
-
   const relRenderItems: RelRenderItem[] = useMemo(() => {
     if (!model || !activeView) return [];
     // Group relationships by unordered (A,B) endpoint pair so parallel lines are drawn
@@ -584,10 +234,10 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     };
 
     for (const relId of relationshipIdsToRender) {
-      const rel = model.relationships[relId];
-      if (!rel) continue;
-      const s = sourceRefForRel(rel);
-      const t = targetRefForRel(rel);
+      const relObj = model.relationships[relId];
+      if (!relObj) continue;
+      const s = sourceRefForRel(relObj);
+      const t = targetRefForRel(relObj);
       if (!s || !t) continue;
       const a = refKey(s);
       const b = refKey(t);
@@ -602,10 +252,10 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       const stable = [...relIds].sort((x, y) => x.localeCompare(y));
       for (let i = 0; i < stable.length; i += 1) {
         const relId = stable[i];
-        const rel = model.relationships[relId];
-        if (!rel) continue;
-        const sRef = sourceRefForRel(rel);
-        const tRef = targetRefForRel(rel);
+        const relObj = model.relationships[relId];
+        if (!relObj) continue;
+        const sRef = sourceRefForRel(relObj);
+        const tRef = targetRefForRel(relObj);
         if (!sRef || !tRef) continue;
         const s = nodeByKey.get(refKey(sRef));
         const t = nodeByKey.get(refKey(tRef));
@@ -616,67 +266,6 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
     return items;
   }, [model, activeView, nodes, relationshipIdsToRender]);
-
-  const pendingRelTypeOptions = useMemo(() => {
-    if (!model || !pendingCreateRel) return RELATIONSHIP_TYPES;
-    const view = model.views[pendingCreateRel.viewId];
-    const vp = view ? getViewpointById(view.viewpointId) : undefined;
-    return vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : RELATIONSHIP_TYPES;
-  }, [model, pendingCreateRel]);
-
-  // When the dialog opens, default the type to last used (if allowed), otherwise first option.
-  useEffect(() => {
-    if (!pendingCreateRel) return;
-    const opts = pendingRelTypeOptions;
-    const next = opts.includes(lastRelType) ? lastRelType : opts[0] ?? 'Association';
-    setPendingRelType(next);
-    setPendingRelError(null);
-  }, [pendingCreateRel, pendingRelTypeOptions, lastRelType]);
-
-  function closePendingRelationshipDialog() {
-    setPendingCreateRel(null);
-    setPendingRelError(null);
-  }
-
-  function confirmCreatePendingRelationship() {
-    if (!model || !pendingCreateRel) return;
-    setPendingRelError(null);
-
-    const { sourceRef, targetRef } = pendingCreateRel;
-
-    const sourceOk = sourceRef.kind === 'element' ? Boolean(model.elements[sourceRef.id]) : Boolean(model.connectors?.[sourceRef.id]);
-    const targetOk = targetRef.kind === 'element' ? Boolean(model.elements[targetRef.id]) : Boolean(model.connectors?.[targetRef.id]);
-    if (!sourceOk || !targetOk) {
-      setPendingRelError('Both source and target endpoints must exist.');
-      return;
-    }
-
-    // Only apply ArchiMate relationship rule validation when both endpoints are elements.
-    if (sourceRef.kind === 'element' && targetRef.kind === 'element') {
-      const validation = validateRelationship({
-        id: 'tmp',
-        type: pendingRelType,
-        sourceElementId: sourceRef.id,
-        targetElementId: targetRef.id,
-      });
-      if (!validation.ok) {
-        setPendingRelError(validation.errors[0] ?? 'Invalid relationship');
-        return;
-      }
-    }
-
-    const rel = createRelationship({
-      type: pendingRelType,
-      sourceElementId: sourceRef.kind === 'element' ? sourceRef.id : undefined,
-      sourceConnectorId: sourceRef.kind === 'connector' ? sourceRef.id : undefined,
-      targetElementId: targetRef.kind === 'element' ? targetRef.id : undefined,
-      targetConnectorId: targetRef.kind === 'connector' ? targetRef.id : undefined,
-    });
-    modelStore.addRelationship(rel);
-    setLastRelType(pendingRelType);
-    setPendingCreateRel(null);
-    onSelect({ kind: 'relationship', relationshipId: rel.id });
-  }
 
   if (!model) {
     return (
@@ -689,7 +278,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   return (
     <div className="diagramWrap">
       <div aria-label="Diagram toolbar" className="diagramToolbar">
-                <div className="diagramToolbarTools" role="group" aria-label="Diagram tools">
+        <div className="diagramToolbarTools" role="group" aria-label="Diagram tools">
           <button
             type="button"
             className={'shellButton' + (toolMode === 'select' ? ' isActive' : '')}
@@ -717,7 +306,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           >
             Label
           </button>
-          
+
           <button
             type="button"
             className={'shellButton' + (toolMode === 'addDivider' ? ' isActive' : '')}
@@ -727,7 +316,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           >
             Divider
           </button>
-<button
+          <button
             type="button"
             className={'shellButton' + (toolMode === 'addGroupBox' ? ' isActive' : '')}
             onClick={() => setToolMode('addGroupBox')}
@@ -738,7 +327,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           </button>
         </div>
 
-<div className="diagramToolbarButtons">
+        <div className="diagramToolbarButtons">
           <button className="shellButton" type="button" onClick={zoomOut} aria-label="Zoom out">
             −
           </button>
@@ -825,291 +414,95 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                   transformOrigin: '0 0',
                 }}
               >
-                <svg
-                  className="diagramRelationships"
-                  width={surfaceWidthModel}
-                  height={surfaceHeightModel}
-                  aria-label="Diagram relationships"
-                >
-                  <RelationshipMarkers />
-                  {groupBoxDraft ? (
-                    <rect
-                      x={Math.min(groupBoxDraft.start.x, groupBoxDraft.current.x)}
-                      y={Math.min(groupBoxDraft.start.y, groupBoxDraft.current.y)}
-                      width={Math.abs(groupBoxDraft.start.x - groupBoxDraft.current.x)}
-                      height={Math.abs(groupBoxDraft.start.y - groupBoxDraft.current.y)}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeDasharray="6 4"
-                      opacity={0.55}
-                    />
-                  ) : null}
+                <DiagramRelationshipsLayer
+                  model={model}
+                  nodes={nodes}
+                  relLayoutById={relLayoutById}
+                  relRenderItems={relRenderItems}
+                  surfaceWidthModel={surfaceWidthModel}
+                  surfaceHeightModel={surfaceHeightModel}
+                  selection={selection}
+                  linkDrag={rel.linkDrag}
+                  groupBoxDraft={groupBoxDraft}
+                  onSelect={onSelect}
+                />
 
-
-                  {relRenderItems.map((item) => {
-                    const relId = item.relId;
-                    const rel = model.relationships[relId];
-                    if (!rel) return null;
-
-                    const s = item.source;
-                    const t = item.target;
-
-                    const sc: Point = { x: s.x + (s.width ?? 120) / 2, y: s.y + (s.height ?? 60) / 2 };
-                    const tc: Point = { x: t.x + (t.width ?? 120) / 2, y: t.y + (t.height ?? 60) / 2 };
-
-                    // Prefer border anchors (looks nicer than center-to-center).
-                    const start = rectEdgeAnchor(s, tc);
-                    const end = rectEdgeAnchor(t, sc);
-
-                    const layout = relLayoutById.get(relId);
-                    const midPts = layout?.points ?? [];
-                    let points: Point[] = [start, ...midPts, end];
-
-                    // If there are multiple relationships between the same two elements, offset them in parallel.
-                    const total = item.totalInGroup;
-                    if (total > 1) {
-                      const spacing = 14;
-                      const offsetIndex = item.indexInGroup - (total - 1) / 2;
-                      const offset = offsetIndex * spacing;
-
-                      // Use a stable perpendicular based on the unordered group key so
-                      // relationships in opposite directions still spread apart consistently.
-                      const parts = item.groupKey.split('|');
-                      const aNode = nodes.find((n) => {
-                        const r = nodeRefFromLayout(n);
-                        return r ? refKey(r) === parts[0] : false;
-                      });
-                      const bNode = nodes.find((n) => {
-                        const r = nodeRefFromLayout(n);
-                        return r ? refKey(r) === parts[1] : false;
-                      });
-                      const aC: Point | null = aNode ? { x: aNode.x + (aNode.width ?? 120) / 2, y: aNode.y + (aNode.height ?? 60) / 2 } : null;
-                      const bC: Point | null = bNode ? { x: bNode.x + (bNode.width ?? 120) / 2, y: bNode.y + (bNode.height ?? 60) / 2 } : null;
-                      const perp = aC && bC ? unitPerp(aC, bC) : unitPerp(sc, tc);
-                      points = offsetPolyline(points, perp, offset);
-                    }
-
-                    const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-
-                    const isSelected = selection.kind === 'relationship' && selection.relationshipId === relId;
-                    const v = relationshipVisual(rel, isSelected);
-                    const mid = v.midLabel ? polylineMidPoint(points) : null;
-
-                    return (
-                      <g key={relId}>
-                        {/*
-                          Large invisible hit target so relationships are easy to select.
-                          (The visible line itself has pointer-events disabled.)
-                        */}
-                        <path
-                          className="diagramRelHit"
-                          d={d}
-                          style={{ strokeWidth: total > 1 ? 10 : 14 }}
-                          onClick={(e) => {
-                            if (linkDrag) return;
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onSelect({ kind: 'relationship', relationshipId: relId });
-                          }}
-                        />
-                        <path
-                          className={'diagramRelLine' + (isSelected ? ' isSelected' : '')}
-                          d={d}
-                          markerStart={v.markerStart}
-                          markerEnd={v.markerEnd}
-                          strokeDasharray={v.dasharray ?? undefined}
-                        />
-
-                        {mid ? (
-                          <text
-                            x={mid.x}
-                            y={mid.y - 6}
-                            fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial"
-                            fontSize={12}
-                            fontWeight={800}
-                            fill="rgba(0,0,0,0.65)"
-                            textAnchor="middle"
-                            pointerEvents="none"
-                          >
-                            {v.midLabel}
-                          </text>
-                        ) : null}
-                      </g>
-                    );
-                  })}
-
-
-                  {/* Link creation preview */}
-                  {linkDrag ? (() => {
-                    const start = linkDrag.sourcePoint;
-                    let end = linkDrag.currentPoint;
-                    if (linkDrag.targetRef) {
-                      const key = refKey(linkDrag.targetRef);
-                      const t = nodes.find((n) => {
-                        const r = nodeRefFromLayout(n);
-                        return r ? refKey(r) === key : false;
-                      });
-                      if (t) end = { x: t.x + t.width / 2, y: t.y + t.height / 2 };
-                    }
-                    const d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
-                    return (
-                      <path
-                        key="__preview__"
-                        d={d}
-                        fill="none"
-                        stroke="var(--diagram-rel-stroke)"
-                        strokeWidth={2}
-                        strokeDasharray="6 5"
-                        markerEnd="url(#arrowOpen)"
-                      />
-                    );
-                  })() : null}
-                </svg>
-
-
-                {nodes.map((n) => {
-                  if (n.elementId) {
-                    const el = model.elements[n.elementId];
-                    if (!el) return null;
-
-                    const layer = ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business';
-                    const bgVar = LAYER_BG_VAR[layer];
-
-                    const isSelected =
-                      selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId;
-
-                    return (
-                      <DiagramNode
-                        key={`${activeView.id}:${n.elementId}`}
-                        node={n}
-                        element={el}
-                        activeViewId={activeView.id}
-                        isSelected={isSelected}
-                        linkDrag={linkDrag}
-                        bgVar={bgVar}
-                        onSelect={onSelect}
-                        onBeginNodeDrag={(state) => {
-                          dragRef.current = state;
-                        }}
-                        onHoverAsRelationshipTarget={(ref) => {
-                          setLinkDrag((prev) => (prev ? { ...prev, targetRef: ref } : prev));
-                        }}
-                        clientToModelPoint={clientToModelPoint}
-                        onStartLinkDrag={(drag) => {
-                          setLinkDrag(drag);
-                        }}
-                      />
-                    );
-                  }
-
-                  if (n.connectorId) {
-                    const conn = model.connectors?.[n.connectorId];
-                    if (!conn) return null;
-                    const isSelected = selection.kind === 'connector' && selection.connectorId === n.connectorId;
-                    return (
-                      <DiagramConnectorNode
-                        key={`${activeView.id}:${n.connectorId}`}
-                        node={n}
-                        connector={conn}
-                        activeViewId={activeView.id}
-                        isSelected={isSelected}
-                        linkDrag={linkDrag}
-                        onSelect={onSelect}
-                        onBeginNodeDrag={(state) => {
-                          dragRef.current = state;
-                        }}
-                        onHoverAsRelationshipTarget={(ref) => {
-                          setLinkDrag((prev) => (prev ? { ...prev, targetRef: ref } : prev));
-                        }}
-                        clientToModelPoint={clientToModelPoint}
-                        onStartLinkDrag={(drag) => {
-                          setLinkDrag(drag);
-                        }}
-                      />
-                    );
-                  }
-
-                  if (n.objectId) {
-                    const objects = (activeView.objects ?? {}) as Record<string, any>;
-                    const obj = objects[n.objectId];
-                    if (!obj) return null;
-                    const isSelected =
-                      selection.kind === 'viewObject' && selection.viewId === activeView.id && selection.objectId === n.objectId;
-                    return (
-                      <DiagramViewObjectNode
-                        key={`${activeView.id}:${n.objectId}`}
-                        node={n}
-                        object={obj}
-                        activeViewId={activeView.id}
-                        isSelected={isSelected}
-                        onSelect={onSelect}
-                        onBeginNodeDrag={(state) => {
-                          dragRef.current = state;
-                        }}
-                      />
-                    );
-                  }
-
-                  return null;
-                })}
+                <DiagramNodesLayer
+                  model={model}
+                  activeView={activeView}
+                  nodes={nodes}
+                  selection={selection}
+                  linkDrag={rel.linkDrag}
+                  clientToModelPoint={clientToModelPoint}
+                  onSelect={onSelect}
+                  onBeginNodeDrag={beginNodeDrag}
+                  onHoverAsRelationshipTarget={rel.hoverAsRelationshipTarget}
+                  onStartLinkDrag={rel.startLinkDrag}
+                  getElementBgVar={getElementBgVar}
+                />
               </div>
             </div>
           </div>
         )}
       </div>
 
-	      {/* Relationship type picker ("stereotype") shown after drag-drop */}
-	      <Dialog
-	        title="Create relationship"
-	        isOpen={Boolean(pendingCreateRel)}
-	        onClose={closePendingRelationshipDialog}
-	        footer={
-	          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-	            <button type="button" className="shellButton" onClick={closePendingRelationshipDialog}>
-	              Cancel
-	            </button>
-	            <button type="button" className="shellButton" onClick={confirmCreatePendingRelationship}>
-	              Create
-	            </button>
-	          </div>
-	        }
-	      >
-	        {pendingCreateRel && model ? (
-	          <div>
-	            <div style={{ opacity: 0.9, marginBottom: 10 }}>
-	              <div>
-	                <b>From:</b>{' '}
-	                {pendingCreateRel.sourceRef.kind === 'element'
-	                  ? (model.elements[pendingCreateRel.sourceRef.id]?.name ?? '—')
-	                  : (model.connectors?.[pendingCreateRel.sourceRef.id]?.type ?? 'Connector')}
-	              </div>
-	              <div>
-	                <b>To:</b>{' '}
-	                {pendingCreateRel.targetRef.kind === 'element'
-	                  ? (model.elements[pendingCreateRel.targetRef.id]?.name ?? '—')
-	                  : (model.connectors?.[pendingCreateRel.targetRef.id]?.type ?? 'Connector')}
-	              </div>
-	            </div>
+      {/* Relationship type picker shown after drag-drop */}
+      <Dialog
+        title="Create relationship"
+        isOpen={Boolean(rel.pendingCreateRel)}
+        onClose={rel.closePendingRelationshipDialog}
+        footer={
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button type="button" className="shellButton" onClick={rel.closePendingRelationshipDialog}>
+              Cancel
+            </button>
+            <button type="button" className="shellButton" onClick={rel.confirmCreatePendingRelationship}>
+              Create
+            </button>
+          </div>
+        }
+      >
+        {rel.pendingCreateRel && model ? (
+          <div>
+            <div style={{ opacity: 0.9, marginBottom: 10 }}>
+              <div>
+                <b>From:</b>{' '}
+                {rel.pendingCreateRel.sourceRef.kind === 'element'
+                  ? (model.elements[rel.pendingCreateRel.sourceRef.id]?.name ?? '—')
+                  : (model.connectors?.[rel.pendingCreateRel.sourceRef.id]?.type ?? 'Connector')}
+              </div>
+              <div>
+                <b>To:</b>{' '}
+                {rel.pendingCreateRel.targetRef.kind === 'element'
+                  ? (model.elements[rel.pendingCreateRel.targetRef.id]?.name ?? '—')
+                  : (model.connectors?.[rel.pendingCreateRel.targetRef.id]?.type ?? 'Connector')}
+              </div>
+            </div>
 
-	            <label htmlFor="diagram-rel-type" style={{ display: 'block', marginBottom: 6 }}>
-	              Stereotype (relationship type)
-	            </label>
-	            <select id="diagram-rel-type" className="selectInput" value={pendingRelType} onChange={(e) => setPendingRelType(e.target.value as RelationshipType)}>
-	              {pendingRelTypeOptions.map((rt) => (
-	                <option key={rt} value={rt}>
-	                  {rt}
-	                </option>
-	              ))}
-	            </select>
+            <label htmlFor="diagram-rel-type" style={{ display: 'block', marginBottom: 6 }}>
+              Stereotype (relationship type)
+            </label>
+            <select
+              id="diagram-rel-type"
+              className="selectInput"
+              value={rel.pendingRelType}
+              onChange={(e) => rel.setPendingRelType(e.target.value as RelationshipType)}
+            >
+              {rel.pendingRelTypeOptions.map((rt) => (
+                <option key={rt} value={rt}>
+                  {rt}
+                </option>
+              ))}
+            </select>
 
-	            {pendingRelError ? (
-	              <div className="errorText" role="alert" style={{ marginTop: 10 }}>
-	                {pendingRelError}
-	              </div>
-	            ) : null}
-	          </div>
-	        ) : null}
-	      </Dialog>
+            {rel.pendingRelError ? (
+              <div className="errorText" role="alert" style={{ marginTop: 10 }}>
+                {rel.pendingRelError}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

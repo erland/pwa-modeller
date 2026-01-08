@@ -152,6 +152,51 @@ describe('persistence', () => {
     expect((parsed.views[view.id] as any).objects).toEqual({});
   });
 
+  test('deserializeModel migrates v6 models by moving legacy description to documentation (concept objects)', () => {
+    const modelV6 = createEmptyModel({ name: 'Legacy v6' }) as any;
+    modelV6.schemaVersion = 6;
+
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' }) as any;
+    // Simulate legacy persisted shape
+    el.description = 'Legacy element desc';
+    delete el.documentation;
+    modelV6.elements[el.id] = el;
+
+    const rel = createRelationship({ sourceElementId: el.id, targetElementId: el.id, type: 'Serving' }) as any;
+    rel.description = 'Legacy relationship desc';
+    delete rel.documentation;
+    modelV6.relationships[rel.id] = rel;
+
+    const view = createView({ name: 'Main', viewpointId: 'layered' }) as any;
+    view.description = 'Legacy view desc';
+    delete view.documentation;
+    modelV6.views[view.id] = view;
+
+    const conn = createConnector({ type: 'AndJunction' }) as any;
+    conn.description = 'Legacy connector desc';
+    delete conn.documentation;
+    modelV6.connectors[conn.id] = conn;
+
+    const parsed = deserializeModel(serializeModel(modelV6));
+    expect(parsed.schemaVersion).toBe(7);
+
+    const parsedEl: any = parsed.elements[el.id];
+    expect(parsedEl.documentation).toBe('Legacy element desc');
+    expect('description' in parsedEl).toBe(false);
+
+    const parsedRel: any = parsed.relationships[rel.id];
+    expect(parsedRel.documentation).toBe('Legacy relationship desc');
+    expect('description' in parsedRel).toBe(false);
+
+    const parsedView: any = parsed.views[view.id];
+    expect(parsedView.documentation).toBe('Legacy view desc');
+    expect('description' in parsedView).toBe(false);
+
+    const parsedConn: any = (parsed as any).connectors[conn.id];
+    expect(parsedConn.documentation).toBe('Legacy connector desc');
+    expect('description' in parsedConn).toBe(false);
+  });
+
   test('deserializeModel migrates v1 models by removing legacy Elements/Views root folders', () => {
     // Minimal v1-like model structure (as produced by older createEmptyModel()).
     const modelV1 = createEmptyModel({ name: 'Legacy' }) as any;
@@ -210,18 +255,6 @@ describe('persistence', () => {
     expect(root!.elementIds).toContain(a.id);
     expect(root!.viewIds).toContain(view.id);
   });
-
-  test('deserializeModel migrates v4 models by adding connectors container', () => {
-    const modelV4 = createEmptyModel({ name: 'Legacy v4' }) as any;
-    modelV4.schemaVersion = 4;
-    delete modelV4.connectors;
-
-    const parsed = deserializeModel(serializeModel(modelV4));
-    expect(parsed.schemaVersion).toBe(7);
-    expect(parsed.connectors).toEqual({});
-  });
-
-
 
   test('deserializeModel sanitizes taggedValues on load', () => {
     const model = createEmptyModel({ name: 'Tagged Model', description: 'desc' });

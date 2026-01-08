@@ -37,6 +37,28 @@ describe('domain factories', () => {
     expect(rel.name).toBe('relates');
   });
 
+  test('createRelationship uses documentation (and falls back to legacy description)', () => {
+    const rel = createRelationship({
+      sourceElementId: 'el_1',
+      targetElementId: 'el_2',
+      type: 'Serving',
+      documentation: '  docs  ',
+      // legacy field should be ignored when documentation exists
+      description: '  legacy  '
+    } as any);
+
+    expect(rel.documentation).toBe('docs');
+
+    const relLegacy = createRelationship({
+      sourceElementId: 'el_1',
+      targetElementId: 'el_2',
+      type: 'Serving',
+      description: '  legacy  '
+    } as any);
+
+    expect(relLegacy.documentation).toBe('legacy');
+  });
+
   test('createRelationship supports connector endpoints', () => {
     const rel = createRelationship({
       sourceConnectorId: 'conn_1',

@@ -1,5 +1,6 @@
 import type { ImportReport } from '../importReport';
 
+import type { IRModel } from './ir';
 /**
  * A short, stable identifier for an importer implementation (e.g. "meff", "xmi").
  * Used for logging and debugging. Must be unique in the registry.
@@ -36,13 +37,10 @@ export type ImportContext = {
 };
 
 /**
- * Intermediate representation produced by an importer.
- *
- * Step 2 will introduce a canonical IR type shared by all importers.
- * For Step 1 we keep this generic so we can wire up the framework without
- * forcing any particular IR schema yet.
+ * Canonical Intermediate Representation (IR) produced by an importer.
+ * See `./ir.ts` for the format-agnostic schema.
  */
-export type ImportIR = unknown;
+export type ImportIR = IRModel;
 
 export type ImportResult<TIR = ImportIR> = {
   format: ImportFormat;

@@ -97,6 +97,38 @@ export function moveViewToElement(model: Model, viewId: string, elementId: strin
   model.views[viewId] = { ...view, centerElementId: elementId };
 }
 
+export function moveFolderToFolder(model: Model, folderId: string, targetFolderId: string): void {
+  const folder = getFolder(model, folderId);
+  const targetFolder = getFolder(model, targetFolderId);
+
+  if (folderId === targetFolderId) return;
+  if (folder.kind === 'root') throw new Error('Cannot move the root folder.');
+
+  const fromParentId = folder.parentId;
+  if (!fromParentId) throw new Error(`Cannot move folder without parent: ${folderId}`);
+
+  // Prevent cycles: target cannot be the folder itself or any of its descendants.
+  const subtreeIds = collectFolderSubtreeIds(model, folderId);
+  if (subtreeIds.includes(targetFolderId)) {
+    throw new Error('Cannot move a folder into itself (or its descendant).');
+  }
+
+  if (fromParentId === targetFolderId) return;
+
+  const fromParent = getFolder(model, fromParentId);
+
+  // Remove from old parent.
+  fromParent.folderIds = fromParent.folderIds.filter((id) => id !== folderId);
+
+  // Add to target parent (dedupe).
+  if (!targetFolder.folderIds.includes(folderId)) {
+    targetFolder.folderIds = [...targetFolder.folderIds, folderId];
+  }
+
+  // Update parent pointer.
+  folder.parentId = targetFolderId;
+}
+
 // -------------------------
 // Folder extensions (taggedValues/externalIds)
 // -------------------------

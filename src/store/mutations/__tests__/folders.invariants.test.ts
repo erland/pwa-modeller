@@ -6,6 +6,7 @@ import {
   moveElementToFolder,
   moveViewToElement,
   moveViewToFolder,
+  moveFolderToFolder,
   renameFolder
 } from '../folders';
 
@@ -156,6 +157,54 @@ describe('store mutations: folders invariants', () => {
     expect(model.elements[el.id]).toBeUndefined();
     expect(model.views[view.id]).toBeUndefined();
   });
+
+
+
+test('moveFolderToFolder moves folder between parents and updates parentId', () => {
+  const model = createEmptyModel({ name: 'M' });
+  const rootId = getRootFolderId(model);
+
+  const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0.111111111);
+  const a = createFolder(model, rootId, 'A');
+  randSpy.mockReturnValue(0.222222222);
+  const b = createFolder(model, rootId, 'B');
+  randSpy.mockReturnValue(0.333333333);
+  const c = createFolder(model, a, 'C');
+  randSpy.mockRestore();
+
+  expect(model.folders[a].folderIds).toContain(c);
+  expect(model.folders[c].parentId).toBe(a);
+
+  moveFolderToFolder(model, c, b);
+
+  expect(model.folders[a].folderIds).not.toContain(c);
+  expect(model.folders[b].folderIds).toContain(c);
+  expect(model.folders[c].parentId).toBe(b);
+});
+
+test('moveFolderToFolder prevents moving a folder into itself/descendant', () => {
+  const model = createEmptyModel({ name: 'M' });
+  const rootId = getRootFolderId(model);
+
+  const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0.444444444);
+  const a = createFolder(model, rootId, 'A');
+  randSpy.mockReturnValue(0.555555555);
+  const c = createFolder(model, a, 'C');
+  randSpy.mockRestore();
+
+  expect(() => moveFolderToFolder(model, a, c)).toThrow(/into itself/i);
+});
+
+test('moveFolderToFolder throws when attempting to move the root folder', () => {
+  const model = createEmptyModel({ name: 'M' });
+  const rootId = getRootFolderId(model);
+
+  const randSpy = jest.spyOn(Math, 'random').mockReturnValue(0.666666666);
+  const a = createFolder(model, rootId, 'A');
+  randSpy.mockRestore();
+
+  expect(() => moveFolderToFolder(model, rootId, a)).toThrow(/root folder/i);
+});
 
   test('renameFolder throws for root folder', () => {
     const model = createEmptyModel({ name: 'M' });

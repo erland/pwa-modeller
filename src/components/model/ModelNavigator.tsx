@@ -127,7 +127,13 @@ export function ModelNavigator({ selection, onSelect }: Props) {
             // Action is on the store instance (not part of the Zustand state snapshot).
             modelStore.moveElementToFolder(elementId, targetFolderId);
           }}
-        />
+          onMoveViewToFolder={(viewId, targetFolderId) => {
+            modelStore.moveViewToFolder(viewId, targetFolderId);
+          }}
+          onMoveFolderToFolder={(folderId, targetFolderId) => {
+            modelStore.moveFolderToFolder(folderId, targetFolderId);
+          }}
+/>
       </div>
 
       <DeleteFolderDialog

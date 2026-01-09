@@ -7,6 +7,10 @@
 
 // Drag payload for dragging an element from the tree into a view.
 export const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
+// Drag payload for dragging a view between folders in the navigator.
+export const DND_VIEW_MIME = 'application/x-pwa-modeller-view-id';
+// Drag payload for dragging a folder between folders in the navigator.
+export const DND_FOLDER_MIME = 'application/x-pwa-modeller-folder-id';
 
 export type NavNodeKind = 'folder' | 'element' | 'view' | 'relationship' | 'section';
 

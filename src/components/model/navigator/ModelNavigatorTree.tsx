@@ -8,7 +8,7 @@ import {
 } from 'react-aria-components';
 
 import type { NavNode } from './types';
-import { DND_ELEMENT_MIME } from './types';
+import { DND_ELEMENT_MIME, DND_FOLDER_MIME, DND_VIEW_MIME } from './types';
 import { NavigatorNodeRow } from './NavigatorNodeRow';
 
 const DND_DEBUG = typeof window !== 'undefined' && window.localStorage?.getItem('pwaModellerDndDebug') === '1';
@@ -42,7 +42,39 @@ type Props = {
 
   /** Optional handler: move an element to a folder when dropped on a folder in the tree. */
   onMoveElementToFolder?: (elementId: string, targetFolderId: string) => void;
+  /** Optional handler: move a view to a folder when dropped on a folder in the tree. */
+  onMoveViewToFolder?: (viewId: string, targetFolderId: string) => void;
+  /** Optional handler: move a folder under another folder when dropped on a folder in the tree. */
+  onMoveFolderToFolder?: (folderId: string, targetFolderId: string) => void;
 };
+
+function parsePlainTextPayload(dt: DataTransfer): { kind: 'element' | 'view' | 'folder'; id: string } | null {
+  try {
+    const raw = dt.getData('text/plain');
+    if (!raw) return null;
+    const s = String(raw);
+
+    if (s.startsWith('pwa-modeller:')) {
+      const parts = s.split(':');
+      if (parts.length >= 3) {
+        const kind = parts[1];
+        const id = parts.slice(2).join(':');
+        if ((kind === 'element' || kind === 'view' || kind === 'folder') && id) {
+          return { kind, id };
+        }
+      }
+      return null;
+    }
+
+    // Legacy fallback: infer kind based on id prefix.
+    if (s.startsWith('element_')) return { kind: 'element', id: s };
+    if (s.startsWith('view_')) return { kind: 'view', id: s };
+    if (s.startsWith('folder_')) return { kind: 'folder', id: s };
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 function parseDraggedElementId(dt: DataTransfer | null): string | null {
   if (!dt) return null;
@@ -52,25 +84,52 @@ function parseDraggedElementId(dt: DataTransfer | null): string | null {
   } catch {
     // ignore
   }
+  const p = parsePlainTextPayload(dt);
+  return p?.kind === 'element' ? p.id : null;
+}
+
+function parseDraggedViewId(dt: DataTransfer | null): string | null {
+  if (!dt) return null;
   try {
-    const t = dt.getData('text/plain');
-    if (t) return t;
+    const id = dt.getData(DND_VIEW_MIME);
+    if (id) return id;
   } catch {
     // ignore
   }
-  return null;
+  const p = parsePlainTextPayload(dt);
+  return p?.kind === 'view' ? p.id : null;
 }
 
-function isMaybeElementDrag(dt: DataTransfer | null): boolean {
+function parseDraggedFolderId(dt: DataTransfer | null): string | null {
+  if (!dt) return null;
+  try {
+    const id = dt.getData(DND_FOLDER_MIME);
+    if (id) return id;
+  } catch {
+    // ignore
+  }
+  const p = parsePlainTextPayload(dt);
+  return p?.kind === 'folder' ? p.id : null;
+}
+
+
+
+function isMaybeSupportedDrag(dt: DataTransfer | null): boolean {
   if (!dt) return false;
   try {
     const types = Array.from(dt.types ?? []);
     // Note: some browsers restrict getData() during dragover, but types are still visible.
-    return types.includes(DND_ELEMENT_MIME) || types.includes('text/plain');
+    return (
+      types.includes(DND_ELEMENT_MIME)
+      || types.includes(DND_VIEW_MIME)
+      || types.includes(DND_FOLDER_MIME)
+      || types.includes('text/plain')
+    );
   } catch {
     return false;
   }
 }
+
 
 function iconFor(node: NavNode): string {
   switch (node.kind) {
@@ -114,7 +173,9 @@ export function ModelNavigatorTree({
   openCreateElement,
   openCreateView,
   openCreateCenteredView,
-  onMoveElementToFolder
+  onMoveElementToFolder,
+  onMoveViewToFolder,
+  onMoveFolderToFolder
 }: Props) {
   const treeWrapRef = useRef<HTMLDivElement | null>(null);
   const currentDropElRef = useRef<HTMLElement | null>(null);
@@ -133,10 +194,10 @@ export function ModelNavigatorTree({
     };
 
     const onDragOver = (e: DragEvent) => {
-      if (!onMoveElementToFolder) return;
+      if (!onMoveElementToFolder && !onMoveViewToFolder && !onMoveFolderToFolder) return;
       // During dragover, some browsers may not expose the data payload via getData().
-      // Accept the drop based on visible types and resolve the element id on drop.
-      if (!isMaybeElementDrag(e.dataTransfer)) {
+      // Accept the drop based on visible types and resolve the id on drop.
+      if (!isMaybeSupportedDrag(e.dataTransfer)) {
         clearHighlight();
         return;
       }
@@ -146,6 +207,12 @@ export function ModelNavigatorTree({
         clearHighlight();
         return;
       }
+const maybeFolderDragId = parseDraggedFolderId(e.dataTransfer);
+if (maybeFolderDragId && maybeFolderDragId === row.dataset.folderid) {
+  // Don't allow dropping a folder onto itself.
+  clearHighlight();
+  return;
+}
       // Accept the drop.
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -158,21 +225,53 @@ export function ModelNavigatorTree({
     };
 
     const onDrop = (e: DragEvent) => {
-      if (!onMoveElementToFolder) return;
-      const elId = parseDraggedElementId(e.dataTransfer);
-      const target = e.target as HTMLElement | null;
-      const row = target?.closest('.navTreeRow[data-drop-folder="folder"]') as HTMLElement | null;
-      const folderId = row?.dataset.folderid;
-      clearHighlight();
-      if (!elId || !folderId) return;
-      e.preventDefault();
-      e.stopPropagation();
-      dndLog('tree folder drop', { elementId: elId, folderId });
-      // Safety: confirmation to avoid accidental moves.
+  if (!onMoveElementToFolder && !onMoveViewToFolder && !onMoveFolderToFolder) return;
+
+  const elementId = parseDraggedElementId(e.dataTransfer);
+  const viewId = parseDraggedViewId(e.dataTransfer);
+  const folderDragId = parseDraggedFolderId(e.dataTransfer);
+
+  const target = e.target as HTMLElement | null;
+  const row = target?.closest('.navTreeRow[data-drop-folder="folder"]') as HTMLElement | null;
+  const folderId = row?.dataset.folderid;
+
+  clearHighlight();
+  if (!folderId) return;
+
+  // Ignore drops of a folder onto itself.
+  if (folderDragId && folderDragId === folderId) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  dndLog('tree folder drop', { elementId, viewId, folderDragId, folderId, types: Array.from(e.dataTransfer?.types ?? []) });
+
+  try {
+    if (elementId && onMoveElementToFolder) {
       if (window.confirm('Move element to this folder?')) {
-        onMoveElementToFolder(elId, folderId);
+        onMoveElementToFolder(elementId, folderId);
       }
-    };
+      return;
+    }
+
+    if (viewId && onMoveViewToFolder) {
+      if (window.confirm('Move view to this folder?')) {
+        onMoveViewToFolder(viewId, folderId);
+      }
+      return;
+    }
+
+    if (folderDragId && onMoveFolderToFolder) {
+      if (window.confirm('Move folder into this folder?')) {
+        onMoveFolderToFolder(folderDragId, folderId);
+      }
+      return;
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    window.alert(msg);
+  }
+};
 
     const onDragLeave = (_e: DragEvent) => {
       // If the pointer leaves the tree wrapper entirely, clear highlight.

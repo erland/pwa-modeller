@@ -358,6 +358,10 @@ export class ModelStore {
     this.updateModel((model) => folderMutations.moveViewToElement(model, viewId, elementId));
   };
 
+  moveFolderToFolder = (folderId: string, targetFolderId: string): void => {
+    this.updateModel((model) => folderMutations.moveFolderToFolder(model, folderId, targetFolderId));
+  };
+
   // -------------------------
   // Folder extensions (taggedValues/externalIds)
   // -------------------------

@@ -3,6 +3,7 @@ import { createImportReport } from '../importReport';
 import type { ImportContext, ImportResult } from './importer';
 import { UnsupportedImportFormatError } from './importer';
 import { pickImporter } from './registry';
+import { readBlobAsArrayBuffer } from './blobReaders';
 
 const DEFAULT_SNIFF_BYTES = 256 * 1024; // 256 KiB
 
@@ -17,8 +18,12 @@ function getExtension(fileName: string): string | null {
   return ext || null;
 }
 
+
+
+
 async function readSniffBytes(file: File, maxBytes = DEFAULT_SNIFF_BYTES): Promise<Uint8Array> {
-  const buf = await file.slice(0, maxBytes).arrayBuffer();
+  const blob = file.slice(0, maxBytes);
+  const buf = await readBlobAsArrayBuffer(blob);
   return new Uint8Array(buf);
 }
 

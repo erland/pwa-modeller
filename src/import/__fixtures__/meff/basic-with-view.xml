@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <name>Sample Model</name>
+
+  <organizations>
+    <item identifier="f1">
+      <label>Folder A</label>
+      <item identifierRef="e1"/>
+      <item identifierRef="e2"/>
+      <item identifierRef="r1"/>
+      <item identifierRef="v1"/>
+    </item>
+  </organizations>
+
+  <elements>
+    <element identifier="e1" xsi:type="BusinessActor">
+      <name>Actor A</name>
+    </element>
+    <element identifier="e2" xsi:type="BusinessRole">
+      <name>Role B</name>
+    </element>
+  </elements>
+
+  <relationships>
+    <relationship identifier="r1" xsi:type="AssignmentRelationship" source="e1" target="e2">
+      <name>assigns</name>
+    </relationship>
+  </relationships>
+
+  <views>
+    <view identifier="v1">
+      <name>Main View</name>
+      <node identifier="n1" elementRef="e1" x="10" y="20" w="100" h="60" />
+      <node identifier="n2" elementRef="e2" x="200" y="20" width="100" height="60" />
+      <connection identifier="c1" relationshipRef="r1">
+        <point x="110" y="50"/>
+        <point x="200" y="50"/>
+      </connection>
+    </view>
+  </views>
+</model>

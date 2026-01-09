@@ -1,4 +1,5 @@
 import { createImportReport } from '../importReport';
+import { readBlobAsText } from '../framework/blobReaders';
 import type { ImportResult, Importer } from '../framework/importer';
 import type { IRModel } from '../framework/ir';
 import { parseMeffXml } from './parseMeff';
@@ -12,7 +13,7 @@ export const meffImporter: Importer<IRModel> = {
   extensions: ['xml'],
   sniff: sniffMeff,
   async import(file, ctx): Promise<ImportResult<IRModel>> {
-    const text = await file.text();
+    const text = await readBlobAsText(file);
 
     const { ir, report } = parseMeffXml(text, ctx.fileName);
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <name>Unknown Types</name>
+
+  <elements>
+    <element identifier="e1" xsi:type="NotARealElementType">
+      <name>Weird Thing</name>
+    </element>
+    <element identifier="e2" xsi:type="BusinessActor">
+      <name>Actor</name>
+    </element>
+  </elements>
+
+  <relationships>
+    <relationship identifier="r1" xsi:type="NotARealRelationshipType" source="e2" target="e1" />
+  </relationships>
+</model>

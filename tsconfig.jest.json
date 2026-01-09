@@ -3,8 +3,17 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "types": ["jest", "@testing-library/jest-dom"],
+    "types": [
+      "jest",
+      "@testing-library/jest-dom",
+      "node"
+    ],
     "noEmit": true
   },
-  "include": ["src", "**/*.test.ts", "**/*.test.tsx", "jest.setup.ts"]
+  "include": [
+    "src",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "jest.setup.ts"
+  ]
 }

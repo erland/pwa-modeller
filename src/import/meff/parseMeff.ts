@@ -509,6 +509,10 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
       if (typeRes.kind === 'unknown') recordUnknownElementType(report, typeRes.unknown);
 
       const name = childText(el, 'name') ?? attrAny(el, ['name']) ?? '';
+      const safeName = name.trim().length ? name.trim() : '(unnamed)';
+      if (!name.trim().length) {
+        report.warnings.push(`MEFF: Element "${id}" is missing a name; using "(unnamed)".`);
+      }
       const documentation = childText(el, 'documentation') ?? undefined;
 
       const folderId = refToFolder.get(id) ?? null;
@@ -516,7 +520,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
       elements.push({
         id,
         type: type || 'Unknown',
-        name: name || undefined,
+        name: safeName,
         documentation,
         folderId: folderId ?? undefined,
         properties: parsePropertiesToRecord(el),

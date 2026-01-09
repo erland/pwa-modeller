@@ -61,7 +61,7 @@ const REL_LOOKUP = buildLookup(RELATIONSHIP_TYPES);
 export function mapElementType(rawType: string, source: string): TypeMappingResult<ElementType> {
   const raw = (rawType ?? '').trim();
   if (!raw) {
-    return { kind: 'unknown', type: 'Unknown', unknown: { source, name: 'MissingType' } };
+    return { kind: 'unknown', type: 'Unknown', unknown: { ns: source, name: 'MissingType' } };
   }
 
   // Special-case: if already exactly one of our known strings, accept directly.
@@ -73,7 +73,7 @@ export function mapElementType(rawType: string, source: string): TypeMappingResu
   const mapped = ELEMENT_LOOKUP.get(key);
   if (mapped) return { kind: 'known', type: mapped };
 
-  return { kind: 'unknown', type: 'Unknown', unknown: { source, name: raw } };
+  return { kind: 'unknown', type: 'Unknown', unknown: { ns: source, name: raw } };
 }
 
 /**
@@ -82,7 +82,7 @@ export function mapElementType(rawType: string, source: string): TypeMappingResu
 export function mapRelationshipType(rawType: string, source: string): TypeMappingResult<RelationshipType> {
   const raw = (rawType ?? '').trim();
   if (!raw) {
-    return { kind: 'unknown', type: 'Unknown', unknown: { source, name: 'MissingType' } };
+    return { kind: 'unknown', type: 'Unknown', unknown: { ns: source, name: 'MissingType' } };
   }
 
   if ((RELATIONSHIP_TYPES as readonly string[]).includes(raw)) {
@@ -95,7 +95,7 @@ export function mapRelationshipType(rawType: string, source: string): TypeMappin
   const mapped = REL_LOOKUP.get(key);
   if (mapped) return { kind: 'known', type: mapped as RelationshipType };
 
-  return { kind: 'unknown', type: 'Unknown', unknown: { source, name: raw } };
+  return { kind: 'unknown', type: 'Unknown', unknown: { ns: source, name: raw } };
 }
 
 /**

@@ -7,7 +7,7 @@ import { sniffMeff } from './sniffMeff';
 export const meffImporter: Importer<IRModel> = {
   id: 'meff',
   format: 'archimate-meff',
-  name: 'ArchiMate Model Exchange File (MEFF)',
+  displayName: 'ArchiMate Model Exchange File (MEFF)',
   priority: 100,
   extensions: ['xml'],
   sniff: sniffMeff,

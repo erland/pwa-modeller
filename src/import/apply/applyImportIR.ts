@@ -251,9 +251,14 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
   for (const el of ir.elements ?? []) {
     if (!el?.id) continue;
 
-    const resolved = resolveElementType(el.type);
+    // Importers may canonicalize `el.type` to 'Unknown' and keep the original token in meta.
+    // Prefer the original token when present so we can:
+    // - infer the layer from the source type more accurately
+    // - preserve unknown type names for later repair
+    const sourceType = (typeof el.meta?.sourceType === 'string' ? (el.meta.sourceType as string) : el.type) ?? '';
+    const resolved = resolveElementType(sourceType);
     if (resolved.kind === 'unknown' && unknownTypePolicy === 'skip') {
-      pushWarning(report, `Skipped element with unknown type "${el.type}": ${el.name ?? el.id}`);
+      pushWarning(report, `Skipped element with unknown type "${sourceType || el.type}": ${el.name ?? el.id}`);
       continue;
     }
 
@@ -263,7 +268,7 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
     const externalIds = toExternalIds(el.externalIds, sourceSystem, el.id);
     const taggedValues = toTaggedValues(el.taggedValues, sourceSystem);
 
-    const layer = resolved.kind === 'known' ? resolved.layer : guessLayerFromTypeString(el.type);
+    const layer = resolved.kind === 'known' ? resolved.layer : guessLayerFromTypeString(sourceType || el.type);
     const type: ElementType = resolved.kind === 'known' ? resolved.type : ('Unknown' as ElementType);
 
     const domainEl: Element = {
@@ -277,7 +282,7 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
       externalIds,
       taggedValues,
       ...(type === 'Unknown'
-        ? { unknownType: { ns: sourceSystem, name: el.type || 'Unknown' } }
+        ? { unknownType: { ns: sourceSystem, name: (sourceType || el.type || 'Unknown').toString() } }
         : {})
     };
 
@@ -301,20 +306,22 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
   for (const rel of ir.relationships ?? []) {
     if (!rel?.id) continue;
 
+    const sourceType = (typeof rel.meta?.sourceType === 'string' ? (rel.meta.sourceType as string) : rel.type) ?? '';
+
     const src = mappings.elements[rel.sourceId];
     const tgt = mappings.elements[rel.targetId];
 
     if (!src || !tgt) {
       pushWarning(
         report,
-        `Skipped relationship "${rel.id}" (${rel.type}) because source/target element was missing (source=${rel.sourceId}, target=${rel.targetId})`
+        `Skipped relationship "${rel.id}" (${sourceType || rel.type}) because source/target element was missing (source=${rel.sourceId}, target=${rel.targetId})`
       );
       continue;
     }
 
-    const resolved = resolveRelationshipType(rel.type);
+    const resolved = resolveRelationshipType(sourceType || rel.type);
     if (resolved.kind === 'unknown' && unknownTypePolicy === 'skip') {
-      pushWarning(report, `Skipped relationship with unknown type "${rel.type}": ${rel.id}`);
+      pushWarning(report, `Skipped relationship with unknown type "${sourceType || rel.type}": ${rel.id}`);
       continue;
     }
 
@@ -338,7 +345,7 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
       externalIds,
       taggedValues,
       ...(type === 'Unknown'
-        ? { unknownType: { ns: sourceSystem, name: rel.type || 'Unknown' } }
+        ? { unknownType: { ns: sourceSystem, name: (sourceType || rel.type || 'Unknown').toString() } }
         : {})
     };
 

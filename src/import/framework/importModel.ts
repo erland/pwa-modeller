@@ -1,3 +1,4 @@
+import { registerBuiltInImporters } from './builtins';
 import { createImportReport } from '../importReport';
 import type { ImportContext, ImportResult } from './importer';
 import { UnsupportedImportFormatError } from './importer';
@@ -51,6 +52,7 @@ export async function buildImportContext(file: File): Promise<ImportContext> {
  * Step 3 will introduce applyImportIR(...) to mutate the store.
  */
 export async function importModel(file: File): Promise<ImportResult> {
+  registerBuiltInImporters();
   const ctx = await buildImportContext(file);
   const pick = await pickImporter(ctx);
 

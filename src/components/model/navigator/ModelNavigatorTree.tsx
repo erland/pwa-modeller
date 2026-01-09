@@ -44,6 +44,8 @@ type Props = {
   onMoveElementToFolder?: (elementId: string, targetFolderId: string) => void;
   /** Optional handler: move a view to a folder when dropped on a folder in the tree. */
   onMoveViewToFolder?: (viewId: string, targetFolderId: string) => void;
+  /** Optional handler: center a view under an element when dropped on an element in the tree. */
+  onMoveViewToElement?: (viewId: string, targetElementId: string) => void;
   /** Optional handler: move a folder under another folder when dropped on a folder in the tree. */
   onMoveFolderToFolder?: (folderId: string, targetFolderId: string) => void;
 };
@@ -175,7 +177,8 @@ export function ModelNavigatorTree({
   openCreateCenteredView,
   onMoveElementToFolder,
   onMoveViewToFolder,
-  onMoveFolderToFolder
+  onMoveViewToElement,
+    onMoveFolderToFolder
 }: Props) {
   const treeWrapRef = useRef<HTMLDivElement | null>(null);
   const currentDropElRef = useRef<HTMLElement | null>(null);
@@ -202,13 +205,30 @@ export function ModelNavigatorTree({
         return;
       }
       const target = e.target as HTMLElement | null;
-      const row = target?.closest('.navTreeRow[data-drop-folder="folder"]') as HTMLElement | null;
+      const folderRow = target?.closest('.navTreeRow[data-drop-folder="folder"]') as HTMLElement | null;
+      const elementRow = target?.closest('.navTreeRow[data-kind="element"]') as HTMLElement | null;
+      const row = folderRow ?? elementRow;
       if (!row) {
         clearHighlight();
         return;
       }
+      // Only accept view drops on element rows. Folder/element drops must target folders.
+      try {
+        const types = Array.from(e.dataTransfer?.types ?? []);
+        const isElementRow = row.dataset.kind === 'element';
+        if (isElementRow) {
+          // If we can see it's an element/folder drag, reject.
+          if (types.includes(DND_ELEMENT_MIME) || types.includes(DND_FOLDER_MIME)) {
+            clearHighlight();
+            return;
+          }
+        }
+      } catch {
+        // ignore
+      }
 const maybeFolderDragId = parseDraggedFolderId(e.dataTransfer);
-if (maybeFolderDragId && maybeFolderDragId === row.dataset.folderid) {
+const isFolderTarget = row.dataset.dropFolder === 'folder';
+if (maybeFolderDragId && isFolderTarget && maybeFolderDragId === row.dataset.folderid) {
   // Don't allow dropping a folder onto itself.
   clearHighlight();
   return;
@@ -232,14 +252,34 @@ if (maybeFolderDragId && maybeFolderDragId === row.dataset.folderid) {
   const folderDragId = parseDraggedFolderId(e.dataTransfer);
 
   const target = e.target as HTMLElement | null;
-  const row = target?.closest('.navTreeRow[data-drop-folder="folder"]') as HTMLElement | null;
-  const folderId = row?.dataset.folderid;
+  const folderRow = target?.closest('.navTreeRow[data-drop-folder="folder"]') as HTMLElement | null;
+  const elementRow = target?.closest('.navTreeRow[data-kind="element"]') as HTMLElement | null;
+  const folderId = folderRow?.dataset.folderid;
+  const elementIdTarget = elementRow?.dataset.elementid;
 
   clearHighlight();
+
+  // Allow dropping a view onto an element to center the view under that element.
+  if (viewId && elementIdTarget && onMoveViewToElement) {
+    e.preventDefault();
+    e.stopPropagation();
+    dndLog('tree element drop (view)', { viewId, elementIdTarget, types: Array.from(e.dataTransfer?.types ?? []) });
+    try {
+      if (window.confirm('Center this view under the element?')) {
+        onMoveViewToElement(viewId, elementIdTarget);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      window.alert(msg);
+    }
+    return;
+  }
+
+  // Other drops must target a folder row.
   if (!folderId) return;
 
   // Ignore drops of a folder onto itself.
-  if (folderDragId && folderDragId === folderId) return;
+  if (folderDragId && folderId && folderDragId === folderId) return;
 
   e.preventDefault();
   e.stopPropagation();

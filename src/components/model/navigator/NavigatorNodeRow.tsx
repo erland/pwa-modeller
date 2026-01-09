@@ -142,7 +142,9 @@ export function NavigatorNodeRow({
       data-scope={node.scope}
       data-nodekey={node.key}
       data-folderid={node.kind === 'folder' ? node.folderId : undefined}
-      data-drop-folder={node.kind === 'folder' ? 'folder' : undefined}
+            data-elementid={node.kind === 'element' ? node.elementId : undefined}
+      data-viewid={node.kind === 'view' ? node.viewId : undefined}
+data-drop-folder={node.kind === 'folder' ? 'folder' : undefined}
       title={title}
       draggable={
         (node.kind === 'element' && Boolean(node.elementId))

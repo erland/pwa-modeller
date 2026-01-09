@@ -11,7 +11,7 @@ describe('App shell', () => {
     expect(screen.getByTestId('main-content')).toBeInTheDocument();
     expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
 
-    expect(screen.getByText(/pwa modeller/i)).toBeInTheDocument();
+        expect(screen.getByText(/ea modeller/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /model workspace/i })).toBeInTheDocument();
   });
 });

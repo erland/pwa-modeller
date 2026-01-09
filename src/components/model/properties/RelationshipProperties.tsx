@@ -1,5 +1,8 @@
+import { useEffect, useMemo, useState } from 'react';
+
 import type { AccessType, Model, RelationshipType } from '../../../domain';
 import { RELATIONSHIP_TYPES } from '../../../domain';
+import { getAllowedRelationshipTypes, validateRelationship } from '../../../domain/config/archimatePalette';
 
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
@@ -22,7 +25,42 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
   const rel = model.relationships[relationshipId];
   if (!rel) return <p className="panelHint">Relationship not found.</p>;
 
-  const relationshipTypeOptions = rel.type === 'Unknown' ? (['Unknown', ...RELATIONSHIP_TYPES] as any[]) : (RELATIONSHIP_TYPES as any[]);
+  const [showAllRelationshipTypes, setShowAllRelationshipTypes] = useState(false);
+  useEffect(() => {
+    // Reset per selection to avoid surprising carry-over when clicking between relationships.
+    setShowAllRelationshipTypes(false);
+  }, [relationshipId]);
+
+  const sourceElement = rel.sourceElementId ? model.elements[rel.sourceElementId] : undefined;
+  const targetElement = rel.targetElementId ? model.elements[rel.targetElementId] : undefined;
+
+  const allowedRelationshipTypes = useMemo(() => {
+    if (!sourceElement || !targetElement) return RELATIONSHIP_TYPES as RelationshipType[];
+    const allowed = getAllowedRelationshipTypes(sourceElement.type, targetElement.type);
+    return (allowed.length > 0 ? allowed : (RELATIONSHIP_TYPES as RelationshipType[])) as RelationshipType[];
+  }, [sourceElement?.type, targetElement?.type]);
+
+  const relationshipRuleWarning = useMemo(() => {
+    if (!sourceElement || !targetElement) return null;
+    if (rel.type === 'Unknown') return null;
+    const res = validateRelationship(sourceElement.type, targetElement.type, rel.type as RelationshipType);
+    return res.allowed ? null : res.reason;
+  }, [sourceElement?.type, targetElement?.type, rel.type]);
+
+  const relationshipTypeOptions = useMemo(() => {
+    const base = showAllRelationshipTypes ? (RELATIONSHIP_TYPES as any[]) : (allowedRelationshipTypes as any[]);
+    const list = [...base];
+    const seen = new Set(list);
+
+    // Keep current value visible even if it's not in the filtered set.
+    if (rel.type === 'Unknown') {
+      // When imported as unknown, allow mapping to known types while keeping the original choice.
+      return ['Unknown', ...list.filter((t) => t !== 'Unknown')];
+    }
+
+    if (!seen.has(rel.type)) return [rel.type, ...list];
+    return list;
+  }, [showAllRelationshipTypes, allowedRelationshipTypes, rel.type]);
 
   const elementOptions = Object.values(model.elements)
     .filter(Boolean)
@@ -56,6 +94,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
       <p className="panelHint">Relationship</p>
       <div className="propertiesGrid">
         <PropertyRow label="Type">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <select
               className="selectInput"
               aria-label="Relationship property type"
@@ -68,6 +107,30 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
                 </option>
               ))}
             </select>
+
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
+              <input
+                type="checkbox"
+                aria-label="Show all relationship types"
+                checked={showAllRelationshipTypes}
+                onChange={(e) => setShowAllRelationshipTypes(e.target.checked)}
+              />
+              Show all relationship types
+            </label>
+
+            {!showAllRelationshipTypes && sourceElement && targetElement ? (
+              <div style={{ fontSize: 12, opacity: 0.75 }}>
+                Showing types allowed for <span style={{ opacity: 0.95 }}>{sourceElement.type}</span> →{' '}
+                <span style={{ opacity: 0.95 }}>{targetElement.type}</span>.
+              </div>
+            ) : null}
+
+            {relationshipRuleWarning ? (
+              <div className="panelHint" style={{ color: '#ffb3b3', opacity: 0.95 }}>
+                {relationshipRuleWarning}
+              </div>
+            ) : null}
+          </div>
         </PropertyRow>
 
         {rel.type === 'Unknown' ? (

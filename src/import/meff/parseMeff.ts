@@ -1,6 +1,7 @@
 import { createImportReport, recordUnknownElementType, recordUnknownRelationshipType } from '../importReport';
 import type { ImportReport } from '../importReport';
 import type { IRFolder, IRElement, IRId, IRModel, IRRelationship, IRTaggedValue } from '../framework/ir';
+import { canonicalizeElementTypeForIR, canonicalizeRelationshipTypeForIR, mapElementType, mapRelationshipType } from '../mapping/archimateTypeMapping';
 
 function isElementNode(n: Node): n is Element {
   return n.nodeType === Node.ELEMENT_NODE;
@@ -243,8 +244,10 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
         continue;
       }
 
-      const type = (getType(el) ?? '').trim();
-      if (!type) recordUnknownElementType(report, 'MissingType');
+      const rawType = (getType(el) ?? '').trim();
+      const type = canonicalizeElementTypeForIR(rawType, 'archimate-meff');
+      const typeRes = mapElementType(rawType, 'archimate-meff');
+      if (typeRes.kind === 'unknown') recordUnknownElementType(report, typeRes.unknown);
 
       const name = childText(el, 'name') ?? attrAny(el, ['name']) ?? '';
       const documentation = childText(el, 'documentation') ?? undefined;
@@ -280,8 +283,10 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
         continue;
       }
 
-      const type = (getType(el) ?? '').trim();
-      if (!type) recordUnknownRelationshipType(report, 'MissingType');
+      const rawType = (getType(el) ?? '').trim();
+      const type = canonicalizeRelationshipTypeForIR(rawType, 'archimate-meff');
+      const typeRes = mapRelationshipType(rawType, 'archimate-meff');
+      if (typeRes.kind === 'unknown') recordUnknownRelationshipType(report, typeRes.unknown);
 
       const sourceId =
         attrAny(el, ['source', 'sourceRef', 'sourceref', 'from']) ?? childText(el, 'source') ?? childText(el, 'sourceRef');

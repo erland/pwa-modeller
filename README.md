@@ -1,4 +1,4 @@
-# pwa-modeller
+# EA Modeller
 
 Enterprise Architecture Modeling Tool (ArchiMate® 3.2) – MVP.
 

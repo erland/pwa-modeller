@@ -161,7 +161,7 @@ export default function WorkspacePage() {
   return (
     <>
       <AppShell
-        title="PWA Modeller"
+        title="EA Modeller"
         subtitle="Enterprise Architecture Modeling PWA (ArchiMate® 3.2)"
         actions={<ModelActions onEditModelProps={() => setModelPropsOpen(true)} />}
         leftSidebar={<ModelNavigator selection={selection} onSelect={setSelection} />}

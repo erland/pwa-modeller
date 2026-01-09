@@ -1,5 +1,6 @@
 import { createImportReport } from '../importReport';
-import { readBlobAsText } from '../framework/blobReaders';
+import { readBlobAsArrayBuffer } from '../framework/blobReaders';
+import { decodeXmlBytes } from '../framework/xmlDecoding';
 import type { ImportResult, Importer } from '../framework/importer';
 import type { IRModel } from '../framework/ir';
 import { parseMeffXml } from './parseMeff';
@@ -13,9 +14,9 @@ export const meffImporter: Importer<IRModel> = {
   extensions: ['xml'],
   sniff: sniffMeff,
   async import(file, ctx): Promise<ImportResult<IRModel>> {
-    const text = await readBlobAsText(file);
-
-    const { ir, report } = parseMeffXml(text, ctx.fileName);
+    const buf = await readBlobAsArrayBuffer(file);
+    const { text } = decodeXmlBytes(new Uint8Array(buf));
+const { ir, report } = parseMeffXml(text, ctx.fileName);
 
     // Ensure report has correct source.
     if (!report.source) report.source = 'archimate-meff';

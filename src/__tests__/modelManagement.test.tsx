@@ -81,6 +81,7 @@ describe('Model management UI', () => {
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await user.click(screen.getByRole('button', { name: 'Model' }));
+    await user.click(screen.getByRole('button', { name: 'Properties…' }));
     await user.clear(screen.getByLabelText('Version'));
     await user.type(screen.getByLabelText('Version'), '1.0');
     await user.click(screen.getByRole('button', { name: 'Save' }));

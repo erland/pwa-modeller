@@ -101,11 +101,17 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
   function doImport() {
     if (!confirmReplaceIfDirty()) return;
     setImportError(null);
+    // Open the dialog (shows progress/errors) and immediately open the file picker.
     setImportDialogOpen(true);
+    triggerImportFilePicker();
   }
 
   function triggerImportFilePicker() {
-    importInputRef.current?.click();
+    const el = importInputRef.current;
+    if (!el) return;
+    // Allow choosing the same file again.
+    el.value = '';
+    el.click();
   }
 
   async function onImportFileChosen(file: File | null) {
@@ -189,6 +195,9 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       <button type="button" className="shellButton" onClick={doOpenModel}>
         Open
       </button>
+      <button type="button" className="shellButton" onClick={doImport}>
+        Import…
+      </button>
       <button
         type="button"
         className="shellButton"
@@ -207,25 +216,15 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       >
         Download As
       </button>
-      <button type="button" className="shellButton" onClick={onEditModelProps} disabled={!model}>
+      <button type="button" className="shellButton" onClick={() => setOverflowOpen(true)}>
         Model
       </button>
-
-      <button
-        type="button"
-        className="shellIconButton shellOnlySmall"
-        aria-label="More model actions"
-        onClick={() => setOverflowOpen(true)}
-      >
-        ⋯
-      </button>
-
       <input
         ref={openInputRef}
         data-testid="open-model-input"
         type="file"
         accept="application/json,.json"
-        style={{ display: 'none' }}
+        style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
         onChange={(e) => {
           const f = e.currentTarget.files?.[0] ?? null;
           // Allow choosing the same file again.
@@ -238,7 +237,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         ref={importInputRef}
         type="file"
         accept=".xml,.xmi,application/xml,text/xml"
-        style={{ display: 'none' }}
+        style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
         onChange={(e) => {
           const f = e.currentTarget.files?.[0] ?? null;
           // Allow choosing the same file again.
@@ -286,6 +285,20 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
             Import…
           </button>
 
+
+
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => {
+              setOverflowOpen(false);
+              onEditModelProps();
+            }}
+            disabled={!model}
+            title={!model ? 'No model loaded' : undefined}
+          >
+            Properties…
+          </button>
 
           <button
             type="button"

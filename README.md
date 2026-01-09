@@ -114,6 +114,9 @@ npm run preview
 npm test
 # or
 npm run test:watch
+
+# Generate a coverage report (writes to ./coverage)
+npm run test:coverage
 ```
 
 ### Lint & format

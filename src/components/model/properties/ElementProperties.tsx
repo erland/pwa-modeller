@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { Model } from '../../../domain';
-import { ARCHIMATE_LAYERS, ELEMENT_TYPES, computeRelationshipTrace } from '../../../domain';
-import type { FolderOption } from '../../../domain';
+import type { ArchimateLayer, ElementType, FolderOption, Model } from '../../../domain';
+import { ARCHIMATE_LAYERS, ELEMENT_TYPES, ELEMENT_TYPES_BY_LAYER, computeRelationshipTrace } from '../../../domain';
 
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
@@ -28,12 +27,38 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
   const el = model.elements[elementId];
   if (!el) return <p className="panelHint">Element not found.</p>;
 
-  const elementTypeOptions = el.type === 'Unknown' ? (['Unknown', ...ELEMENT_TYPES] as any[]) : (ELEMENT_TYPES as any[]);
-
   const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
 
   const [traceDirection, setTraceDirection] = useState<TraceDirection>('both');
   const [traceDepth, setTraceDepth] = useState<number>(1);
+  const [showAllElementTypes, setShowAllElementTypes] = useState(false);
+
+  const layerForElementType = useMemo(() => {
+    const m = new Map<ElementType, ArchimateLayer>();
+    for (const layer of ARCHIMATE_LAYERS) {
+      for (const t of ELEMENT_TYPES_BY_LAYER[layer] ?? []) {
+        m.set(t, layer);
+      }
+    }
+    return m;
+  }, []);
+
+  const allowedTypesForLayer = useMemo<ElementType[]>(() => ELEMENT_TYPES_BY_LAYER[el.layer] ?? [], [el.layer]);
+
+  const isTypeOutOfSync = el.type !== 'Unknown' && !allowedTypesForLayer.includes(el.type);
+
+  const elementTypeOptions = useMemo<ElementType[]>(() => {
+    const allOptions: ElementType[] =
+      el.type === 'Unknown' ? (['Unknown', ...ELEMENT_TYPES] as ElementType[]) : (ELEMENT_TYPES as ElementType[]);
+
+    const filteredBase: ElementType[] =
+      el.type === 'Unknown' ? (['Unknown', ...allowedTypesForLayer] as ElementType[]) : allowedTypesForLayer;
+
+    const base = showAllElementTypes ? allOptions : filteredBase;
+
+    // Keep current value visible even if it is out-of-sync (e.g., imported data).
+    return base.includes(el.type) ? base : ([el.type, ...base] as ElementType[]);
+  }, [el.type, allowedTypesForLayer, showAllElementTypes]);
 
   useEffect(() => {
     setTraceDirection('both');
@@ -88,15 +113,53 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               className="selectInput"
               aria-label="Element property type"
               value={el.type}
-              onChange={(e) => actions.updateElement(el.id, { type: e.target.value as any })}
+              onChange={(e) => {
+                const nextType = e.target.value as ElementType;
+                if (nextType !== 'Unknown') {
+                  const derivedLayer = layerForElementType.get(nextType);
+                  if (derivedLayer && derivedLayer !== el.layer) {
+                    actions.updateElement(el.id, { type: nextType, layer: derivedLayer });
+                    return;
+                  }
+                }
+                actions.updateElement(el.id, { type: nextType });
+              }}
             >
-              {elementTypeOptions.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
+              {elementTypeOptions.map((t) => {
+                const isCurrentInvalid = isTypeOutOfSync && t === el.type;
+                const derivedLayer = isCurrentInvalid ? layerForElementType.get(t) : undefined;
+                const label = isCurrentInvalid ? `⚠ ${t}${derivedLayer ? ` (${derivedLayer})` : ''}` : t;
+                return (
+                  <option key={t} value={t}>
+                    {label}
+                  </option>
+                );
+              })}
             </select>
         </PropertyRow>
+
+        <PropertyRow label="Type options">
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 400 }}>
+            <input
+              type="checkbox"
+              checked={showAllElementTypes}
+              onChange={(e) => setShowAllElementTypes(e.target.checked)}
+            />
+            Show all element types
+          </label>
+        </PropertyRow>
+
+        {isTypeOutOfSync ? (
+          <div className="propertiesRow">
+            <div className="propertiesKey">Warning</div>
+            <div className="propertiesValue">
+              <div style={{ fontSize: 12, opacity: 0.85 }}>
+                This element's <strong>Type</strong> does not belong to its <strong>Layer</strong>. Select a Type (or
+                Layer) to re-sync. If you change Type, the Layer will update automatically.
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {el.type === 'Unknown' ? (
           <div className="propertiesRow">
@@ -117,7 +180,18 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               className="selectInput"
               aria-label="Element property layer"
               value={el.layer}
-              onChange={(e) => actions.updateElement(el.id, { layer: e.target.value as any })}
+              onChange={(e) => {
+                const nextLayer = e.target.value as ArchimateLayer;
+                if (el.type !== 'Unknown') {
+                  const allowed = ELEMENT_TYPES_BY_LAYER[nextLayer] ?? [];
+                  if (!allowed.includes(el.type)) {
+                    const nextType: ElementType = allowed[0] ?? el.type;
+                    actions.updateElement(el.id, { layer: nextLayer, type: nextType });
+                    return;
+                  }
+                }
+                actions.updateElement(el.id, { layer: nextLayer });
+              }}
             >
               {ARCHIMATE_LAYERS.map((l) => (
                 <option key={l} value={l}>

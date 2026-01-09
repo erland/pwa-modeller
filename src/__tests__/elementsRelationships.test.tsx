@@ -18,6 +18,7 @@ describe('Elements & Relationships CRUD', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), name);
     await user.click(screen.getByRole('button', { name: 'Create' }));

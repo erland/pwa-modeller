@@ -189,37 +189,14 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
 
   return (
     <>
-      <button type="button" className="shellButton" onClick={doNewModel}>
-        New
-      </button>
-      <button type="button" className="shellButton" onClick={doOpenModel}>
-        Open
-      </button>
-      <button type="button" className="shellButton" onClick={doImport}>
-        Import…
-      </button>
       <button
         type="button"
         className="shellButton"
-        onClick={doSave}
-        disabled={!model}
-        title={!model ? 'No model loaded' : isDirty ? 'Save changes (Ctrl/Cmd+S)' : 'Download model (Ctrl/Cmd+S)'}
+        onClick={() => setOverflowOpen(true)}
       >
-        Save model{isDirty ? '*' : ''}
-      </button>
-      <button
-        type="button"
-        className="shellButton"
-        onClick={doSaveAs}
-        disabled={!model}
-        aria-label="Download model as"
-      >
-        Download As
-      </button>
-      <button type="button" className="shellButton" onClick={() => setOverflowOpen(true)}>
         Model
       </button>
-      <input
+<input
         ref={openInputRef}
         data-testid="open-model-input"
         type="file"

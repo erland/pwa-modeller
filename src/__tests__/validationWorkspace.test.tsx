@@ -20,6 +20,7 @@ describe('Validation UI', () => {
     render(<App />);
 
     // Create a model + two elements via UI to avoid act warnings.
+    await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), 'Validation Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));

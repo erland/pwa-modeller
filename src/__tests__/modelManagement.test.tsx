@@ -19,18 +19,21 @@ describe('Model management UI', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), 'My Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(screen.getByText('My Model')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /save/i })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Model' }));
+    expect(screen.getByRole('button', { name: /save model/i })).toBeEnabled();
   });
 
   it('creates and deletes a folder under the model root', async () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), 'Folder Test Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));
@@ -76,6 +79,7 @@ describe('Model management UI', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), 'Props Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));

@@ -19,6 +19,7 @@ describe('Navigator CRUD', () => {
     render(<App />);
 
     // Create a new model.
+    await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), 'Navigator Model');
     await user.click(screen.getByRole('button', { name: 'Create' }));

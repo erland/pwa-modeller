@@ -142,6 +142,28 @@
   cursor: not-allowed;
 }
 
+
+
+.shellSelect {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--button-border);
+  background: var(--surface-1);
+  color: inherit;
+  cursor: pointer;
+}
+
+.shellValidationMode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shellValidationModeLabel {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
 /* Default: small-only controls hidden */
 .shellOnlySmall {
   display: none;

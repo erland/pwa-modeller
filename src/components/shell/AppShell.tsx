@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 import '../../styles/shell.css';
-import { useModelStore } from '../../store';
+import { modelStore, useModelStore } from '../../store';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -114,8 +114,12 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const shellBodyRef = useRef<HTMLDivElement | null>(null);
   const [isResizing, setIsResizing] = useState<null | 'left' | 'right'>(null);
   const [isNavigatorDragging, setIsNavigatorDragging] = useState(false);
-const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.model }));
-  const online = useOnlineStatus();
+const { isDirty, model, relationshipValidationMode } = useModelStore((s) => ({
+    isDirty: s.isDirty,
+    model: s.model,
+    relationshipValidationMode: s.relationshipValidationMode,
+  }));
+const online = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
 
   const confirmNavigate = useMemo(() => {
@@ -231,8 +235,21 @@ const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.
             {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
             {model && isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}
           </div>
-          <button
-            type="button"
+          <label className="shellValidationMode" aria-label="Relationship validation mode" title="Välj valideringsnivå för relationer medan du modellerar">
+            <span className="shellValidationModeLabel">Validering</span>
+            <select
+              className="shellSelect"
+              value={relationshipValidationMode}
+              onChange={(e) => modelStore.setRelationshipValidationMode(e.target.value as any)}
+              aria-label="Valideringsnivå"
+            >
+              <option value="minimal">Minimal</option>
+              <option value="full">Full</option>
+              <option value="full_derived">Full inkl. härledda</option>
+            </select>
+          </label>
+
+          <button type="button"
             className="shellIconButton"
             aria-label="Toggle theme"
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}

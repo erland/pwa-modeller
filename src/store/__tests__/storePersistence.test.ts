@@ -12,7 +12,7 @@ describe('storePersistence', () => {
   test('persistStoreState + loadPersistedStoreState round-trip a valid model envelope', () => {
     const model = createEmptyModel({ name: 'Test Model' }, 'model_test');
 
-    persistStoreState({ model, fileName: 'test.json', isDirty: true });
+    persistStoreState({ model, fileName: 'test.json', isDirty: true, relationshipValidationMode: 'full' });
 
     const restored = loadPersistedStoreState();
     expect(restored).not.toBeNull();
@@ -44,7 +44,7 @@ describe('storePersistence', () => {
   test('clearPersistedStoreState removes persisted envelope', () => {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ v: 1, state: { model: null, fileName: null, isDirty: false } })
+      JSON.stringify({ v: 1, state: { model: null, fileName: null, isDirty: false, relationshipValidationMode: 'minimal' } })
     );
     clearPersistedStoreState();
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();

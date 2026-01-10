@@ -35,7 +35,12 @@ export function initStorePersistence(): void {
   const persistNow = () => {
     pending = false;
     const s = modelStore.getState();
-    persistStoreState({ model: s.model, fileName: s.fileName, isDirty: s.isDirty });
+    persistStoreState({
+      model: s.model,
+      fileName: s.fileName,
+      isDirty: s.isDirty,
+      relationshipValidationMode: s.relationshipValidationMode
+    });
   };
 
   const schedulePersist = () => {

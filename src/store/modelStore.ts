@@ -10,7 +10,8 @@ import type {
   ViewFormatting,
   ViewNodeLayout,
   ViewObject,
-  ViewObjectType
+  ViewObjectType,
+  RelationshipValidationMode
 } from '../domain';
 import { createEmptyModel } from '../domain';
 import {
@@ -32,6 +33,8 @@ export type ModelStoreState = {
   fileName: string | null;
   /** Tracks if there are unsaved changes since last load/save. */
   isDirty: boolean;
+  /** Relationship validation rule set used while drawing and in validation workspace. */
+  relationshipValidationMode: RelationshipValidationMode;
 };
 
 type Listener = () => void;
@@ -40,7 +43,8 @@ export class ModelStore {
   private state: ModelStoreState = {
     model: null,
     fileName: null,
-    isDirty: false
+    isDirty: false,
+    relationshipValidationMode: 'minimal'
   };
 
   private listeners = new Set<Listener>();
@@ -108,15 +112,23 @@ export class ModelStore {
    * This is intentionally separate from loadModel() so we can restore the
    * `isDirty` flag as well.
    */
-  hydrate = (state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>): void => {
+  hydrate = (
+    state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty' | 'relationshipValidationMode'>
+  ): void => {
     this.setState({
       model: state.model,
       fileName: state.fileName,
-      isDirty: state.isDirty
+      isDirty: state.isDirty,
+      relationshipValidationMode: state.relationshipValidationMode ?? 'minimal'
     });
   };
 
-  reset = (): void => {
+  
+  setRelationshipValidationMode = (mode: RelationshipValidationMode): void => {
+    this.setState({ relationshipValidationMode: mode });
+  };
+
+reset = (): void => {
     this.setState({ model: null, fileName: null, isDirty: false });
   };
 

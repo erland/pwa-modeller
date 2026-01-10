@@ -1,4 +1,5 @@
 import type { Model } from '../domain';
+import { coerceRelationshipValidationMode } from '../domain';
 import type { ModelStoreState } from './modelStore';
 import { deserializeModel } from './persistence';
 
@@ -6,7 +7,7 @@ const STORAGE_KEY = 'pwa-modeller:storeState:v1';
 
 type PersistedEnvelope = {
   v: 1;
-  state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>;
+  state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty' | 'relationshipValidationMode'>;
 };
 
 function hasLocalStorage(): boolean {
@@ -29,7 +30,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
-export function loadPersistedStoreState(): Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'> | null {
+export function loadPersistedStoreState(): Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty' | 'relationshipValidationMode'> | null {
   if (!hasLocalStorage()) return null;
 
   const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -45,6 +46,8 @@ export function loadPersistedStoreState(): Pick<ModelStoreState, 'model' | 'file
 
   const fileName = typeof state['fileName'] === 'string' ? state['fileName'] : state['fileName'] === null ? null : null;
   const isDirty = typeof state['isDirty'] === 'boolean' ? state['isDirty'] : false;
+
+  const relationshipValidationMode = coerceRelationshipValidationMode(state['relationshipValidationMode']);
 
   const modelUnknown = state['model'];
   let model: Model | null = null;
@@ -64,10 +67,10 @@ export function loadPersistedStoreState(): Pick<ModelStoreState, 'model' | 'file
     model = null;
   }
 
-  return { model, fileName, isDirty };
+  return { model, fileName, isDirty, relationshipValidationMode };
 }
 
-export function persistStoreState(state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>): void {
+export function persistStoreState(state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty' | 'relationshipValidationMode'>): void {
   if (!hasLocalStorage()) return;
   const envelope: PersistedEnvelope = { v: 1, state };
   try {

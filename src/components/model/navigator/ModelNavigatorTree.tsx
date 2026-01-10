@@ -321,6 +321,11 @@ if (maybeFolderDragId && isFolderTarget && maybeFolderDragId === row.dataset.fol
 
     const onDragEnd = () => {
       clearHighlight();
+      try {
+        window.dispatchEvent(new CustomEvent('modelNavigator:dragend'));
+      } catch {
+        // ignore
+      }
     };
 
     root.addEventListener('dragover', onDragOver, true);

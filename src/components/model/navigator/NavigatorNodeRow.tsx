@@ -162,6 +162,11 @@ data-drop-folder={node.kind === 'folder' ? 'folder' : undefined}
         focusTreeRow(e.currentTarget as HTMLElement);
       }}
       onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+        try {
+          window.dispatchEvent(new CustomEvent('modelNavigator:dragstart'));
+        } catch {
+          // ignore
+        }
         const dragId =
   (node.kind === 'element' && node.elementId)
   || (node.kind === 'view' && node.viewId)
@@ -227,6 +232,11 @@ try {
         }
       }}
       onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
+        try {
+          window.dispatchEvent(new CustomEvent('modelNavigator:dragend'));
+        } catch {
+          // ignore
+        }
         const dragId =
           (node.kind === 'element' && node.elementId)
           || (node.kind === 'view' && node.viewId)

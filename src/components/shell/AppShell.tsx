@@ -113,6 +113,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
 
   const shellBodyRef = useRef<HTMLDivElement | null>(null);
   const [isResizing, setIsResizing] = useState<null | 'left' | 'right'>(null);
+  const [isNavigatorDragging, setIsNavigatorDragging] = useState(false);
 const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.model }));
   const online = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
@@ -179,6 +180,30 @@ const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.
     }
   }, [isSmall]);
 
+  // While dragging from the navigator on touch devices, temporarily relax overlay hit-testing
+  // so the canvas can receive drop/pointer events.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onStart = () => setIsNavigatorDragging(true);
+    const onEnd = () => setIsNavigatorDragging(false);
+
+    window.addEventListener('modelNavigator:dragstart', onStart as any);
+    window.addEventListener('modelNavigator:dragend', onEnd as any);
+
+    // Safety: ensure we always clear the dragging flag.
+    window.addEventListener('dragend', onEnd as any, true);
+    window.addEventListener('drop', onEnd as any, true);
+
+    return () => {
+      window.removeEventListener('modelNavigator:dragstart', onStart as any);
+      window.removeEventListener('modelNavigator:dragend', onEnd as any);
+      window.removeEventListener('dragend', onEnd as any, true);
+      window.removeEventListener('drop', onEnd as any, true);
+    };
+  }, []);
+
+
   // On medium screens, prefer hiding the properties panel by default.
   useEffect(() => {
     if (!isSmall && isMedium) {
@@ -189,7 +214,7 @@ const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.
   const showBackdrop = (isSmall && (leftOpen || rightOpen)) || (rightOverlay && rightOpen);
 
   return (
-    <div className={['shell', isResizing ? 'isResizing' : null].filter(Boolean).join(' ')}>
+    <div className={['shell', isResizing ? 'isResizing' : null, isNavigatorDragging ? 'isNavigatorDragging' : null].filter(Boolean).join(' ')}>
       <header className="shellHeader" data-testid="app-header">
         <div className="shellBrand" aria-label="Application">
           <div className="shellTitle">{title}</div>
@@ -359,7 +384,7 @@ const { isDirty, model } = useModelStore((s) => ({ isDirty: s.isDirty, model: s.
           </aside>
         ) : null}
 
-        {showBackdrop ? (
+        {showBackdrop && !isNavigatorDragging ? (
           <div
             className="shellBackdrop"
             aria-hidden="true"

@@ -191,7 +191,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
     <>
       <button
         type="button"
-        className="shellButton"
+        className="shellButton shellPrimaryAction"
         onClick={() => setOverflowOpen(true)}
       >
         Model

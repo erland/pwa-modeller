@@ -7,6 +7,7 @@ import { modelStore } from '../../../../store';
 import { Dialog } from '../../../dialog/Dialog';
 import type { Selection } from '../../selection';
 import { elementOptionLabel } from '../navUtils';
+import { useModelStore } from '../../../../store';
 
 type Props = {
   model: Model;
@@ -17,7 +18,9 @@ type Props = {
 };
 
 export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId, onClose, onSelect }: Props) {
-  const [nameDraft, setNameDraft] = useState('');
+  
+  const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
+const [nameDraft, setNameDraft] = useState('');
   const [documentationDraft, setDocumentationDraft] = useState('');
   const [sourceId, setSourceId] = useState('');
   const [targetId, setTargetId] = useState('');
@@ -44,7 +47,7 @@ export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId
     const s = model.elements[sourceId];
     const t = model.elements[targetId];
     if (!s || !t) return RELATIONSHIP_TYPES as RelationshipType[];
-    const allowed = getAllowedRelationshipTypes(s.type, t.type);
+    const allowed = getAllowedRelationshipTypes(s.type, t.type, relationshipValidationMode);
     return (allowed.length > 0 ? allowed : RELATIONSHIP_TYPES) as RelationshipType[];
   }, [model, sourceId, targetId]);
 
@@ -59,7 +62,7 @@ export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId
     const s = model.elements[sourceId];
     const t = model.elements[targetId];
     if (!s || !t) return null;
-    const res = validateRelationship(s.type, t.type, typeDraft);
+    const res = validateRelationship(s.type, t.type, typeDraft, relationshipValidationMode);
     return res.allowed ? null : res.reason;
   }, [model, sourceId, targetId, typeDraft]);
 

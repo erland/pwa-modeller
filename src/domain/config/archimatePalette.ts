@@ -3,6 +3,7 @@ import type { RelationshipValidationMode } from '../relationshipValidationMode';
 import { includeDerivedRelationships } from '../relationshipValidationMode';
 import type { RelationshipMatrix } from '../validation/relationshipMatrix';
 import { getAllowedRelationshipTypesFromMatrix, parseRelationshipTableXml, validateRelationshipByMatrix } from '../validation/relationshipMatrix';
+import relationshipsXml from '../validation/data/relationships.xml?raw';
 
 
 /**
@@ -232,6 +233,18 @@ function validateRelationshipMinimal(
  */
 let _relationshipMatrix: RelationshipMatrix | null = null;
 
+function ensureRelationshipMatrix(): RelationshipMatrix | null {
+  if (_relationshipMatrix) return _relationshipMatrix;
+  // Only attempt to parse the relationship table in browser-like environments.
+  if (typeof DOMParser === 'undefined') return null;
+  try {
+    _relationshipMatrix = parseRelationshipTableXml(relationshipsXml);
+  } catch {
+    _relationshipMatrix = null;
+  }
+  return _relationshipMatrix;
+}
+
 /** Provide a pre-parsed relationship matrix (e.g. at app startup). */
 export function setRelationshipValidationMatrix(matrix: RelationshipMatrix | null): void {
   _relationshipMatrix = matrix;
@@ -250,12 +263,17 @@ export function validateRelationship(
   relationshipType: RelationshipType,
   mode: RelationshipValidationMode = 'minimal'
 ): RelationshipValidation {
-  if (mode === 'minimal' || !_relationshipMatrix) {
+  if (mode === 'minimal') {
+    return validateRelationshipMinimal(sourceType, targetType, relationshipType);
+  }
+
+  const matrix = ensureRelationshipMatrix();
+  if (!matrix) {
     return validateRelationshipMinimal(sourceType, targetType, relationshipType);
   }
 
   const includeDerived = includeDerivedRelationships(mode);
-  const res = validateRelationshipByMatrix(_relationshipMatrix, sourceType, targetType, relationshipType, { includeDerived });
+  const res = validateRelationshipByMatrix(matrix, sourceType, targetType, relationshipType, { includeDerived });
   if (res.allowed) return { allowed: true };
 
   return { allowed: false, reason: res.reason };
@@ -274,12 +292,17 @@ export function getAllowedRelationshipTypes(
   targetType: ElementType,
   mode: RelationshipValidationMode = 'minimal'
 ): RelationshipType[] {
-  if (mode === 'minimal' || !_relationshipMatrix) {
+  if (mode === 'minimal') {
+    return RELATIONSHIP_TYPES.filter((t) => isRelationshipAllowed(sourceType, targetType, t, 'minimal'));
+  }
+
+  const matrix = ensureRelationshipMatrix();
+  if (!matrix) {
     return RELATIONSHIP_TYPES.filter((t) => isRelationshipAllowed(sourceType, targetType, t, 'minimal'));
   }
 
   const includeDerived = includeDerivedRelationships(mode);
-  const allowed = getAllowedRelationshipTypesFromMatrix(_relationshipMatrix, sourceType, targetType, { includeDerived });
+  const allowed = getAllowedRelationshipTypesFromMatrix(matrix, sourceType, targetType, { includeDerived });
   // Keep deterministic ordering according to our canonical list.
   const allowedSet = new Set<RelationshipType>(allowed);
   return RELATIONSHIP_TYPES.filter((t) => allowedSet.has(t));

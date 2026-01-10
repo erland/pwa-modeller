@@ -1,4 +1,5 @@
 import type { Model } from '../types';
+import type { RelationshipValidationMode } from '../relationshipValidationMode';
 import { findDuplicateIds, getAllModelIds } from '../validation';
 import { validateRelationship as validateRelationshipRule } from '../config/archimatePalette';
 import { makeIssue } from './issues';
@@ -6,7 +7,7 @@ import type { ValidationIssue } from './types';
 import { listDuplicatesInLayout } from './layout';
 import { validateExternalIdsForTarget, validateTaggedValuesForTarget } from './externalMetadata';
 
-export function validateModel(model: Model): ValidationIssue[] {
+export function validateModel(model: Model, relationshipValidationMode: RelationshipValidationMode = 'minimal'): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 // ------------------------------
 // Schema / extension validation (externalIds + taggedValues)
@@ -132,7 +133,7 @@ for (const folder of Object.values(model.folders)) {
 
     // Structural rule check (only meaningful for element-to-element relationships)
     if (source && target && !hasSrcCo && !hasTgtCo) {
-      const result = validateRelationshipRule(source.type, target.type, rel.type);
+      const result = validateRelationshipRule(source.type, target.type, rel.type, relationshipValidationMode);
       if (!result.allowed) {
         issues.push(
           makeIssue(

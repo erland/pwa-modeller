@@ -11,6 +11,7 @@ import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
 import { PropertyRow } from './editors/PropertyRow';
 import { ExternalIdsSection } from './sections/ExternalIdsSection';
 import { TaggedValuesSection } from './sections/TaggedValuesSection';
+import { useModelStore } from '../../../store';
 
 const ACCESS_TYPES: AccessType[] = ['Access', 'Read', 'Write', 'ReadWrite'];
 
@@ -22,7 +23,9 @@ type Props = {
 };
 
 export function RelationshipProperties({ model, relationshipId, actions, onSelect }: Props) {
-  const rel = model.relationships[relationshipId];
+  
+  const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
+const rel = model.relationships[relationshipId];
   if (!rel) return <p className="panelHint">Relationship not found.</p>;
 
   const [showAllRelationshipTypes, setShowAllRelationshipTypes] = useState(false);
@@ -36,14 +39,14 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
 
   const allowedRelationshipTypes = useMemo(() => {
     if (!sourceElement || !targetElement) return RELATIONSHIP_TYPES as RelationshipType[];
-    const allowed = getAllowedRelationshipTypes(sourceElement.type, targetElement.type);
+    const allowed = getAllowedRelationshipTypes(sourceElement.type, targetElement.type, relationshipValidationMode);
     return (allowed.length > 0 ? allowed : (RELATIONSHIP_TYPES as RelationshipType[])) as RelationshipType[];
   }, [sourceElement?.type, targetElement?.type]);
 
   const relationshipRuleWarning = useMemo(() => {
     if (!sourceElement || !targetElement) return null;
     if (rel.type === 'Unknown') return null;
-    const res = validateRelationship(sourceElement.type, targetElement.type, rel.type as RelationshipType);
+    const res = validateRelationship(sourceElement.type, targetElement.type, rel.type as RelationshipType, relationshipValidationMode);
     return res.allowed ? null : res.reason;
   }, [sourceElement?.type, targetElement?.type, rel.type]);
 

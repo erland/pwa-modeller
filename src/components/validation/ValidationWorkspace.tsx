@@ -33,7 +33,9 @@ function describeTarget(issue: ValidationIssue): string {
 }
 
 export function ValidationWorkspace({ onSelect, onGoToDiagram }: Props) {
-  const model = useModelStore((s) => s.model);
+  
+  const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
+const model = useModelStore((s) => s.model);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
 
   const summary = useMemo(() => {
@@ -45,7 +47,7 @@ export function ValidationWorkspace({ onSelect, onGoToDiagram }: Props) {
 
   function runValidation() {
     if (!model) return;
-    setIssues(validateModel(model));
+    setIssues(validateModel(model, relationshipValidationMode));
   }
 
   function navigate(issue: ValidationIssue) {

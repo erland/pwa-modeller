@@ -24,7 +24,21 @@ export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, onCl
     setViewpointDraft(VIEWPOINTS[0]?.id ?? 'layered');
   }, [isOpen]);
 
-  return (
+  const canCreate = nameDraft.trim().length > 0;
+const doCreate = () => {
+  if (!canCreate) return;
+    const created = createView({
+      name: nameDraft.trim(),
+      viewpointId: viewpointDraft,
+      centerElementId: centerElementId || undefined
+    });
+    // Centered views are not placed in folders (store enforces this invariant).
+    modelStore.addView(created, centerElementId ? undefined : (targetFolderId ?? undefined));
+    onClose();
+    onSelect({ kind: 'view', viewId: created.id });
+};
+
+return (
     <Dialog
       title="Create view"
       isOpen={isOpen}
@@ -37,18 +51,8 @@ export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, onCl
           <button
             type="button"
             className="shellButton"
-            disabled={nameDraft.trim().length === 0}
-            onClick={() => {
-              const created = createView({
-                name: nameDraft.trim(),
-                viewpointId: viewpointDraft,
-                centerElementId: centerElementId || undefined
-              });
-              // Centered views are not placed in folders (store enforces this invariant).
-              modelStore.addView(created, centerElementId ? undefined : (targetFolderId ?? undefined));
-              onClose();
-              onSelect({ kind: 'view', viewId: created.id });
-            }}
+            disabled={!canCreate}
+            onClick={doCreate}
           >
             Create
           </button>
@@ -69,6 +73,12 @@ export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, onCl
               aria-label="View name"
               value={nameDraft}
               onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                doCreate();
+              }}
+            autoFocus
             />
           </div>
         </div>

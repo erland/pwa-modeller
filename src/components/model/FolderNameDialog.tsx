@@ -48,6 +48,13 @@ export function FolderNameDialog({ isOpen, title, initialName, confirmLabel, onC
             className="textInput"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              e.preventDefault();
+              const trimmed = name.trim();
+              if (!trimmed) return;
+              onConfirm(trimmed);
+            }}
             autoFocus
           />
         </div>

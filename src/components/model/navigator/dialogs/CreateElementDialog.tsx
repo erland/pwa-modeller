@@ -22,7 +22,7 @@ export function CreateElementDialog({ isOpen, targetFolderId, onClose, onSelect 
   const [layerDraft, setLayerDraft] = useState<ArchimateLayer>(ARCHIMATE_LAYERS[1]);
   const [typeDraft, setTypeDraft] = useState<ElementType>(() => {
     const types = ELEMENT_TYPES_BY_LAYER[ARCHIMATE_LAYERS[1]];
-    return (types?.[0] ?? 'BusinessActor') as ElementType;
+return (types?.[0] ?? 'BusinessActor') as ElementType;
   });
 
   // Reset drafts when opening
@@ -44,7 +44,21 @@ export function CreateElementDialog({ isOpen, targetFolderId, onClose, onSelect 
 
   const typeOptions = useMemo(() => ELEMENT_TYPES_BY_LAYER[layerDraft] ?? [], [layerDraft]);
 
-  return (
+  
+const canCreate = nameDraft.trim().length > 0;
+const doCreate = () => {
+  if (!canCreate) return;
+  const created = createElement({
+    name: nameDraft.trim(),
+    layer: layerDraft,
+    type: typeDraft
+  });
+  modelStore.addElement(created, targetFolderId ?? undefined);
+  onClose();
+  onSelect({ kind: 'element', elementId: created.id });
+};
+
+return (
     <Dialog
       title="Create element"
       isOpen={isOpen}
@@ -57,17 +71,8 @@ export function CreateElementDialog({ isOpen, targetFolderId, onClose, onSelect 
           <button
             type="button"
             className="shellButton"
-            disabled={nameDraft.trim().length === 0}
-            onClick={() => {
-              const created = createElement({
-                name: nameDraft.trim(),
-                layer: layerDraft,
-                type: typeDraft
-              });
-              modelStore.addElement(created, targetFolderId ?? undefined);
-              onClose();
-              onSelect({ kind: 'element', elementId: created.id });
-            }}
+            disabled={!canCreate}
+            onClick={doCreate}
           >
             Create
           </button>
@@ -83,6 +88,12 @@ export function CreateElementDialog({ isOpen, targetFolderId, onClose, onSelect 
               aria-label="Element name"
               value={nameDraft}
               onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                doCreate();
+              }}
+            autoFocus
             />
           </div>
         </div>

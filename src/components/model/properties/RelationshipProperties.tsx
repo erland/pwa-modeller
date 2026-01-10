@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { AccessType, Model, RelationshipType } from '../../../domain';
 import { RELATIONSHIP_TYPES } from '../../../domain';
-import { getAllowedRelationshipTypes, validateRelationship } from '../../../domain/config/archimatePalette';
+import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../domain/config/archimatePalette';
 
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
@@ -25,6 +25,19 @@ type Props = {
 export function RelationshipProperties({ model, relationshipId, actions, onSelect }: Props) {
   
   const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
+
+  const [matrixLoadTick, setMatrixLoadTick] = useState(0);
+
+  useEffect(() => {
+    if (relationshipValidationMode === 'minimal') return;
+    let cancelled = false;
+    void initRelationshipValidationMatrixFromBundledTable().then(() => {
+      if (!cancelled) setMatrixLoadTick((t) => t + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [relationshipValidationMode]);
 const rel = model.relationships[relationshipId];
   const [showAllRelationshipTypes, setShowAllRelationshipTypes] = useState(false);
   useEffect(() => {
@@ -39,7 +52,7 @@ const rel = model.relationships[relationshipId];
     if (!sourceElement || !targetElement) return RELATIONSHIP_TYPES as RelationshipType[];
     const allowed = getAllowedRelationshipTypes(sourceElement.type, targetElement.type, relationshipValidationMode);
     return (allowed.length > 0 ? allowed : (RELATIONSHIP_TYPES as RelationshipType[])) as RelationshipType[];
-  }, [sourceElement?.type, targetElement?.type, relationshipValidationMode]);
+  }, [sourceElement?.type, targetElement?.type, relationshipValidationMode, matrixLoadTick]);
 
   const relationshipRuleWarning = useMemo(() => {
     if (!rel) return null;
@@ -47,7 +60,7 @@ const rel = model.relationships[relationshipId];
     if (rel.type === 'Unknown') return null;
     const res = validateRelationship(sourceElement.type, targetElement.type, rel?.type as RelationshipType, relationshipValidationMode);
     return res.allowed ? null : res.reason;
-  }, [sourceElement?.type, targetElement?.type, rel?.type, relationshipValidationMode]);
+  }, [sourceElement?.type, targetElement?.type, rel?.type, relationshipValidationMode, matrixLoadTick]);
 
   const relationshipTypeOptions = useMemo(() => {
     if (!rel) return (showAllRelationshipTypes ? (RELATIONSHIP_TYPES as any[]) : (allowedRelationshipTypes as any[])) as any[];

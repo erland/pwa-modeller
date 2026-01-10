@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { Model, RelationshipType } from '../../../../domain';
 import { RELATIONSHIP_TYPES, createRelationship } from '../../../../domain';
-import { getAllowedRelationshipTypes, validateRelationship } from '../../../../domain/config/archimatePalette';
+import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../../domain/config/archimatePalette';
 import { modelStore } from '../../../../store';
 import { Dialog } from '../../../dialog/Dialog';
 import type { Selection } from '../../selection';
@@ -20,6 +20,19 @@ type Props = {
 export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId, onClose, onSelect }: Props) {
   
   const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
+
+  const [matrixLoadTick, setMatrixLoadTick] = useState(0);
+
+  useEffect(() => {
+    if (relationshipValidationMode === 'minimal') return;
+    let cancelled = false;
+    void initRelationshipValidationMatrixFromBundledTable().then(() => {
+      if (!cancelled) setMatrixLoadTick((t) => t + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [relationshipValidationMode]);
 const [nameDraft, setNameDraft] = useState('');
   const [documentationDraft, setDocumentationDraft] = useState('');
   const [sourceId, setSourceId] = useState('');
@@ -49,7 +62,7 @@ const [nameDraft, setNameDraft] = useState('');
     if (!s || !t) return RELATIONSHIP_TYPES as RelationshipType[];
     const allowed = getAllowedRelationshipTypes(s.type, t.type, relationshipValidationMode);
     return (allowed.length > 0 ? allowed : RELATIONSHIP_TYPES) as RelationshipType[];
-  }, [model, sourceId, targetId]);
+  }, [model, sourceId, targetId, relationshipValidationMode, matrixLoadTick]);
 
   // Keep relationship type valid for chosen endpoints.
   useEffect(() => {
@@ -64,7 +77,7 @@ const [nameDraft, setNameDraft] = useState('');
     if (!s || !t) return null;
     const res = validateRelationship(s.type, t.type, typeDraft, relationshipValidationMode);
     return res.allowed ? null : res.reason;
-  }, [model, sourceId, targetId, typeDraft]);
+  }, [model, sourceId, targetId, typeDraft, relationshipValidationMode, matrixLoadTick]);
 
   return (
     <Dialog

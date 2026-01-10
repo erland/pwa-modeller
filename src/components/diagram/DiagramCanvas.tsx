@@ -495,6 +495,15 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
               ))}
             </select>
 
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+              <input
+                type="checkbox"
+                checked={rel.showAllPendingRelTypes}
+                onChange={(e) => rel.setShowAllPendingRelTypes(e.target.checked)}
+              />
+              Show all relationship types (override validation)
+            </label>
+
             {rel.pendingRelError ? (
               <div className="errorText" role="alert" style={{ marginTop: 10 }}>
                 {rel.pendingRelError}

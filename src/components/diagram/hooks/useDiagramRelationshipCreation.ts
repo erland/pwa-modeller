@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Model, RelationshipType } from '../../../domain';
-import { RELATIONSHIP_TYPES, createRelationship, getViewpointById, validateRelationship } from '../../../domain';
-import { modelStore } from '../../../store';
+import { RELATIONSHIP_TYPES, createRelationship, getViewpointById } from '../../../domain';
+import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../domain/config/archimatePalette';
+
+import { modelStore, useModelStore } from '../../../store';
 import type { Selection } from '../../model/selection';
 import type { Point } from '../geometry';
 import { hitTestConnectable } from '../geometry';
@@ -24,6 +26,21 @@ type Args = {
 };
 
 export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoint, onSelect }: Args) {
+
+  const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
+
+  const [matrixLoadTick, setMatrixLoadTick] = useState(0);
+  useEffect(() => {
+    if (relationshipValidationMode === 'minimal') return;
+    let cancelled = false;
+    void initRelationshipValidationMatrixFromBundledTable().then(() => {
+      if (!cancelled) setMatrixLoadTick((t) => t + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [relationshipValidationMode]);
+
   const [linkDrag, setLinkDrag] = useState<DiagramLinkDrag | null>(null);
 
   const [pendingCreateRel, setPendingCreateRel] = useState<PendingCreateRel | null>(null);
@@ -31,6 +48,7 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
   const [lastRelType, setLastRelType] = useState<RelationshipType>('Association');
   const [pendingRelType, setPendingRelType] = useState<RelationshipType>('Association');
   const [pendingRelError, setPendingRelError] = useState<string | null>(null);
+  const [showAllPendingRelTypes, setShowAllPendingRelTypes] = useState(false);
 
   // Relationship creation: drag a "wire" from a node handle to another node.
   useEffect(() => {
@@ -58,6 +76,7 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
           setPendingCreateRel({ viewId: prev.viewId, sourceRef: prev.sourceRef, targetRef: target });
           setPendingRelType(lastRelType);
           setPendingRelError(null);
+          setShowAllPendingRelTypes(false);
         }
         return null;
       });
@@ -71,12 +90,47 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
     };
   }, [linkDrag, clientToModelPoint, lastRelType, nodes]);
 
-  const pendingRelTypeOptions = useMemo(() => {
-    if (!model || !pendingCreateRel) return RELATIONSHIP_TYPES;
+const pendingRelTypeOptions = useMemo(() => {
+  if (!model || !pendingCreateRel) return RELATIONSHIP_TYPES;
+
+  const { sourceRef, targetRef } = pendingCreateRel;
+
+  // Start with the "best effort" allowed list (either ArchiMate rules or viewpoint guidance).
+  let allowed: RelationshipType[] = RELATIONSHIP_TYPES;
+
+  // If both endpoints are elements, filter by ArchiMate rules (mode-aware).
+  if (sourceRef.kind === 'element' && targetRef.kind === 'element') {
+    const sourceType = model.elements[sourceRef.id]?.type;
+    const targetType = model.elements[targetRef.id]?.type;
+    if (sourceType && targetType) {
+      allowed = getAllowedRelationshipTypes(sourceType, targetType, relationshipValidationMode);
+    }
+  } else {
+    // Otherwise, fall back to viewpoint guidance (connectors etc.).
     const view = model.views[pendingCreateRel.viewId];
     const vp = view ? getViewpointById(view.viewpointId) : undefined;
-    return vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : RELATIONSHIP_TYPES;
-  }, [model, pendingCreateRel]);
+    allowed = (vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : RELATIONSHIP_TYPES) as RelationshipType[];
+  }
+
+  if (!showAllPendingRelTypes) return allowed;
+
+  // "Show all" mode: keep the allowed ones first, then append the rest (unique).
+  const seen = new Set<RelationshipType>();
+  const out: RelationshipType[] = [];
+  for (const rt of allowed) {
+    if (!seen.has(rt)) {
+      seen.add(rt);
+      out.push(rt);
+    }
+  }
+  for (const rt of RELATIONSHIP_TYPES as RelationshipType[]) {
+    if (!seen.has(rt)) {
+      seen.add(rt);
+      out.push(rt);
+    }
+  }
+  return out;
+}, [model, pendingCreateRel, relationshipValidationMode, matrixLoadTick, showAllPendingRelTypes]);
 
   // When the dialog opens, default the type to last used (if allowed), otherwise first option.
   useEffect(() => {
@@ -109,15 +163,14 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
 
     // Only apply ArchiMate relationship rule validation when both endpoints are elements.
     if (sourceRef.kind === 'element' && targetRef.kind === 'element') {
-      const validation = validateRelationship({
-        id: 'tmp',
-        type: pendingRelType,
-        sourceElementId: sourceRef.id,
-        targetElementId: targetRef.id,
-      });
-      if (!validation.ok) {
-        setPendingRelError(validation.errors[0] ?? 'Invalid relationship');
-        return;
+      const sourceType = model.elements[sourceRef.id]?.type;
+      const targetType = model.elements[targetRef.id]?.type;
+      if (sourceType && targetType) {
+        const v = validateRelationship(sourceType, targetType, pendingRelType, relationshipValidationMode);
+        if (!v.allowed) {
+          setPendingRelError(v.reason ?? 'Invalid relationship');
+          if (!showAllPendingRelTypes) return;
+        }
       }
     }
 
@@ -153,6 +206,8 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
     setPendingRelType,
     pendingRelError,
     pendingRelTypeOptions,
+    showAllPendingRelTypes,
+    setShowAllPendingRelTypes,
 
     closePendingRelationshipDialog,
     confirmCreatePendingRelationship,

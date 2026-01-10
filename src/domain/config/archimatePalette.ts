@@ -1,4 +1,9 @@
 import type { ArchimateLayer, ElementType, RelationshipType } from '../types';
+import type { RelationshipValidationMode } from '../relationshipValidationMode';
+import { includeDerivedRelationships } from '../relationshipValidationMode';
+import type { RelationshipMatrix } from '../validation/relationshipMatrix';
+import { getAllowedRelationshipTypesFromMatrix, parseRelationshipTableXml, validateRelationshipByMatrix } from '../validation/relationshipMatrix';
+
 
 /**
  * Static configuration used by the Step 6 palette & CRUD UI.
@@ -104,7 +109,7 @@ export type RelationshipValidation = { allowed: true } | { allowed: false; reaso
  * NOTE: This is intentionally *not* a full ArchiMate rules engine.
  * It exists to give the UI meaningful feedback in early steps.
  */
-export function validateRelationship(
+function validateRelationshipMinimal(
   sourceType: ElementType,
   targetType: ElementType,
   relationshipType: RelationshipType
@@ -218,11 +223,64 @@ export function validateRelationship(
   // Default: permissive (keeps early UX flexible).
   return { allowed: true };
 }
+/**
+ * Relationship validation mode switch.
+ *
+ * - 'minimal': current heuristic rules (fast, permissive defaults)
+ * - 'full': uses the ArchiMate relationship table matrix (must be initialized)
+ * - 'full_derived': like 'full', but also allows derived relationships when present in the matrix
+ */
+let _relationshipMatrix: RelationshipMatrix | null = null;
 
-export function isRelationshipAllowed(sourceType: ElementType, targetType: ElementType, relationshipType: RelationshipType): boolean {
-  return validateRelationship(sourceType, targetType, relationshipType).allowed;
+/** Provide a pre-parsed relationship matrix (e.g. at app startup). */
+export function setRelationshipValidationMatrix(matrix: RelationshipMatrix | null): void {
+  _relationshipMatrix = matrix;
 }
 
-export function getAllowedRelationshipTypes(sourceType: ElementType, targetType: ElementType): RelationshipType[] {
-  return RELATIONSHIP_TYPES.filter((t) => isRelationshipAllowed(sourceType, targetType, t));
+/** Convenience: parse and store the relationship matrix from the relationships.xml text. */
+export function initRelationshipValidationMatrixFromXml(xmlText: string): RelationshipMatrix {
+  const m = parseRelationshipTableXml(xmlText);
+  _relationshipMatrix = m;
+  return m;
+}
+
+export function validateRelationship(
+  sourceType: ElementType,
+  targetType: ElementType,
+  relationshipType: RelationshipType,
+  mode: RelationshipValidationMode = 'minimal'
+): RelationshipValidation {
+  if (mode === 'minimal' || !_relationshipMatrix) {
+    return validateRelationshipMinimal(sourceType, targetType, relationshipType);
+  }
+
+  const includeDerived = includeDerivedRelationships(mode);
+  const res = validateRelationshipByMatrix(_relationshipMatrix, sourceType, targetType, relationshipType, { includeDerived });
+  if (res.allowed) return { allowed: true };
+
+  return { allowed: false, reason: res.reason };
+}
+export function isRelationshipAllowed(
+  sourceType: ElementType,
+  targetType: ElementType,
+  relationshipType: RelationshipType,
+  mode: RelationshipValidationMode = 'minimal'
+): boolean {
+  return validateRelationship(sourceType, targetType, relationshipType, mode).allowed;
+}
+
+export function getAllowedRelationshipTypes(
+  sourceType: ElementType,
+  targetType: ElementType,
+  mode: RelationshipValidationMode = 'minimal'
+): RelationshipType[] {
+  if (mode === 'minimal' || !_relationshipMatrix) {
+    return RELATIONSHIP_TYPES.filter((t) => isRelationshipAllowed(sourceType, targetType, t, 'minimal'));
+  }
+
+  const includeDerived = includeDerivedRelationships(mode);
+  const allowed = getAllowedRelationshipTypesFromMatrix(_relationshipMatrix, sourceType, targetType, { includeDerived });
+  // Keep deterministic ordering according to our canonical list.
+  const allowedSet = new Set<RelationshipType>(allowed);
+  return RELATIONSHIP_TYPES.filter((t) => allowedSet.has(t));
 }

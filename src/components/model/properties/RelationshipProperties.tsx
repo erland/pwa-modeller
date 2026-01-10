@@ -26,31 +26,31 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
   
   const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
 const rel = model.relationships[relationshipId];
-  if (!rel) return <p className="panelHint">Relationship not found.</p>;
-
   const [showAllRelationshipTypes, setShowAllRelationshipTypes] = useState(false);
   useEffect(() => {
     // Reset per selection to avoid surprising carry-over when clicking between relationships.
     setShowAllRelationshipTypes(false);
   }, [relationshipId]);
 
-  const sourceElement = rel.sourceElementId ? model.elements[rel.sourceElementId] : undefined;
-  const targetElement = rel.targetElementId ? model.elements[rel.targetElementId] : undefined;
+  const sourceElement = rel?.sourceElementId ? model.elements[rel.sourceElementId] : undefined;
+  const targetElement = rel?.targetElementId ? model.elements[rel.targetElementId] : undefined;
 
   const allowedRelationshipTypes = useMemo(() => {
     if (!sourceElement || !targetElement) return RELATIONSHIP_TYPES as RelationshipType[];
     const allowed = getAllowedRelationshipTypes(sourceElement.type, targetElement.type, relationshipValidationMode);
     return (allowed.length > 0 ? allowed : (RELATIONSHIP_TYPES as RelationshipType[])) as RelationshipType[];
-  }, [sourceElement?.type, targetElement?.type]);
+  }, [sourceElement?.type, targetElement?.type, relationshipValidationMode]);
 
   const relationshipRuleWarning = useMemo(() => {
+    if (!rel) return null;
     if (!sourceElement || !targetElement) return null;
     if (rel.type === 'Unknown') return null;
-    const res = validateRelationship(sourceElement.type, targetElement.type, rel.type as RelationshipType, relationshipValidationMode);
+    const res = validateRelationship(sourceElement.type, targetElement.type, rel?.type as RelationshipType, relationshipValidationMode);
     return res.allowed ? null : res.reason;
-  }, [sourceElement?.type, targetElement?.type, rel.type]);
+  }, [sourceElement?.type, targetElement?.type, rel?.type, relationshipValidationMode]);
 
   const relationshipTypeOptions = useMemo(() => {
+    if (!rel) return (showAllRelationshipTypes ? (RELATIONSHIP_TYPES as any[]) : (allowedRelationshipTypes as any[])) as any[];
     const base = showAllRelationshipTypes ? (RELATIONSHIP_TYPES as any[]) : (allowedRelationshipTypes as any[]);
     const list = [...base];
     const seen = new Set(list);
@@ -63,8 +63,9 @@ const rel = model.relationships[relationshipId];
 
     if (!seen.has(rel.type)) return [rel.type, ...list];
     return list;
-  }, [showAllRelationshipTypes, allowedRelationshipTypes, rel.type]);
+  }, [showAllRelationshipTypes, allowedRelationshipTypes, rel?.type]);
 
+  if (!rel) return <p className="panelHint">Relationship not found.</p>;
   const elementOptions = Object.values(model.elements)
     .filter(Boolean)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));

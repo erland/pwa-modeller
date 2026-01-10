@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 
 import '../../styles/shell.css';
 import { modelStore, useModelStore } from '../../store';
+import { initRelationshipValidationMatrixFromBundledTable } from '../../domain/config/archimatePalette';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -119,6 +120,12 @@ const { isDirty, model, relationshipValidationMode } = useModelStore((s) => ({
     model: s.model,
     relationshipValidationMode: s.relationshipValidationMode,
   }));
+
+  useEffect(() => {
+    if (relationshipValidationMode !== 'minimal') {
+      void initRelationshipValidationMatrixFromBundledTable().catch(() => undefined);
+    }
+  }, [relationshipValidationMode]);
 const online = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
 

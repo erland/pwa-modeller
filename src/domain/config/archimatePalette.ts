@@ -3,9 +3,6 @@ import type { RelationshipValidationMode } from '../relationshipValidationMode';
 import { includeDerivedRelationships } from '../relationshipValidationMode';
 import type { RelationshipMatrix } from '../validation/relationshipMatrix';
 import { getAllowedRelationshipTypesFromMatrix, parseRelationshipTableXml, validateRelationshipByMatrix } from '../validation/relationshipMatrix';
-import relationshipsXml from '../validation/data/relationships.xml?raw';
-
-
 /**
  * Static configuration used by the Step 6 palette & CRUD UI.
  *
@@ -234,16 +231,26 @@ function validateRelationshipMinimal(
 let _relationshipMatrix: RelationshipMatrix | null = null;
 
 function ensureRelationshipMatrix(): RelationshipMatrix | null {
-  if (_relationshipMatrix) return _relationshipMatrix;
-  // Only attempt to parse the relationship table in browser-like environments.
-  if (typeof DOMParser === 'undefined') return null;
-  try {
-    _relationshipMatrix = parseRelationshipTableXml(relationshipsXml);
-  } catch {
-    _relationshipMatrix = null;
-  }
   return _relationshipMatrix;
 }
+
+/**
+ * Attempt to initialize the relationship matrix from the bundled relationships.xml.
+ * Uses a dynamic import with Vite's `?raw` loader.
+ * In Jest/Node this may fail; callers should ignore a false result.
+ */
+export async function initRelationshipValidationMatrixFromBundledTable(): Promise<boolean> {
+  if (_relationshipMatrix) return true;
+  try {
+    const mod: any = await import('../validation/data/relationships.xml?raw');
+    const xmlText: string = (mod && (mod.default ?? mod)) as string;
+    initRelationshipValidationMatrixFromXml(xmlText);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
 /** Provide a pre-parsed relationship matrix (e.g. at app startup). */
 export function setRelationshipValidationMatrix(matrix: RelationshipMatrix | null): void {

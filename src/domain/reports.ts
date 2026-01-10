@@ -1,4 +1,4 @@
-import type { ElementType, Folder, Model } from './types';
+import type { ArchimateLayer, ElementType, Folder, Model } from './types';
 import { VIEWPOINTS, getViewpointById } from './config/viewpoints';
 
 export type ElementReportCategoryId =
@@ -6,6 +6,15 @@ export type ElementReportCategoryId =
   | 'BusinessProcess'
   | 'ApplicationComponent'
   | 'Capability';
+
+export type ElementReportOptions = {
+  /** Existing quick preset (currently maps 1:1 to element type). */
+  category?: ElementReportCategoryId;
+  /** Filter by ArchiMate layer. */
+  layer?: ArchimateLayer | 'all';
+  /** Filter by a specific element type (overrides category when set). */
+  elementType?: ElementType | 'all';
+};
 
 export type ElementReportRow = {
   id: string;
@@ -65,10 +74,22 @@ function categoryToTypes(category: ElementReportCategoryId): ElementType[] | nul
   return [category as unknown as ElementType];
 }
 
-export function generateElementReport(model: Model, category: ElementReportCategoryId = 'all'): ElementReportRow[] {
-  const types = categoryToTypes(category);
+export function generateElementReport(model: Model, category?: ElementReportCategoryId): ElementReportRow[];
+export function generateElementReport(model: Model, options?: ElementReportOptions): ElementReportRow[];
+export function generateElementReport(
+  model: Model,
+  arg: ElementReportCategoryId | ElementReportOptions = 'all'
+): ElementReportRow[] {
+  const options: ElementReportOptions = typeof arg === 'string' ? { category: arg } : arg;
+  const category = options.category ?? 'all';
+  const layerFilter = options.layer ?? 'all';
+  const typeFilter = options.elementType ?? 'all';
+
+  const types = typeFilter !== 'all' ? ([typeFilter] as ElementType[]) : categoryToTypes(category);
+
   return Object.values(model.elements)
     .filter((e) => (types ? types.includes(e.type) : true))
+    .filter((e) => (layerFilter === 'all' ? true : e.layer === layerFilter))
     .map((e) => ({
       id: e.id,
       name: e.name,

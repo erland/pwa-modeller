@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react';
 
-import type { ElementReportCategoryId, RelationshipReportRow, ElementReportRow, ViewInventoryRow } from '../../domain';
+import type {
+  ArchimateLayer,
+  ElementType,
+  RelationshipReportRow,
+  ElementReportRow,
+  ViewInventoryRow
+} from '../../domain';
 import { generateElementReport, generateRelationshipReport, generateViewInventoryReport, rowsToCsv } from '../../domain';
 import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
@@ -16,18 +22,22 @@ type SortState = {
   dir: SortDir;
 };
 
-const ELEMENT_CATEGORIES: Array<{ id: ElementReportCategoryId; label: string }> = [
-  { id: 'all', label: 'All elements' },
-  { id: 'BusinessProcess', label: 'Business Processes' },
-  { id: 'ApplicationComponent', label: 'Application Components' },
-  { id: 'Capability', label: 'Capabilities' }
+const ARCHIMATE_LAYERS: ArchimateLayer[] = [
+  'Strategy',
+  'Business',
+  'Application',
+  'Technology',
+  'Physical',
+  'ImplementationMigration',
+  'Motivation'
 ];
 
 export function ReportsWorkspace() {
   const model = useModelStore((s) => s.model);
 
   const [activeTab, setActiveTab] = useState<Tab>('elements');
-  const [category, setCategory] = useState<ElementReportCategoryId>('all');
+  const [layerFilter, setLayerFilter] = useState<ArchimateLayer | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<ElementType | 'all'>('all');
 
   const [sortByTab, setSortByTab] = useState<Record<Tab, SortState>>({
     elements: { key: 'name', dir: 'asc' },
@@ -35,9 +45,32 @@ export function ReportsWorkspace() {
     relationships: { key: 'type', dir: 'asc' }
   });
 
-  const elementRows = useMemo(() => (model ? generateElementReport(model, category) : []), [model, category]);
+  const elementRows = useMemo(
+    () =>
+      model
+        ? generateElementReport(model, {
+            layer: layerFilter,
+            elementType: typeFilter
+          })
+        : [],
+    [model, layerFilter, typeFilter]
+  );
   const viewRows = useMemo(() => (model ? generateViewInventoryReport(model) : []), [model]);
   const relationshipRows = useMemo(() => (model ? generateRelationshipReport(model) : []), [model]);
+
+  const layerOptions = useMemo(() => {
+    if (!model) return [] as ArchimateLayer[];
+    const present = new Set(Object.values(model.elements).map((e) => e.layer as ArchimateLayer));
+    return ARCHIMATE_LAYERS.filter((l) => present.has(l));
+  }, [model]);
+
+  const typeOptions = useMemo(() => {
+    if (!model) return [] as ElementType[];
+    const all = Object.values(model.elements);
+    const filtered = layerFilter === 'all' ? all : all.filter((e) => e.layer === layerFilter);
+    const present = new Set<ElementType>(filtered.map((e) => e.type));
+    return Array.from(present).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [model, layerFilter]);
 
   const canExport = Boolean(model);
 
@@ -94,7 +127,10 @@ export function ReportsWorkspace() {
       { key: 'layer', header: 'Layer' },
       { key: 'folderPath', header: 'Folder' }
     ]);
-    const base = `${model.metadata.name}-elements-${category === 'all' ? 'all' : category}`;
+
+    const suffixParts = [layerFilter !== 'all' ? String(layerFilter) : null, typeFilter !== 'all' ? String(typeFilter) : null].filter(Boolean);
+    const suffix = suffixParts.length > 0 ? suffixParts.join('-') : 'all';
+    const base = `${model.metadata.name}-elements-${suffix}`;
     downloadTextFile(sanitizeFileNameWithExtension(base, 'csv'), csv, 'text/csv');
   }
 
@@ -187,20 +223,43 @@ export function ReportsWorkspace() {
           <div className="crudHeader">
             <div>
               <p className="crudTitle">Element list</p>
-              <p className="crudHint">Filter by a common element category and export as CSV.</p>
+              <p className="crudHint">Filter by layer or element type and export as CSV.</p>
             </div>
             <div className="toolbar" aria-label="Element report toolbar">
               <div className="toolbarGroup">
-                <label htmlFor="element-report-category">Category</label>
+                <label htmlFor="element-report-layer">Layer</label>
                 <select
-                  id="element-report-category"
+                  id="element-report-layer"
                   className="selectInput"
-                  value={category}
-                  onChange={(e) => setCategory(e.currentTarget.value as ElementReportCategoryId)}
+                  value={layerFilter}
+                  onChange={(e) => {
+                    const next = e.currentTarget.value as ArchimateLayer | 'all';
+                    setLayerFilter(next);
+                    // Switching layer changes the available types; reset to All types.
+                    setTypeFilter('all');
+                  }}
                 >
-                  {ELEMENT_CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
+                  <option value="all">All layers</option>
+                  {layerOptions.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="toolbarGroup">
+                <label htmlFor="element-report-type">Element type</label>
+                <select
+                  id="element-report-type"
+                  className="selectInput"
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.currentTarget.value as ElementType | 'all')}
+                >
+                  <option value="all">All types</option>
+                  {typeOptions.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
                     </option>
                   ))}
                 </select>

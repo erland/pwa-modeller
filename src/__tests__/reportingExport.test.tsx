@@ -26,7 +26,8 @@ describe('Step 11 – Reporting and Export', () => {
     expect(screen.getByRole('heading', { name: 'Reports' })).toBeInTheDocument();
 
     // Filter to Business Processes and ensure it shows only one row.
-    await user.selectOptions(screen.getByLabelText('Category'), 'BusinessProcess');
+    await user.selectOptions(screen.getByLabelText('Layer'), 'Business');
+    await user.selectOptions(screen.getByLabelText('Element type'), 'BusinessProcess');
     const elementTable = screen.getByRole('table', { name: 'Element report table' });
     expect(within(elementTable).getByRole('cell', { name: 'Process A' })).toBeInTheDocument();
     expect(within(elementTable).queryByRole('cell', { name: 'Capability X' })).not.toBeInTheDocument();

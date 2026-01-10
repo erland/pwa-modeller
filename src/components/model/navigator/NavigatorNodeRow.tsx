@@ -22,7 +22,6 @@ type Props = {
   depth: number;
   icon: string;
   title: string;
-  showBadge: boolean;
   hasChildren: boolean;
   isExpanded: boolean;
 
@@ -51,7 +50,6 @@ export function NavigatorNodeRow({
   depth,
   icon,
   title,
-  showBadge,
   hasChildren,
   isExpanded,
   handleSelectionChange,
@@ -324,7 +322,7 @@ try {
         <span className="navTreeLabel">{node.label}</span>
       )}
 
-      {showBadge ? <span className="navTreeSecondary">{node.secondary}</span> : null}
+      {/* Secondary count badges were removed to save horizontal space on small screens. */}
       {actions}
     </div>
   );

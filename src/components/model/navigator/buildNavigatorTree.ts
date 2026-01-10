@@ -75,13 +75,11 @@ export function buildNavigatorTreeData(args: {
       }));
 
     const children: NavNode[] = [...childFolderNodes, ...elementLeaves, ...viewLeaves];
-    const immediateCount = childFolders.length + folder.elementIds.length + folder.viewIds.length;
 
     return {
       key: makeKey('folder', folderId),
       kind: 'folder',
       label: folder.name,
-      secondary: String(immediateCount),
       tooltip:
         `${folder.name} — ${folder.elementIds.length} element(s), ${folder.viewIds.length} view(s), ${childFolders.length} folder(s)`,
       children,
@@ -149,11 +147,11 @@ export function buildNavigatorTreeData(args: {
     makeSection(
       'search',
       'Search results',
-      String(elements.length + views.length + folders.length),
+      '',
       [
-        ...(elements.length ? [makeSection('search-elements', 'Elements', String(elements.length), elements)] : []),
-        ...(views.length ? [makeSection('search-views', 'Views', String(views.length), views)] : []),
-        ...(folders.length ? [makeSection('search-folders', 'Folders', String(folders.length), folders)] : [])
+        ...(elements.length ? [makeSection('search-elements', 'Elements', '', elements)] : []),
+        ...(views.length ? [makeSection('search-views', 'Views', '', views)] : []),
+        ...(folders.length ? [makeSection('search-folders', 'Folders', '', folders)] : [])
       ]
     )
   ];

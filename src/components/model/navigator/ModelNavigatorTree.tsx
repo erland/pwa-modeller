@@ -351,7 +351,6 @@ if (maybeFolderDragId && isFolderTarget && maybeFolderDragId === row.dataset.fol
     const icon = iconFor(node);
     const hasChildren = !!node.children && node.children.length > 0;
     const isExpanded = hasChildren && expandedKeys.has(node.key);
-    const showBadge = !!node.secondary && (node.kind === 'folder' || node.kind === 'section');
     // Keep tooltip simple: always show the full label (useful when the label is ellipsized).
     const title = node.label;
 
@@ -363,7 +362,6 @@ if (maybeFolderDragId && isFolderTarget && maybeFolderDragId === row.dataset.fol
             depth={depth}
             icon={icon}
             title={title}
-            showBadge={showBadge}
             hasChildren={hasChildren}
             isExpanded={isExpanded}
             handleSelectionChange={handleSelectionChange}

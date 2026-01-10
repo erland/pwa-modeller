@@ -19,3 +19,4 @@ export * from './selectors/folders';
 export * from './graph/trace';
 
 export * from './unknownExportPolicy';
+export * from './relationshipValidationMode';

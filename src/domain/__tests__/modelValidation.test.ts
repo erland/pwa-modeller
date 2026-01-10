@@ -1,4 +1,13 @@
 import { createConnector, createElement, createEmptyModel, createRelationship, createView } from '../factories';
+import { initRelationshipValidationMatrixFromXml } from '../config/archimatePalette';
+
+const fs = require('fs');
+const path = require('path');
+function readRelationshipTable(): string {
+  const p = path.resolve(__dirname, '../validation/data/relationships.xml');
+  return fs.readFileSync(p, 'utf-8');
+}
+
 import { validateModel } from '../modelValidation';
 
 describe('validateModel', () => {
@@ -48,7 +57,28 @@ describe('validateModel', () => {
     expect(issues.some((i) => i.message.includes('missing source connector'))).toBe(true);
   });
 
-  it('reports invalid ArchiMate structural combinations', () => {
+  
+it('supports full relationship-table validation modes', () => {
+  initRelationshipValidationMatrixFromXml(readRelationshipTable());
+
+  const model = createEmptyModel({ name: 'M' });
+  const coa = createElement({ name: 'Handlingsalternativ', layer: 'Strategy', type: 'CourseOfAction' });
+  const cap = createElement({ name: 'Förmåga', layer: 'Strategy', type: 'Capability' });
+  model.elements[coa.id] = coa;
+  model.elements[cap.id] = cap;
+
+  // Serving is allowed in relationship tables for CourseOfAction -> Capability, but rejected by minimal rules.
+  const rel = createRelationship({ type: 'Serving', sourceElementId: coa.id, targetElementId: cap.id });
+  model.relationships[rel.id] = rel;
+
+  const issuesMinimal = validateModel(model, 'minimal');
+  expect(issuesMinimal.some((i) => i.message.includes('Serving relationships must originate from a Service'))).toBe(true);
+
+  const issuesFull = validateModel(model, 'full');
+  expect(issuesFull.some((i) => i.message.includes('Serving relationships must originate from a Service'))).toBe(false);
+});
+
+it('reports invalid ArchiMate structural combinations', () => {
     const model = createEmptyModel({ name: 'M' });
     const actor = createElement({ name: 'Actor', layer: 'Business', type: 'BusinessActor' });
     const service = createElement({ name: 'Service', layer: 'Business', type: 'BusinessService' });

@@ -13,6 +13,7 @@ import { dataTransferHasElement, readDraggedElementId } from './dragDrop';
 import type { ConnectableRef } from './connectable';
 import { refKey } from './connectable';
 import { getConnectionPath } from './connectionPath';
+import { applyLaneOffsets } from './connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from './orthogonalHints';
 
 import { useActiveViewId } from './hooks/useActiveViewId';
@@ -283,7 +284,15 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       items.push({ relationshipId: conn.relationshipId, connectionId: conn.id, points });
     }
 
-    return items;
+    // Apply cheap lane offsets consistently with rendering/export.
+    const adjusted = applyLaneOffsets(
+      items.map((it) => ({ id: it.connectionId, points: it.points })),
+      { gridSize: activeView.formatting?.gridSize }
+    );
+    const byId = new Map<string, Point[]>();
+    for (const a of adjusted) byId.set(a.id, a.points);
+
+    return items.map((it) => ({ ...it, points: byId.get(it.connectionId) ?? it.points }));
   }, [model, activeView, connectionRenderItems, nodes]);
 
   const handleSurfacePointerDownCapture = useCallback(

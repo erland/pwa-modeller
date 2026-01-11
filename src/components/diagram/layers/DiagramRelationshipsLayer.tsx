@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { Model, ViewConnection, ViewNodeLayout } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import { RelationshipMarkers } from '../RelationshipMarkers';
@@ -12,6 +13,7 @@ import {
   unitPerp,
 } from '../geometry';
 import { getConnectionPath } from '../connectionPath';
+import { applyLaneOffsets } from '../connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from '../orthogonalHints';
 import { relationshipVisual } from '../relationshipVisual';
 import { refKey } from '../connectable';
@@ -61,6 +63,70 @@ export function DiagramRelationshipsLayer({
     return { x: n.x, y: n.y, w, h };
   };
 
+  // Precompute routed polylines for all connections and apply cheap lane offsets for
+  // connections that share a similar corridor (helps avoid visually merging lines).
+  const pointsByConnectionId = useMemo(() => {
+    const laneItems: Array<{ id: string; points: Point[] }> = [];
+
+    for (const item of connectionRenderItems) {
+      const conn = item.connection;
+      const rel = model.relationships[conn.relationshipId];
+      if (!rel) continue;
+
+      const s = item.source;
+      const t = item.target;
+      const sc: Point = { x: s.x + (s.width ?? 120) / 2, y: s.y + (s.height ?? 60) / 2 };
+      const tc: Point = { x: t.x + (t.width ?? 120) / 2, y: t.y + (t.height ?? 60) / 2 };
+      const start = rectEdgeAnchor(s, tc);
+      const end = rectEdgeAnchor(t, sc);
+
+      const sKey = refKey(nodeRefFromLayout(s)!);
+      const tKey = refKey(nodeRefFromLayout(t)!);
+      const obstacles = nodes
+        .filter((n) => {
+          const r = nodeRefFromLayout(n);
+          if (!r) return false;
+          const k = refKey(r);
+          return k !== sKey && k !== tKey;
+        })
+        .map(nodeRect);
+
+      const hints = {
+        ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
+        obstacles,
+        obstacleMargin: gridSize ? gridSize / 2 : 10,
+      };
+      let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
+
+      const total = item.totalInGroup;
+      if (total > 1) {
+        const spacing = 14;
+        const offsetIndex = item.indexInGroup - (total - 1) / 2;
+        const offset = offsetIndex * spacing;
+        const parts = item.groupKey.split('|');
+        const aNode = nodes.find((n) => {
+          const r = nodeRefFromLayout(n);
+          return r ? refKey(r) === parts[0] : false;
+        });
+        const bNode = nodes.find((n) => {
+          const r = nodeRefFromLayout(n);
+          return r ? refKey(r) === parts[1] : false;
+        });
+        const aC: Point | null = aNode ? { x: aNode.x + (aNode.width ?? 120) / 2, y: aNode.y + (aNode.height ?? 60) / 2 } : null;
+        const bC: Point | null = bNode ? { x: bNode.x + (bNode.width ?? 120) / 2, y: bNode.y + (bNode.height ?? 60) / 2 } : null;
+        const perp = aC && bC ? unitPerp(aC, bC) : unitPerp(sc, tc);
+        points = offsetPolyline(points, perp, offset);
+      }
+
+      laneItems.push({ id: conn.id, points });
+    }
+
+    const adjusted = applyLaneOffsets(laneItems, { gridSize });
+    const map = new Map<string, Point[]>();
+    for (const it of adjusted) map.set(it.id, it.points);
+    return map;
+  }, [connectionRenderItems, model, nodes, gridSize]);
+
   return (
     <svg className="diagramRelationships" width={surfaceWidthModel} height={surfaceHeightModel} aria-label="Diagram relationships">
       <RelationshipMarkers />
@@ -84,58 +150,10 @@ export function DiagramRelationshipsLayer({
         const rel = model.relationships[relId];
         if (!rel) return null;
 
-        const s = item.source;
-        const t = item.target;
+        const points = pointsByConnectionId.get(conn.id);
+        if (!points) return null;
 
-        const sc: Point = { x: s.x + (s.width ?? 120) / 2, y: s.y + (s.height ?? 60) / 2 };
-        const tc: Point = { x: t.x + (t.width ?? 120) / 2, y: t.y + (t.height ?? 60) / 2 };
-
-        // Prefer border anchors (looks nicer than center-to-center).
-        const start = rectEdgeAnchor(s, tc);
-        const end = rectEdgeAnchor(t, sc);
-
-        // Centralized routing (straight/orthogonal) using ViewConnection.
-        const sKey = refKey(nodeRefFromLayout(s)!);
-        const tKey = refKey(nodeRefFromLayout(t)!);
-        const obstacles = nodes
-          .filter((n) => {
-            const r = nodeRefFromLayout(n);
-            if (!r) return false;
-            const k = refKey(r);
-            return k !== sKey && k !== tKey;
-          })
-          .map(nodeRect);
-
-        const hints = {
-          ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
-          obstacles,
-          obstacleMargin: gridSize ? gridSize / 2 : 10,
-        };
-        let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
-
-        // If there are multiple relationships between the same two elements, offset them in parallel.
         const total = item.totalInGroup;
-        if (total > 1) {
-          const spacing = 14;
-          const offsetIndex = item.indexInGroup - (total - 1) / 2;
-          const offset = offsetIndex * spacing;
-
-          // Use a stable perpendicular based on the unordered group key so
-          // relationships in opposite directions still spread apart consistently.
-          const parts = item.groupKey.split('|');
-          const aNode = nodes.find((n) => {
-            const r = nodeRefFromLayout(n);
-            return r ? refKey(r) === parts[0] : false;
-          });
-          const bNode = nodes.find((n) => {
-            const r = nodeRefFromLayout(n);
-            return r ? refKey(r) === parts[1] : false;
-          });
-          const aC: Point | null = aNode ? { x: aNode.x + (aNode.width ?? 120) / 2, y: aNode.y + (aNode.height ?? 60) / 2 } : null;
-          const bC: Point | null = bNode ? { x: bNode.x + (bNode.width ?? 120) / 2, y: bNode.y + (bNode.height ?? 60) / 2 } : null;
-          const perp = aC && bC ? unitPerp(aC, bC) : unitPerp(sc, tc);
-          points = offsetPolyline(points, perp, offset);
-        }
 
         const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 

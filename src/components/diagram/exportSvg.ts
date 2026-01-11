@@ -2,6 +2,7 @@ import type { Model, RelationshipType, ViewNodeLayout, ArchimateLayer, ElementTy
 import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import { refKey } from './connectable';
 import { getConnectionPath, polylineToSvgPath } from './connectionPath';
+import { applyLaneOffsets } from './connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from './orthogonalHints';
 import {
   boundsForNodes,
@@ -143,10 +144,9 @@ export function createViewSvg(model: Model, viewId: string): string {
   type RelItem = {
     id: string;
     relId: string;
-    d: string;
+    points: Point[];
     label: string;
     visual: RelationshipVisual;
-    mid: Point;
   };
 
   // Group connections by unordered endpoint pair so parallel relationships are offset consistently.
@@ -226,34 +226,42 @@ export function createViewSvg(model: Model, viewId: string): string {
         points = offsetPolyline(points, perp, offset);
       }
 
-      const d = polylineToSvgPath(points);
       const visual = relationshipVisual(rel);
-      const mid = polylineMidPoint(points);
-
-      relItems.push({ id: conn.id, relId: conn.relationshipId, d, label: rel.type, visual, mid });
+      relItems.push({ id: conn.id, relId: conn.relationshipId, points, label: rel.type, visual });
     }
   }
 
+  // Apply cheap lane offsets across all relationships before emitting SVG paths.
+  const laneAdjusted = applyLaneOffsets(
+    relItems.map((it) => ({ id: it.id, points: it.points })),
+    { gridSize: view.formatting?.gridSize }
+  );
+  const lanePointsById = new Map<string, Point[]>();
+  for (const it of laneAdjusted) lanePointsById.set(it.id, it.points);
+
   const linesSvg = relItems
     .map((it) => {
+      const points = lanePointsById.get(it.id) ?? it.points;
+      const d = polylineToSvgPath(points);
+      const mid = polylineMidPoint(points);
       const markerStart = it.visual.markerStartId ? ` marker-start="url(#${it.visual.markerStartId})"` : '';
       const markerEnd = it.visual.markerEndId ? ` marker-end="url(#${it.visual.markerEndId})"` : '';
       const dash = it.visual.dasharray ? ` stroke-dasharray="${it.visual.dasharray}"` : '';
       const midLabel = it.visual.midLabel
-        ? `<text x="${it.mid.x}" y="${it.mid.y - 6}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" font-weight="800" fill="rgba(0,0,0,0.65)" text-anchor="middle">${escapeXml(
+        ? `<text x="${mid.x}" y="${mid.y - 6}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" font-weight="800" fill="rgba(0,0,0,0.65)" text-anchor="middle">${escapeXml(
             it.visual.midLabel
           )}</text>`
         : '';
 
       // Keep the type label in exports (helps interpretation if arrow styles are unfamiliar).
       // If we also render a midLabel, push the type label down a bit to avoid overlap.
-      const labelY = it.visual.midLabel ? it.mid.y + 10 : it.mid.y - 4;
-      const label = `<text x="${it.mid.x}" y="${labelY}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#334155" text-anchor="middle">${escapeXml(
+      const labelY = it.visual.midLabel ? mid.y + 10 : mid.y - 4;
+      const label = `<text x="${mid.x}" y="${labelY}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#334155" text-anchor="middle">${escapeXml(
         it.label
       )}</text>`;
 
       return [
-        `<path d="${it.d}" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="2"${dash}${markerStart}${markerEnd} />`,
+        `<path d="${d}" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="2"${dash}${markerStart}${markerEnd} />`,
         midLabel,
         label,
       ].join('');

@@ -74,7 +74,7 @@ export function createConnector(input: CreateConnectorInput): RelationshipConnec
   };
 }
 
-export type CreateViewInput = Omit<View, 'id'> & { id?: string };
+export type CreateViewInput = Omit<View, 'id' | 'connections'> & { id?: string; connections?: View['connections'] };
 export function createView(input: CreateViewInput): View {
   requireNonBlank(input.name, 'View.name');
   requireNonBlank(input.viewpointId, 'View.viewpointId');
@@ -88,6 +88,7 @@ export function createView(input: CreateViewInput): View {
     documentation: (input.documentation ?? (input as any).description)?.trim() || undefined,
     stakeholders: input.stakeholders,
     formatting,
+    connections: input.connections ?? [],
     // View-local diagram objects (notes/labels/group boxes). Optional in the schema, but
     // new views should start with an empty map for a predictable runtime shape.
     objects: input.objects ?? {},
@@ -216,6 +217,7 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     // Bump when the persisted schema changes.
     // v5 introduces model.connectors (relationship connectors / junctions).
     // v6 introduces view.objects + view-only layout nodes (notes/labels/group boxes).
-    schemaVersion: 7
+    // v8 introduces view.connections (per-view relationship instances).
+    schemaVersion: 8
   };
 }

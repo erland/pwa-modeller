@@ -271,6 +271,10 @@ export function ensureModelFolderExtensions(model: Model): Model {
   // View-only objects (introduced in v6): keep runtime shape predictable.
   for (const vid of Object.keys(model.views)) {
     const v: any = model.views[vid] as any;
+    // View connections (introduced in v8): keep runtime shape predictable.
+    if (!Array.isArray(v.connections)) {
+      model.views[vid] = { ...(v as any), connections: [] };
+    }
     if (!isRecord(v.objects)) {
       model.views[vid] = { ...(v as any), objects: {} };
     }

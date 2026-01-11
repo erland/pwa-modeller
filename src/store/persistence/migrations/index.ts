@@ -215,6 +215,21 @@ function migrateV6ToV7(model: Model): Model {
   return model;
 }
 
+/**
+ * v7 -> v8 migration:
+ * - Add View.connections (default empty array) on all views.
+ */
+function migrateV7ToV8(model: Model): Model {
+  for (const id of Object.keys(model.views)) {
+    const v: any = model.views[id] as any;
+    if (!Array.isArray(v.connections)) {
+      model.views[id] = { ...(v as any), connections: [] };
+    }
+  }
+  model.schemaVersion = 8;
+  return model;
+}
+
 
 export function migrateModel(model: Model): Model {
   let v = getSchemaVersion(model);
@@ -240,6 +255,10 @@ export function migrateModel(model: Model): Model {
   }
   if (v < 7) {
     model = migrateV6ToV7(model);
+    v = getSchemaVersion(model);
+  }
+  if (v < 8) {
+    model = migrateV7ToV8(model);
   }
   return model;
 }

@@ -303,6 +303,58 @@ export interface ViewRelationshipLayout {
   zIndex?: number;
 }
 
+// ------------------------------------
+// ViewConnections (per-view relationship instances)
+// ------------------------------------
+
+export type ViewConnectionRouteKind = 'orthogonal' | 'straight';
+
+export interface ViewConnectionRoute {
+  kind: ViewConnectionRouteKind;
+}
+
+export type ViewConnectionEndpointKind = 'element' | 'connector';
+
+/**
+ * A reference to what a connection endpoint attaches to *in this view*.
+ *
+ * Note: This is intentionally view-oriented (not semantic-relationship oriented) to
+ * support future features like duplicate element nodes per view.
+ */
+export interface ViewConnectionEndpointRef {
+  kind: ViewConnectionEndpointKind;
+  /** Element id or connector id depending on kind. */
+  id: string;
+}
+
+/**
+ * A view-specific instance of a semantic `Relationship`.
+ *
+ * This is where we store diagram presentation details for the relationship, such as
+ * routing style (straight/orthogonal/curved), bendpoints, label placement, etc.
+ */
+export interface ViewConnection {
+  id: string;
+  /** Owning view id (redundant if stored inside the view, but helpful for indexing/debugging). */
+  viewId: string;
+  /** Semantic relationship id in the model. */
+  relationshipId: string;
+
+  source: ViewConnectionEndpointRef;
+  target: ViewConnectionEndpointRef;
+
+  route: ViewConnectionRoute;
+
+  /** Optional polyline points for routing (future: user-edited bendpoints). */
+  points?: Array<{ x: number; y: number }>;
+
+  /** Optional label placement for the connection. */
+  label?: RelationshipLabelPlacement;
+
+  /** Optional stacking order (higher renders on top). */
+  zIndex?: number;
+}
+
 export interface ViewFormatting {
   /** Optional per-layer default styling (e.g. tag badge). */
   layerStyleTags?: Partial<Record<ArchimateLayer, string>>;
@@ -324,6 +376,13 @@ export interface View extends HasTaggedValues, HasExternalIds {
   documentation?: string;
   stakeholders?: string[];
   formatting?: ViewFormatting;
+
+  /**
+   * View-specific relationship instances (routing, bendpoints, label placement, etc.).
+   *
+   * v8+: always present (default empty array).
+   */
+  connections: ViewConnection[];
 
   /** View-local diagram objects (notes/labels/group boxes, etc.). */
   objects?: Record<string, ViewObject>;

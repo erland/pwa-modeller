@@ -12,6 +12,7 @@ import {
   unitPerp,
 } from '../geometry';
 import { getConnectionPath } from '../connectionPath';
+import { orthogonalRoutingHintsFromAnchors } from '../orthogonalHints';
 import { relationshipVisual } from '../relationshipVisual';
 import { refKey } from '../connectable';
 
@@ -28,6 +29,8 @@ type Props = {
   model: Model;
   /** Active view id (used for per-view connection properties like routing). */
   viewId?: string;
+  /** Grid size used when choosing routing channels for orthogonal connections. */
+  gridSize?: number;
   nodes: ViewNodeLayout[];
   connectionRenderItems: ConnectionRenderItem[];
   surfaceWidthModel: number;
@@ -41,6 +44,7 @@ type Props = {
 export function DiagramRelationshipsLayer({
   model,
   viewId,
+  gridSize,
   nodes,
   connectionRenderItems,
   surfaceWidthModel,
@@ -84,7 +88,8 @@ export function DiagramRelationshipsLayer({
         const end = rectEdgeAnchor(t, sc);
 
         // Centralized routing (straight/orthogonal) using ViewConnection.
-        let points: Point[] = getConnectionPath(conn, { a: start, b: end }).points;
+        const hints = orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize);
+        let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
 
         // If there are multiple relationships between the same two elements, offset them in parallel.
         const total = item.totalInGroup;

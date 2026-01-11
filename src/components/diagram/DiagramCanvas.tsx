@@ -13,6 +13,7 @@ import { dataTransferHasElement, readDraggedElementId } from './dragDrop';
 import type { ConnectableRef } from './connectable';
 import { refKey } from './connectable';
 import { getConnectionPath } from './connectionPath';
+import { orthogonalRoutingHintsFromAnchors } from './orthogonalHints';
 
 import { useActiveViewId } from './hooks/useActiveViewId';
 import { useDiagramViewport } from './hooks/useDiagramViewport';
@@ -232,7 +233,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       const start = rectEdgeAnchor(s, tc);
       const end = rectEdgeAnchor(t, sc);
 
-      let points: Point[] = getConnectionPath(conn, { a: start, b: end }).points;
+      const hints = orthogonalRoutingHintsFromAnchors(s, start, t, end, activeView.formatting?.gridSize);
+      let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
 
       const total = item.totalInGroup;
       if (total > 1) {
@@ -459,6 +461,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                 <DiagramRelationshipsLayer
                   model={model}
                   viewId={activeViewId ?? undefined}
+                  gridSize={activeView?.formatting?.gridSize}
                   nodes={nodes}
                   connectionRenderItems={connectionRenderItems}
                   surfaceWidthModel={surfaceWidthModel}

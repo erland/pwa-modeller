@@ -2,6 +2,7 @@ import type { Model, RelationshipType, ViewNodeLayout, ArchimateLayer, ElementTy
 import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import { refKey } from './connectable';
 import { getConnectionPath, polylineToSvgPath } from './connectionPath';
+import { orthogonalRoutingHintsFromAnchors } from './orthogonalHints';
 import {
   boundsForNodes,
   nodeRefFromLayout,
@@ -192,7 +193,8 @@ export function createViewSvg(model: Model, viewId: string): string {
       const translatedPoints = conn.points ? conn.points.map((p) => ({ x: p.x + offsetX, y: p.y + offsetY })) : undefined;
 
       // Centralized routing (straight/orthogonal) using the shared path generator.
-      let points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end }).points;
+      const hints = orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, view.formatting?.gridSize);
+      let points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end, hints }).points;
 
       // Parallel relationship offset.
       if (total > 1) {

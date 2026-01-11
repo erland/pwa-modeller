@@ -11,6 +11,7 @@ import type {
   ViewNodeLayout,
   ViewObject,
   ViewObjectType,
+  ViewConnectionRouteKind,
   RelationshipValidationMode
 } from '../domain';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
@@ -239,6 +240,24 @@ reset = (): void => {
       const view = model.views[viewId];
       if (!view) return;
       model.views[viewId] = { ...view, connections: materializeViewConnectionsForView(model, view) };
+    });
+  };
+
+  setViewConnectionRoute = (viewId: string, connectionId: string, kind: ViewConnectionRouteKind): void => {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view || !Array.isArray(view.connections)) return;
+      const idx = view.connections.findIndex((c) => c.id === connectionId);
+      if (idx < 0) return;
+
+      const current = view.connections[idx];
+      const nextConn = {
+        ...current,
+        route: { ...(current.route ?? { kind: 'orthogonal' }), kind },
+      };
+      const nextConnections = [...view.connections];
+      nextConnections[idx] = nextConn;
+      model.views[viewId] = { ...view, connections: nextConnections };
     });
   };
 

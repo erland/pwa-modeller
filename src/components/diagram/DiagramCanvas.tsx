@@ -361,6 +361,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
               >
                 <DiagramRelationshipsLayer
                   model={model}
+                  viewId={activeViewId ?? undefined}
                   nodes={nodes}
                   connectionRenderItems={connectionRenderItems}
                   surfaceWidthModel={surfaceWidthModel}

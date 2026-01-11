@@ -4,6 +4,7 @@ import type {
   RelationshipConnector,
   Relationship,
   RelationshipType,
+  ViewConnectionRouteKind,
   ViewObject,
   View,
   ViewFormatting,
@@ -23,6 +24,9 @@ export type ModelActions = {
 
   updateRelationship: (relationshipId: string, patch: Partial<Relationship> & { type?: RelationshipType }) => void;
   deleteRelationship: (relationshipId: string) => void;
+
+  /** Update per-view routing style for a ViewConnection instance. */
+  setViewConnectionRoute: (viewId: string, connectionId: string, kind: ViewConnectionRouteKind) => void;
 
   updateConnector: (connectorId: string, patch: Partial<Omit<RelationshipConnector, 'id'>>) => void;
   deleteConnector: (connectorId: string) => void;

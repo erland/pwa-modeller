@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { AccessType, Model, RelationshipType } from '../../../domain';
+import type { AccessType, Model, RelationshipType, ViewConnectionRouteKind } from '../../../domain';
 import { RELATIONSHIP_TYPES } from '../../../domain';
 import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../domain/config/archimatePalette';
 
@@ -18,11 +18,13 @@ const ACCESS_TYPES: AccessType[] = ['Access', 'Read', 'Write', 'ReadWrite'];
 type Props = {
   model: Model;
   relationshipId: string;
+  /** Optional: when the relationship is selected from within a view, this enables view-specific connection props. */
+  viewId?: string;
   actions: ModelActions;
   onSelect?: (selection: Selection) => void;
 };
 
-export function RelationshipProperties({ model, relationshipId, actions, onSelect }: Props) {
+export function RelationshipProperties({ model, relationshipId, viewId, actions, onSelect }: Props) {
   
   const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
 
@@ -38,7 +40,7 @@ export function RelationshipProperties({ model, relationshipId, actions, onSelec
       cancelled = true;
     };
   }, [relationshipValidationMode]);
-const rel = model.relationships[relationshipId];
+  const rel = model.relationships[relationshipId];
   const [showAllRelationshipTypes, setShowAllRelationshipTypes] = useState(false);
   useEffect(() => {
     // Reset per selection to avoid surprising carry-over when clicking between relationships.
@@ -99,12 +101,16 @@ const rel = model.relationships[relationshipId];
   };
 
   const usedInViews = Object.values(model.views)
-    .filter((v) => v.layout && v.layout.relationships.some((c) => c.relationshipId === rel.id))
+    .filter((v) => Array.isArray(v.connections) && v.connections.some((c) => c.relationshipId === rel.id))
     .map((v) => {
-      const count = v.layout ? v.layout.relationships.filter((c) => c.relationshipId === rel.id).length : 0;
+      const count = v.connections ? v.connections.filter((c) => c.relationshipId === rel.id).length : 0;
       return { id: v.id, name: v.name, count };
     })
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+  const selectedView = viewId ? model.views[viewId] : undefined;
+  const selectedConnection = selectedView?.connections?.find((c) => c.relationshipId === rel.id);
+  const routingKind: ViewConnectionRouteKind | null = selectedConnection?.route?.kind ?? null;
 
   return (
     <div>
@@ -267,6 +273,31 @@ const rel = model.relationships[relationshipId];
             </select>
             <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Current: {targetName}</div>
         </PropertyRow>
+
+        {selectedConnection && viewId ? (
+          <PropertyRow label="Routing">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <select
+                className="selectInput"
+                aria-label="Relationship property routing"
+                value={routingKind ?? 'orthogonal'}
+                onChange={(e) =>
+                  actions.setViewConnectionRoute(
+                    viewId,
+                    selectedConnection.id,
+                    e.target.value as ViewConnectionRouteKind
+                  )
+                }
+              >
+                <option value="orthogonal">Orthogonal</option>
+                <option value="straight">Straight</option>
+              </select>
+              <div style={{ fontSize: 12, opacity: 0.75 }}>
+                Routing is stored per view.
+              </div>
+            </div>
+          </PropertyRow>
+        ) : null}
         <NameEditorRow
           ariaLabel="Relationship property name"
           value={rel.name}

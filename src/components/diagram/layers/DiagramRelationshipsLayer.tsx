@@ -26,6 +26,8 @@ export type ConnectionRenderItem = {
 
 type Props = {
   model: Model;
+  /** Active view id (used for per-view connection properties like routing). */
+  viewId?: string;
   nodes: ViewNodeLayout[];
   connectionRenderItems: ConnectionRenderItem[];
   surfaceWidthModel: number;
@@ -38,6 +40,7 @@ type Props = {
 
 export function DiagramRelationshipsLayer({
   model,
+  viewId,
   nodes,
   connectionRenderItems,
   surfaceWidthModel,
@@ -128,7 +131,7 @@ export function DiagramRelationshipsLayer({
                 if (linkDrag) return;
                 e.preventDefault();
                 e.stopPropagation();
-                onSelect({ kind: 'relationship', relationshipId: relId });
+                onSelect({ kind: 'relationship', relationshipId: relId, viewId });
               }}
             />
             <path

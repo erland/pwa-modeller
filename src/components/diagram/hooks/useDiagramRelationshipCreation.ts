@@ -185,7 +185,7 @@ const pendingRelTypeOptions = useMemo(() => {
     modelStore.ensureViewConnections(pendingCreateRel.viewId);
     setLastRelType(pendingRelType);
     setPendingCreateRel(null);
-    onSelect({ kind: 'relationship', relationshipId: rel.id });
+    onSelect({ kind: 'relationship', relationshipId: rel.id, viewId: pendingCreateRel.viewId });
   }, [model, pendingCreateRel, pendingRelType, onSelect]);
 
   const startLinkDrag = useCallback((drag: DiagramLinkDrag) => {

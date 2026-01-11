@@ -49,6 +49,8 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
     updateRelationship: (relationshipId, patch) => modelStore.updateRelationship(relationshipId, patch),
     deleteRelationship: (relationshipId) => modelStore.deleteRelationship(relationshipId),
 
+    setViewConnectionRoute: (viewId, connectionId, kind) => modelStore.setViewConnectionRoute(viewId, connectionId, kind),
+
     updateConnector: (connectorId, patch) => modelStore.updateConnector(connectorId, patch),
     deleteConnector: (connectorId) => modelStore.deleteConnector(connectorId),
 
@@ -132,6 +134,7 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
         <RelationshipProperties
           model={model}
           relationshipId={selection.relationshipId}
+          viewId={selection.viewId}
           actions={actions}
           onSelect={onSelect}
         />

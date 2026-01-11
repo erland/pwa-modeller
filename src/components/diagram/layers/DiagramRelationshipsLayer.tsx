@@ -13,8 +13,9 @@ import {
   unitPerp,
 } from '../geometry';
 import { getConnectionPath } from '../connectionPath';
-import { applyLaneOffsets } from '../connectionLanes';
+import { applyLaneOffsetsSafely } from '../connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from '../orthogonalHints';
+import { adjustOrthogonalConnectionEndpoints } from '../adjustConnectionEndpoints';
 import { relationshipVisual } from '../relationshipVisual';
 import { refKey } from '../connectable';
 
@@ -67,6 +68,7 @@ export function DiagramRelationshipsLayer({
   // connections that share a similar corridor (helps avoid visually merging lines).
   const pointsByConnectionId = useMemo(() => {
     const laneItems: Array<{ id: string; points: Point[] }> = [];
+    const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
 
     for (const item of connectionRenderItems) {
       const conn = item.connection;
@@ -91,12 +93,21 @@ export function DiagramRelationshipsLayer({
         })
         .map(nodeRect);
 
+      obstaclesById.set(conn.id, obstacles);
+
       const hints = {
         ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
         obstacles,
         obstacleMargin: gridSize ? gridSize / 2 : 10,
       };
       let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
+
+      // If the router decided to start/end with an axis that doesn't match the original anchors,
+      // snap endpoints to the implied node edges so the connection doesn't appear to "start from"
+      // an unexpected side (e.g. horizontal segment starting at the top edge).
+      if (conn.route.kind === 'orthogonal') {
+        points = adjustOrthogonalConnectionEndpoints(points, s, t, { stubLength: gridSize ? gridSize / 2 : 10 });
+      }
 
       const total = item.totalInGroup;
       if (total > 1) {
@@ -121,7 +132,11 @@ export function DiagramRelationshipsLayer({
       laneItems.push({ id: conn.id, points });
     }
 
-    const adjusted = applyLaneOffsets(laneItems, { gridSize });
+    const adjusted = applyLaneOffsetsSafely(laneItems, {
+      gridSize,
+      obstaclesById,
+      obstacleMargin: gridSize ? gridSize / 2 : 10,
+    });
     const map = new Map<string, Point[]>();
     for (const it of adjusted) map.set(it.id, it.points);
     return map;

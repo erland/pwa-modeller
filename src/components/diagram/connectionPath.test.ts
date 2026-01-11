@@ -38,6 +38,27 @@ describe('connectionPath', () => {
     expect(res.endTangent).toEqual({ x: 0, y: 1 });
   });
 
+  test('orthogonal auto-route detours when aligned but blocked by obstacles', () => {
+    const res = getConnectionPath(
+      { route: { kind: 'orthogonal' }, points: undefined },
+      {
+        a: { x: 2, y: 0 },
+        b: { x: 2, y: 20 },
+        hints: {
+          gridSize: 10,
+          obstacleMargin: 0,
+          // An obstacle square centered on the straight corridor.
+          obstacles: [{ x: 0, y: 8, w: 6, h: 4 }],
+        },
+      }
+    );
+
+    // Should promote to a 3-segment route with a shifted vertical channel.
+    expect(res.points.length).toBe(4);
+    expect(res.points[1].x).not.toBe(2);
+    expect(res.points[1].x).toBe(res.points[2].x);
+  });
+
   test('orthogonal route respects explicit bend points when present', () => {
     const res = getConnectionPath(
       { route: { kind: 'orthogonal' }, points: [{ x: 5, y: 0 }, { x: 5, y: 10 }] },

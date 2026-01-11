@@ -13,8 +13,9 @@ import { dataTransferHasElement, readDraggedElementId } from './dragDrop';
 import type { ConnectableRef } from './connectable';
 import { refKey } from './connectable';
 import { getConnectionPath } from './connectionPath';
-import { applyLaneOffsets } from './connectionLanes';
+import { applyLaneOffsetsSafely } from './connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from './orthogonalHints';
+import { adjustOrthogonalConnectionEndpoints } from './adjustConnectionEndpoints';
 
 import { useActiveViewId } from './hooks/useActiveViewId';
 import { useDiagramViewport } from './hooks/useDiagramViewport';
@@ -220,6 +221,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   const connectionHitItems = useMemo(() => {
     if (!model || !activeView) return [] as Array<{ relationshipId: string; connectionId: string; points: Point[] }>;
     const items: Array<{ relationshipId: string; connectionId: string; points: Point[] }> = [];
+    const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
 
     for (const item of connectionRenderItems) {
       const conn = item.connection;
@@ -252,6 +254,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
         })
         .map(nodeRect);
 
+      obstaclesById.set(conn.id, obstacles);
+
       const gridSize = activeView.formatting?.gridSize;
       const hints = {
         ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
@@ -259,6 +263,10 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
         obstacleMargin: gridSize ? gridSize / 2 : 10,
       };
       let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
+
+      if (conn.route.kind === 'orthogonal') {
+        points = adjustOrthogonalConnectionEndpoints(points, s, t, { stubLength: gridSize ? gridSize / 2 : 10 });
+      }
 
       const total = item.totalInGroup;
       if (total > 1) {
@@ -285,9 +293,13 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     }
 
     // Apply cheap lane offsets consistently with rendering/export.
-    const adjusted = applyLaneOffsets(
+    const adjusted = applyLaneOffsetsSafely(
       items.map((it) => ({ id: it.connectionId, points: it.points })),
-      { gridSize: activeView.formatting?.gridSize }
+      {
+        gridSize: activeView.formatting?.gridSize,
+        obstaclesById,
+        obstacleMargin: activeView.formatting?.gridSize ? activeView.formatting?.gridSize / 2 : 10,
+      }
     );
     const byId = new Map<string, Point[]>();
     for (const a of adjusted) byId.set(a.id, a.points);

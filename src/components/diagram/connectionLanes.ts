@@ -64,6 +64,57 @@ export type LaneOffsetItem = {
   points: Point[];
 };
 
+type Rect = { x: number; y: number; w: number; h: number };
+
+function inflateRect(r: Rect, margin: number): Rect {
+  if (!margin) return r;
+  return { x: r.x - margin, y: r.y - margin, w: r.w + margin * 2, h: r.h + margin * 2 };
+}
+
+function segmentIntersectsRect(a: Point, b: Point, r: Rect): boolean {
+  const x0 = r.x;
+  const x1 = r.x + r.w;
+  const y0 = r.y;
+  const y1 = r.y + r.h;
+
+  // Vertical segment.
+  if (a.x === b.x && a.y !== b.y) {
+    const x = a.x;
+    const ymin = Math.min(a.y, b.y);
+    const ymax = Math.max(a.y, b.y);
+    return x >= x0 && x <= x1 && ymax >= y0 && ymin <= y1;
+  }
+
+  // Horizontal segment.
+  if (a.y === b.y && a.x !== b.x) {
+    const y = a.y;
+    const xmin = Math.min(a.x, b.x);
+    const xmax = Math.max(a.x, b.x);
+    return y >= y0 && y <= y1 && xmax >= x0 && xmin <= x1;
+  }
+
+  // Non-orthogonal fallback: bounding-box overlap.
+  const xmin = Math.min(a.x, b.x);
+  const xmax = Math.max(a.x, b.x);
+  const ymin = Math.min(a.y, b.y);
+  const ymax = Math.max(a.y, b.y);
+  const bbOverlaps = xmax >= x0 && xmin <= x1 && ymax >= y0 && ymin <= y1;
+  return bbOverlaps;
+}
+
+function polylineIntersectsAnyRect(points: Point[], obstacles: Rect[], margin: number): boolean {
+  if (!obstacles.length || points.length < 2) return false;
+  const inflated = obstacles.map((o) => inflateRect(o, margin));
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    for (const r of inflated) {
+      if (segmentIntersectsRect(a, b, r)) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Applies cheap "lane" offsets for connections that share a similar corridor.
  * Returns a new array with updated points (does not mutate the input items).
@@ -109,3 +160,36 @@ export function applyLaneOffsets(items: LaneOffsetItem[], opts?: { gridSize?: nu
     return { id: it.id, points: pts };
   });
 }
+
+export type LaneOffsetSafeOptions = {
+  gridSize?: number;
+  laneSpacing?: number;
+  /** Obstacles to avoid per connection id (typically all other node rects in the view). */
+  obstaclesById?: Map<string, Array<{ x: number; y: number; w: number; h: number }>>;
+  /** Extra margin around obstacles (model units). Defaults to gridSize/2. */
+  obstacleMargin?: number;
+};
+
+/**
+ * Like applyLaneOffsets, but never returns a lane-adjusted polyline that intersects obstacles.
+ * If the lane shift would cause an intersection, this falls back to the original polyline.
+ */
+export function applyLaneOffsetsSafely(items: LaneOffsetItem[], opts?: LaneOffsetSafeOptions): LaneOffsetItem[] {
+  const adjusted = applyLaneOffsets(items, { gridSize: opts?.gridSize, laneSpacing: opts?.laneSpacing });
+  const obstaclesById = opts?.obstaclesById;
+  if (!obstaclesById || obstaclesById.size === 0) return adjusted;
+
+  const margin = opts?.obstacleMargin ?? (opts?.gridSize ? opts.gridSize / 2 : 10);
+  const originalById = new Map<string, Point[]>();
+  for (const it of items) originalById.set(it.id, it.points.map((p) => ({ ...p })));
+
+  return adjusted.map((it) => {
+    const obstacles = obstaclesById.get(it.id) ?? [];
+    if (!obstacles.length) return it;
+    if (polylineIntersectsAnyRect(it.points, obstacles, margin)) {
+      return { id: it.id, points: originalById.get(it.id) ?? it.points };
+    }
+    return it;
+  });
+}
+

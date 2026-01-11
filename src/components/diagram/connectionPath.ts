@@ -213,19 +213,23 @@ function chooseBestCandidate(candidates: Point[][], hints?: OrthogonalRoutingHin
 }
 
 export function orthogonalAutoPolyline(a: Point, b: Point, hints?: OrthogonalRoutingHints): Point[] {
-  // If already aligned horizontally/vertically, no bend needed.
-  if (a.x === b.x || a.y === b.y) return [a, b];
+  const hasObstacles = !!(hints?.obstacles && hints.obstacles.length > 0);
+  const aligned = a.x === b.x || a.y === b.y;
+
+  // If already aligned and there are no obstacles to avoid, keep the simplest route.
+  if (aligned && !hasObstacles) return [a, b];
 
   // Legacy stable default (no hints and no obstacles): vertical then horizontal.
   // If obstacles are provided, we still run the candidate/avoidance logic.
-  if (!hints?.preferStartAxis && !hints?.preferEndAxis && !(hints?.obstacles && hints.obstacles.length > 0)) {
+  if (!hints?.preferStartAxis && !hints?.preferEndAxis && !hasObstacles && !aligned) {
     return [a, { x: a.x, y: b.y }, b];
   }
 
+  const straight: Point[] = [a, b];
   const lVerticalThenHorizontal: Point[] = [a, { x: a.x, y: b.y }, b];
   const lHorizontalThenVertical: Point[] = [a, { x: b.x, y: a.y }, b];
 
-  const baseCandidates: Point[][] = [lVerticalThenHorizontal, lHorizontalThenVertical];
+  const baseCandidates: Point[][] = aligned ? [straight] : [lVerticalThenHorizontal, lHorizontalThenVertical];
 
   const obstacles = (hints?.obstacles ?? []) as Rect[];
   const margin = hints?.obstacleMargin ?? (hints?.gridSize ? hints.gridSize / 2 : 10);
@@ -247,26 +251,56 @@ export function orthogonalAutoPolyline(a: Point, b: Point, hints?: OrthogonalRou
   // Score the base L routes.
   for (const c of baseCandidates) pushScored(c);
 
-  // Add and score channel-search variants for 3-segment routes when they make sense.
-  // Horizontal-in/out preference -> vertical middle segment at x=mx.
-  if (hints.preferStartAxis === 'h' && hints.preferEndAxis === 'h') {
-    const baseX = roundToGrid((a.x + b.x) / 2, hints.gridSize) + laneOffset;
+  // Determine whether base candidates collide with obstacles.
+  const minBaseHits = scored.reduce((m, s) => Math.min(m, s.hits), Number.POSITIVE_INFINITY);
+  const needsAvoidance = hasObstacles && Number.isFinite(minBaseHits) && minBaseHits > 0;
+
+  const addVerticalChannelCandidates = (reasonScore = 0) => {
+    const baseX = roundToGrid((a.x + b.x) / 2, hints?.gridSize) + laneOffset;
     for (const step of laneOffsets(maxShiftSteps)) {
       const mx = baseX + step * laneSpacing;
       if (mx === a.x || mx === b.x) continue;
       const pts = [a, { x: mx, y: a.y }, { x: mx, y: b.y }, b];
-      pushScored(pts, Math.abs(step) * 50);
+      pushScored(pts, Math.abs(step) * 50 + reasonScore);
     }
-  }
+  };
 
-  // Vertical-in/out preference -> horizontal middle segment at y=my.
-  if (hints.preferStartAxis === 'v' && hints.preferEndAxis === 'v') {
-    const baseY = roundToGrid((a.y + b.y) / 2, hints.gridSize) + laneOffset;
+  const addHorizontalChannelCandidates = (reasonScore = 0) => {
+    const baseY = roundToGrid((a.y + b.y) / 2, hints?.gridSize) + laneOffset;
     for (const step of laneOffsets(maxShiftSteps)) {
       const my = baseY + step * laneSpacing;
       if (my === a.y || my === b.y) continue;
       const pts = [a, { x: a.x, y: my }, { x: b.x, y: my }, b];
-      pushScored(pts, Math.abs(step) * 50);
+      pushScored(pts, Math.abs(step) * 50 + reasonScore);
+    }
+  };
+
+  // Add and score channel-search variants for 3-segment routes.
+  // 1) When hints explicitly request horizontal-horizontal or vertical-vertical.
+  // 2) When the best base route intersects obstacles: "promote" to a 3-segment channel route and shift.
+  const wantsHH = hints?.preferStartAxis === 'h' && hints?.preferEndAxis === 'h';
+  const wantsVV = hints?.preferStartAxis === 'v' && hints?.preferEndAxis === 'v';
+
+  if (wantsHH) addVerticalChannelCandidates(0);
+  if (wantsVV) addHorizontalChannelCandidates(0);
+
+  if (needsAvoidance) {
+    // Prefer the channel type that is most likely to side-step a blocked straight corridor.
+    // - If vertically aligned (or nearly so), shifting X is usually the best escape hatch.
+    // - If horizontally aligned, shifting Y is usually best.
+    if (a.x === b.x) {
+      addVerticalChannelCandidates(200); // slight penalty vs explicitly requested routes
+    } else if (a.y === b.y) {
+      addHorizontalChannelCandidates(200);
+    } else {
+      // General case: try both channel types so we can escape whichever corridor is blocked.
+      // Apply a small bias to favor candidates that match the requested axes when any are set.
+      const hasStart = !!hints?.preferStartAxis;
+      const hasEnd = !!hints?.preferEndAxis;
+      const biasX = hasStart || hasEnd ? (hints?.preferStartAxis === 'h' || hints?.preferEndAxis === 'h' ? 0 : 250) : 0;
+      const biasY = hasStart || hasEnd ? (hints?.preferStartAxis === 'v' || hints?.preferEndAxis === 'v' ? 0 : 250) : 0;
+      addVerticalChannelCandidates(200 + biasX);
+      addHorizontalChannelCandidates(200 + biasY);
     }
   }
 

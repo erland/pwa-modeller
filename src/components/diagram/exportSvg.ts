@@ -2,8 +2,9 @@ import type { Model, RelationshipType, ViewNodeLayout, ArchimateLayer, ElementTy
 import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import { refKey } from './connectable';
 import { getConnectionPath, polylineToSvgPath } from './connectionPath';
-import { applyLaneOffsets } from './connectionLanes';
+import { applyLaneOffsetsSafely } from './connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from './orthogonalHints';
+import { adjustOrthogonalConnectionEndpoints } from './adjustConnectionEndpoints';
 import {
   boundsForNodes,
   nodeRefFromLayout,
@@ -167,6 +168,7 @@ export function createViewSvg(model: Model, viewId: string): string {
   }
 
   const relItems: RelItem[] = [];
+  const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
   for (const [groupKey, conns] of groups) {
     // Stable order inside group.
     const sorted = [...conns].sort((a, b) => a.relationshipId.localeCompare(b.relationshipId) || a.id.localeCompare(b.id));
@@ -209,6 +211,8 @@ export function createViewSvg(model: Model, viewId: string): string {
         })
         .map(nodeRect);
 
+      obstaclesById.set(conn.id, obstacles);
+
       const gridSize = view.formatting?.gridSize;
       const hints = {
         ...orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, gridSize),
@@ -216,6 +220,10 @@ export function createViewSvg(model: Model, viewId: string): string {
         obstacleMargin: gridSize ? gridSize / 2 : 10,
       };
       let points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end, hints }).points;
+
+      if (conn.route.kind === 'orthogonal') {
+        points = adjustOrthogonalConnectionEndpoints(points, sNode, tNode, { stubLength: gridSize ? gridSize / 2 : 10 });
+      }
 
       // Parallel relationship offset.
       if (total > 1) {
@@ -232,9 +240,13 @@ export function createViewSvg(model: Model, viewId: string): string {
   }
 
   // Apply cheap lane offsets across all relationships before emitting SVG paths.
-  const laneAdjusted = applyLaneOffsets(
+  const laneAdjusted = applyLaneOffsetsSafely(
     relItems.map((it) => ({ id: it.id, points: it.points })),
-    { gridSize: view.formatting?.gridSize }
+    {
+      gridSize: view.formatting?.gridSize,
+      obstaclesById,
+      obstacleMargin: view.formatting?.gridSize ? view.formatting?.gridSize / 2 : 10,
+    }
   );
   const lanePointsById = new Map<string, Point[]>();
   for (const it of laneAdjusted) lanePointsById.set(it.id, it.points);

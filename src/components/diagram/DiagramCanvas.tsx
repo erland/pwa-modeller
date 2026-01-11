@@ -7,10 +7,12 @@ import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
 import { Dialog } from '../dialog/Dialog';
 import { createViewSvg } from './exportSvg';
-import { boundsForNodes, nodeRefFromLayout } from './geometry';
+import { boundsForNodes, distancePointToPolyline, nodeRefFromLayout, offsetPolyline, rectEdgeAnchor, unitPerp } from './geometry';
+import type { Point } from './geometry';
 import { dataTransferHasElement, readDraggedElementId } from './dragDrop';
 import type { ConnectableRef } from './connectable';
 import { refKey } from './connectable';
+import { getConnectionPath } from './connectionPath';
 
 import { useActiveViewId } from './hooks/useActiveViewId';
 import { useDiagramViewport } from './hooks/useDiagramViewport';
@@ -212,6 +214,101 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     return items;
   }, [model, activeView, nodes]);
 
+  // Precompute connection polylines in model coordinates for hit-testing (select tool).
+  const connectionHitItems = useMemo(() => {
+    if (!model || !activeView) return [] as Array<{ relationshipId: string; connectionId: string; points: Point[] }>;
+    const items: Array<{ relationshipId: string; connectionId: string; points: Point[] }> = [];
+
+    for (const item of connectionRenderItems) {
+      const conn = item.connection;
+      const rel = model.relationships[conn.relationshipId];
+      if (!rel) continue;
+
+      const s = item.source;
+      const t = item.target;
+
+      const sc: Point = { x: s.x + (s.width ?? 120) / 2, y: s.y + (s.height ?? 60) / 2 };
+      const tc: Point = { x: t.x + (t.width ?? 120) / 2, y: t.y + (t.height ?? 60) / 2 };
+      const start = rectEdgeAnchor(s, tc);
+      const end = rectEdgeAnchor(t, sc);
+
+      let points: Point[] = getConnectionPath(conn, { a: start, b: end }).points;
+
+      const total = item.totalInGroup;
+      if (total > 1) {
+        const spacing = 14;
+        const offsetIndex = item.indexInGroup - (total - 1) / 2;
+        const offset = offsetIndex * spacing;
+
+        const parts = item.groupKey.split('|');
+        const aNode = nodes.find((n) => {
+          const r = nodeRefFromLayout(n);
+          return r ? refKey(r) === parts[0] : false;
+        });
+        const bNode = nodes.find((n) => {
+          const r = nodeRefFromLayout(n);
+          return r ? refKey(r) === parts[1] : false;
+        });
+        const aC: Point | null = aNode ? { x: aNode.x + (aNode.width ?? 120) / 2, y: aNode.y + (aNode.height ?? 60) / 2 } : null;
+        const bC: Point | null = bNode ? { x: bNode.x + (bNode.width ?? 120) / 2, y: bNode.y + (bNode.height ?? 60) / 2 } : null;
+        const perp = aC && bC ? unitPerp(aC, bC) : unitPerp(sc, tc);
+        points = offsetPolyline(points, perp, offset);
+      }
+
+      items.push({ relationshipId: conn.relationshipId, connectionId: conn.id, points });
+    }
+
+    return items;
+  }, [model, activeView, connectionRenderItems, nodes]);
+
+  const handleSurfacePointerDownCapture = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      onSurfacePointerDownCapture(e);
+      if (toolMode !== 'select') return;
+      if (!model || !activeViewId || !activeView) return;
+      if (rel.linkDrag) return;
+
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.diagramNode, .diagramConnectorNode, .diagramViewObjectNode, .diagramRelHit')) return;
+
+      const p = clientToModelPoint(e.clientX, e.clientY);
+      if (!p) return;
+
+      // Select the closest connection polyline within a small screen-space threshold.
+      const thresholdModel = 10 / Math.max(0.0001, zoom);
+      let best: { relationshipId: string; connectionId: string; points: Point[] } | null = null;
+      let bestDist = Number.POSITIVE_INFINITY;
+
+      for (const item of connectionHitItems) {
+        const d = distancePointToPolyline(p, item.points);
+        if (d < bestDist) {
+          bestDist = d;
+          best = item;
+        }
+      }
+
+      if (best && bestDist <= thresholdModel) {
+        onSelect({ kind: 'relationship', relationshipId: best.relationshipId, viewId: activeViewId });
+      } else {
+        // Clicking empty space selects the view (useful for view-level properties).
+        onSelect({ kind: 'view', viewId: activeViewId });
+      }
+    },
+    [
+      onSurfacePointerDownCapture,
+      toolMode,
+      model,
+      activeViewId,
+      activeView,
+      rel.linkDrag,
+      clientToModelPoint,
+      zoom,
+      connectionHitItems,
+      onSelect,
+    ]
+  );
+
+
   if (!model) {
     return (
       <div aria-label="Diagram canvas" className="diagramCanvas">
@@ -351,7 +448,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
               <div
                 className="diagramSurface"
                 ref={surfaceRef}
-                onPointerDownCapture={onSurfacePointerDownCapture}
+                onPointerDownCapture={handleSurfacePointerDownCapture}
                 style={{
                   width: surfaceWidthModel,
                   height: surfaceHeightModel,

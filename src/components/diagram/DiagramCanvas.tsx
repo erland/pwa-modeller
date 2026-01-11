@@ -1,6 +1,6 @@
 import type * as React from 'react';
 import { useCallback, useMemo, useState } from 'react';
-import type { ArchimateLayer, ElementType, Model, RelationshipType, View, ViewNodeLayout, ViewRelationshipLayout } from '../../domain';
+import type { ArchimateLayer, ElementType, Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER, createConnector, getDefaultViewObjectSize } from '../../domain';
 import { downloadTextFile, modelStore, sanitizeFileNameWithExtension } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
@@ -19,7 +19,7 @@ import { useDiagramNodeDrag } from './hooks/useDiagramNodeDrag';
 import { useDiagramRelationshipCreation } from './hooks/useDiagramRelationshipCreation';
 
 import { DiagramNodesLayer } from './layers/DiagramNodesLayer';
-import { DiagramRelationshipsLayer, type RelRenderItem } from './layers/DiagramRelationshipsLayer';
+import { DiagramRelationshipsLayer, type ConnectionRenderItem } from './layers/DiagramRelationshipsLayer';
 
 type Props = {
   selection: Selection;
@@ -172,100 +172,45 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
   }
 
-  // Relationships to render: explicit in view if present, otherwise infer from model relationships between nodes in view.
-  const relationshipIdsToRender = useMemo(() => {
-    if (!model || !activeView) return [] as string[];
-    const explicit = activeView.layout?.relationships ?? [];
-    if (explicit.length > 0) return explicit.map((r) => r.relationshipId);
-    const nodeSet = new Set(
-      nodes
-        .map((n) => nodeRefFromLayout(n))
-        .filter((r): r is ConnectableRef => Boolean(r))
-        .map((r) => refKey(r))
-    );
-
-    function sourceRefForRel(r: any): ConnectableRef | null {
-      if (typeof r.sourceElementId === 'string') return { kind: 'element', id: r.sourceElementId };
-      if (typeof r.sourceConnectorId === 'string') return { kind: 'connector', id: r.sourceConnectorId };
-      return null;
-    }
-    function targetRefForRel(r: any): ConnectableRef | null {
-      if (typeof r.targetElementId === 'string') return { kind: 'element', id: r.targetElementId };
-      if (typeof r.targetConnectorId === 'string') return { kind: 'connector', id: r.targetConnectorId };
-      return null;
-    }
-
-    return Object.values(model.relationships)
-      .filter((r) => {
-        const s = sourceRefForRel(r);
-        const t = targetRefForRel(r);
-        return Boolean(s && t && nodeSet.has(refKey(s)) && nodeSet.has(refKey(t)));
-      })
-      .map((r) => r.id);
-  }, [model, activeView, nodes]);
-
-  const relLayoutById = useMemo(() => {
-    const m = new Map<string, ViewRelationshipLayout>();
-    for (const r of activeView?.layout?.relationships ?? []) m.set(r.relationshipId, r);
-    return m;
-  }, [activeView]);
-
-  const relRenderItems: RelRenderItem[] = useMemo(() => {
+  // Connections to render come from the view (ViewConnection), materialized on load/import.
+  const connectionRenderItems: ConnectionRenderItem[] = useMemo(() => {
     if (!model || !activeView) return [];
-    // Group relationships by unordered (A,B) endpoint pair so parallel lines are drawn
-    // when multiple relationships exist between the same two nodes.
-    const groups = new Map<string, string[]>();
 
+    // Build a lookup of current view nodes by their connectable ref key.
     const nodeByKey = new Map<string, ViewNodeLayout>();
     for (const n of nodes) {
       const r = nodeRefFromLayout(n);
       if (r) nodeByKey.set(refKey(r), n);
     }
 
-    const sourceRefForRel = (r: any): ConnectableRef | null => {
-      if (typeof r.sourceElementId === 'string') return { kind: 'element', id: r.sourceElementId };
-      if (typeof r.sourceConnectorId === 'string') return { kind: 'connector', id: r.sourceConnectorId };
-      return null;
-    };
-    const targetRefForRel = (r: any): ConnectableRef | null => {
-      if (typeof r.targetElementId === 'string') return { kind: 'element', id: r.targetElementId };
-      if (typeof r.targetConnectorId === 'string') return { kind: 'connector', id: r.targetConnectorId };
-      return null;
-    };
+    // Group connections by unordered (A,B) endpoint pair so parallel lines are drawn
+    // when multiple relationships exist between the same two nodes.
+    const groups = new Map<string, typeof activeView.connections>();
 
-    for (const relId of relationshipIdsToRender) {
-      const relObj = model.relationships[relId];
-      if (!relObj) continue;
-      const s = sourceRefForRel(relObj);
-      const t = targetRefForRel(relObj);
-      if (!s || !t) continue;
-      const a = refKey(s);
-      const b = refKey(t);
+    for (const conn of activeView.connections ?? []) {
+      if (!model.relationships[conn.relationshipId]) continue;
+      const a = refKey(conn.source as unknown as ConnectableRef);
+      const b = refKey(conn.target as unknown as ConnectableRef);
       const key = a < b ? `${a}|${b}` : `${b}|${a}`;
       const list = groups.get(key) ?? [];
-      list.push(relId);
+      list.push(conn);
       groups.set(key, list);
     }
 
-    const items: RelRenderItem[] = [];
-    for (const [groupKey, relIds] of groups.entries()) {
-      const stable = [...relIds].sort((x, y) => x.localeCompare(y));
+    const items: ConnectionRenderItem[] = [];
+    for (const [groupKey, conns] of groups.entries()) {
+      const stable = [...conns].sort((x, y) => x.id.localeCompare(y.id));
       for (let i = 0; i < stable.length; i += 1) {
-        const relId = stable[i];
-        const relObj = model.relationships[relId];
-        if (!relObj) continue;
-        const sRef = sourceRefForRel(relObj);
-        const tRef = targetRefForRel(relObj);
-        if (!sRef || !tRef) continue;
-        const s = nodeByKey.get(refKey(sRef));
-        const t = nodeByKey.get(refKey(tRef));
+        const conn = stable[i];
+        const s = nodeByKey.get(refKey(conn.source as unknown as ConnectableRef));
+        const t = nodeByKey.get(refKey(conn.target as unknown as ConnectableRef));
         if (!s || !t) continue;
-        items.push({ relId, source: s, target: t, indexInGroup: i, totalInGroup: stable.length, groupKey });
+        items.push({ connection: conn, source: s, target: t, indexInGroup: i, totalInGroup: stable.length, groupKey });
       }
     }
 
     return items;
-  }, [model, activeView, nodes, relationshipIdsToRender]);
+  }, [model, activeView, nodes]);
 
   if (!model) {
     return (
@@ -417,8 +362,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
                 <DiagramRelationshipsLayer
                   model={model}
                   nodes={nodes}
-                  relLayoutById={relLayoutById}
-                  relRenderItems={relRenderItems}
+                  connectionRenderItems={connectionRenderItems}
                   surfaceWidthModel={surfaceWidthModel}
                   surfaceHeightModel={surfaceHeightModel}
                   selection={selection}

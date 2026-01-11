@@ -1,4 +1,4 @@
-import type { Model, ViewNodeLayout, ViewRelationshipLayout } from '../../../domain';
+import type { Model, ViewConnection, ViewNodeLayout } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import { RelationshipMarkers } from '../RelationshipMarkers';
 import type { DiagramLinkDrag } from '../DiagramNode';
@@ -11,11 +11,12 @@ import {
   rectEdgeAnchor,
   unitPerp,
 } from '../geometry';
+import { getConnectionPath } from '../connectionPath';
 import { relationshipVisual } from '../relationshipVisual';
 import { refKey } from '../connectable';
 
-export type RelRenderItem = {
-  relId: string;
+export type ConnectionRenderItem = {
+  connection: ViewConnection;
   source: ViewNodeLayout;
   target: ViewNodeLayout;
   indexInGroup: number;
@@ -26,8 +27,7 @@ export type RelRenderItem = {
 type Props = {
   model: Model;
   nodes: ViewNodeLayout[];
-  relLayoutById: Map<string, ViewRelationshipLayout>;
-  relRenderItems: RelRenderItem[];
+  connectionRenderItems: ConnectionRenderItem[];
   surfaceWidthModel: number;
   surfaceHeightModel: number;
   selection: Selection;
@@ -39,8 +39,7 @@ type Props = {
 export function DiagramRelationshipsLayer({
   model,
   nodes,
-  relLayoutById,
-  relRenderItems,
+  connectionRenderItems,
   surfaceWidthModel,
   surfaceHeightModel,
   selection,
@@ -65,8 +64,9 @@ export function DiagramRelationshipsLayer({
         />
       ) : null}
 
-      {relRenderItems.map((item) => {
-        const relId = item.relId;
+      {connectionRenderItems.map((item) => {
+        const conn = item.connection;
+        const relId = conn.relationshipId;
         const rel = model.relationships[relId];
         if (!rel) return null;
 
@@ -80,9 +80,8 @@ export function DiagramRelationshipsLayer({
         const start = rectEdgeAnchor(s, tc);
         const end = rectEdgeAnchor(t, sc);
 
-        const layout = relLayoutById.get(relId);
-        const midPts = layout?.points ?? [];
-        let points: Point[] = [start, ...midPts, end];
+        // Centralized routing (straight/orthogonal) using ViewConnection.
+        let points: Point[] = getConnectionPath(conn, { a: start, b: end }).points;
 
         // If there are multiple relationships between the same two elements, offset them in parallel.
         const total = item.totalInGroup;
@@ -115,7 +114,7 @@ export function DiagramRelationshipsLayer({
         const mid = v.midLabel ? polylineMidPoint(points) : null;
 
         return (
-          <g key={relId}>
+          <g key={conn.id}>
             {/*
               Large invisible hit target so relationships are easy to select.
               (The visible line itself has pointer-events disabled.)

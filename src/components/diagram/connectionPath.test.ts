@@ -68,6 +68,29 @@ describe('connectionPath', () => {
     expect(res.points[res.points.length - 2].y).toBe(res.points[res.points.length - 1].y);
   });
 
+  test('orthogonal auto-route shifts its channel to avoid obstacles', () => {
+    const res = getConnectionPath(
+      { route: { kind: 'orthogonal' }, points: undefined },
+      {
+        a: { x: 0, y: 0 },
+        b: { x: 10, y: 10 },
+        hints: {
+          preferStartAxis: 'h',
+          preferEndAxis: 'h',
+          gridSize: 5,
+          obstacleMargin: 0,
+          // Obstacle intersects the default vertical channel at x=5 (y-range only in the middle).
+          obstacles: [{ x: 4.5, y: 4, w: 1, h: 2 }],
+        },
+      }
+    );
+
+    expect(res.points.length).toBe(4);
+    // Middle segment is vertical at some x != 5 (shifted away from the obstacle).
+    expect(res.points[1].x).not.toBe(5);
+    expect(res.points[1].x).toBe(res.points[2].x);
+  });
+
   test('orthogonal auto-route can prefer a horizontal first segment with a 2-segment route', () => {
     const res = getConnectionPath(
       { route: { kind: 'orthogonal' }, points: undefined },

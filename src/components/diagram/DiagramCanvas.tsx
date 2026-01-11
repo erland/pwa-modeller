@@ -233,7 +233,30 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       const start = rectEdgeAnchor(s, tc);
       const end = rectEdgeAnchor(t, sc);
 
-      const hints = orthogonalRoutingHintsFromAnchors(s, start, t, end, activeView.formatting?.gridSize);
+      // Include obstacle rectangles (other nodes) so the orthogonal auto-router can shift channels.
+      const nodeRect = (n: ViewNodeLayout) => {
+        const isConnector = Boolean((n as any).connectorId);
+        const w = n.width ?? (isConnector ? 24 : 120);
+        const h = n.height ?? (isConnector ? 24 : 60);
+        return { x: n.x, y: n.y, w, h };
+      };
+      const sKey = refKey(nodeRefFromLayout(s)!);
+      const tKey = refKey(nodeRefFromLayout(t)!);
+      const obstacles = nodes
+        .filter((n) => {
+          const r = nodeRefFromLayout(n);
+          if (!r) return false;
+          const k = refKey(r);
+          return k !== sKey && k !== tKey;
+        })
+        .map(nodeRect);
+
+      const gridSize = activeView.formatting?.gridSize;
+      const hints = {
+        ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
+        obstacles,
+        obstacleMargin: gridSize ? gridSize / 2 : 10,
+      };
       let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
 
       const total = item.totalInGroup;

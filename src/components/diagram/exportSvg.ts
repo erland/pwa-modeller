@@ -90,6 +90,11 @@ function nodeCenter(n: ViewNodeLayout): Point {
   return { x: n.x + w / 2, y: n.y + h / 2 };
 }
 
+function nodeRect(n: ViewNodeLayout): { x: number; y: number; w: number; h: number } {
+  const { w, h } = nodeSize(n);
+  return { x: n.x, y: n.y, w, h };
+}
+
 export function createViewSvg(model: Model, viewId: string): string {
   const view = model.views[viewId];
   if (!view) throw new Error(`View not found: ${viewId}`);
@@ -193,7 +198,23 @@ export function createViewSvg(model: Model, viewId: string): string {
       const translatedPoints = conn.points ? conn.points.map((p) => ({ x: p.x + offsetX, y: p.y + offsetY })) : undefined;
 
       // Centralized routing (straight/orthogonal) using the shared path generator.
-      const hints = orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, view.formatting?.gridSize);
+      const sKey = refKey({ kind: conn.source.kind, id: conn.source.id });
+      const tKey = refKey({ kind: conn.target.kind, id: conn.target.id });
+      const obstacles = nodes
+        .filter((n) => {
+          const r = nodeRefFromLayout(n);
+          if (!r) return false;
+          const k = refKey(r);
+          return k !== sKey && k !== tKey;
+        })
+        .map(nodeRect);
+
+      const gridSize = view.formatting?.gridSize;
+      const hints = {
+        ...orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, gridSize),
+        obstacles,
+        obstacleMargin: gridSize ? gridSize / 2 : 10,
+      };
       let points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end, hints }).points;
 
       // Parallel relationship offset.

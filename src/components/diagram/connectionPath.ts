@@ -11,6 +11,21 @@ export type OrthogonalRoutingHints = {
   preferEndAxis?: OrthogonalRoutingAxis;
   /** Grid size used when choosing a "channel" coordinate for 3-segment routes. */
   gridSize?: number;
+
+  /** Optional lane offset (in model units) applied to the chosen orthogonal channel. */
+  laneOffset?: number;
+
+  /** Spacing between candidate channel "lanes" when searching for a clear route. Defaults to gridSize/2. */
+  laneSpacing?: number;
+
+  /** Maximum number of lane steps to search in each direction when avoiding obstacles. Defaults to 10. */
+  maxChannelShiftSteps?: number;
+
+  /** Rectangles to avoid when auto-routing (typically other nodes in the view). */
+  obstacles?: Array<{ x: number; y: number; w: number; h: number }>;
+
+  /** Additional margin added around obstacles (in model units). Defaults to gridSize/2. */
+  obstacleMargin?: number;
 };
 
 export type ConnectionPathResult = {
@@ -102,6 +117,68 @@ function roundToGrid(value: number, gridSize?: number): number {
   return Math.round(value / gridSize) * gridSize;
 }
 
+type Rect = { x: number; y: number; w: number; h: number };
+
+function inflateRect(r: Rect, margin: number): Rect {
+  if (!margin) return r;
+  return { x: r.x - margin, y: r.y - margin, w: r.w + margin * 2, h: r.h + margin * 2 };
+}
+
+function segmentIntersectsRect(a: Point, b: Point, r: Rect): boolean {
+  const x0 = r.x;
+  const x1 = r.x + r.w;
+  const y0 = r.y;
+  const y1 = r.y + r.h;
+
+  // Vertical segment.
+  if (a.x === b.x && a.y !== b.y) {
+    const x = a.x;
+    const ymin = Math.min(a.y, b.y);
+    const ymax = Math.max(a.y, b.y);
+    return x >= x0 && x <= x1 && ymax >= y0 && ymin <= y1;
+  }
+
+  // Horizontal segment.
+  if (a.y === b.y && a.x !== b.x) {
+    const y = a.y;
+    const xmin = Math.min(a.x, b.x);
+    const xmax = Math.max(a.x, b.x);
+    return y >= y0 && y <= y1 && xmax >= x0 && xmin <= x1;
+  }
+
+  // Non-orthogonal fallback: bounding-box overlap.
+  const xmin = Math.min(a.x, b.x);
+  const xmax = Math.max(a.x, b.x);
+  const ymin = Math.min(a.y, b.y);
+  const ymax = Math.max(a.y, b.y);
+  const bbOverlaps = xmax >= x0 && xmin <= x1 && ymax >= y0 && ymin <= y1;
+  return bbOverlaps;
+}
+
+function obstacleHitCount(points: Point[], obstacles: Rect[], margin: number): number {
+  if (!obstacles.length || points.length < 2) return 0;
+  const inflated = obstacles.map((o) => inflateRect(o, margin));
+  const hit = new Set<number>();
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    for (let j = 0; j < inflated.length; j += 1) {
+      if (hit.has(j)) continue;
+      if (segmentIntersectsRect(a, b, inflated[j])) hit.add(j);
+    }
+  }
+  return hit.size;
+}
+
+function laneOffsets(maxSteps: number): number[] {
+  const res: number[] = [0];
+  for (let i = 1; i <= maxSteps; i += 1) {
+    res.push(i);
+    res.push(-i);
+  }
+  return res;
+}
+
 function scoreCandidate(points: Point[], hints?: OrthogonalRoutingHints): number {
   const simplified = simplifyPolyline(points);
   if (simplified.length < 2) return Number.POSITIVE_INFINITY;
@@ -139,34 +216,63 @@ export function orthogonalAutoPolyline(a: Point, b: Point, hints?: OrthogonalRou
   // If already aligned horizontally/vertically, no bend needed.
   if (a.x === b.x || a.y === b.y) return [a, b];
 
-  // Legacy stable default (no hints): vertical then horizontal.
-  if (!hints?.preferStartAxis && !hints?.preferEndAxis) {
+  // Legacy stable default (no hints and no obstacles): vertical then horizontal.
+  // If obstacles are provided, we still run the candidate/avoidance logic.
+  if (!hints?.preferStartAxis && !hints?.preferEndAxis && !(hints?.obstacles && hints.obstacles.length > 0)) {
     return [a, { x: a.x, y: b.y }, b];
   }
 
   const lVerticalThenHorizontal: Point[] = [a, { x: a.x, y: b.y }, b];
   const lHorizontalThenVertical: Point[] = [a, { x: b.x, y: a.y }, b];
 
-  const candidates: Point[][] = [lVerticalThenHorizontal, lHorizontalThenVertical];
+  const baseCandidates: Point[][] = [lVerticalThenHorizontal, lHorizontalThenVertical];
 
-  // If both ends prefer horizontal (e.g. right/left anchors), add a 3-segment Z route.
+  const obstacles = (hints?.obstacles ?? []) as Rect[];
+  const margin = hints?.obstacleMargin ?? (hints?.gridSize ? hints.gridSize / 2 : 10);
+  const laneSpacing = hints?.laneSpacing ?? (hints?.gridSize ? hints.gridSize / 2 : 10);
+  const maxShiftSteps = hints?.maxChannelShiftSteps ?? 10;
+  const laneOffset = hints?.laneOffset ?? 0;
+
+  type Scored = { points: Point[]; hits: number; score: number };
+  const scored: Scored[] = [];
+
+  const pushScored = (pts: Point[], extraScore = 0) => {
+    const simplified = simplifyPolyline(pts);
+    const hits = obstacles.length ? obstacleHitCount(simplified, obstacles, margin) : 0;
+    // Huge penalty for obstacle intersections so any clear route wins.
+    const s = scoreCandidate(simplified, hints) + extraScore + hits * 100_000;
+    scored.push({ points: simplified, hits, score: s });
+  };
+
+  // Score the base L routes.
+  for (const c of baseCandidates) pushScored(c);
+
+  // Add and score channel-search variants for 3-segment routes when they make sense.
+  // Horizontal-in/out preference -> vertical middle segment at x=mx.
   if (hints.preferStartAxis === 'h' && hints.preferEndAxis === 'h') {
-    const mx = roundToGrid((a.x + b.x) / 2, hints.gridSize);
-    // Avoid degenerate mx that would collapse segments.
-    if (mx !== a.x && mx !== b.x) {
-      candidates.push([a, { x: mx, y: a.y }, { x: mx, y: b.y }, b]);
+    const baseX = roundToGrid((a.x + b.x) / 2, hints.gridSize) + laneOffset;
+    for (const step of laneOffsets(maxShiftSteps)) {
+      const mx = baseX + step * laneSpacing;
+      if (mx === a.x || mx === b.x) continue;
+      const pts = [a, { x: mx, y: a.y }, { x: mx, y: b.y }, b];
+      pushScored(pts, Math.abs(step) * 50);
     }
   }
 
-  // If both ends prefer vertical (top/bottom anchors), add the symmetric 3-segment route.
+  // Vertical-in/out preference -> horizontal middle segment at y=my.
   if (hints.preferStartAxis === 'v' && hints.preferEndAxis === 'v') {
-    const my = roundToGrid((a.y + b.y) / 2, hints.gridSize);
-    if (my !== a.y && my !== b.y) {
-      candidates.push([a, { x: a.x, y: my }, { x: b.x, y: my }, b]);
+    const baseY = roundToGrid((a.y + b.y) / 2, hints.gridSize) + laneOffset;
+    for (const step of laneOffsets(maxShiftSteps)) {
+      const my = baseY + step * laneSpacing;
+      if (my === a.y || my === b.y) continue;
+      const pts = [a, { x: a.x, y: my }, { x: b.x, y: my }, b];
+      pushScored(pts, Math.abs(step) * 50);
     }
   }
 
-  return chooseBestCandidate(candidates, hints);
+  // Choose the best scored route.
+  scored.sort((x, y) => x.score - y.score);
+  return scored[0]?.points ?? chooseBestCandidate(baseCandidates, hints);
 }
 
 export function connectionPolylinePoints(

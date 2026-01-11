@@ -54,6 +54,13 @@ export function DiagramRelationshipsLayer({
   groupBoxDraft,
   onSelect,
 }: Props) {
+  const nodeRect = (n: ViewNodeLayout) => {
+    const isConnector = Boolean((n as any).connectorId);
+    const w = n.width ?? (isConnector ? 24 : 120);
+    const h = n.height ?? (isConnector ? 24 : 60);
+    return { x: n.x, y: n.y, w, h };
+  };
+
   return (
     <svg className="diagramRelationships" width={surfaceWidthModel} height={surfaceHeightModel} aria-label="Diagram relationships">
       <RelationshipMarkers />
@@ -88,7 +95,22 @@ export function DiagramRelationshipsLayer({
         const end = rectEdgeAnchor(t, sc);
 
         // Centralized routing (straight/orthogonal) using ViewConnection.
-        const hints = orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize);
+        const sKey = refKey(nodeRefFromLayout(s)!);
+        const tKey = refKey(nodeRefFromLayout(t)!);
+        const obstacles = nodes
+          .filter((n) => {
+            const r = nodeRefFromLayout(n);
+            if (!r) return false;
+            const k = refKey(r);
+            return k !== sKey && k !== tKey;
+          })
+          .map(nodeRect);
+
+        const hints = {
+          ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
+          obstacles,
+          obstacleMargin: gridSize ? gridSize / 2 : 10,
+        };
         let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
 
         // If there are multiple relationships between the same two elements, offset them in parallel.

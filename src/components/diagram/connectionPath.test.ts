@@ -53,4 +53,32 @@ describe('connectionPath', () => {
     expect(res.d).toBe('M 0 0 L 5 0 L 5 10 L 10 10');
     expect(res.endTangent).toEqual({ x: 1, y: 0 });
   });
+
+  test('orthogonal auto-route can prefer horizontal start and end by choosing a 3-segment route', () => {
+    const res = getConnectionPath(
+      { route: { kind: 'orthogonal' }, points: undefined },
+      { a: { x: 0, y: 0 }, b: { x: 10, y: 10 }, hints: { preferStartAxis: 'h', preferEndAxis: 'h', gridSize: 5 } }
+    );
+
+    // A 2-segment L cannot be horizontal at both ends, so we expect a 3-segment Z route.
+    expect(res.points.length).toBe(4);
+    // First segment must be horizontal.
+    expect(res.points[0].y).toBe(res.points[1].y);
+    // Last segment must be horizontal.
+    expect(res.points[res.points.length - 2].y).toBe(res.points[res.points.length - 1].y);
+  });
+
+  test('orthogonal auto-route can prefer a horizontal first segment with a 2-segment route', () => {
+    const res = getConnectionPath(
+      { route: { kind: 'orthogonal' }, points: undefined },
+      { a: { x: 0, y: 0 }, b: { x: 10, y: 10 }, hints: { preferStartAxis: 'h' } }
+    );
+
+    // With only a start preference, a 2-segment L can satisfy it.
+    expect(res.points).toEqual([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+    ]);
+  });
 });

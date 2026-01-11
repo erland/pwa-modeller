@@ -182,6 +182,7 @@ const pendingRelTypeOptions = useMemo(() => {
       targetConnectorId: targetRef.kind === 'connector' ? targetRef.id : undefined,
     });
     modelStore.addRelationship(rel);
+    modelStore.ensureViewConnections(pendingCreateRel.viewId);
     setLastRelType(pendingRelType);
     setPendingCreateRel(null);
     onSelect({ kind: 'relationship', relationshipId: rel.id });

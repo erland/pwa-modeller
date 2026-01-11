@@ -7,6 +7,7 @@ import {
   sanitizeModelRelationshipAttrs,
   sanitizeModelTaggedValues,
   sanitizeModelUnknownTypes,
+  sanitizeModelViewConnections,
 } from './sanitize';
 
 /**
@@ -28,12 +29,15 @@ export function deserializeModel(json: string): Model {
   }
 
   return ensureModelFolderExtensions(
-    sanitizeModelRelationshipAttrs(
-      sanitizeModelUnknownTypes(
-        sanitizeModelExternalIds(
-          sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model))
+    sanitizeModelViewConnections(
+      sanitizeModelRelationshipAttrs(
+        sanitizeModelUnknownTypes(
+          sanitizeModelExternalIds(
+            sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model))
+          )
         )
       )
     )
   );
+
 }

@@ -1,5 +1,17 @@
 import type { Model, ViewNodeLayout, ViewRelationshipLayout } from '../../domain';
+import { materializeViewConnectionsForView } from '../../domain';
 import { ensureViewLayout, getView } from './helpers';
+
+function syncViewConnections(model: Model, viewId: string): void {
+  const v = model.views[viewId];
+  if (!v) return;
+  const next = materializeViewConnectionsForView(model, v);
+  // Reduce churn when nothing changes.
+  if (next !== v.connections) {
+    model.views[viewId] = { ...v, connections: next };
+  }
+}
+
 
 export function updateViewNodeLayout(
   model: Model,
@@ -46,6 +58,7 @@ export function addElementToView(model: Model, viewId: string, elementId: string
     ...viewWithLayout,
     layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
   };
+  syncViewConnections(model, viewId);
 
   return elementId;
 }
@@ -80,6 +93,7 @@ export function addElementToViewAt(model: Model, viewId: string, elementId: stri
   if (existing) {
     const nextNodes = layout.nodes.map((n) => (n.elementId === elementId ? { ...n, x: nx, y: ny } : n));
     model.views[viewId] = { ...viewWithLayout, layout: { nodes: nextNodes, relationships: layout.relationships } };
+    syncViewConnections(model, viewId);
     return elementId;
   }
 
@@ -89,6 +103,7 @@ export function addElementToViewAt(model: Model, viewId: string, elementId: stri
     ...viewWithLayout,
     layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
   };
+  syncViewConnections(model, viewId);
 
   return elementId;
 }
@@ -122,6 +137,7 @@ export function addConnectorToViewAt(model: Model, viewId: string, connectorId: 
       n.connectorId === connectorId ? { ...n, x: nx, y: ny, width: nodeW, height: nodeH } : n
     );
     model.views[viewId] = { ...viewWithLayout, layout: { nodes: nextNodes, relationships: layout.relationships } };
+    syncViewConnections(model, viewId);
     return connectorId;
   }
 
@@ -131,6 +147,7 @@ export function addConnectorToViewAt(model: Model, viewId: string, connectorId: 
     ...viewWithLayout,
     layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
   };
+  syncViewConnections(model, viewId);
 
   return connectorId;
 }
@@ -147,6 +164,7 @@ export function removeElementFromView(model: Model, viewId: string, elementId: s
 
   if (nextNodes.length === layout.nodes.length && nextConnections.length === layout.relationships.length) return;
   model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: nextConnections } };
+  syncViewConnections(model, viewId);
 }
 
 export function updateViewNodePosition(model: Model, viewId: string, elementId: string, x: number, y: number): void {

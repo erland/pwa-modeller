@@ -1,6 +1,7 @@
 import type { Model, TaggedValue, TaggedValueType } from '../../domain';
 import {
   createId,
+  ensureModelViewConnections,
   sanitizeRelationshipAttrs,
   sanitizeUnknownTypeForElement,
   sanitizeUnknownTypeForRelationship,
@@ -249,6 +250,20 @@ export function sanitizeModelUnknownTypes(model: Model): Model {
  * Ensure new optional array fields are present as arrays at runtime.
  * This makes the rest of the codebase simpler (no `?.` needed).
  */
+
+
+export function sanitizeModelViewConnections(model: Model): Model {
+  // Ensure view.connections exists (v8+) and materialize per-view connections to match
+  // the currently visible relationships for each view.
+  for (const vid of Object.keys(model.views)) {
+    const v: any = model.views[vid] as any;
+    if (!Array.isArray(v.connections)) {
+      model.views[vid] = { ...(v as any), connections: [] };
+    }
+  }
+  return ensureModelViewConnections(model);
+}
+
 export function ensureModelFolderExtensions(model: Model): Model {
   const m: any = model as any;
   if (!Array.isArray(m.externalIds)) m.externalIds = [];

@@ -20,3 +20,4 @@ export * from './graph/trace';
 
 export * from './unknownExportPolicy';
 export * from './relationshipValidationMode';
+export * from './viewConnections';

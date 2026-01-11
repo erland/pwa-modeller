@@ -13,7 +13,7 @@ import type {
   ViewObjectType,
   RelationshipValidationMode
 } from '../domain';
-import { createEmptyModel } from '../domain';
+import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
 import {
   connectorMutations,
   elementMutations,
@@ -232,6 +232,14 @@ reset = (): void => {
 
   updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => {
     this.updateModel((model) => viewMutations.updateView(model, viewId, patch));
+  };
+
+  ensureViewConnections = (viewId: string): void => {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) return;
+      model.views[viewId] = { ...view, connections: materializeViewConnectionsForView(model, view) };
+    });
   };
 
   upsertViewTaggedValue = (viewId: string, entry: TaggedValueInput): void => {

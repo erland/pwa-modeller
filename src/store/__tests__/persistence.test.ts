@@ -8,6 +8,7 @@ import {
   createViewObjectNodeLayout
 } from '../../domain/factories';
 import { deserializeModel, serializeModel } from '../persistence';
+import { ensureModelViewConnections } from '../../domain/viewConnections';
 import { stripUndefinedDeep } from '../../test/stripUndefinedDeep';
 
 describe('persistence', () => {
@@ -63,6 +64,8 @@ describe('persistence', () => {
       }
     });
     model.views[view.id] = view;
+
+    ensureModelViewConnections(model);
 
     const parsed = deserializeModel(serializeModel(model));
     expect(stripUndefinedDeep(parsed)).toEqual(stripUndefinedDeep(model));

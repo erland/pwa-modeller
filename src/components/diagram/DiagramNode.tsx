@@ -74,6 +74,9 @@ export function DiagramNode({
   const isRelTarget = Boolean(linkDrag && sameRef(linkDrag.targetRef, selfRef) && !sameRef(linkDrag.sourceRef, selfRef));
   const isRelSource = Boolean(linkDrag && sameRef(linkDrag.sourceRef, selfRef));
 
+  const w = n.width ?? 120;
+  const h = n.height ?? 60;
+
   return (
     <div
       className={
@@ -87,8 +90,8 @@ export function DiagramNode({
         {
           left: n.x,
           top: n.y,
-          width: n.width ?? 120,
-          height: n.height ?? 60,
+          width: w,
+          height: h,
           zIndex: n.zIndex,
           '--diagram-node-bg': bgVar,
         } as React.CSSProperties
@@ -103,8 +106,6 @@ export function DiagramNode({
       onPointerDown={(e) => {
         if (linkDrag) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        const w = n.width ?? 120;
-        const h = n.height ?? 60;
         onBeginNodeDrag({
           viewId: activeViewId,
           ref: selfRef,
@@ -162,8 +163,8 @@ export function DiagramNode({
           e.stopPropagation();
           (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
 
-          // Start the drag from the bottom-right corner (matches the handle position)
-          const sourcePoint: Point = { x: n.x + (n.width ?? 120), y: n.y + (n.height ?? 60) };
+          // Start the drag from the top-right corner (matches the handle position)
+          const sourcePoint: Point = { x: n.x + w, y: n.y };
           const p = clientToModelPoint(e.clientX, e.clientY) ?? sourcePoint;
 
           onStartLinkDrag({
@@ -177,6 +178,32 @@ export function DiagramNode({
       >
         ↗
       </button>
+
+      {/* Resize handle (shown when selected) */}
+      {isSelected ? (
+        <div
+          className="diagramResizeHandle"
+          role="button"
+          aria-label="Resize"
+          onPointerDown={(e) => {
+            if (linkDrag) return;
+            e.preventDefault();
+            e.stopPropagation();
+            (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+            onBeginNodeDrag({
+              viewId: activeViewId,
+              ref: selfRef,
+              action: 'resize',
+              startX: e.clientX,
+              startY: e.clientY,
+              origX: n.x,
+              origY: n.y,
+              origW: w,
+              origH: h,
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

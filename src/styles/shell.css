@@ -696,7 +696,7 @@
 
 .diagramRelHandle--connector {
   right: -10px;
-  bottom: -10px;
+  top: -10px;
   width: 20px;
   height: 20px;
   font-size: 12px;
@@ -714,9 +714,10 @@
 
 .diagramRelHandle {
   position: absolute;
-  /* Place the relationship-drag handle at the bottom-right corner of the node */
+  /* Place the relationship-drag handle at the top-right corner of the node.
+     Bottom-right is reserved for the resize handle. */
   right: -12px;
-  bottom: -12px;
+  top: -12px;
   transform: none;
   width: 24px;
   height: 24px;

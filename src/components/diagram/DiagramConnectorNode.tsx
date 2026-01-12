@@ -107,7 +107,8 @@ export function DiagramConnectorNode({
           e.stopPropagation();
           (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
 
-          const sourcePoint: Point = { x: n.x + w, y: n.y + h };
+          // Match handle position (top-right)
+          const sourcePoint: Point = { x: n.x + w, y: n.y };
           const p = clientToModelPoint(e.clientX, e.clientY) ?? sourcePoint;
 
           onStartLinkDrag({
@@ -121,6 +122,32 @@ export function DiagramConnectorNode({
       >
         ↗
       </button>
+
+      {/* Resize handle (shown when selected) */}
+      {isSelected ? (
+        <div
+          className="diagramResizeHandle"
+          role="button"
+          aria-label="Resize"
+          onPointerDown={(e) => {
+            if (linkDrag) return;
+            e.preventDefault();
+            e.stopPropagation();
+            (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+            onBeginNodeDrag({
+              viewId: activeViewId,
+              ref: selfRef,
+              action: 'resize',
+              startX: e.clientX,
+              startY: e.clientY,
+              origX: n.x,
+              origY: n.y,
+              origW: w,
+              origH: h,
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -62,9 +62,7 @@ function useMediaQuery(query: string) {
 
     // Safari < 14
     if (typeof anyMql.addListener === 'function') {
-      // eslint-disable-next-line deprecation/deprecation
       anyMql.addListener(onChange);
-      // eslint-disable-next-line deprecation/deprecation
       return () => anyMql.removeListener(onChange);
     }
 

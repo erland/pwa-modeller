@@ -2,6 +2,7 @@ const js = require('@eslint/js');
 const tseslint = require('typescript-eslint');
 const react = require('eslint-plugin-react');
 const reactHooks = require('eslint-plugin-react-hooks');
+const testingLibrary = require('eslint-plugin-testing-library');
 const prettier = require('eslint-config-prettier');
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
@@ -25,6 +26,18 @@ module.exports = [
         module: 'readonly',
         exports: 'readonly',
         __dirname: 'readonly',
+        process: 'readonly'
+      }
+    }
+  },
+
+  // Node globals for repo scripts.
+  {
+    files: ['scripts/**/*.{js,mjs,cjs,ts,cts}'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: {
+        console: 'readonly',
         process: 'readonly'
       }
     }
@@ -87,6 +100,29 @@ module.exports = [
         afterEach: 'readonly',
         jest: 'readonly'
       }
+    },
+    plugins: {
+      // Ensures rule definitions exist so eslint-disable comments like
+      // "testing-library/no-node-access" don't error.
+      'testing-library': testingLibrary
+    },
+    rules: {
+      // Tests often legitimately need loose typing and CommonJS imports.
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-require-imports': 'off'
+    }
+  },
+
+  // Boundary code: allow "any" where we intentionally deal with unknown external data.
+  {
+    files: [
+      'jest.setup.ts',
+      'src/store/persistence/**/*.{ts,tsx}',
+      'src/store/persistence/migrations/**/*.{ts,tsx}',
+      'src/import/**/*.{ts,tsx}'
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off'
     }
   },
   prettier

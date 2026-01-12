@@ -11,16 +11,16 @@ export function validateModel(model: Model, relationshipValidationMode: Relation
   const issues: ValidationIssue[] = [];
 // ------------------------------
 // Schema / extension validation (externalIds + taggedValues)
-issues.push(...validateExternalIdsForTarget((model as any).externalIds, { kind: 'model' }, 'model', 'Model'));
-issues.push(...validateTaggedValuesForTarget((model as any).taggedValues, { kind: 'model' }, 'model', 'Model'));
+issues.push(...validateExternalIdsForTarget(model.externalIds, { kind: 'model' }, 'model', 'Model'));
+issues.push(...validateTaggedValuesForTarget(model.taggedValues, { kind: 'model' }, 'model', 'Model'));
 
 for (const folder of Object.values(model.folders)) {
   const label = `Folder ${folder.name} (${folder.id})`;
   issues.push(
-    ...validateExternalIdsForTarget((folder as any).externalIds, { kind: 'folder', folderId: folder.id }, `folder:${folder.id}`, label)
+    ...validateExternalIdsForTarget(folder.externalIds, { kind: 'folder', folderId: folder.id }, `folder:${folder.id}`, label)
   );
   issues.push(
-    ...validateTaggedValuesForTarget((folder as any).taggedValues, { kind: 'folder', folderId: folder.id }, `folder:${folder.id}`, label)
+    ...validateTaggedValuesForTarget(folder.taggedValues, { kind: 'folder', folderId: folder.id }, `folder:${folder.id}`, label)
   );
 }
 
@@ -30,10 +30,10 @@ for (const folder of Object.values(model.folders)) {
   for (const c of Object.values(model.connectors ?? {})) {
     const label = `Connector ${c.type} (${c.id})`;
     issues.push(
-      ...validateExternalIdsForTarget((c as any).externalIds, { kind: 'connector', connectorId: c.id }, `connector:${c.id}`, label)
+      ...validateExternalIdsForTarget(c.externalIds, { kind: 'connector', connectorId: c.id }, `connector:${c.id}`, label)
     );
     issues.push(
-      ...validateTaggedValuesForTarget((c as any).taggedValues, { kind: 'connector', connectorId: c.id }, `connector:${c.id}`, label)
+      ...validateTaggedValuesForTarget(c.taggedValues, { kind: 'connector', connectorId: c.id }, `connector:${c.id}`, label)
     );
   }
 

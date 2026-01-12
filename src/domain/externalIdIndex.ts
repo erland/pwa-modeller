@@ -1,4 +1,4 @@
-import type { Model } from './types';
+import type { Model, HasExternalIds } from './types';
 import { dedupeExternalIds, externalKey, normalizeExternalIdRef } from './externalIds';
 
 export type ExternalIdKind = 'element' | 'relationship' | 'view';
@@ -23,17 +23,13 @@ function keyFromParts(system: string, id: string, scope?: string): string {
 
 function indexRecord(
   kind: ExternalIdKind,
-  record: Record<string, { externalIds?: unknown }>,
+  record: Record<string, HasExternalIds>,
   map: Map<string, string>,
   duplicates: ExternalIdDuplicate[]
 ): void {
   for (const [internalId, entity] of Object.entries(record)) {
     // We expect sanitized ExternalIdRef[], but we defensively normalize anyway.
-    const refs = dedupeExternalIds(
-      Array.isArray((entity as any).externalIds)
-        ? ((entity as any).externalIds as any)
-        : undefined
-    );
+    const refs = dedupeExternalIds(entity.externalIds);
     for (const ref of refs) {
       const norm = normalizeExternalIdRef(ref);
       if (!norm) continue;
@@ -56,9 +52,9 @@ export function buildModelExternalIdIndex(model: Model): ModelExternalIdIndex {
   const relationshipByKey = new Map<string, string>();
   const viewByKey = new Map<string, string>();
 
-  indexRecord('element', model.elements as any, elementByKey, duplicates);
-  indexRecord('relationship', model.relationships as any, relationshipByKey, duplicates);
-  indexRecord('view', model.views as any, viewByKey, duplicates);
+  indexRecord('element', model.elements, elementByKey, duplicates);
+  indexRecord('relationship', model.relationships, relationshipByKey, duplicates);
+  indexRecord('view', model.views, viewByKey, duplicates);
 
   return { elementByKey, relationshipByKey, viewByKey, duplicates };
 }

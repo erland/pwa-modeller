@@ -57,6 +57,7 @@ const [nameDraft, setNameDraft] = useState('');
   }, [isOpen, prefillSourceElementId, elementIdsInOrder]);
 
   const allowedRelationshipTypes = useMemo(() => {
+    void matrixLoadTick;
     const s = model.elements[sourceId];
     const t = model.elements[targetId];
     if (!s || !t) return RELATIONSHIP_TYPES as RelationshipType[];
@@ -72,6 +73,7 @@ const [nameDraft, setNameDraft] = useState('');
   }, [allowedRelationshipTypes, typeDraft]);
 
   const relationshipRuleError = useMemo(() => {
+    void matrixLoadTick;
     const s = model.elements[sourceId];
     const t = model.elements[targetId];
     if (!s || !t) return null;

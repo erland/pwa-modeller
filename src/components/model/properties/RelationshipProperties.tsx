@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { AccessType, Model, RelationshipType, ViewConnectionRouteKind } from '../../../domain';
+import type { AccessType, Element, Model, RelationshipType, ViewConnectionRouteKind } from '../../../domain';
 import { RELATIONSHIP_TYPES } from '../../../domain';
 import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../domain/config/archimatePalette';
 
@@ -50,35 +50,42 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
   const sourceElement = rel?.sourceElementId ? model.elements[rel.sourceElementId] : undefined;
   const targetElement = rel?.targetElementId ? model.elements[rel.targetElementId] : undefined;
 
+  const sourceType = sourceElement?.type;
+  const targetType = targetElement?.type;
+  const relType = rel?.type;
+  const relIsUnknown = relType === 'Unknown';
+
   const allowedRelationshipTypes = useMemo(() => {
-    if (!sourceElement || !targetElement) return RELATIONSHIP_TYPES as RelationshipType[];
-    const allowed = getAllowedRelationshipTypes(sourceElement.type, targetElement.type, relationshipValidationMode);
+    // Dependency tick to recompute when the relationship matrix loads/changes.
+    void matrixLoadTick;
+    if (!sourceType || !targetType) return RELATIONSHIP_TYPES as RelationshipType[];
+    const allowed = getAllowedRelationshipTypes(sourceType, targetType, relationshipValidationMode);
     return (allowed.length > 0 ? allowed : (RELATIONSHIP_TYPES as RelationshipType[])) as RelationshipType[];
-  }, [sourceElement?.type, targetElement?.type, relationshipValidationMode, matrixLoadTick]);
+  }, [sourceType, targetType, relationshipValidationMode, matrixLoadTick]);
 
   const relationshipRuleWarning = useMemo(() => {
-    if (!rel) return null;
-    if (!sourceElement || !targetElement) return null;
-    if (rel.type === 'Unknown') return null;
-    const res = validateRelationship(sourceElement.type, targetElement.type, rel?.type as RelationshipType, relationshipValidationMode);
+    // Dependency tick to recompute when the relationship matrix loads/changes.
+    void matrixLoadTick;
+    if (!rel || !sourceType || !targetType) return null;
+    if (relIsUnknown) return null;
+    const res = validateRelationship(sourceType, targetType, relType as RelationshipType, relationshipValidationMode);
     return res.allowed ? null : res.reason;
-  }, [sourceElement?.type, targetElement?.type, rel?.type, relationshipValidationMode, matrixLoadTick]);
+  }, [rel, sourceType, targetType, relType, relIsUnknown, relationshipValidationMode, matrixLoadTick]);
 
   const relationshipTypeOptions = useMemo(() => {
-    if (!rel) return (showAllRelationshipTypes ? (RELATIONSHIP_TYPES as any[]) : (allowedRelationshipTypes as any[])) as any[];
-    const base = showAllRelationshipTypes ? (RELATIONSHIP_TYPES as any[]) : (allowedRelationshipTypes as any[]);
-    const list = [...base];
+    const base: RelationshipType[] = showAllRelationshipTypes ? RELATIONSHIP_TYPES : allowedRelationshipTypes;
+    const list: RelationshipType[] = [...base];
     const seen = new Set(list);
 
     // Keep current value visible even if it's not in the filtered set.
-    if (rel.type === 'Unknown') {
+    if (relIsUnknown) {
       // When imported as unknown, allow mapping to known types while keeping the original choice.
       return ['Unknown', ...list.filter((t) => t !== 'Unknown')];
     }
 
-    if (!seen.has(rel.type)) return [rel.type, ...list];
+    if (relType && !seen.has(relType)) return [relType, ...list];
     return list;
-  }, [showAllRelationshipTypes, allowedRelationshipTypes, rel?.type]);
+  }, [showAllRelationshipTypes, allowedRelationshipTypes, relType, relIsUnknown]);
 
   if (!rel) return <p className="panelHint">Relationship not found.</p>;
   const elementOptions = Object.values(model.elements)
@@ -90,7 +97,7 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
   const sourceName = (rel.sourceElementId ? model.elements[rel.sourceElementId]?.name : undefined) ?? sourceId;
   const targetName = (rel.targetElementId ? model.elements[rel.targetElementId]?.name : undefined) ?? targetId;
 
-  const elementOptionLabel = (e: any): string => {
+  const elementOptionLabel = (e: Element): string => {
     const typeLabel =
       e.type === 'Unknown'
         ? e.unknownType?.name

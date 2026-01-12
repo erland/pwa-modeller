@@ -242,7 +242,7 @@ function ensureRelationshipMatrix(): RelationshipMatrix | null {
 export async function initRelationshipValidationMatrixFromBundledTable(): Promise<boolean> {
   if (_relationshipMatrix) return true;
   try {
-    const mod: any = await import('../validation/data/relationships.xml?raw');
+    const mod: { default: string } = await import('../validation/data/relationships.xml?raw');
     const xmlText: string = (mod && (mod.default ?? mod)) as string;
     initRelationshipValidationMatrixFromXml(xmlText);
     return true;

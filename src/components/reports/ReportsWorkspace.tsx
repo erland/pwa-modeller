@@ -161,17 +161,17 @@ export function ReportsWorkspace() {
 
   const sortedElementRows = useMemo(() => {
     const sort = sortByTab.elements;
-    return sortRows<ElementReportRow>(elementRows, sort, (r, k) => (r as any)[k]);
+    return sortRows<ElementReportRow>(elementRows, sort, (r, k) => (r as Record<string, unknown>)[k]);
   }, [elementRows, sortByTab.elements]);
 
   const sortedViewRows = useMemo(() => {
     const sort = sortByTab.views;
-    return sortRows<ViewInventoryRow>(viewRows, sort, (r, k) => (r as any)[k]);
+    return sortRows<ViewInventoryRow>(viewRows, sort, (r, k) => (r as Record<string, unknown>)[k]);
   }, [viewRows, sortByTab.views]);
 
   const sortedRelationshipRows = useMemo(() => {
     const sort = sortByTab.relationships;
-    return sortRows<RelationshipReportRow>(relationshipRows, sort, (r, k) => (r as any)[k]);
+    return sortRows<RelationshipReportRow>(relationshipRows, sort, (r, k) => (r as Record<string, unknown>)[k]);
   }, [relationshipRows, sortByTab.relationships]);
 
   return (

@@ -3,6 +3,9 @@ import type { ElementType, Model, RelationshipType, View, ViewNodeLayout } from 
 import { Dialog } from '../dialog/Dialog';
 
 import type { Selection } from '../model/selection';
+import type { Point } from './geometry';
+import type { DiagramLinkDrag, DiagramNodeDragState } from './DiagramNode';
+import type { ConnectableRef } from './connectable';
 
 import type { GroupBoxDraft, ToolMode } from './hooks/useDiagramToolState';
 import { DiagramNodesLayer } from './layers/DiagramNodesLayer';
@@ -10,9 +13,9 @@ import type { ConnectionRenderItem } from './layers/DiagramRelationshipsLayer';
 import { DiagramRelationshipsLayer } from './layers/DiagramRelationshipsLayer';
 
 export type RelationshipCreationController = {
-  linkDrag: unknown;
-  hoverAsRelationshipTarget: (ref: unknown) => void;
-  startLinkDrag: (drag: unknown) => void;
+  linkDrag: DiagramLinkDrag | null;
+  hoverAsRelationshipTarget: (ref: ConnectableRef | null) => void;
+  startLinkDrag: (drag: DiagramLinkDrag) => void;
 
   pendingCreateRel: null | {
     viewId: string;
@@ -65,8 +68,8 @@ export type DiagramCanvasViewProps = {
   connectionRenderItems: ConnectionRenderItem[];
 
   rel: RelationshipCreationController;
-  onBeginNodeDrag: (state: any) => void;
-  clientToModelPoint: (clientX: number, clientY: number) => any;
+  onBeginNodeDrag: (state: DiagramNodeDragState) => void;
+  clientToModelPoint: (clientX: number, clientY: number) => Point | null;
   getElementBgVar: (t: ElementType) => string;
 
   canExportImage: boolean;
@@ -230,7 +233,7 @@ export function DiagramCanvasView({
                   surfaceWidthModel={surfaceWidthModel}
                   surfaceHeightModel={surfaceHeightModel}
                   selection={selection}
-                  linkDrag={rel.linkDrag as any}
+                  linkDrag={rel.linkDrag}
                   groupBoxDraft={groupBoxDraft}
                   onSelect={onSelect}
                 />
@@ -240,12 +243,12 @@ export function DiagramCanvasView({
                   activeView={activeView}
                   nodes={nodes}
                   selection={selection}
-                  linkDrag={rel.linkDrag as any}
+                  linkDrag={rel.linkDrag}
                   clientToModelPoint={clientToModelPoint}
                   onSelect={onSelect}
                   onBeginNodeDrag={onBeginNodeDrag}
-                  onHoverAsRelationshipTarget={rel.hoverAsRelationshipTarget as any}
-                  onStartLinkDrag={rel.startLinkDrag as any}
+                  onHoverAsRelationshipTarget={rel.hoverAsRelationshipTarget}
+                  onStartLinkDrag={rel.startLinkDrag}
                   getElementBgVar={getElementBgVar}
                 />
               </div>
@@ -277,13 +280,13 @@ export function DiagramCanvasView({
                 <b>From:</b>{' '}
                 {rel.pendingCreateRel.sourceRef.kind === 'element'
                   ? (model.elements[rel.pendingCreateRel.sourceRef.id]?.name ?? '—')
-                  : ((model as any).connectors?.[rel.pendingCreateRel.sourceRef.id]?.type ?? 'Connector')}
+                  : (model.connectors?.[rel.pendingCreateRel.sourceRef.id]?.type ?? 'Connector')}
               </div>
               <div>
                 <b>To:</b>{' '}
                 {rel.pendingCreateRel.targetRef.kind === 'element'
                   ? (model.elements[rel.pendingCreateRel.targetRef.id]?.name ?? '—')
-                  : ((model as any).connectors?.[rel.pendingCreateRel.targetRef.id]?.type ?? 'Connector')}
+                  : (model.connectors?.[rel.pendingCreateRel.targetRef.id]?.type ?? 'Connector')}
               </div>
             </div>
 

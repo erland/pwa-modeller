@@ -11,16 +11,18 @@ export type TaggedValueInput = Omit<TaggedValue, 'id'> & { id?: string };
  * - drops invalid entries
  * - de-dupes by (ns,key), keeping the last occurrence
  */
-export function tidyTaggedValuesFromUi(list: TaggedValue[] | undefined): TaggedValue[] | undefined {
+export function tidyTaggedValuesFromUi(list: TaggedValueInput[] | undefined): TaggedValue[] | undefined {
   if (!list || list.length === 0) return undefined;
 
   const normalized: TaggedValue[] = [];
   for (const raw of list) {
     if (!raw || typeof raw !== 'object') continue;
 
+    const { id, ...rest } = raw;
+    const nextId = typeof id === 'string' && id.trim().length > 0 ? id.trim() : createId('tag');
     const withId: TaggedValue = {
-      ...raw,
-      id: typeof (raw as any).id === 'string' && (raw as any).id.trim().length > 0 ? (raw as any).id.trim() : createId('tag')
+      ...rest,
+      id: nextId
     };
 
     const { normalized: tv, errors } = validateTaggedValue(withId);
@@ -113,8 +115,8 @@ export function deleteRelationshipInModel(model: Model, relationshipId: string):
 
   // Remove from any folder that contains it.
   for (const fid of Object.keys(model.folders)) {
-    const f = model.folders[fid] as any;
-    const relIds: string[] | undefined = Array.isArray(f.relationshipIds) ? f.relationshipIds : undefined;
+    const f = model.folders[fid];
+    const relIds = f.relationshipIds;
     if (relIds && relIds.includes(relationshipId)) {
       model.folders[fid] = { ...f, relationshipIds: relIds.filter((id) => id !== relationshipId) };
     }

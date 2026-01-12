@@ -56,7 +56,7 @@ export function TaggedValuesEditor({
   title = 'Tagged values',
   allowNamespaces = true
 }: TaggedValuesEditorProps) {
-  const list = taggedValues ?? [];
+  const list = useMemo(() => taggedValues ?? [], [taggedValues]);
 
   const validations = useMemo(() => {
     const map = new Map<string, string>();

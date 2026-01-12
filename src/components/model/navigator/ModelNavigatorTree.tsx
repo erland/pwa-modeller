@@ -14,7 +14,6 @@ import { NavigatorNodeRow } from './NavigatorNodeRow';
 const DND_DEBUG = typeof window !== 'undefined' && window.localStorage?.getItem('pwaModellerDndDebug') === '1';
 function dndLog(...args: unknown[]) {
   if (!DND_DEBUG) return;
-  // eslint-disable-next-line no-console
   console.log('[PWA Modeller DND]', ...args);
 }
 
@@ -313,7 +312,7 @@ if (maybeFolderDragId && isFolderTarget && maybeFolderDragId === row.dataset.fol
   }
 };
 
-    const onDragLeave = (_e: DragEvent) => {
+	    const onDragLeave = () => {
       // If the pointer leaves the tree wrapper entirely, clear highlight.
       // (dragover will re-apply when entering another folder row)
       // Note: dragleave fires frequently; keep this conservative.
@@ -340,7 +339,7 @@ if (maybeFolderDragId && isFolderTarget && maybeFolderDragId === row.dataset.fol
       document.removeEventListener('dragend', onDragEnd, true);
       clearHighlight();
     };
-  }, [onMoveElementToFolder]);
+  }, [onMoveElementToFolder, onMoveViewToFolder, onMoveFolderToFolder, onMoveViewToElement]);
 
   const toggleExpanded = (nodeKey: string) => {
     setExpandedKeys((prev) => toggleExpandedKey(prev, nodeKey));

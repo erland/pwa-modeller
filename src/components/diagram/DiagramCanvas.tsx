@@ -151,8 +151,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       onViewportDrop={drop.handleViewportDrop}
       connectionRenderItems={connectionRenderItems}
       rel={rel as unknown as RelationshipCreationController}
-      onBeginNodeDrag={nodeDrag.beginNodeDrag as any}
-      clientToModelPoint={viewport.clientToModelPoint as any}
+      onBeginNodeDrag={nodeDrag.beginNodeDrag}
+      clientToModelPoint={viewport.clientToModelPoint}
       getElementBgVar={getElementBgVar}
       canExportImage={canExportImage}
       onExportImage={handleExportImage}

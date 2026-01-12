@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { View, ViewNodeLayout } from '../../../domain';
+import type {View, ViewNodeLayout, ViewObject} from '../../../domain';
 import { getDefaultViewObjectSize } from '../../../domain';
 import { boundsForNodes } from '../geometry';
 
@@ -25,7 +25,7 @@ export function useDiagramNodes(activeView: View | null): DiagramNodesController
       (activeView?.layout?.nodes ?? []).map((n, idx) => {
         const isConn = Boolean(n.connectorId);
         const isObj = Boolean(n.objectId);
-        const objects = (activeView?.objects ?? {}) as Record<string, any>;
+        const objects = (activeView?.objects ?? {}) as Record<string, ViewObject>;
         const obj = isObj ? objects[n.objectId!] : undefined;
 
         let width = n.width;

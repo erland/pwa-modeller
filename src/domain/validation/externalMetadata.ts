@@ -2,6 +2,37 @@ import type { ValidationIssue, ValidationIssueTarget } from './types';
 import { makeIssue } from './issues';
 import { dedupeExternalIds, externalKey, normalizeExternalIdRef } from '../externalIds';
 import { normalizeKey, normalizeNs, validateTaggedValue } from '../taggedValues';
+import type { TaggedValue, TaggedValueType } from '../types';
+
+const TAGGED_VALUE_TYPES: readonly TaggedValueType[] = ['string', 'number', 'boolean', 'json'];
+
+function isTaggedValueType(v: unknown): v is TaggedValueType {
+  return typeof v === 'string' && (TAGGED_VALUE_TYPES as readonly string[]).includes(v);
+}
+
+function coerceTaggedValueCandidate(v: Record<string, unknown>): TaggedValue {
+  const id = typeof v.id === 'string' && v.id.trim().length > 0 ? v.id : 'tv_unknown';
+  const ns = typeof v.ns === 'string' ? v.ns : undefined;
+  const key = typeof v.key === 'string' ? v.key : '';
+  const type = isTaggedValueType(v.type) ? v.type : undefined;
+  const rawValue = v.value;
+  const value =
+    typeof rawValue === 'string'
+      ? rawValue
+      : rawValue === null || rawValue === undefined
+        ? ''
+        : typeof rawValue === 'number' || typeof rawValue === 'boolean'
+          ? String(rawValue)
+          : (() => {
+              try {
+                return JSON.stringify(rawValue);
+              } catch {
+                return String(rawValue);
+              }
+            })();
+
+  return { id, ns, key, type, value };
+}
 
 export function validateExternalIdsForTarget(
   list: unknown,
@@ -96,13 +127,14 @@ export function validateTaggedValuesForTarget(
     }
 
     // validateTaggedValue expects a TaggedValue-like object; it will normalize/validate defensively.
-    const { normalized, errors, warnings } = validateTaggedValue(tv as any);
+    const candidate = coerceTaggedValueCandidate(tv as Record<string, unknown>);
+    const { normalized, errors, warnings } = validateTaggedValue(candidate);
 
     if (errors.length > 0) {
       invalidCount++;
       if (samples.length < 3) {
-        const ns = normalizeNs((normalized as any).ns);
-        const key = normalizeKey((normalized as any).key);
+        const ns = normalizeNs(normalized.ns);
+        const key = normalizeKey(normalized.key);
         const name = `${ns ? ns + ':' : ''}${key || '(missing key)'}`;
         samples.push(`${name}: ${errors[0]}`);
       }

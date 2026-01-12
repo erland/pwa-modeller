@@ -81,6 +81,10 @@ module.exports = [
       react: { version: 'detect' }
     },
     rules: {
+      // The codebase still contains several integration points where `any` is practical
+      // (DOM/SVG event glue, drag/drop payloads, etc.). Treat as warnings so lint can
+      // stay useful without blocking.
+      '@typescript-eslint/no-explicit-any': 'warn',
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off'

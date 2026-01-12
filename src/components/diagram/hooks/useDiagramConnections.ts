@@ -92,7 +92,7 @@ export function useDiagramConnections({ model, activeView, nodes }: Args) {
 
       // Include obstacle rectangles (other nodes) so the orthogonal auto-router can shift channels.
       const nodeRect = (n: ViewNodeLayout) => {
-        const isConnector = Boolean((n as any).connectorId);
+        const isConnector = Boolean(n.connectorId);
         const w = n.width ?? (isConnector ? 24 : 120);
         const h = n.height ?? (isConnector ? 24 : 60);
         return { x: n.x, y: n.y, w, h };

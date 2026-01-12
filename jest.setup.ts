@@ -53,7 +53,6 @@ beforeAll(() => {
     if (msg.includes('React Router Future Flag Warning')) return;
 
     // Fall back to the original console.warn for everything else.
-    // eslint-disable-next-line no-console
     originalWarn(...(args as any[]));
   });
 });

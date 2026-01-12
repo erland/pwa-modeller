@@ -110,7 +110,7 @@ export function findExternalId(
 
 /** Default generator for new external IDs (browser + tests). */
 export function defaultGenerateExternalId(): string {
-  const c: any = (globalThis as any).crypto;
+  const c = (globalThis as unknown as { crypto?: Crypto }).crypto;
   if (c && typeof c.randomUUID === 'function') return c.randomUUID();
   // Fallback: not cryptographically strong, but good enough for local identifiers.
   return `ext_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;

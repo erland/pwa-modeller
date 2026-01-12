@@ -13,7 +13,6 @@ import { DND_ELEMENT_MIME, DND_FOLDER_MIME, DND_VIEW_MIME } from './types';
 const DND_DEBUG = typeof window !== 'undefined' && window.localStorage?.getItem('pwaModellerDndDebug') === '1';
 function dndLog(...args: unknown[]) {
   if (!DND_DEBUG) return;
-  // eslint-disable-next-line no-console
   console.log('[PWA Modeller DND]', ...args);
 }
 
@@ -250,13 +249,14 @@ try {
                 ? DND_FOLDER_MIME
                 : undefined;
 
-        dndLog('tree dragend', {
+	        const dt = e.dataTransfer;
+	        dndLog('tree dragend', {
           key: node.key,
           kind: node.kind,
           id: dragId,
           mime,
-          dropEffect: (e.dataTransfer && (e.dataTransfer as any).dropEffect) || undefined,
-          effectAllowed: (e.dataTransfer && (e.dataTransfer as any).effectAllowed) || undefined,
+	          dropEffect: dt?.dropEffect || undefined,
+	          effectAllowed: dt?.effectAllowed || undefined,
         });
       }}
       onDoubleClick={(e: React.MouseEvent) => {

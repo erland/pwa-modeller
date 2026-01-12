@@ -137,8 +137,8 @@ export function generateRelationshipReport(model: Model): RelationshipReportRow[
 function escapeCsvValue(value: unknown): string {
   const s = String(value ?? '');
   // Escape quotes and wrap if value contains CSV special chars.
-  const needsQuotes = /[\n\r,\"]/g.test(s);
-  const escaped = s.replace(/\"/g, '""');
+  const needsQuotes = /[\n\r,"]/g.test(s);
+  const escaped = s.replace(/"/g, '""');
   return needsQuotes ? `"${escaped}"` : escaped;
 }
 

@@ -183,7 +183,7 @@ export function deleteFolder(
       const f = model.folders[fid];
       if (!f) continue;
       for (const eid of f.elementIds) elementIds.add(eid);
-      for (const rid of (f as any).relationshipIds ?? []) relationshipIds.add(rid);
+      for (const rid of f.relationshipIds) relationshipIds.add(rid);
       for (const vid of f.viewIds) viewIds.add(vid);
     }
 

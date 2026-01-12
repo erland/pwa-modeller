@@ -91,6 +91,8 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
   }, [linkDrag, clientToModelPoint, lastRelType, nodes]);
 
 const pendingRelTypeOptions = useMemo(() => {
+  // Dependency tick to recompute when the relationship matrix loads/changes.
+  void matrixLoadTick;
   if (!model || !pendingCreateRel) return RELATIONSHIP_TYPES;
 
   const { sourceRef, targetRef } = pendingCreateRel;
@@ -186,7 +188,7 @@ const pendingRelTypeOptions = useMemo(() => {
     setLastRelType(pendingRelType);
     setPendingCreateRel(null);
     onSelect({ kind: 'relationship', relationshipId: rel.id, viewId: pendingCreateRel.viewId });
-  }, [model, pendingCreateRel, pendingRelType, onSelect]);
+  }, [model, pendingCreateRel, pendingRelType, onSelect, relationshipValidationMode, showAllPendingRelTypes]);
 
   const startLinkDrag = useCallback((drag: DiagramLinkDrag) => {
     setLinkDrag(drag);

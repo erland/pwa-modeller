@@ -1,4 +1,4 @@
-import type { Model } from '../../../domain';
+import type { ArchimateLayer, Model } from '../../../domain';
 import { ARCHIMATE_LAYERS, VIEWPOINTS } from '../../../domain';
 import type { FolderOption } from '../../../domain';
 
@@ -195,10 +195,10 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
                       value={value}
                       onChange={(e) => {
                         const nextValue = e.target.value;
-                        const nextTags = { ...(view.formatting?.layerStyleTags ?? {}) } as Record<string, string>;
+                        const nextTags: Partial<Record<ArchimateLayer, string>> = { ...(view.formatting?.layerStyleTags ?? {}) };
                         if (!nextValue) delete nextTags[layer];
                         else nextTags[layer] = nextValue;
-                        actions.updateViewFormatting(view.id, { layerStyleTags: nextTags as any });
+                        actions.updateViewFormatting(view.id, { layerStyleTags: nextTags });
                       }}
                     />
                   </div>

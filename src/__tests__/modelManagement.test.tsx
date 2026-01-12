@@ -40,7 +40,6 @@ describe('Model management UI', () => {
 
     // Create a folder via the navigator "Create…" menu. (Root is hidden in the UI.)
     const searchInput = screen.getByRole('textbox', { name: 'Search model' });
-    // eslint-disable-next-line testing-library/no-node-access
     const headerRow = searchInput.parentElement as HTMLElement;
     await user.click(within(headerRow).getByRole('button', { name: 'Create…' }));
     await user.click(screen.getByRole('menuitem', { name: 'Folder…' }));

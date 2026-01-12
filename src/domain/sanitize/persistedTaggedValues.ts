@@ -43,7 +43,7 @@ export function sanitizeTaggedValuesList(raw: unknown): TaggedValue[] | undefine
         : undefined;
 
     let value: string;
-    const valueRaw = (item as any).value;
+    const valueRaw = item.value;
     if (typeof valueRaw === 'string') value = valueRaw;
     else if (typeof valueRaw === 'number' || typeof valueRaw === 'boolean') value = String(valueRaw);
     else if (valueRaw === null || valueRaw === undefined) value = '';

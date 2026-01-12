@@ -5,7 +5,7 @@ type Rect = { x: number; y: number; w: number; h: number };
 type Side = 'left' | 'right' | 'top' | 'bottom';
 
 function nodeRect(n: ViewNodeLayout): Rect {
-  const isConnector = Boolean((n as any).connectorId);
+  const isConnector = Boolean(n.connectorId);
   const w = n.width ?? (isConnector ? 24 : 120);
   const h = n.height ?? (isConnector ? 24 : 60);
   return { x: n.x, y: n.y, w, h };

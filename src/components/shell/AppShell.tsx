@@ -1,9 +1,11 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 import '../../styles/shell.css';
 import { modelStore, useModelStore } from '../../store';
 import { initRelationshipValidationMatrixFromBundledTable } from '../../domain/config/archimatePalette';
+import type { RelationshipValidationMode } from '../../domain';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -52,18 +54,24 @@ function useMediaQuery(query: string) {
 
     // NOTE: TypeScript's DOM lib assumes `addEventListener` exists on MediaQueryList,
     // which makes feature checks like `'addEventListener' in mql` narrow the else
-    // branch to `never`. Use an `any`-based feature check so we can still support
-    // older Safari/iOS versions that only have `addListener/removeListener`.
-    const anyMql = mql as any;
-    if (typeof anyMql.addEventListener === 'function') {
-      anyMql.addEventListener('change', onChange);
-      return () => anyMql.removeEventListener('change', onChange);
+    // Compatibility: older Safari/iOS versions only support addListener/removeListener.
+    type MqlCompat = MediaQueryList & {
+      addEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
+      removeEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
+      addListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
+      removeListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
+    };
+
+    const mqlCompat = mql as MqlCompat;
+    if (typeof mqlCompat.addEventListener === 'function') {
+      mqlCompat.addEventListener('change', onChange);
+      return () => mqlCompat.removeEventListener?.('change', onChange);
     }
 
     // Safari < 14
-    if (typeof anyMql.addListener === 'function') {
-      anyMql.addListener(onChange);
-      return () => anyMql.removeListener(onChange);
+    if (typeof mqlCompat.addListener === 'function') {
+      mqlCompat.addListener(onChange);
+      return () => mqlCompat.removeListener?.(onChange);
     }
 
     return;
@@ -194,21 +202,21 @@ const online = useOnlineStatus();
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const onStart = () => setIsNavigatorDragging(true);
-    const onEnd = () => setIsNavigatorDragging(false);
+    const onStart: EventListener = () => setIsNavigatorDragging(true);
+    const onEnd: EventListener = () => setIsNavigatorDragging(false);
 
-    window.addEventListener('modelNavigator:dragstart', onStart as any);
-    window.addEventListener('modelNavigator:dragend', onEnd as any);
+    window.addEventListener('modelNavigator:dragstart', onStart);
+    window.addEventListener('modelNavigator:dragend', onEnd);
 
     // Safety: ensure we always clear the dragging flag.
-    window.addEventListener('dragend', onEnd as any, true);
-    window.addEventListener('drop', onEnd as any, true);
+    window.addEventListener('dragend', onEnd, true);
+    window.addEventListener('drop', onEnd, true);
 
     return () => {
-      window.removeEventListener('modelNavigator:dragstart', onStart as any);
-      window.removeEventListener('modelNavigator:dragend', onEnd as any);
-      window.removeEventListener('dragend', onEnd as any, true);
-      window.removeEventListener('drop', onEnd as any, true);
+      window.removeEventListener('modelNavigator:dragstart', onStart);
+      window.removeEventListener('modelNavigator:dragend', onEnd);
+      window.removeEventListener('dragend', onEnd, true);
+      window.removeEventListener('drop', onEnd, true);
     };
   }, []);
 
@@ -245,7 +253,7 @@ const online = useOnlineStatus();
             <select
               className="shellSelect"
               value={relationshipValidationMode}
-              onChange={(e) => modelStore.setRelationshipValidationMode(e.target.value as any)}
+              onChange={(e) => modelStore.setRelationshipValidationMode(e.target.value as RelationshipValidationMode)}
               aria-label="Valideringsnivå"
             >
               <option value="minimal">Minimal</option>
@@ -310,9 +318,9 @@ const online = useOnlineStatus();
         ref={shellBodyRef}
         style={
           {
-            ['--shellLeftWidth' as any]: `${Math.round(leftWidth)}px`,
-            ['--shellRightWidth' as any]: `${Math.round(rightWidth)}px`
-          } as any
+            '--shellLeftWidth': `${Math.round(leftWidth)}px`,
+            '--shellRightWidth': `${Math.round(rightWidth)}px`
+          } as CSSProperties
         }
         className={[
           'shellBody',
@@ -356,7 +364,7 @@ const online = useOnlineStatus();
                 onPointerDown={(e) => {
                   if (e.button !== 0) return;
                   e.preventDefault();
-                  (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+                  e.currentTarget.setPointerCapture?.(e.pointerId);
                   setIsResizing('left');
                 }}
               />
@@ -398,7 +406,7 @@ const online = useOnlineStatus();
                 onPointerDown={(e) => {
                   if (e.button !== 0) return;
                   e.preventDefault();
-                  (e.currentTarget as any).setPointerCapture?.(e.pointerId);
+                  e.currentTarget.setPointerCapture?.(e.pointerId);
                   setIsResizing('right');
                 }}
               />

@@ -76,8 +76,8 @@ export function updateViewObject(model: Model, viewId: string, objectId: string,
     ...current,
     ...patch,
     id: current.id,
-    name: typeof (patch as any).name === 'string' ? ((patch as any).name as string).trim() || undefined : current.name,
-    text: typeof (patch as any).text === 'string' ? ((patch as any).text as string).trim() || undefined : current.text,
+    name: typeof patch.name === 'string' ? patch.name.trim() || undefined : current.name,
+    text: typeof patch.text === 'string' ? patch.text.trim() || undefined : current.text,
     style: patch.style ? { ...(current.style ?? {}), ...(patch.style ?? {}) } : current.style
   };
 

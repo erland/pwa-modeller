@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 
-import type { ModelMetadata } from '../../../domain';
+import type { Model, ModelMetadata } from '../../../domain';
 import {
   deserializeModel,
   serializeModel,
@@ -30,7 +30,7 @@ export type LastImportInfo = {
 };
 
 export type UseModelActionHandlersArgs = {
-  model: any | null;
+  model: Model | null;
   fileName: string | null;
   isDirty: boolean;
   navigate: NavigateFunction;

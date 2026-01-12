@@ -4,7 +4,7 @@ import type { Point } from './geometry';
 
 function nodeSize(n: ViewNodeLayout): { w: number; h: number } {
   // Keep these defaults in sync with diagram rendering/export.
-  const isConnector = Boolean((n as any).connectorId);
+  const isConnector = Boolean(n.connectorId);
   const w = n.width ?? (isConnector ? 24 : 120);
   const h = n.height ?? (isConnector ? 24 : 60);
   return { w, h };

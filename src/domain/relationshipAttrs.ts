@@ -40,7 +40,7 @@ export function sanitizeRelationshipAttrs(
       next.isDirected = attrs.isDirected;
     }
   } else if (relationshipType === 'Influence') {
-    const strength = coerceTrimmedString((attrs as any).influenceStrength);
+    const strength = coerceTrimmedString(('influenceStrength' in (attrs as object) ? (attrs as { influenceStrength?: unknown }).influenceStrength : undefined));
     if (strength) {
       next.influenceStrength = strength;
     }

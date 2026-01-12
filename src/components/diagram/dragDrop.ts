@@ -4,7 +4,7 @@ const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
 
 export function dataTransferHasElement(dt: DataTransfer | null): boolean {
   if (!dt) return false;
-  const types = Array.from((dt as any).types ?? []);
+  const types = Array.from(dt.types ?? []);
   if (types.includes(DND_ELEMENT_MIME)) return true;
 
   // Many browsers (and some iOS/Safari versions) only reliably expose 'text/plain' during DnD.

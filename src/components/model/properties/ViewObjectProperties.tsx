@@ -1,4 +1,4 @@
-import type { Model, ViewObject } from '../../../domain';
+import type { Model, ViewObject, ViewObjectTextAlign } from '../../../domain';
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 
@@ -120,7 +120,14 @@ export function ViewObjectProperties({ model, viewId, objectId, actions, onSelec
                   value={obj.style?.textAlign ?? ''}
                   onChange={(e) =>
                     actions.updateViewObject(viewId, objectId, {
-                      style: { textAlign: (e.target.value || undefined) as any }
+                      style: {
+                        textAlign: (() => {
+                          const v = e.target.value;
+                          if (!v) return undefined;
+                          if (v === 'left' || v === 'center' || v === 'right') return v as ViewObjectTextAlign;
+                          return undefined;
+                        })()
+                      }
                     })
                   }
                 >

@@ -19,8 +19,8 @@ export function addRelationship(model: Model, relationship: Relationship): void 
     ? findFolderContainingElement(model, sourceId) ?? findFolderIdByKind(model, 'root')
     : findFolderIdByKind(model, 'root');
 
-  const folder = getFolder(model, targetFolderId) as any;
-  const relIds: string[] = Array.isArray(folder.relationshipIds) ? folder.relationshipIds : [];
+  const folder = getFolder(model, targetFolderId);
+  const relIds = folder.relationshipIds;
   if (!relIds.includes(relationship.id)) {
     model.folders[targetFolderId] = { ...folder, relationshipIds: [...relIds, relationship.id] };
   }

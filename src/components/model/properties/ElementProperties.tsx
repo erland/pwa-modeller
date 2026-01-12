@@ -24,8 +24,12 @@ type Props = {
 };
 
 export function ElementProperties({ model, elementId, actions, elementFolders, onSelect }: Props) {
+  // Note: Avoid conditional hooks by allowing the component to render a fallback
+  // after all hooks have been invoked.
   const el = model.elements[elementId];
-  if (!el) return <p className="panelHint">Element not found.</p>;
+  const hasElement = Boolean(el);
+  const safeLayer: ArchimateLayer = hasElement ? el!.layer : ARCHIMATE_LAYERS[0];
+  const safeType: ElementType = hasElement ? el!.type : ('Unknown' as ElementType);
 
   const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
 
@@ -43,29 +47,29 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
     return m;
   }, []);
 
-  const allowedTypesForLayer = useMemo<ElementType[]>(() => ELEMENT_TYPES_BY_LAYER[el.layer] ?? [], [el.layer]);
+  const allowedTypesForLayer = useMemo<ElementType[]>(() => ELEMENT_TYPES_BY_LAYER[safeLayer] ?? [], [safeLayer]);
 
-  const isTypeOutOfSync = el.type !== 'Unknown' && !allowedTypesForLayer.includes(el.type);
+  const isTypeOutOfSync = hasElement && safeType !== 'Unknown' && !allowedTypesForLayer.includes(safeType);
 
   const elementTypeOptions = useMemo<ElementType[]>(() => {
     const allOptions: ElementType[] =
-      el.type === 'Unknown' ? (['Unknown', ...ELEMENT_TYPES] as ElementType[]) : (ELEMENT_TYPES as ElementType[]);
+      safeType === 'Unknown' ? (['Unknown', ...ELEMENT_TYPES] as ElementType[]) : (ELEMENT_TYPES as ElementType[]);
 
     const filteredBase: ElementType[] =
-      el.type === 'Unknown' ? (['Unknown', ...allowedTypesForLayer] as ElementType[]) : allowedTypesForLayer;
+      safeType === 'Unknown' ? (['Unknown', ...allowedTypesForLayer] as ElementType[]) : allowedTypesForLayer;
 
     const base = showAllElementTypes ? allOptions : filteredBase;
 
     // Keep current value visible even if it is out-of-sync (e.g., imported data).
-    return base.includes(el.type) ? base : ([el.type, ...base] as ElementType[]);
-  }, [el.type, allowedTypesForLayer, showAllElementTypes]);
+    return base.includes(safeType) ? base : ([safeType, ...base] as ElementType[]);
+  }, [safeType, allowedTypesForLayer, showAllElementTypes]);
 
   useEffect(() => {
     setTraceDirection('both');
     setTraceDepth(1);
   }, [elementId]);
 
-  const currentFolderId = findFolderContaining(model, 'element', el.id);
+  const currentFolderId = hasElement ? findFolderContaining(model, 'element', el!.id) : null;
 
   const relatedForElement = useMemo(() => {
     return splitRelationshipsForElement(model, elementId);
@@ -80,23 +84,28 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
 
   const usedInViews = useMemo(() => {
     return Object.values(model.views)
-      .filter((v) => v.layout && v.layout.nodes.some((n) => n.elementId === el.id))
+      .filter((v) => hasElement && v.layout && v.layout.nodes.some((n) => n.elementId === elementId))
       .map((v) => {
-        const count = v.layout ? v.layout.nodes.filter((n) => n.elementId === el.id).length : 0;
+        const count = v.layout && hasElement ? v.layout.nodes.filter((n) => n.elementId === elementId).length : 0;
         return { id: v.id, name: v.name, count };
       })
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-  }, [model, el.id]);
+  }, [model, hasElement, elementId]);
 
   const canCreateRelationship = Object.keys(model.elements).length >= 2;
   const onSelectSafe = onSelect ?? (() => undefined);
 
-  const relationshipTypeLabel = (r: any): string =>
-    r.type === 'Unknown'
-      ? r.unknownType?.name
-        ? `Unknown: ${r.unknownType.name}`
+  type RelationshipLike = { type: string; unknownType?: { name?: string } };
+  const relationshipTypeLabel = (r: unknown): string => {
+    const rel = r as RelationshipLike;
+    return rel.type === 'Unknown'
+      ? rel.unknownType?.name
+        ? `Unknown: ${rel.unknownType.name}`
         : 'Unknown'
-      : r.type;
+      : rel.type;
+  };
+
+  if (!hasElement) return <p className="panelHint">Element not found.</p>;
 
   return (
     <div>
@@ -154,7 +163,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
             <div className="propertiesKey">Warning</div>
             <div className="propertiesValue">
               <div style={{ fontSize: 12, opacity: 0.85 }}>
-                This element's <strong>Type</strong> does not belong to its <strong>Layer</strong>. Select a Type (or
+                This element&apos;s <strong>Type</strong> does not belong to its <strong>Layer</strong>. Select a Type (or
                 Layer) to re-sync. If you change Type, the Layer will update automatically.
               </div>
             </div>

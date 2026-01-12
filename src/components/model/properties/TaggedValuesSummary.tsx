@@ -42,7 +42,7 @@ export function TaggedValuesSummary({
   allowNamespaces = true,
   maxInline = 4
 }: TaggedValuesSummaryProps) {
-  const list = taggedValues ?? [];
+  const list = useMemo(() => taggedValues ?? [], [taggedValues]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState<TaggedValue[] | undefined>(taggedValues);

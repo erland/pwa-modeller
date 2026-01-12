@@ -105,8 +105,8 @@ export function createViewSvg(model: Model, viewId: string): string {
   const orderedNodes = [...nodes0]
     .filter((n) => Boolean(n.elementId || n.connectorId))
     .sort((a, b) => {
-      const za = typeof (a as any).zIndex === 'number' ? (a as any).zIndex : 0;
-      const zb = typeof (b as any).zIndex === 'number' ? (b as any).zIndex : 0;
+      const za = typeof a.zIndex === 'number' ? a.zIndex : 0;
+      const zb = typeof b.zIndex === 'number' ? b.zIndex : 0;
       const ka = a.elementId ?? a.connectorId ?? '';
       const kb = b.elementId ?? b.connectorId ?? '';
       return za - zb || ka.localeCompare(kb);

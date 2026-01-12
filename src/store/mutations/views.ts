@@ -36,8 +36,8 @@ export function updateView(model: Model, viewId: string, patch: Partial<Omit<Vie
   const next: View = { ...current, ...patch, id: current.id };
 
   // Maintain placement invariant when centerElementId is modified.
-  if (Object.prototype.hasOwnProperty.call(patch, 'centerElementId')) {
-    const nextCenter = (patch as any).centerElementId as string | undefined;
+  if ('centerElementId' in patch) {
+    const nextCenter = patch.centerElementId;
 
     if (typeof nextCenter === 'string' && nextCenter) {
       // Centered views should not be present in any folder list.

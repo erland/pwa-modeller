@@ -1,4 +1,4 @@
-import type { ElementType, Model, View, ViewNodeLayout } from '../../../domain';
+import type {ElementType, Model, View, ViewNodeLayout, ViewObject} from '../../../domain';
 import type { Selection } from '../../model/selection';
 import { DiagramNode, type DiagramLinkDrag, type DiagramNodeDragState } from '../DiagramNode';
 import { DiagramConnectorNode } from '../DiagramConnectorNode';
@@ -85,7 +85,7 @@ export function DiagramNodesLayer({
         }
 
         if (n.objectId) {
-          const objects = (activeView.objects ?? {}) as Record<string, any>;
+          const objects = (activeView.objects ?? {}) as Record<string, ViewObject>;
           const obj = objects[n.objectId];
           if (!obj) return null;
           const isSelected =

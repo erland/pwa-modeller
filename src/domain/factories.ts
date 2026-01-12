@@ -20,7 +20,7 @@ function requireNonBlank(value: string, field: string): void {
   }
 }
 
-export type CreateElementInput = Omit<Element, 'id'> & { id?: string };
+export type CreateElementInput = Omit<Element, 'id'> & { id?: string; description?: string };
 export function createElement(input: CreateElementInput): Element {
   requireNonBlank(input.name, 'Element.name');
   // layer/type are required at compile-time; this runtime check gives clearer errors.
@@ -32,11 +32,11 @@ export function createElement(input: CreateElementInput): Element {
     name: input.name.trim(),
     layer: input.layer,
     type: input.type,
-    documentation: (input.documentation ?? (input as any).description)?.trim() || undefined
+    documentation: (input.documentation ?? input.description)?.trim() || undefined
   };
 }
 
-export type CreateRelationshipInput = Omit<Relationship, 'id'> & { id?: string };
+export type CreateRelationshipInput = Omit<Relationship, 'id'> & { id?: string; description?: string };
 export function createRelationship(input: CreateRelationshipInput): Relationship {
   const hasSource = !!(input.sourceElementId || input.sourceConnectorId);
   const hasTarget = !!(input.targetElementId || input.targetConnectorId);
@@ -53,7 +53,7 @@ export function createRelationship(input: CreateRelationshipInput): Relationship
     type: input.type,
     unknownType: input.unknownType,
     name: input.name?.trim() || undefined,
-    documentation: ((input as any).documentation ?? (input as any).description)?.trim() || undefined,
+    documentation: (input.documentation ?? input.description)?.trim() || undefined,
     attrs: input.attrs,
     externalIds: input.externalIds ?? [],
     taggedValues: input.taggedValues ?? []
@@ -68,7 +68,7 @@ export function createConnector(input: CreateConnectorInput): RelationshipConnec
     id: input.id ?? createId('conn'),
     type: input.type,
     name: input.name?.trim() || undefined,
-    documentation: (input.documentation ?? (input as any).description)?.trim() || undefined,
+    documentation: input.documentation?.trim() || undefined,
     externalIds: input.externalIds ?? [],
     taggedValues: input.taggedValues ?? []
   };
@@ -85,7 +85,7 @@ export function createView(input: CreateViewInput): View {
     id: input.id ?? createId('view'),
     name: input.name.trim(),
     viewpointId: input.viewpointId.trim(),
-    documentation: (input.documentation ?? (input as any).description)?.trim() || undefined,
+    documentation: input.documentation?.trim() || undefined,
     stakeholders: input.stakeholders,
     formatting,
     connections: input.connections ?? [],
@@ -122,7 +122,7 @@ export function createViewObject(input: CreateViewObjectInput): ViewObject {
   const defaultName = input.type === 'GroupBox' ? 'Group' : undefined;
   const defaultText = input.type === 'Note' ? 'Note' : input.type === 'Label' ? 'Label' : undefined;
 
-  const styleRaw: any = input.style ?? undefined;
+  const styleRaw = input.style;
   const style =
     styleRaw && typeof styleRaw === 'object'
       ? {

@@ -1,6 +1,11 @@
 {
   "entry": [
     "src/main.tsx",
-    "src/**/*.test.{ts,tsx}"
+    "src/**/*.test.{ts,tsx}",
+    "jest.setup.ts",
+    "scripts/check-no-dotdotdot.mjs"
+  ],
+  "ignore": [
+    "public/sw.js"
   ]
 }

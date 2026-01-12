@@ -21,3 +21,6 @@ export * from './graph/trace';
 export * from './unknownExportPolicy';
 export * from './relationshipValidationMode';
 export * from './viewConnections';
+
+export * from './invariants/applyModelInvariants';
+export * from './sanitize/persistedTaggedValues';

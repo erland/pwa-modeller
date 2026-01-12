@@ -231,34 +231,64 @@ function migrateV7ToV8(model: Model): Model {
 }
 
 
-export function migrateModel(model: Model): Model {
-  let v = getSchemaVersion(model);
+export type MigrationResult = {
+  model: Model;
+  migratedFromVersion: number;
+  notes: string[];
+};
+
+/**
+ * Run schema migrations on a persisted model.
+ *
+ * Migrations are allowed to change the meaning of fields/structures to match
+ * the current schema version.
+ */
+export function runMigrations(model: Model): MigrationResult {
+  const migratedFromVersion = getSchemaVersion(model);
+  const notes: string[] = [];
+
+  let v = migratedFromVersion;
   if (v < 2) {
     model = migrateV1ToV2(model);
+    notes.push('migrate v1 -> v2');
     v = getSchemaVersion(model);
   }
   if (v < 3) {
     model = migrateV2ToV3(model);
+    notes.push('migrate v2 -> v3');
     v = getSchemaVersion(model);
   }
   if (v < 4) {
     model = migrateV3ToV4(model);
+    notes.push('migrate v3 -> v4');
     v = getSchemaVersion(model);
   }
   if (v < 5) {
     model = migrateV4ToV5(model);
+    notes.push('migrate v4 -> v5');
     v = getSchemaVersion(model);
   }
   if (v < 6) {
     model = migrateV5ToV6(model);
+    notes.push('migrate v5 -> v6');
     v = getSchemaVersion(model);
   }
   if (v < 7) {
     model = migrateV6ToV7(model);
+    notes.push('migrate v6 -> v7');
     v = getSchemaVersion(model);
   }
   if (v < 8) {
     model = migrateV7ToV8(model);
+    notes.push('migrate v7 -> v8');
   }
-  return model;
+
+  return { model, migratedFromVersion, notes };
+}
+
+/**
+ * Backward-compatible helper used by older code/tests.
+ */
+export function migrateModel(model: Model): Model {
+  return runMigrations(model).model;
 }

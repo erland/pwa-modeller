@@ -1,6 +1,7 @@
 import type { Model } from '../../domain';
+import { applyModelInvariants } from '../../domain';
 import { isRecord } from './utils';
-import { migrateModel } from './migrations';
+import { runMigrations } from './migrations';
 import {
   ensureModelFolderExtensions,
   sanitizeModelExternalIds,
@@ -28,16 +29,20 @@ export function deserializeModel(json: string): Model {
     throw new Error('Invalid model file (missing collections)');
   }
 
-  return ensureModelFolderExtensions(
+  const migrated = runMigrations(parsed as unknown as Model);
+
+  const sanitized = ensureModelFolderExtensions(
     sanitizeModelViewConnections(
       sanitizeModelRelationshipAttrs(
         sanitizeModelUnknownTypes(
           sanitizeModelExternalIds(
-            sanitizeModelTaggedValues(migrateModel(parsed as unknown as Model))
+            sanitizeModelTaggedValues(migrated.model)
           )
         )
       )
     )
   );
+
+  return applyModelInvariants(sanitized);
 
 }

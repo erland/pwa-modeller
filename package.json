@@ -5,14 +5,15 @@
   "description": "Enterprise Architecture Modeling PWA (ArchiMate 3.2) \u2013 MVP",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit && vite build",
+    "build": "npm run check:ellipsis && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit && vite build",
     "preview": "vite preview",
-    "test": "jest",
+    "test": "npm run check:ellipsis && jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "check:ellipsis": "node scripts/check-no-dotdotdot.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

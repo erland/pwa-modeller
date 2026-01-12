@@ -4,6 +4,7 @@ import type { ImportContext, ImportResult } from './importer';
 import { UnsupportedImportFormatError } from './importer';
 import { pickImporter } from './registry';
 import { readBlobAsArrayBuffer } from './blobReaders';
+import { normalizeImportIR } from '../normalize/normalizeImportIR';
 
 const DEFAULT_SNIFF_BYTES = 256 * 1024; // 256 KiB
 
@@ -53,8 +54,9 @@ export async function buildImportContext(file: File): Promise<ImportContext> {
 /**
  * Main entry point used by UI.
  *
- * Step 1: returns IR + ImportReport; does NOT apply to store.
- * Step 3 will introduce applyImportIR(...) to mutate the store.
+ * Step 1: parse into format-agnostic IR + ImportReport (no store mutations).
+ * Step 2: normalize/validate IR into a structurally safe shape.
+ * Step 3: applyImportIR(...) mutates the store.
  */
 export async function importModel(file: File): Promise<ImportResult> {
   registerBuiltInImporters();
@@ -75,5 +77,11 @@ export async function importModel(file: File): Promise<ImportResult> {
     result.report = createImportReport(result.format || pick.importer.format || pick.importer.id);
   }
 
-  return result;
+  // Step 2: format-agnostic normalization (keeps parse vs apply responsibilities clean).
+  const normalizedIr = normalizeImportIR(result.ir, {
+    report: result.report,
+    source: result.format || pick.importer.format || pick.importer.id
+  });
+
+  return { ...result, ir: normalizedIr };
 }

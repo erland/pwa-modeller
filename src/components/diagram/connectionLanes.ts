@@ -24,32 +24,90 @@ function segmentOrientation(a: Point, b: Point, eps = 0.0001): 'h' | 'v' | 'd' {
 
 /**
  * Detect a "corridor" suitable for lane offsets. For now we keep it intentionally simple:
- * - only handle 3-segment orthogonal polylines (4 points)
- * - corridor is the middle segment (p1 -> p2)
+ * - handle orthogonal polylines of length >= 4 points
+ * - choose the longest *interior* run (horizontal or vertical) as the corridor
+ *
+ * The intent is to offset the most visually dominant "channel" segment so that
+ * multiple connections that would otherwise overlap get cheap separation.
  */
 function laneInfoForPolyline(points: Point[], gridSize?: number): LaneInfo | null {
-  if (!points || points.length !== 4) return null;
-  const [p0, p1, p2, p3] = points;
-  const o0 = segmentOrientation(p0, p1);
-  const o1 = segmentOrientation(p1, p2);
-  const o2 = segmentOrientation(p2, p3);
-  if (o0 === 'd' || o1 === 'd' || o2 === 'd') return null;
-  // Typical 3-segment orthogonal: first and last have same orientation, middle is perpendicular.
-  if (o0 !== o2) return null;
-  if (o1 === o0) return null;
+  if (!points || points.length < 4) return null;
+
+  const orients: Array<'h' | 'v' | 'd'> = [];
+  for (let i = 0; i < points.length - 1; i += 1) {
+    orients.push(segmentOrientation(points[i], points[i + 1]));
+  }
+  if (orients.some((o) => o === 'd')) return null;
+
+  type Run = { kind: 'h' | 'v'; start: number; end: number; length: number };
+  const runs: Run[] = [];
+  let curKind: 'h' | 'v' = orients[0] as 'h' | 'v';
+  let curStart = 0;
+  let curLen = 0;
+  for (let i = 0; i < orients.length; i += 1) {
+    const k = orients[i] as 'h' | 'v';
+    const segLen = Math.abs(points[i + 1].x - points[i].x) + Math.abs(points[i + 1].y - points[i].y);
+    if (i === 0) {
+      curKind = k;
+      curStart = 0;
+      curLen = segLen;
+      continue;
+    }
+    if (k !== curKind) {
+      runs.push({ kind: curKind, start: curStart, end: i, length: curLen });
+      curKind = k;
+      curStart = i;
+      curLen = segLen;
+    } else {
+      curLen += segLen;
+    }
+  }
+  runs.push({ kind: curKind, start: curStart, end: orients.length, length: curLen });
+
+  const lastIdx = points.length - 1;
+  const interiorRuns = runs.filter((r) => r.start > 0 && r.end < lastIdx);
+  if (interiorRuns.length === 0) return null;
+
+  // Choose the longest interior run; tie-breaker is the most central run.
+  const mid = (points[0].x + points[lastIdx].x + points[0].y + points[lastIdx].y) / 4;
+  const scoreRun = (r: Run): number => {
+    const pA = points[r.start];
+    const pB = points[r.end];
+    const center = (pA.x + pB.x + pA.y + pB.y) / 4;
+    const centrality = Math.abs(center - mid);
+    return r.length * 10_000 - centrality; // prioritize length heavily
+  };
+
+  let best = interiorRuns[0];
+  let bestScore = scoreRun(best);
+  for (const r of interiorRuns.slice(1)) {
+    const s = scoreRun(r);
+    if (s > bestScore) {
+      best = r;
+      bestScore = s;
+    }
+  }
 
   const bandStep = (gridSize ?? 20) * 4;
-  if (o1 === 'v') {
-    const channelX = (p1.x + p2.x) / 2;
-    const band = quantize((p1.y + p2.y) / 2, bandStep);
+  const indices: number[] = [];
+  for (let i = best.start; i <= best.end; i += 1) indices.push(i);
+
+  if (best.kind === 'v') {
+    const channelX = points[best.start].x;
+    const y0 = points[best.start].y;
+    const y1 = points[best.end].y;
+    const band = quantize((y0 + y1) / 2, bandStep);
     const channel = quantize(channelX, gridSize ?? 20);
-    return { key: `x:${channel}:${band}`, axis: 'x', indices: [1, 2] };
+    return { key: `x:${channel}:${band}`, axis: 'x', indices };
   }
-  // o1 === 'h'
-  const channelY = (p1.y + p2.y) / 2;
-  const band = quantize((p1.x + p2.x) / 2, bandStep);
+
+  // best.kind === 'h'
+  const channelY = points[best.start].y;
+  const x0 = points[best.start].x;
+  const x1 = points[best.end].x;
+  const band = quantize((x0 + x1) / 2, bandStep);
   const channel = quantize(channelY, gridSize ?? 20);
-  return { key: `y:${channel}:${band}`, axis: 'y', indices: [1, 2] };
+  return { key: `y:${channel}:${band}`, axis: 'y', indices };
 }
 
 function laneIndexForPosition(i: number): number {

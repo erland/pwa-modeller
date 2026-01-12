@@ -77,6 +77,71 @@ export function rectEdgeAnchor(n: ViewNodeLayout, toward: Point): Point {
   return { x: cx + dx * s, y: cy + dy * s };
 }
 
+function rectBox(n: ViewNodeLayout): { minX: number; minY: number; maxX: number; maxY: number; cx: number; cy: number } {
+  const w = n.width ?? (n.connectorId ? 24 : 120);
+  const h = n.height ?? (n.connectorId ? 24 : 60);
+  const minX = n.x;
+  const minY = n.y;
+  const maxX = n.x + w;
+  const maxY = n.y + h;
+  return { minX, minY, maxX, maxY, cx: minX + w / 2, cy: minY + h / 2 };
+}
+
+/**
+ * Return an attachment point on `n` that approximates the *closest* edge toward `other`.
+ *
+ * This differs from `rectEdgeAnchor` (ray from center) and tends to match what users
+ * expect for straight connections: connect between the facing, nearest edges.
+ */
+export function rectClosestEdgeAnchor(n: ViewNodeLayout, other: ViewNodeLayout): Point {
+  const a = rectBox(n);
+  const b = rectBox(other);
+
+  const separatedLeft = b.maxX < a.minX;
+  const separatedRight = b.minX > a.maxX;
+  const separatedAbove = b.maxY < a.minY;
+  const separatedBelow = b.minY > a.maxY;
+
+  // Prefer the nearest pair of facing edges when rectangles are separated.
+  // If they're separated both horizontally *and* vertically (diagonal case),
+  // choose the dominant separation axis (larger gap) so the connection tends
+  // to enter/exit on the side that feels most "natural" while dragging.
+  const sepX = separatedLeft || separatedRight;
+  const sepY = separatedAbove || separatedBelow;
+  if (sepX && sepY) {
+    const gapX = separatedLeft ? a.minX - b.maxX : b.minX - a.maxX;
+    const gapY = separatedAbove ? a.minY - b.maxY : b.minY - a.maxY;
+    if (gapX > gapY) {
+      // More separated horizontally → attach on left/right edge.
+      if (separatedLeft) return { x: a.minX, y: clamp(b.cy, a.minY, a.maxY) };
+      return { x: a.maxX, y: clamp(b.cy, a.minY, a.maxY) };
+    }
+    // More separated vertically (or equal) → attach on top/bottom edge.
+    if (separatedAbove) return { x: clamp(b.cx, a.minX, a.maxX), y: a.minY };
+    return { x: clamp(b.cx, a.minX, a.maxX), y: a.maxY };
+  }
+
+  if (separatedLeft) {
+    // other is strictly left
+    return { x: a.minX, y: clamp(b.cy, a.minY, a.maxY) };
+  }
+  if (separatedRight) {
+    // other is strictly right
+    return { x: a.maxX, y: clamp(b.cy, a.minY, a.maxY) };
+  }
+  if (separatedAbove) {
+    // other is strictly above
+    return { x: clamp(b.cx, a.minX, a.maxX), y: a.minY };
+  }
+  if (separatedBelow) {
+    // other is strictly below
+    return { x: clamp(b.cx, a.minX, a.maxX), y: a.maxY };
+  }
+
+  // Overlapping / intersecting: fall back to the center-ray anchor for stability.
+  return rectEdgeAnchor(n, { x: b.cx, y: b.cy });
+}
+
 export function unitPerp(from: Point, to: Point): Point {
   const dx = to.x - from.x;
   const dy = to.y - from.y;

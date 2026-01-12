@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import type { Model, ViewConnection, ViewNodeLayout } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import { RelationshipMarkers } from '../RelationshipMarkers';
@@ -9,13 +9,12 @@ import {
   nodeRefFromLayout,
   offsetPolyline,
   polylineMidPoint,
-  rectEdgeAnchor,
+  rectClosestEdgeAnchor,
   unitPerp,
 } from '../geometry';
 import { getConnectionPath } from '../connectionPath';
 import { applyLaneOffsetsSafely } from '../connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from '../orthogonalHints';
-import { adjustOrthogonalConnectionEndpoints } from '../adjustConnectionEndpoints';
 import { relationshipVisual } from '../relationshipVisual';
 import { refKey } from '../connectable';
 
@@ -57,6 +56,9 @@ export function DiagramRelationshipsLayer({
   groupBoxDraft,
   onSelect,
 }: Props) {
+  // Cache previous un-offset polylines for local re-routing.
+  // Keyed by view-connection id.
+  const seedPathsRef = useRef<Map<string, Point[]>>(new Map());
   const nodeRect = (n: ViewNodeLayout) => {
     const isConnector = Boolean((n as any).connectorId);
     const w = n.width ?? (isConnector ? 24 : 120);
@@ -67,6 +69,7 @@ export function DiagramRelationshipsLayer({
   // Precompute routed polylines for all connections and apply cheap lane offsets for
   // connections that share a similar corridor (helps avoid visually merging lines).
   const pointsByConnectionId = useMemo(() => {
+    const nextSeeds = new Map<string, Point[]>();
     const laneItems: Array<{ id: string; points: Point[] }> = [];
     const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
 
@@ -79,8 +82,12 @@ export function DiagramRelationshipsLayer({
       const t = item.target;
       const sc: Point = { x: s.x + (s.width ?? 120) / 2, y: s.y + (s.height ?? 60) / 2 };
       const tc: Point = { x: t.x + (t.width ?? 120) / 2, y: t.y + (t.height ?? 60) / 2 };
-      const start = rectEdgeAnchor(s, tc);
-      const end = rectEdgeAnchor(t, sc);
+      // Anchor selection:
+      // Use the closest-facing edges for both straight and orthogonal routes.
+      // This matches user expectations ("take the closest path") and lets the orthogonal
+      // router use axis/direction hints derived from these anchors.
+      const start = rectClosestEdgeAnchor(s, t);
+      const end = rectClosestEdgeAnchor(t, s);
 
       const sKey = refKey(nodeRefFromLayout(s)!);
       const tKey = refKey(nodeRefFromLayout(t)!);
@@ -95,19 +102,24 @@ export function DiagramRelationshipsLayer({
 
       obstaclesById.set(conn.id, obstacles);
 
+      const seedPath = seedPathsRef.current.get(conn.id);
+
       const hints = {
         ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
         obstacles,
         obstacleMargin: gridSize ? gridSize / 2 : 10,
+        seedPath,
+        // Padding for local re-routing bounds (in model units). Tuned for stability.
+        localReroutePadding: gridSize ? gridSize * 12 : 120,
       };
       let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
 
-      // If the router decided to start/end with an axis that doesn't match the original anchors,
-      // snap endpoints to the implied node edges so the connection doesn't appear to "start from"
-      // an unexpected side (e.g. horizontal segment starting at the top edge).
-      if (conn.route.kind === 'orthogonal') {
-        points = adjustOrthogonalConnectionEndpoints(points, s, t, { stubLength: gridSize ? gridSize / 2 : 10 });
-      }
+      // Note: endpoint stubs / side forcing are handled by the router + hints.
+      // Avoid mutating the polyline here; it can introduce non-orthogonal artifacts.
+
+      // Cache the *base* routed polyline (before group offsets and lane offsets)
+      // so that incremental re-routing is stable and not influenced by spacing cosmetics.
+      nextSeeds.set(conn.id, points);
 
       const total = item.totalInGroup;
       if (total > 1) {
@@ -131,6 +143,9 @@ export function DiagramRelationshipsLayer({
 
       laneItems.push({ id: conn.id, points });
     }
+
+    // Update cache for the next render.
+    seedPathsRef.current = nextSeeds;
 
     const adjusted = applyLaneOffsetsSafely(laneItems, {
       gridSize,

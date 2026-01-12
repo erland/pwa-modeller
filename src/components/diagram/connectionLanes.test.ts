@@ -69,4 +69,43 @@ describe('connectionLanes', () => {
     expect(out[1].points[1].x).toBe(50);
     expect(out[1].points[2].x).toBe(50);
   });
+
+  test('applies lane offsets for longer orthogonal polylines by shifting the dominant interior run', () => {
+    const items = [
+      {
+        id: 'a',
+        points: [
+          { x: 0, y: 0 },
+          { x: 40, y: 0 },
+          { x: 40, y: 20 },
+          { x: 80, y: 20 },
+          { x: 80, y: 120 },
+          { x: 120, y: 120 },
+        ],
+      },
+      {
+        id: 'b',
+        points: [
+          { x: 0, y: 10 },
+          { x: 40, y: 10 },
+          { x: 40, y: 20 },
+          { x: 80, y: 20 },
+          { x: 80, y: 120 },
+          { x: 120, y: 120 },
+        ],
+      },
+    ];
+
+    const out = applyLaneOffsets(items, { gridSize: 20, laneSpacing: 10 });
+
+    // The dominant interior run is the long vertical corridor at x=80 between y=20..120.
+    // Item 'a' stays on base lane.
+    expect(out[0].points[3].x).toBe(80);
+    expect(out[0].points[4].x).toBe(80);
+
+    // Item 'b' gets shifted to a different lane (x changes, but the corridor remains vertical).
+    expect(out[1].points[3].x).not.toBe(80);
+    expect(out[1].points[4].x).not.toBe(80);
+    expect(out[1].points[3].x).toBe(out[1].points[4].x);
+  });
 });

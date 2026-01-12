@@ -11,8 +11,8 @@ module.exports = [
   },
   js.configs.recommended,
   // Keep TypeScript-specific rules away from plain .js/.cjs files like config files.
-  …tseslint.configs.recommended.map((cfg) => ({
-    …cfg,
+  ...tseslint.configs.recommended.map((cfg) => ({
+    ...cfg,
     files: ['**/*.{ts,tsx}']
   })),
 

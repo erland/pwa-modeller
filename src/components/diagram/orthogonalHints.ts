@@ -1,5 +1,5 @@
 import type { ViewNodeLayout } from '../../domain';
-import type { OrthogonalRoutingAxis, OrthogonalRoutingHints } from './connectionPath';
+import type { OrthogonalRoutingAxis, OrthogonalRoutingHints } from '../../diagram/routing/engine';
 import type { Point } from './geometry';
 
 function nodeSize(n: ViewNodeLayout): { w: number; h: number } {

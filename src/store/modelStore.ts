@@ -54,7 +54,7 @@ export class ModelStore {
    * IMPORTANT: All store methods are arrow functions to avoid `this`-binding bugs.
    *
    * Several UI layers pass store methods as callbacks. If these were prototype
-   * methods (e.g. `updateRelationship() { ... }`), `this` could become undefined
+   * methods (e.g. `updateRelationship() { … }`), `this` could become undefined
    * or point at another object, causing runtime errors like:
    *   `TypeError: this.updateModel is not a function`
    */

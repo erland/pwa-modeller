@@ -53,7 +53,7 @@ function laneInfoForPolyline(points: Point[], gridSize?: number): LaneInfo | nul
 }
 
 function laneIndexForPosition(i: number): number {
-  // 0, +1, -1, +2, -2, ...
+  // 0, +1, -1, +2, -2, …
   if (i === 0) return 0;
   const k = Math.ceil(i / 2);
   return i % 2 === 1 ? k : -k;

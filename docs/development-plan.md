@@ -92,15 +92,15 @@ Provide an in-memory model store with a clear API and an abstraction layer for p
   - Holds the current `Model` (or `null` if none loaded).
   - Exposes operations:
     - `createEmptyModel(metadata)`
-    - `updateModelMetadata(...)`
+    - `updateModelMetadata(…)`
     - `addElement(element)`
-    - `updateElement(...)`
+    - `updateElement(…)`
     - `deleteElement(id)`
     - `addRelationship(rel)`
-    - `updateRelationship(...)`
+    - `updateRelationship(…)`
     - `deleteRelationship(id)`
     - `addView(view)`
-    - `updateView(...)`
+    - `updateView(…)`
     - `deleteView(id)`
   - Emits change notifications to the UI (via state management).
 - Implement a simple persistence abstraction:

@@ -71,9 +71,9 @@ describe('relationship rules (modes)', () => {
     try {
       setRelationshipValidationMatrix(parseRelationshipTableXml(synthetic));
 
-      // Access is not in core (relations="o"), so 'full' should reject it...
+      // Access is not in core (relations="o"), so 'full' should reject it…
       expect(validateRelationship('BusinessProcess', 'BusinessObject', 'Access', 'full').allowed).toBe(false);
-      // ...but 'full_derived' should allow it via derived="a".
+      // …but 'full_derived' should allow it via derived="a".
       expect(validateRelationship('BusinessProcess', 'BusinessObject', 'Access', 'full_derived')).toEqual({ allowed: true });
     } finally {
       // Restore the original matrix so other tests are unaffected.

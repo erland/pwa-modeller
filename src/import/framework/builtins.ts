@@ -8,7 +8,7 @@ let registered = false;
 
 /**
  * Register built-in importers once.
- * This is called by importModel(...) so callers do not need to remember to register.
+ * This is called by importModel(…) so callers do not need to remember to register.
  */
 export function registerBuiltInImporters(): void {
   if (registered) return;

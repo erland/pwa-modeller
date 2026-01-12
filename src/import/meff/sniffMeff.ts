@@ -15,7 +15,7 @@ export function sniffMeff(ctx: ImportContext): boolean {
     t.includes('www.opengroup.org/xsd/archimate') ||
     t.includes('xsd/archimate');
 
-  // MEFF is typically a <model ...> root.
+  // MEFF is typically a <model …> root.
   const hasModelRoot = t.includes('<model') && (t.includes('</model>') || t.includes('<elements') || t.includes('<relationships'));
 
   // Many exports mention "archimate" plainly.

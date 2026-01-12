@@ -55,7 +55,7 @@ function parseLettersToSet(letters: string | null | undefined): Set<Relationship
  * Parse a relationship table XML string into a RelationshipMatrix.
  *
  * Expected shape:
- * <relationships ...>
+ * <relationships …>
  *   <source concept="BusinessProcess">
  *     <target concept="BusinessObject" relations="ao" />
  *   </source>

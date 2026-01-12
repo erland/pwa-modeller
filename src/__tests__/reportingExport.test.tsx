@@ -15,7 +15,7 @@ describe('Step 11 – Reporting and Export', () => {
     const user = userEvent.setup();
     const spy = jest.spyOn(download, 'downloadTextFile').mockImplementation(() => {});
 
-    // Prepare state BEFORE rendering to avoid act(...) warnings from external-store updates.
+    // Prepare state BEFORE rendering to avoid act(…) warnings from external-store updates.
     modelStore.newModel({ name: 'Report Model' });
     modelStore.addElement(createElement({ name: 'Process A', layer: 'Business', type: 'BusinessProcess' }));
     modelStore.addElement(createElement({ name: 'Capability X', layer: 'Strategy', type: 'Capability' }));
@@ -44,7 +44,7 @@ describe('Step 11 – Reporting and Export', () => {
     const user = userEvent.setup();
     const spy = jest.spyOn(download, 'downloadTextFile').mockImplementation(() => {});
 
-    // Prepare state BEFORE rendering to avoid act(...) warnings from external-store updates.
+    // Prepare state BEFORE rendering to avoid act(…) warnings from external-store updates.
     modelStore.newModel({ name: 'Diagram Model' });
     const e1 = createElement({ name: 'Process A', layer: 'Business', type: 'BusinessProcess' });
     const e2 = createElement({ name: 'App X', layer: 'Application', type: 'ApplicationComponent' });

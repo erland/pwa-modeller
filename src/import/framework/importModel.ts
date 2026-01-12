@@ -56,7 +56,7 @@ export async function buildImportContext(file: File): Promise<ImportContext> {
  *
  * Step 1: parse into format-agnostic IR + ImportReport (no store mutations).
  * Step 2: normalize/validate IR into a structurally safe shape.
- * Step 3: applyImportIR(...) mutates the store.
+ * Step 3: applyImportIR(…) mutates the store.
  */
 export async function importModel(file: File): Promise<ImportResult> {
   registerBuiltInImporters();

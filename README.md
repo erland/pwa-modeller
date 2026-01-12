@@ -48,7 +48,7 @@ The project follows a simple layered structure:
   - “Unknown type” handling to keep imports resilient
 
 - **`src/store/`** – Application state & persistence
-  - Central `modelStore` (external store) + `useModelStore(...)` hook (`useSyncExternalStore`)
+  - Central `modelStore` (external store) + `useModelStore(…)` hook (`useSyncExternalStore`)
   - Serialization/deserialization helpers (`serializeModel` / `deserializeModel`)
   - Local persistence (localStorage) and file download helpers
 

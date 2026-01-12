@@ -52,8 +52,8 @@ function childText(el: Element, childTag: string): string | null {
 function parsePropertiesToRecord(el: Element): Record<string, string> | undefined {
   // Common patterns:
   // - <properties><property key="k" value="v"/></properties>
-  // - <properties><property propertyDefinitionRef="..." value="..."/></properties>
-  // - <property key="..." value="..."/>
+  // - <properties><property propertyDefinitionRef="…" value="…"/></properties>
+  // - <property key="…" value="…"/>
   const props: Record<string, string> = {};
 
   const collectFromProperty = (p: Element) => {
@@ -84,7 +84,7 @@ function parsePropertiesToRecord(el: Element): Record<string, string> | undefine
 function parseTaggedValues(el: Element): IRTaggedValue[] | undefined {
   // We keep this broad. Some exporters represent tagged values as:
   // - <taggedValues><taggedValue key="k" value="v"/></taggedValues>
-  // - <properties> ... </properties> (handled separately as properties)
+  // - <properties> … </properties> (handled separately as properties)
   const out: IRTaggedValue[] = [];
 
   const addKV = (key: string | null, value: string | null) => {

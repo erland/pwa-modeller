@@ -13,6 +13,8 @@ import {
   unitPerp,
 } from '../geometry';
 import { getConnectionPath } from '../connectionPath';
+import { routeOrthogonalBatchWithSoftAvoidance, type PathfinderBatchRequest } from '../pathfinderSoftAvoid';
+import { computeFanInPolylines, type FanInConnection } from '../fanInRouting';
 import { applyLaneOffsetsSafely } from '../connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from '../orthogonalHints';
 import { adjustOrthogonalConnectionEndpoints } from '../adjustConnectionEndpoints';
@@ -64,11 +66,72 @@ export function DiagramRelationshipsLayer({
     return { x: n.x, y: n.y, w, h };
   };
 
+  const inferSideFromAnchor = (n: ViewNodeLayout, anchor: Point): 'left' | 'right' | 'top' | 'bottom' => {
+    const r = nodeRect(n);
+    const left = Math.abs(anchor.x - r.x);
+    const right = Math.abs(anchor.x - (r.x + r.w));
+    const top = Math.abs(anchor.y - r.y);
+    const bottom = Math.abs(anchor.y - (r.y + r.h));
+    const min = Math.min(left, right, top, bottom);
+    if (min === left) return 'left';
+    if (min === right) return 'right';
+    if (min === top) return 'top';
+    return 'bottom';
+  };
+
   // Precompute routed polylines for all connections and apply cheap lane offsets for
   // connections that share a similar corridor (helps avoid visually merging lines).
   const pointsByConnectionId = useMemo(() => {
-    const laneItems: Array<{ id: string; points: Point[] }> = [];
+    const laneItems: Array<{ id: string; points: Point[]; targetKey?: string; targetSide?: 'left' | 'right' | 'top' | 'bottom' }> = [];
+    const basePoints = new Map<string, Point[]>();
     const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
+    const fanInCandidates: FanInConnection[] = [];
+
+    // Sequential pathfinder routing with soft avoidance to reduce collisions between connections.
+    // This is deterministic (sorted by connection id) and is applied only to orthogonal auto-routed connections.
+    const pfRequests: PathfinderBatchRequest[] = [];
+    const gs = gridSize ?? 20;
+    const stubLength = Math.max(6, Math.floor(gs / 2));
+    const clearance = Math.max(6, Math.floor(gs / 2));
+    const softRadius = Math.max(4, Math.floor(gs / 3));
+    const softPenalty = gs * 8;
+
+    for (const item of connectionRenderItems) {
+      const conn = item.connection;
+      if (conn.route.kind !== 'orthogonal' || conn.points) continue;
+
+      const s = item.source;
+      const t = item.target;
+
+      const sKey = refKey(nodeRefFromLayout(s)!);
+      const tKey = refKey(nodeRefFromLayout(t)!);
+
+      const obstacles = nodes
+        .filter((n) => {
+          const r = nodeRefFromLayout(n);
+          if (!r) return false;
+          const k = refKey(r);
+          return k !== sKey && k !== tKey;
+        })
+        .map(nodeRect);
+
+      // Keep obstacles available for lane-safety checks as well.
+      obstaclesById.set(conn.id, obstacles);
+
+      pfRequests.push({
+        id: conn.id,
+        sourceRect: nodeRect(s),
+        targetRect: nodeRect(t),
+        obstacles,
+        options: { gridSize: gs, clearance, stubLength, coordPaddingSteps: 2 },
+      });
+    }
+
+    const pfMap = routeOrthogonalBatchWithSoftAvoidance(pfRequests, {
+      softRadius,
+      softPenalty,
+      skipEndpointSegments: 1,
+    });
 
     for (const item of connectionRenderItems) {
       const conn = item.connection;
@@ -84,7 +147,8 @@ export function DiagramRelationshipsLayer({
 
       const sKey = refKey(nodeRefFromLayout(s)!);
       const tKey = refKey(nodeRefFromLayout(t)!);
-      const obstacles = nodes
+      const targetSide = inferSideFromAnchor(t, end);
+      const obstacles = obstaclesById.get(conn.id) ?? nodes
         .filter((n) => {
           const r = nodeRefFromLayout(n);
           if (!r) return false;
@@ -93,21 +157,38 @@ export function DiagramRelationshipsLayer({
         })
         .map(nodeRect);
 
-      obstaclesById.set(conn.id, obstacles);
+      if (!obstaclesById.has(conn.id)) obstaclesById.set(conn.id, obstacles);
 
-      const hints = {
-        ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
-        obstacles,
-        obstacleMargin: gridSize ? gridSize / 2 : 10,
-      };
-      let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
+      let usedPathfinder = false;
+      let points: Point[] | null = null;
 
-      // If the router decided to start/end with an axis that doesn't match the original anchors,
-      // snap endpoints to the implied node edges so the connection doesn't appear to "start from"
-      // an unexpected side (e.g. horizontal segment starting at the top edge).
-      if (conn.route.kind === 'orthogonal') {
-        points = adjustOrthogonalConnectionEndpoints(points, s, t, { stubLength: gridSize ? gridSize / 2 : 10 });
+      // Prefer the full pathfinder result (with soft avoidance) for orthogonal auto routes.
+      if (conn.route.kind === 'orthogonal' && !conn.points) {
+        const pf = pfMap.get(conn.id);
+        if (pf) {
+          points = pf;
+          usedPathfinder = true;
+        }
       }
+
+      if (!points) {
+        const hints = {
+          ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
+          obstacles,
+          obstacleMargin: gridSize ? gridSize / 2 : 10,
+        };
+        points = getConnectionPath(conn, { a: start, b: end, hints }).points;
+
+        // If the router decided to start/end with an axis that doesn't match the original anchors,
+        // snap endpoints to the implied node edges so the connection doesn't appear to "start from"
+        // an unexpected side (e.g. horizontal segment starting at the top edge).
+        if (conn.route.kind === 'orthogonal') {
+          points = adjustOrthogonalConnectionEndpoints(points, s, t, { stubLength: gridSize ? gridSize / 2 : 10 });
+        }
+      }
+
+      if (!points) continue;
+
 
       const total = item.totalInGroup;
       if (total > 1) {
@@ -129,16 +210,47 @@ export function DiagramRelationshipsLayer({
         points = offsetPolyline(points, perp, offset);
       }
 
-      laneItems.push({ id: conn.id, points });
+      basePoints.set(conn.id, points);
+
+      if (conn.route.kind === 'orthogonal' && !usedPathfinder) {
+        fanInCandidates.push({ id: conn.id, viewId: conn.viewId, targetKey: tKey, points, targetRect: nodeRect(t), targetSide });
+      }
+
+      if (!usedPathfinder) {
+        laneItems.push({ id: conn.id, points, targetKey: tKey, targetSide });
+      }
     }
 
-    const adjusted = applyLaneOffsetsSafely(laneItems, {
+        // Fan-in routing (dock + approach lanes) for connections that share the same target side.
+    const targetKeysSet = new Set(fanInCandidates.map((c) => c.targetKey));
+    const fanInObstacles = nodes
+      .filter((n) => {
+        const r = nodeRefFromLayout(n);
+        if (!r) return false;
+        const k = refKey(r);
+        return !targetKeysSet.has(k);
+      })
+      .map(nodeRect);
+
+    const fanInMap = computeFanInPolylines(fanInCandidates, {
       gridSize,
+      stubLength: gridSize ? gridSize / 2 : 10,
+      obstacles: fanInObstacles,
+      obstacleMargin: gridSize ? gridSize / 2 : 10,
+    });
+
+    const fanInIds = new Set(fanInMap.keys());
+    const laneInput = laneItems.filter((it) => !fanInIds.has(it.id));
+
+    const adjusted = applyLaneOffsetsSafely(laneInput, {
+      gridSize,
+      stubLength: gridSize ? gridSize / 2 : 10,
       obstaclesById,
       obstacleMargin: gridSize ? gridSize / 2 : 10,
     });
-    const map = new Map<string, Point[]>();
+    const map = new Map<string, Point[]>(basePoints);
     for (const it of adjusted) map.set(it.id, it.points);
+    for (const [id, pts] of fanInMap) map.set(id, pts);
     return map;
   }, [connectionRenderItems, model, nodes, gridSize]);
 

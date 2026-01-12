@@ -2,7 +2,9 @@ import type { Model, RelationshipType, ViewNodeLayout, ArchimateLayer, ElementTy
 import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import { refKey } from './connectable';
 import { getConnectionPath, polylineToSvgPath } from './connectionPath';
+import { routeOrthogonalBatchWithSoftAvoidance, type PathfinderBatchRequest } from './pathfinderSoftAvoid';
 import { applyLaneOffsetsSafely } from './connectionLanes';
+import { computeFanInPolylines, type FanInConnection } from './fanInRouting';
 import { orthogonalRoutingHintsFromAnchors } from './orthogonalHints';
 import { adjustOrthogonalConnectionEndpoints } from './adjustConnectionEndpoints';
 import {
@@ -146,8 +148,28 @@ export function createViewSvg(model: Model, viewId: string): string {
     id: string;
     relId: string;
     points: Point[];
+    targetKey?: string;
+    targetSide?: 'left' | 'right' | 'top' | 'bottom';
+    targetRect?: { x: number; y: number; w: number; h: number };
     label: string;
     visual: RelationshipVisual;
+  };
+
+  const inferSideFromAnchor = (n: ViewNodeLayout, anchor: Point): 'left' | 'right' | 'top' | 'bottom' => {
+    const { w, h } = nodeSize(n);
+    const x0 = n.x;
+    const x1 = n.x + w;
+    const y0 = n.y;
+    const y1 = n.y + h;
+    const dl = Math.abs(anchor.x - x0);
+    const dr = Math.abs(anchor.x - x1);
+    const dt = Math.abs(anchor.y - y0);
+    const db = Math.abs(anchor.y - y1);
+    const min = Math.min(dl, dr, dt, db);
+    if (min === dl) return 'left';
+    if (min === dr) return 'right';
+    if (min === dt) return 'top';
+    return 'bottom';
   };
 
   // Group connections by unordered endpoint pair so parallel relationships are offset consistently.
@@ -168,7 +190,53 @@ export function createViewSvg(model: Model, viewId: string): string {
   }
 
   const relItems: RelItem[] = [];
+  const basePointsById = new Map<string, Point[]>();
+  const pathfinderIds = new Set<string>();
   const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
+  // Sequential pathfinder routing with soft avoidance (penalize overlap with already-routed paths).
+  const gs = view.formatting?.gridSize ?? 20;
+  const stubLength = Math.max(6, Math.floor(gs / 2));
+  const clearance = Math.max(6, Math.floor(gs / 2));
+  const softRadius = Math.max(4, Math.floor(gs / 3));
+  const softPenalty = gs * 8;
+
+  const pfRequests: PathfinderBatchRequest[] = [];
+  for (const conn of visibleConnections) {
+    if (conn.route.kind !== 'orthogonal' || conn.points) continue;
+
+    const sNode = nodeByKey.get(refKey({ kind: conn.source.kind, id: conn.source.id }));
+    const tNode = nodeByKey.get(refKey({ kind: conn.target.kind, id: conn.target.id }));
+    if (!sNode || !tNode) continue;
+
+    const sKey = refKey({ kind: conn.source.kind, id: conn.source.id });
+    const tKey = refKey({ kind: conn.target.kind, id: conn.target.id });
+
+    const obstacles = nodes
+      .filter((n) => {
+        const r = nodeRefFromLayout(n);
+        if (!r) return false;
+        const k = refKey(r);
+        return k !== sKey && k !== tKey;
+      })
+      .map(nodeRect);
+
+    obstaclesById.set(conn.id, obstacles);
+
+    pfRequests.push({
+      id: conn.id,
+      sourceRect: nodeRect(sNode),
+      targetRect: nodeRect(tNode),
+      obstacles,
+      options: { gridSize: gs, clearance, stubLength, coordPaddingSteps: 2 },
+    });
+  }
+
+  const pfMap = routeOrthogonalBatchWithSoftAvoidance(pfRequests, {
+    softRadius,
+    softPenalty,
+    skipEndpointSegments: 1,
+  });
+
   for (const [groupKey, conns] of groups) {
     // Stable order inside group.
     const sorted = [...conns].sort((a, b) => a.relationshipId.localeCompare(b.relationshipId) || a.id.localeCompare(b.id));
@@ -202,7 +270,7 @@ export function createViewSvg(model: Model, viewId: string): string {
       // Centralized routing (straight/orthogonal) using the shared path generator.
       const sKey = refKey({ kind: conn.source.kind, id: conn.source.id });
       const tKey = refKey({ kind: conn.target.kind, id: conn.target.id });
-      const obstacles = nodes
+      const obstacles = obstaclesById.get(conn.id) ?? nodes
         .filter((n) => {
           const r = nodeRefFromLayout(n);
           if (!r) return false;
@@ -211,19 +279,36 @@ export function createViewSvg(model: Model, viewId: string): string {
         })
         .map(nodeRect);
 
-      obstaclesById.set(conn.id, obstacles);
+      if (!obstaclesById.has(conn.id)) obstaclesById.set(conn.id, obstacles);
 
       const gridSize = view.formatting?.gridSize;
-      const hints = {
-        ...orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, gridSize),
-        obstacles,
-        obstacleMargin: gridSize ? gridSize / 2 : 10,
-      };
-      let points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end, hints }).points;
 
-      if (conn.route.kind === 'orthogonal') {
-        points = adjustOrthogonalConnectionEndpoints(points, sNode, tNode, { stubLength: gridSize ? gridSize / 2 : 10 });
+      let points: Point[] | null = null;
+
+      // Prefer the full pathfinder result (with soft avoidance) for orthogonal auto routes.
+      if (conn.route.kind === 'orthogonal' && !translatedPoints) {
+        const pf = pfMap.get(conn.id);
+        if (pf) {
+          points = pf;
+          pathfinderIds.add(conn.id);
+        }
       }
+
+      if (!points) {
+        const hints = {
+          ...orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, gridSize),
+          obstacles,
+          obstacleMargin: gridSize ? gridSize / 2 : 10,
+        };
+        points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end, hints }).points;
+
+        if (conn.route.kind === 'orthogonal') {
+          points = adjustOrthogonalConnectionEndpoints(points, sNode, tNode, { stubLength: gridSize ? gridSize / 2 : 10 });
+        }
+      }
+
+      if (!points) continue;
+
 
       // Parallel relationship offset.
       if (total > 1) {
@@ -234,22 +319,59 @@ export function createViewSvg(model: Model, viewId: string): string {
         points = offsetPolyline(points, perp, offset);
       }
 
+      basePointsById.set(conn.id, points);
+
       const visual = relationshipVisual(rel);
-      relItems.push({ id: conn.id, relId: conn.relationshipId, points, label: rel.type, visual });
+      const targetSide = inferSideFromAnchor(tNode, points[points.length - 1] ?? end);
+      relItems.push({ id: conn.id, relId: conn.relationshipId, points, targetKey: tKey, targetSide, targetRect: nodeRect(tNode), label: rel.type, visual });
     }
   }
 
+  // Fan-in routing (dock + approach lanes) for connections that share the same target side.
+  const gridSize2 = view.formatting?.gridSize;
+  const fanInCandidates: FanInConnection[] = relItems
+    .filter((it) => Boolean(it.targetKey && it.targetRect) && !pathfinderIds.has(it.id))
+    .map((it) => ({
+      id: it.id,
+      viewId,
+      targetKey: it.targetKey!,
+      points: it.points,
+      targetRect: it.targetRect!,
+      targetSide: it.targetSide,
+    }));
+  const targetKeysSet = new Set(fanInCandidates.map((c) => c.targetKey));
+  const fanInObstacles = nodes
+    .filter((n) => {
+      const r = nodeRefFromLayout(n);
+      if (!r) return false;
+      const k = refKey(r);
+      return !targetKeysSet.has(k);
+    })
+    .map(nodeRect);
+  const fanInMap = computeFanInPolylines(fanInCandidates, {
+    gridSize: gridSize2,
+    stubLength: gridSize2 ? gridSize2 / 2 : 10,
+    obstacles: fanInObstacles,
+    obstacleMargin: gridSize2 ? gridSize2 / 2 : 10,
+  });
+
+  const fanInIds = new Set(fanInMap.keys());
+
   // Apply cheap lane offsets across all relationships before emitting SVG paths.
   const laneAdjusted = applyLaneOffsetsSafely(
-    relItems.map((it) => ({ id: it.id, points: it.points })),
+    relItems
+      .filter((it) => !fanInIds.has(it.id) && !pathfinderIds.has(it.id))
+      .map((it) => ({ id: it.id, points: it.points, targetKey: it.targetKey, targetSide: it.targetSide })),
     {
       gridSize: view.formatting?.gridSize,
+      stubLength: view.formatting?.gridSize ? view.formatting.gridSize / 2 : 10,
       obstaclesById,
       obstacleMargin: view.formatting?.gridSize ? view.formatting?.gridSize / 2 : 10,
     }
   );
-  const lanePointsById = new Map<string, Point[]>();
+  const lanePointsById = new Map<string, Point[]>(basePointsById);
   for (const it of laneAdjusted) lanePointsById.set(it.id, it.points);
+  for (const [id, pts] of fanInMap) lanePointsById.set(id, pts);
 
   const linesSvg = relItems
     .map((it) => {

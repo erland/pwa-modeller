@@ -9,7 +9,7 @@ import {
   nodeRefFromLayout,
   offsetPolyline,
   polylineMidPoint,
-  rectEdgeAnchor,
+  rectAlignedOrthogonalAnchors,
   unitPerp,
 } from '../geometry';
 import { getConnectionPath } from '../connectionPath';
@@ -79,8 +79,7 @@ export function DiagramRelationshipsLayer({
       const t = item.target;
       const sc: Point = { x: s.x + (s.width ?? 120) / 2, y: s.y + (s.height ?? 60) / 2 };
       const tc: Point = { x: t.x + (t.width ?? 120) / 2, y: t.y + (t.height ?? 60) / 2 };
-      const start = rectEdgeAnchor(s, tc);
-      const end = rectEdgeAnchor(t, sc);
+      const { start, end } = rectAlignedOrthogonalAnchors(s, t);
 
       const sKey = refKey(nodeRefFromLayout(s)!);
       const tKey = refKey(nodeRefFromLayout(t)!);

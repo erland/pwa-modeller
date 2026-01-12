@@ -77,6 +77,89 @@ export function rectEdgeAnchor(n: ViewNodeLayout, toward: Point): Point {
   return { x: cx + dx * s, y: cy + dy * s };
 }
 
+type Rect = { x: number; y: number; w: number; h: number };
+
+function nodeRect(n: ViewNodeLayout): Rect {
+  const isConnector = Boolean(n.connectorId);
+  const w = n.width ?? (isConnector ? 24 : 120);
+  const h = n.height ?? (isConnector ? 24 : 60);
+  return { x: n.x, y: n.y, w, h };
+}
+
+function cornerPadForRect(r: Rect): number {
+  // Keep connectors usable: don't pad more than a quarter of the size.
+  const maxPad = Math.max(1, Math.min(r.w, r.h) / 4);
+  return Math.min(10, maxPad);
+}
+
+function overlap1D(a0: number, a1: number, b0: number, b1: number): { min: number; max: number } | null {
+  const min = Math.max(a0, b0);
+  const max = Math.min(a1, b1);
+  if (max <= min) return null;
+  return { min, max };
+}
+
+/**
+ * Choose connection anchors that try to *align* when possible.
+ *
+ * If rectangles overlap in X, we can often draw a straight vertical line by sliding
+ * the anchors along the bottom/top edges. Likewise for Y overlap (horizontal line).
+ *
+ * This makes the auto-router prefer a single straight segment (when unobstructed)
+ * instead of a 3-segment polyline when nodes are nearly aligned.
+ */
+export function rectAlignedOrthogonalAnchors(source: ViewNodeLayout, target: ViewNodeLayout): { start: Point; end: Point } {
+  const s = nodeRect(source);
+  const t = nodeRect(target);
+  const sp = cornerPadForRect(s);
+  const tp = cornerPadForRect(t);
+
+  const sMinX = s.x + sp;
+  const sMaxX = s.x + s.w - sp;
+  const sMinY = s.y + sp;
+  const sMaxY = s.y + s.h - sp;
+
+  const tMinX = t.x + tp;
+  const tMaxX = t.x + t.w - tp;
+  const tMinY = t.y + tp;
+  const tMaxY = t.y + t.h - tp;
+
+  const sc: Point = { x: s.x + s.w / 2, y: s.y + s.h / 2 };
+  const tc: Point = { x: t.x + t.w / 2, y: t.y + t.h / 2 };
+
+  const xOverlap = overlap1D(sMinX, sMaxX, tMinX, tMaxX);
+  const yOverlap = overlap1D(sMinY, sMaxY, tMinY, tMaxY);
+
+  type Candidate = { start: Point; end: Point; len: number };
+  const cands: Candidate[] = [];
+
+  if (xOverlap) {
+    const x = (xOverlap.min + xOverlap.max) / 2;
+    // Vertical connect using bottom/top edges.
+    const start = sc.y <= tc.y ? { x, y: s.y + s.h } : { x, y: s.y };
+    const end = sc.y <= tc.y ? { x, y: t.y } : { x, y: t.y + t.h };
+    const len = Math.abs(end.y - start.y);
+    cands.push({ start, end, len });
+  }
+
+  if (yOverlap) {
+    const y = (yOverlap.min + yOverlap.max) / 2;
+    // Horizontal connect using right/left edges.
+    const start = sc.x <= tc.x ? { x: s.x + s.w, y } : { x: s.x, y };
+    const end = sc.x <= tc.x ? { x: t.x, y } : { x: t.x + t.w, y };
+    const len = Math.abs(end.x - start.x);
+    cands.push({ start, end, len });
+  }
+
+  if (cands.length) {
+    cands.sort((a, b) => a.len - b.len);
+    return { start: cands[0].start, end: cands[0].end };
+  }
+
+  // Fallback: classic directional edge anchor.
+  return { start: rectEdgeAnchor(source, tc), end: rectEdgeAnchor(target, sc) };
+}
+
 export function unitPerp(from: Point, to: Point): Point {
   const dx = to.x - from.x;
   const dy = to.y - from.y;

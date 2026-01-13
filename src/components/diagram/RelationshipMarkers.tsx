@@ -1,80 +1,61 @@
+import { MARKER_DEFS, markerId } from '../../diagram/relationships/markers';
+
+function markerStrokeVar(selected: boolean): string {
+  return selected ? 'var(--diagram-rel-stroke-selected)' : 'var(--diagram-rel-stroke)';
+}
+
 export function RelationshipMarkers() {
   return (
     <defs>
-                        {/* Open arrow (dependency/triggering/flow/serving/access/influence) */}
-                        <marker id="arrowOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                          <path
-                            d="M 0 0 L 10 5 L 0 10"
-                            fill="none"
-                            stroke="var(--diagram-rel-stroke)"
-                            strokeWidth="1.6"
-                            strokeLinejoin="round"
-                          />
-                        </marker>
-                        <marker id="arrowOpenSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                          <path
-                            d="M 0 0 L 10 5 L 0 10"
-                            fill="none"
-                            stroke="var(--diagram-rel-stroke-selected)"
-                            strokeWidth="1.6"
-                            strokeLinejoin="round"
-                          />
-                        </marker>
+      {MARKER_DEFS.map((def) => {
+        const pathBaseProps = def.isFilled
+          ? { fill: markerStrokeVar(false) }
+          : {
+              fill: 'none',
+              stroke: markerStrokeVar(false),
+              strokeWidth: def.strokeWidth ?? 1.6,
+              strokeLinejoin: def.strokeLinejoin ?? 'round',
+            };
 
-                        {/* Filled arrow (assignment) */}
-                        <marker id="arrowFilled" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-rel-stroke)" />
-                        </marker>
-                        <marker id="arrowFilledSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-                          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--diagram-rel-stroke-selected)" />
-                        </marker>
+        const pathSelProps = def.isFilled
+          ? { fill: markerStrokeVar(true) }
+          : {
+              fill: 'none',
+              stroke: markerStrokeVar(true),
+              strokeWidth: def.strokeWidth ?? 1.6,
+              strokeLinejoin: def.strokeLinejoin ?? 'round',
+            };
 
-                        {/* Open triangle (realization/specialization) */}
-                        <marker id="triangleOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                          <path
-                            d="M 0 0 L 10 5 L 0 10 z"
-                            fill="none"
-                            stroke="var(--diagram-rel-stroke)"
-                            strokeWidth="1.6"
-                            strokeLinejoin="round"
-                          />
-                        </marker>
-                        <marker id="triangleOpenSel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                          <path
-                            d="M 0 0 L 10 5 L 0 10 z"
-                            fill="none"
-                            stroke="var(--diagram-rel-stroke-selected)"
-                            strokeWidth="1.6"
-                            strokeLinejoin="round"
-                          />
-                        </marker>
+        const id = markerId(def.kind, false)!;
+        const idSel = markerId(def.kind, true)!;
 
-                        {/* Diamonds (composition/aggregation) at the source side */}
-                        <marker id="diamondOpen" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                          <path
-                            d="M 0 5 L 5 0 L 10 5 L 5 10 z"
-                            fill="none"
-                            stroke="var(--diagram-rel-stroke)"
-                            strokeWidth="1.6"
-                            strokeLinejoin="round"
-                          />
-                        </marker>
-                        <marker id="diamondOpenSel" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                          <path
-                            d="M 0 5 L 5 0 L 10 5 L 5 10 z"
-                            fill="none"
-                            stroke="var(--diagram-rel-stroke-selected)"
-                            strokeWidth="1.6"
-                            strokeLinejoin="round"
-                          />
-                        </marker>
-
-                        <marker id="diamondFilled" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                          <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="var(--diagram-rel-stroke)" />
-                        </marker>
-                        <marker id="diamondFilledSel" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-                          <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="var(--diagram-rel-stroke-selected)" />
-                        </marker>
-                      </defs>
+        return (
+          <g key={def.kind}>
+            <marker
+              id={id}
+              viewBox={def.viewBox}
+              refX={def.refX}
+              refY={def.refY}
+              markerWidth={def.markerWidth}
+              markerHeight={def.markerHeight}
+              orient="auto"
+            >
+              <path d={def.pathD} {...pathBaseProps} />
+            </marker>
+            <marker
+              id={idSel}
+              viewBox={def.viewBox}
+              refX={def.refX}
+              refY={def.refY}
+              markerWidth={def.markerWidth}
+              markerHeight={def.markerHeight}
+              orient="auto"
+            >
+              <path d={def.pathD} {...pathSelProps} />
+            </marker>
+          </g>
+        );
+      })}
+    </defs>
   );
 }

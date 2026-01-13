@@ -177,6 +177,48 @@ export function sanitizeModelViewConnections(model: Model): Model {
   return model;
 }
 
+export function sanitizeModelViewKinds(model: Model): Model {
+  // Ensure view.kind exists (v9+) for predictable runtime shape.
+  for (const vid of Object.keys(model.views)) {
+    const v: any = model.views[vid] as any;
+    const raw = v?.kind;
+    const kind = raw === 'archimate' || raw === 'uml' || raw === 'bpmn' ? raw : 'archimate';
+    if (v.kind !== kind) {
+      model.views[vid] = { ...(v as any), kind };
+    }
+  }
+  return model;
+}
+
+export function sanitizeModelViewOwnerRefs(model: Model): Model {
+  // ownerRef is optional; if present, ensure it has a valid shape.
+  for (const vid of Object.keys(model.views)) {
+    const v: any = model.views[vid] as any;
+    if (!Object.prototype.hasOwnProperty.call(v, 'ownerRef')) continue;
+
+    const raw = v.ownerRef;
+    if (!isRecord(raw)) {
+      if (raw !== undefined) model.views[vid] = { ...(v as any), ownerRef: undefined };
+      continue;
+    }
+
+    const kind = (raw as any).kind;
+    const id = (raw as any).id;
+    const okKind = kind === 'archimate' || kind === 'uml' || kind === 'bpmn';
+    const okId = typeof id === 'string' && id.trim().length > 0;
+    if (!okKind || !okId) {
+      model.views[vid] = { ...(v as any), ownerRef: undefined };
+      continue;
+    }
+
+    // Normalize to { kind, id } only (drop extra fields).
+    if (raw.kind !== kind || raw.id !== id || Object.keys(raw).length !== 2) {
+      model.views[vid] = { ...(v as any), ownerRef: { kind, id } };
+    }
+  }
+  return model;
+}
+
 
 export function ensureModelFolderExtensions(model: Model): Model {
   const m: any = model as any;
@@ -200,12 +242,36 @@ export function ensureModelFolderExtensions(model: Model): Model {
   // View-only objects (introduced in v6): keep runtime shape predictable.
   for (const vid of Object.keys(model.views)) {
     const v: any = model.views[vid] as any;
+    // View kind (introduced in v9): keep runtime shape predictable.
+    const rawKind = v?.kind;
+    const kind = rawKind === 'archimate' || rawKind === 'uml' || rawKind === 'bpmn' ? rawKind : 'archimate';
+    if (v.kind !== kind) {
+      model.views[vid] = { ...(v as any), kind };
+    }
     // View connections (introduced in v8): keep runtime shape predictable.
     if (!Array.isArray(v.connections)) {
       model.views[vid] = { ...(v as any), connections: [] };
     }
     if (!isRecord(v.objects)) {
       model.views[vid] = { ...(v as any), objects: {} };
+    }
+
+    // Optional ownerRef (introduced in v10+ conceptually): keep shape predictable when present.
+    if (Object.prototype.hasOwnProperty.call(v, 'ownerRef') && v.ownerRef !== undefined) {
+      const raw = v.ownerRef;
+      if (!isRecord(raw)) {
+        model.views[vid] = { ...(v as any), ownerRef: undefined };
+      } else {
+        const kind = (raw as any).kind;
+        const id = (raw as any).id;
+        const okKind = kind === 'archimate' || kind === 'uml' || kind === 'bpmn';
+        const okId = typeof id === 'string' && id.trim().length > 0;
+        if (!okKind || !okId) {
+          model.views[vid] = { ...(v as any), ownerRef: undefined };
+        } else if (Object.keys(raw).length !== 2 || raw.kind !== kind || raw.id !== id) {
+          model.views[vid] = { ...(v as any), ownerRef: { kind, id } };
+        }
+      }
     }
   }
   return model;

@@ -1,5 +1,6 @@
 import type * as React from 'react';
-import type { ElementType, Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
+import type { Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
+import type { Notation } from '../../notations';
 import { Dialog } from '../dialog/Dialog';
 
 import type { Selection } from '../model/selection';
@@ -38,6 +39,7 @@ export type DiagramCanvasViewProps = {
   views: View[];
   activeViewId: string | null;
   activeView: View | null;
+  notation: Notation;
   nodes: ViewNodeLayout[];
 
   selection: Selection;
@@ -70,7 +72,7 @@ export type DiagramCanvasViewProps = {
   rel: RelationshipCreationController;
   onBeginNodeDrag: (state: DiagramNodeDragState) => void;
   clientToModelPoint: (clientX: number, clientY: number) => Point | null;
-  getElementBgVar: (t: ElementType) => string;
+  getElementBgVar: (t: string) => string;
 
   canExportImage: boolean;
   onExportImage: () => void;
@@ -83,6 +85,7 @@ export function DiagramCanvasView({
   views,
   activeViewId,
   activeView,
+  notation,
   nodes,
   selection,
   onSelect,
@@ -226,6 +229,7 @@ export function DiagramCanvasView({
               >
                 <DiagramRelationshipsLayer
                   model={model}
+                  notation={notation}
                   viewId={activeViewId ?? undefined}
                   gridSize={activeView?.formatting?.gridSize}
                   nodes={nodes}
@@ -241,6 +245,7 @@ export function DiagramCanvasView({
                 <DiagramNodesLayer
                   model={model}
                   activeView={activeView}
+                  notation={notation}
                   nodes={nodes}
                   selection={selection}
                   linkDrag={rel.linkDrag}

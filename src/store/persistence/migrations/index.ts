@@ -230,6 +230,23 @@ function migrateV7ToV8(model: Model): Model {
   return model;
 }
 
+/**
+ * v8 -> v9 migration:
+ * - Add View.kind (default 'archimate') on all views.
+ */
+function migrateV8ToV9(model: Model): Model {
+  for (const id of Object.keys(model.views)) {
+    const v: any = model.views[id] as any;
+    const raw = v?.kind;
+    const kind = raw === 'archimate' || raw === 'uml' || raw === 'bpmn' ? raw : 'archimate';
+    if (v.kind !== kind) {
+      model.views[id] = { ...(v as any), kind };
+    }
+  }
+  model.schemaVersion = 9;
+  return model;
+}
+
 
 export type MigrationResult = {
   model: Model;
@@ -281,6 +298,11 @@ export function runMigrations(model: Model): MigrationResult {
   if (v < 8) {
     model = migrateV7ToV8(model);
     notes.push('migrate v7 -> v8');
+    v = getSchemaVersion(model);
+  }
+  if (v < 9) {
+    model = migrateV8ToV9(model);
+    notes.push('migrate v8 -> v9');
   }
 
   return { model, migratedFromVersion, notes };

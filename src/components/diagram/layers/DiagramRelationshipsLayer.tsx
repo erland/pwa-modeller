@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { Model, ViewConnection, ViewNodeLayout } from '../../../domain';
+import type { Notation } from '../../../notations';
 import type { Selection } from '../../model/selection';
 import { RelationshipMarkers } from '../RelationshipMarkers';
 import type { DiagramLinkDrag } from '../DiagramNode';
@@ -16,8 +17,9 @@ import { getConnectionPath } from '../connectionPath';
 import { applyLaneOffsetsSafely } from '../connectionLanes';
 import { orthogonalRoutingHintsFromAnchors } from '../orthogonalHints';
 import { adjustOrthogonalConnectionEndpoints } from '../adjustConnectionEndpoints';
-import { relationshipVisual } from '../relationshipVisual';
 import { refKey } from '../connectable';
+import { markerUrl } from '../../../diagram/relationships/markers';
+import { dasharrayForPattern } from '../../../diagram/relationships/style';
 
 export type ConnectionRenderItem = {
   connection: ViewConnection;
@@ -30,6 +32,7 @@ export type ConnectionRenderItem = {
 
 type Props = {
   model: Model;
+  notation: Notation;
   /** Active view id (used for per-view connection properties like routing). */
   viewId?: string;
   /** Grid size used when choosing routing channels for orthogonal connections. */
@@ -46,6 +49,7 @@ type Props = {
 
 export function DiagramRelationshipsLayer({
   model,
+  notation,
   viewId,
   gridSize,
   nodes,
@@ -172,8 +176,11 @@ export function DiagramRelationshipsLayer({
         const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
         const isSelected = selection.kind === 'relationship' && selection.relationshipId === relId;
-        const v = relationshipVisual(rel, isSelected);
-        const mid = v.midLabel ? polylineMidPoint(points) : null;
+        const style = notation.getRelationshipStyle(rel);
+        const dasharray = style.line?.dasharray ?? dasharrayForPattern(style.line?.pattern);
+        const markerStart = markerUrl(style.markerStart, isSelected);
+        const markerEnd = markerUrl(style.markerEnd, isSelected);
+        const mid = style.midLabel ? polylineMidPoint(points) : null;
 
         return (
           <g key={conn.id}>
@@ -196,9 +203,9 @@ export function DiagramRelationshipsLayer({
             <path
               className={'diagramRelLine' + (isSelected ? ' isSelected' : '')}
               d={d}
-              markerStart={v.markerStart}
-              markerEnd={v.markerEnd}
-              strokeDasharray={v.dasharray ?? undefined}
+              markerStart={markerStart}
+              markerEnd={markerEnd}
+              strokeDasharray={dasharray ?? undefined}
             />
 
             {mid ? (
@@ -212,7 +219,7 @@ export function DiagramRelationshipsLayer({
                 textAnchor="middle"
                 pointerEvents="none"
               >
-                {v.midLabel}
+                {style.midLabel}
               </text>
             ) : null}
           </g>
@@ -241,7 +248,7 @@ export function DiagramRelationshipsLayer({
                 stroke="var(--diagram-rel-stroke)"
                 strokeWidth={2}
                 strokeDasharray="6 5"
-                markerEnd="url(#arrowOpen)"
+                markerEnd={markerUrl('arrowOpen', false)}
               />
             );
           })()

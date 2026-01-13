@@ -14,6 +14,20 @@ export type ArchimateLayer =
   | 'ImplementationMigration'
   | 'Motivation';
 
+/**
+ * Notation / modeling language used in a view.
+ *
+ * Today the app is ArchiMate-centric, but we keep this extensible so the
+ * model can later include UML/BPMN views as separate diagram kinds.
+ */
+export type ModelKind = 'archimate' | 'uml' | 'bpmn';
+
+/**
+ * A reference to an object that lives in a view/model of a given notation.
+ * Used for cross-diagram drill-down and traceability (e.g. ArchiMate element -> UML/BPMN view).
+ */
+export type Ref = { kind: ModelKind; id: string };
+
 export interface UnknownTypeInfo {
   /** e.g. "archimate-exchange", "ea-xmi", "custom" */
   ns?: string;
@@ -372,6 +386,13 @@ export interface ViewLayout {
 export interface View extends HasTaggedValues, HasExternalIds {
   id: string;
   name: string;
+  /** Diagram notation / language for this view (e.g. ArchiMate, UML, BPMN). */
+  kind: ModelKind;
+  /**
+   * Optional cross-diagram reference describing what this view is a drill-down/detail view for.
+   * Example: A BPMN view may have ownerRef pointing to an ArchiMate Business Process.
+   */
+  ownerRef?: Ref;
   viewpointId: string;
   documentation?: string;
   stakeholders?: string[];

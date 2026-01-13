@@ -74,7 +74,12 @@ export function createConnector(input: CreateConnectorInput): RelationshipConnec
   };
 }
 
-export type CreateViewInput = Omit<View, 'id' | 'connections'> & { id?: string; connections?: View['connections'] };
+export type CreateViewInput = Omit<View, 'id' | 'connections' | 'kind'> & {
+  id?: string;
+  connections?: View['connections'];
+  /** Optional for backward compatibility; defaults to 'archimate'. */
+  kind?: View['kind'];
+};
 export function createView(input: CreateViewInput): View {
   requireNonBlank(input.name, 'View.name');
   requireNonBlank(input.viewpointId, 'View.viewpointId');
@@ -84,6 +89,7 @@ export function createView(input: CreateViewInput): View {
   return {
     id: input.id ?? createId('view'),
     name: input.name.trim(),
+    kind: input.kind ?? 'archimate',
     viewpointId: input.viewpointId.trim(),
     documentation: input.documentation?.trim() || undefined,
     stakeholders: input.stakeholders,
@@ -218,6 +224,7 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     // v5 introduces model.connectors (relationship connectors / junctions).
     // v6 introduces view.objects + view-only layout nodes (notes/labels/group boxes).
     // v8 introduces view.connections (per-view relationship instances).
-    schemaVersion: 8
+    // v9 introduces view.kind (diagram notation).
+    schemaVersion: 9
   };
 }

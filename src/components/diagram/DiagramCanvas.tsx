@@ -18,7 +18,7 @@ import { useDiagramExportImage } from './hooks/useDiagramExportImage';
 import { useDiagramElementDrop } from './hooks/useDiagramElementDrop';
 import { useDiagramConnections } from './hooks/useDiagramConnections';
 import { useDiagramSurfaceSelection } from './hooks/useDiagramSurfaceSelection';
-import { useElementBgVar } from './hooks/useElementBgVar';
+import { getNotation } from '../../notations';
 
 type Props = {
   selection: Selection;
@@ -93,7 +93,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     onSelect,
   });
 
-  const { getElementBgVar } = useElementBgVar();
+  const notation = useMemo(() => getNotation(activeView?.kind ?? 'archimate'), [activeView?.kind]);
+  const getElementBgVar = useCallback((t: string) => notation.getElementBgVar(t), [notation]);
 
   const onAddAndJunction = useCallback(() => {
     if (!model || !activeViewId) return;
@@ -129,6 +130,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       views={views}
       activeViewId={activeViewId}
       activeView={activeView}
+      notation={notation}
       nodes={nodes}
       selection={selection}
       onSelect={onSelect}

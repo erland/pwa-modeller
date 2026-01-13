@@ -1,5 +1,6 @@
-import type { Model, RelationshipType, ViewNodeLayout, ArchimateLayer, ElementType, ViewConnection } from '../../domain';
+import type { Model, ViewNodeLayout, ArchimateLayer, ElementType, ViewConnection, RelationshipType } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
+import { RELATIONSHIP_TYPES } from '../../domain/config/catalog';
 import { refKey } from './connectable';
 import { getConnectionPath, polylineToSvgPath } from './connectionPath';
 import { applyLaneOffsetsSafely } from './connectionLanes';
@@ -14,6 +15,9 @@ import {
   unitPerp,
   type Point,
 } from './geometry';
+import { archimateRelationshipStyle } from '../../diagram/relationships/archimateStyle';
+import { dasharrayForPattern } from '../../diagram/relationships/style';
+import { markerId, renderSvgMarkerDefs } from '../../diagram/relationships/markers';
 
 const ELEMENT_TYPE_TO_LAYER: Partial<Record<ElementType, ArchimateLayer>> = (() => {
   const map: Partial<Record<ElementType, ArchimateLayer>> = {};
@@ -37,39 +41,43 @@ type RelationshipVisual = {
   markerStartId?: string;
   markerEndId?: string;
   dasharray?: string;
-  /** Optional label rendered near the relationship mid point (e.g. Influence strength). */
   midLabel?: string;
 };
 
-function relationshipVisual(rel: { type: RelationshipType; attrs?: { isDirected?: boolean; influenceStrength?: string } }): RelationshipVisual {
-  const influenceStrength = (rel.attrs?.influenceStrength ?? '').trim();
+const RELATIONSHIP_TYPE_SET: ReadonlySet<string> = new Set(RELATIONSHIP_TYPES);
 
-  switch (rel.type) {
-    case 'Association':
-      return rel.attrs?.isDirected ? { markerEndId: 'arrowOpen' } : {};
-    case 'Composition':
-      return { markerStartId: 'diamondFilled' };
-    case 'Aggregation':
-      return { markerStartId: 'diamondOpen' };
-    case 'Specialization':
-      return { markerEndId: 'triangleOpen' };
-    case 'Realization':
-      return { markerEndId: 'triangleOpen', dasharray: '6 5' };
-    case 'Serving':
-      return { markerEndId: 'arrowOpen', dasharray: '6 5' };
-    case 'Flow':
-      return { markerEndId: 'arrowOpen', dasharray: '6 5' };
-    case 'Triggering':
-      return { markerEndId: 'arrowOpen' };
-    case 'Assignment':
-      return { markerEndId: 'arrowFilled' };
-    case 'Access':
-      return { markerEndId: 'arrowOpen' };
-    case 'Influence':
-      return { markerEndId: 'arrowOpen', dasharray: '2 4', midLabel: influenceStrength || '±' };
-    default:
-      return { markerEndId: 'arrowOpen' };
-  }
+function isRelationshipType(t: string): t is RelationshipType {
+  return RELATIONSHIP_TYPE_SET.has(t);
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+function pickArchimateAttrs(attrs: unknown): { isDirected?: boolean; accessType?: string; influenceStrength?: string } | undefined {
+  if (!isRecord(attrs)) return undefined;
+  const out: { isDirected?: boolean; accessType?: string; influenceStrength?: string } = {};
+
+  if (typeof attrs.isDirected === 'boolean') out.isDirected = attrs.isDirected;
+  if (typeof attrs.accessType === 'string') out.accessType = attrs.accessType;
+  if (typeof attrs.influenceStrength === 'string') out.influenceStrength = attrs.influenceStrength;
+
+  return Object.keys(out).length ? out : undefined;
+}
+
+function relationshipVisual(rel: { type: string; attrs?: unknown }): RelationshipVisual {
+  // Export currently supports ArchiMate visuals; as UML/BPMN are added,
+  // export will switch based on view.kind via the notation registry.
+  const style = isRelationshipType(rel.type)
+    ? archimateRelationshipStyle({ type: rel.type, attrs: pickArchimateAttrs(rel.attrs) })
+    : { markerEnd: 'arrowOpen' as const };
+  const dasharray = style.line?.dasharray ?? dasharrayForPattern(style.line?.pattern);
+  return {
+    markerStartId: markerId(style.markerStart, false),
+    markerEndId: markerId(style.markerEnd, false),
+    dasharray,
+    midLabel: style.midLabel,
+  };
 }
 
 function escapeXml(s: string): string {
@@ -336,21 +344,7 @@ export function createViewSvg(model: Model, viewId: string): string {
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
-    <marker id="arrowOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1.6" stroke-linejoin="round" />
-    </marker>
-    <marker id="arrowFilled" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(0,0,0,0.55)" />
-    </marker>
-    <marker id="triangleOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1.6" stroke-linejoin="round" />
-    </marker>
-    <marker id="diamondOpen" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="1.6" stroke-linejoin="round" />
-    </marker>
-    <marker id="diamondFilled" viewBox="0 0 10 10" refX="0" refY="5" markerWidth="10" markerHeight="10" orient="auto">
-      <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="rgba(0,0,0,0.55)" />
-    </marker>
+    ${renderSvgMarkerDefs({ stroke: 'rgba(0,0,0,0.55)' })}
   </defs>
   <rect x="0" y="0" width="${width}" height="${height}" fill="${backgroundFill}" />
   <text x="${padding}" y="${padding}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" font-weight="700" fill="#0f172a">${title}</text>

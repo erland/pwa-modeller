@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { Model, RelationshipType } from '../../../../domain';
 import { RELATIONSHIP_TYPES, createRelationship } from '../../../../domain';
-import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../../domain/config/archimatePalette';
+import { initRelationshipValidationMatrixFromBundledTable } from '../../../../domain/config/archimatePalette';
+import { getNotation } from '../../../../notations';
 import { modelStore } from '../../../../store';
 import { Dialog } from '../../../dialog/Dialog';
 import type { Selection } from '../../selection';
@@ -61,7 +62,10 @@ const [nameDraft, setNameDraft] = useState('');
     const s = model.elements[sourceId];
     const t = model.elements[targetId];
     if (!s || !t) return RELATIONSHIP_TYPES as RelationshipType[];
-    const allowed = getAllowedRelationshipTypes(s.type, t.type, relationshipValidationMode);
+    const notation = getNotation('archimate');
+    const allowed = (RELATIONSHIP_TYPES as RelationshipType[]).filter((rt) =>
+      notation.canCreateRelationship({ relationshipType: rt, sourceType: s.type, targetType: t.type, mode: relationshipValidationMode }).allowed
+    );
     return (allowed.length > 0 ? allowed : RELATIONSHIP_TYPES) as RelationshipType[];
   }, [model, sourceId, targetId, relationshipValidationMode, matrixLoadTick]);
 
@@ -77,8 +81,9 @@ const [nameDraft, setNameDraft] = useState('');
     const s = model.elements[sourceId];
     const t = model.elements[targetId];
     if (!s || !t) return null;
-    const res = validateRelationship(s.type, t.type, typeDraft, relationshipValidationMode);
-    return res.allowed ? null : res.reason;
+    const notation = getNotation('archimate');
+    const res = notation.canCreateRelationship({ relationshipType: typeDraft, sourceType: s.type, targetType: t.type, mode: relationshipValidationMode });
+    return res.allowed ? null : res.reason ?? 'Invalid relationship';
   }, [model, sourceId, targetId, typeDraft, relationshipValidationMode, matrixLoadTick]);
 
   return (

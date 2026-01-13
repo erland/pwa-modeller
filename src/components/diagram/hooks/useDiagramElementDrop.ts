@@ -2,6 +2,7 @@ import type * as React from 'react';
 import { useCallback, useState } from 'react';
 import type { Model } from '../../../domain';
 import { modelStore } from '../../../store';
+import { getNotation } from '../../../notations';
 import type { Selection } from '../../model/selection';
 import { dataTransferHasElement, readDraggedElementId } from '../dragDrop';
 
@@ -38,6 +39,15 @@ export function useDiagramElementDrop({ model, activeViewId, zoom, viewportRef, 
       const elementId = readDraggedElementId(e.dataTransfer);
       if (!elementId) return;
       if (!model.elements[elementId]) return;
+      const view = model.views[activeViewId];
+      const element = model.elements[elementId];
+      if (view && element) {
+        const notation = getNotation(view.kind ?? 'archimate');
+        if (!notation.canCreateNode({ nodeType: element.type })) {
+          // Not allowed in this view's notation.
+          return;
+        }
+      }
 
       e.preventDefault();
 

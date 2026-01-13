@@ -1,4 +1,5 @@
-import type {ElementType, Model, View, ViewNodeLayout, ViewObject} from '../../../domain';
+import type { Model, View, ViewNodeLayout, ViewObject } from '../../../domain';
+import type { Notation } from '../../../notations';
 import type { Selection } from '../../model/selection';
 import { DiagramNode, type DiagramLinkDrag, type DiagramNodeDragState } from '../DiagramNode';
 import { DiagramConnectorNode } from '../DiagramConnectorNode';
@@ -9,6 +10,7 @@ import type { Point } from '../geometry';
 type Props = {
   model: Model;
   activeView: View;
+  notation: Notation;
   nodes: ViewNodeLayout[];
   selection: Selection;
   linkDrag: DiagramLinkDrag | null;
@@ -17,12 +19,13 @@ type Props = {
   onBeginNodeDrag: (state: DiagramNodeDragState) => void;
   onHoverAsRelationshipTarget: (ref: ConnectableRef | null) => void;
   onStartLinkDrag: (drag: DiagramLinkDrag) => void;
-  getElementBgVar: (t: ElementType) => string;
+  getElementBgVar: (t: string) => string;
 };
 
 export function DiagramNodesLayer({
   model,
   activeView,
+  notation,
   nodes,
   selection,
   linkDrag,
@@ -50,6 +53,7 @@ export function DiagramNodesLayer({
               key={`${activeView.id}:${n.elementId}`}
               node={n}
               element={el}
+              notation={notation}
               activeViewId={activeView.id}
               isSelected={isSelected}
               linkDrag={linkDrag}

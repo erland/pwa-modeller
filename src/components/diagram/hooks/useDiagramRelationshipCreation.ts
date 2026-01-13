@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Model, RelationshipType } from '../../../domain';
 import { RELATIONSHIP_TYPES, createRelationship, getViewpointById } from '../../../domain';
-import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../domain/config/archimatePalette';
+import { initRelationshipValidationMatrixFromBundledTable } from '../../../domain/config/archimatePalette';
+import { getNotation } from '../../../notations';
 
 import { modelStore, useModelStore } from '../../../store';
 import type { Selection } from '../../model/selection';
@@ -100,12 +101,16 @@ const pendingRelTypeOptions = useMemo(() => {
   // Start with the "best effort" allowed list (either ArchiMate rules or viewpoint guidance).
   let allowed: RelationshipType[] = RELATIONSHIP_TYPES;
 
-  // If both endpoints are elements, filter by ArchiMate rules (mode-aware).
+  // If both endpoints are elements, filter by notation rules (mode-aware).
   if (sourceRef.kind === 'element' && targetRef.kind === 'element') {
     const sourceType = model.elements[sourceRef.id]?.type;
     const targetType = model.elements[targetRef.id]?.type;
     if (sourceType && targetType) {
-      allowed = getAllowedRelationshipTypes(sourceType, targetType, relationshipValidationMode);
+      const view = model.views[pendingCreateRel.viewId];
+      const notation = getNotation(view?.kind ?? 'archimate');
+      allowed = (RELATIONSHIP_TYPES as RelationshipType[]).filter((t) =>
+        notation.canCreateRelationship({ relationshipType: t, sourceType, targetType, mode: relationshipValidationMode }).allowed
+      );
     }
   } else {
     // Otherwise, fall back to viewpoint guidance (connectors etc.).
@@ -163,12 +168,19 @@ const pendingRelTypeOptions = useMemo(() => {
       return;
     }
 
-    // Only apply ArchiMate relationship rule validation when both endpoints are elements.
+    // Only apply semantic relationship rule validation when both endpoints are elements.
     if (sourceRef.kind === 'element' && targetRef.kind === 'element') {
       const sourceType = model.elements[sourceRef.id]?.type;
       const targetType = model.elements[targetRef.id]?.type;
       if (sourceType && targetType) {
-        const v = validateRelationship(sourceType, targetType, pendingRelType, relationshipValidationMode);
+        const view = model.views[pendingCreateRel.viewId];
+        const notation = getNotation(view?.kind ?? 'archimate');
+        const v = notation.canCreateRelationship({
+          relationshipType: pendingRelType,
+          sourceType,
+          targetType,
+          mode: relationshipValidationMode,
+        });
         if (!v.allowed) {
           setPendingRelError(v.reason ?? 'Invalid relationship');
           if (!showAllPendingRelTypes) return;

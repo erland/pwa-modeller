@@ -1,7 +1,7 @@
 import type * as React from 'react';
 import type { Element, ViewNodeLayout } from '../../domain';
 import type { Selection } from '../model/selection';
-import { ArchimateSymbol } from './archimateSymbols';
+import type { Notation } from '../../notations';
 import type { Point } from './geometry';
 import type { ConnectableRef } from './connectable';
 import { sameRef } from './connectable';
@@ -37,6 +37,7 @@ type Props = {
   node: ViewNodeLayout;
   element: Element;
   activeViewId: string;
+  notation: Notation;
   isSelected: boolean;
   linkDrag: DiagramLinkDrag | null;
   /** Value assigned to CSS var --diagram-node-bg */
@@ -54,6 +55,7 @@ export function DiagramNode({
   node: n,
   element: el,
   activeViewId,
+  notation,
   isSelected,
   linkDrag,
   bgVar,
@@ -135,16 +137,15 @@ export function DiagramNode({
       >
         <div className="diagramNodeHeader">
           <div className="diagramNodeSymbol" aria-hidden="true">
-            <ArchimateSymbol
-              type={el.type}
-              title={
+            {notation.renderNodeSymbol({
+              nodeType: el.type,
+              title:
                 el.type === 'Unknown'
                   ? el.unknownType?.name
                     ? `Unknown: ${el.unknownType.name}`
                     : 'Unknown'
-                  : el.type
-              }
-            />
+                  : el.type,
+            })}
           </div>
           <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
         </div>

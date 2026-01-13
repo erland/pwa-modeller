@@ -28,6 +28,18 @@ type Props = {
    * Must belong to the selected kind, otherwise ignored.
    */
   initialTypeId?: ElementType;
+
+  /**
+   * Optional hook invoked after the element is created and added to the model.
+   * Useful for flows where the element should be placed into a view next.
+   */
+  onCreated?: (elementId: string) => void;
+
+  /**
+   * Whether to select the created element immediately.
+   * Defaults to true to preserve existing behavior.
+   */
+  selectAfterCreate?: boolean;
 };
 
 const DEFAULT_ARCHIMATE_LAYER: ArchimateLayer = ARCHIMATE_LAYERS[1] ?? 'Business';
@@ -52,7 +64,9 @@ export function CreateElementDialog({
   onClose,
   onSelect,
   kind,
-  initialTypeId
+  initialTypeId,
+  onCreated,
+  selectAfterCreate
 }: Props) {
   const effectiveKind: ModelKind = kind ?? 'archimate';
 
@@ -99,8 +113,14 @@ export function CreateElementDialog({
     });
 
     modelStore.addElement(created, targetFolderId ?? undefined);
+
+    // Notify callers (e.g., palette flows) before we close/select.
+    onCreated?.(created.id);
+
     onClose();
-    onSelect({ kind: 'element', elementId: created.id });
+    if (selectAfterCreate !== false) {
+      onSelect({ kind: 'element', elementId: created.id });
+    }
   };
 
   return (

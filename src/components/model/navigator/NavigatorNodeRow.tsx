@@ -9,6 +9,7 @@ import {
 
 import type { NavNode } from './types';
 import { DND_ELEMENT_MIME, DND_FOLDER_MIME, DND_VIEW_MIME } from './types';
+import type { ModelKind } from '../../../domain';
 
 const DND_DEBUG = typeof window !== 'undefined' && window.localStorage?.getItem('pwaModellerDndDebug') === '1';
 function dndLog(...args: unknown[]) {
@@ -39,8 +40,8 @@ type Props = {
 
   // Create actions
   openCreateFolder: (parentFolderId: string) => void;
-  openCreateElement: (targetFolderId?: string) => void;
-  openCreateView: (targetFolderId?: string) => void;
+  openCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
+  openCreateView: (targetFolderId?: string, kind?: ModelKind) => void;
   openCreateCenteredView: (elementId: string) => void;
 };
 
@@ -87,9 +88,13 @@ export function NavigatorNodeRow({
                 if (k === 'folder' && node.folderId) {
                   openCreateFolder(node.folderId);
                 } else if (k === 'element' && node.folderId) {
-                  openCreateElement(node.folderId);
+                  openCreateElement(node.folderId, 'archimate');
+                } else if (k === 'umlElement' && node.folderId) {
+                  openCreateElement(node.folderId, 'uml');
                 } else if (k === 'view' && node.folderId) {
-                  openCreateView(node.folderId);
+                  openCreateView(node.folderId, 'archimate');
+                } else if (k === 'umlView' && node.folderId) {
+                  openCreateView(node.folderId, 'uml');
                 } else if (k === 'centeredView' && node.elementId) {
                   openCreateCenteredView(node.elementId);
                 }
@@ -101,8 +106,14 @@ export function NavigatorNodeRow({
               {node.canCreateElement && node.folderId ? (
                 <MenuItem className="navMenuItem" id="element">Element…</MenuItem>
               ) : null}
+              {node.canCreateElement && node.folderId ? (
+                <MenuItem className="navMenuItem" id="umlElement">UML Element…</MenuItem>
+              ) : null}
               {node.canCreateView && node.folderId ? (
                 <MenuItem className="navMenuItem" id="view">View…</MenuItem>
+              ) : null}
+              {node.canCreateView && node.folderId ? (
+                <MenuItem className="navMenuItem" id="umlView">UML View…</MenuItem>
               ) : null}
               {node.canCreateCenteredView && node.elementId ? (
                 <MenuItem className="navMenuItem" id="centeredView">Centered view…</MenuItem>

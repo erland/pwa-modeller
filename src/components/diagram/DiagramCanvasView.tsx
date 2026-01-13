@@ -1,7 +1,9 @@
 import type * as React from 'react';
-import type { Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
+import { useMemo, useState } from 'react';
+import type { ElementType, Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
 import type { Notation } from '../../notations';
 import { Dialog } from '../dialog/Dialog';
+import { CreateElementDialog } from '../model/navigator/dialogs/CreateElementDialog';
 
 import type { Selection } from '../model/selection';
 import type { Point } from './geometry';
@@ -47,6 +49,8 @@ export type DiagramCanvasViewProps = {
 
   toolMode: ToolMode;
   setToolMode: (mode: ToolMode) => void;
+  beginPlaceExistingElement: (elementId: string) => void;
+  findFolderContainingView: (m: Model, viewId: string) => string | undefined;
   groupBoxDraft: GroupBoxDraft | null;
 
   viewportRef: React.RefObject<HTMLDivElement>;
@@ -91,6 +95,8 @@ export function DiagramCanvasView({
   onSelect,
   toolMode,
   setToolMode,
+  beginPlaceExistingElement,
+  findFolderContainingView,
   groupBoxDraft,
   viewportRef,
   surfaceRef,
@@ -116,6 +122,22 @@ export function DiagramCanvasView({
   onAddAndJunction,
   onAddOrJunction,
 }: DiagramCanvasViewProps) {
+  const [umlPaletteDialog, setUmlPaletteDialog] = useState<{ initialTypeId: ElementType } | null>(null);
+
+  const rootFolderId = useMemo(() => {
+    // The model always has a root folder, but keep a defensive fallback.
+    return (
+      Object.values(model.folders).find((f) => f.kind === 'root')?.id ??
+      Object.values(model.folders)[0]?.id ??
+      ''
+    );
+  }, [model.folders]);
+
+  const paletteTargetFolderId = useMemo(() => {
+    if (!activeViewId) return rootFolderId;
+    return findFolderContainingView(model, activeViewId) ?? rootFolderId;
+  }, [activeViewId, findFolderContainingView, model, rootFolderId]);
+
   return (
     <div className="diagramWrap">
       <div aria-label="Diagram toolbar" className="diagramToolbar">
@@ -172,8 +194,11 @@ export function DiagramCanvasView({
           <div className="diagramToolbarTools" role="group" aria-label="UML palette">
             <button
               type="button"
-              className={'shellButton' + (toolMode === 'addUmlClass' ? ' isActive' : '')}
-              onClick={() => setToolMode('addUmlClass')}
+              className="shellButton"
+              onClick={() => {
+                setToolMode('select');
+                setUmlPaletteDialog({ initialTypeId: 'uml.class' as ElementType });
+              }}
               disabled={!activeViewId}
               title="Place a UML Class (click to drop)"
             >
@@ -181,8 +206,11 @@ export function DiagramCanvasView({
             </button>
             <button
               type="button"
-              className={'shellButton' + (toolMode === 'addUmlInterface' ? ' isActive' : '')}
-              onClick={() => setToolMode('addUmlInterface')}
+              className="shellButton"
+              onClick={() => {
+                setToolMode('select');
+                setUmlPaletteDialog({ initialTypeId: 'uml.interface' as ElementType });
+              }}
               disabled={!activeViewId}
               title="Place a UML Interface (click to drop)"
             >
@@ -190,8 +218,11 @@ export function DiagramCanvasView({
             </button>
             <button
               type="button"
-              className={'shellButton' + (toolMode === 'addUmlEnum' ? ' isActive' : '')}
-              onClick={() => setToolMode('addUmlEnum')}
+              className="shellButton"
+              onClick={() => {
+                setToolMode('select');
+                setUmlPaletteDialog({ initialTypeId: 'uml.enum' as ElementType });
+              }}
               disabled={!activeViewId}
               title="Place a UML Enum (click to drop)"
             >
@@ -199,8 +230,11 @@ export function DiagramCanvasView({
             </button>
             <button
               type="button"
-              className={'shellButton' + (toolMode === 'addUmlPackage' ? ' isActive' : '')}
-              onClick={() => setToolMode('addUmlPackage')}
+              className="shellButton"
+              onClick={() => {
+                setToolMode('select');
+                setUmlPaletteDialog({ initialTypeId: 'uml.package' as ElementType });
+              }}
               disabled={!activeViewId}
               title="Place a UML Package (click to drop)"
             >
@@ -208,8 +242,11 @@ export function DiagramCanvasView({
             </button>
             <button
               type="button"
-              className={'shellButton' + (toolMode === 'addUmlNote' ? ' isActive' : '')}
-              onClick={() => setToolMode('addUmlNote')}
+              className="shellButton"
+              onClick={() => {
+                setToolMode('select');
+                setUmlPaletteDialog({ initialTypeId: 'uml.note' as ElementType });
+              }}
               disabled={!activeViewId}
               title="Place a UML Note (click to drop)"
             >
@@ -315,6 +352,20 @@ export function DiagramCanvasView({
           </div>
         )}
       </div>
+
+      {/* UML palette: create element first, then click to place in the view */}
+      <CreateElementDialog
+        isOpen={umlPaletteDialog !== null}
+        targetFolderId={paletteTargetFolderId}
+        kind="uml"
+        initialTypeId={umlPaletteDialog?.initialTypeId}
+        selectAfterCreate={false}
+        onCreated={(elementId) => {
+          beginPlaceExistingElement(elementId);
+        }}
+        onClose={() => setUmlPaletteDialog(null)}
+        onSelect={onSelect}
+      />
 
       {/* Relationship type picker shown after drag-drop */}
       <Dialog

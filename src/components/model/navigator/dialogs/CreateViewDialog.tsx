@@ -11,11 +11,14 @@ type Props = {
   targetFolderId: string;
   /** If set, the view will be created nested under (centered around) this element and will not be placed in any folder. */
   centerElementId?: string;
+
+  /** Optional initial kind (useful when launching from a navigator shortcut such as “UML View…”). */
+  initialKind?: ModelKind;
   onClose: () => void;
   onSelect: (selection: Selection) => void;
 };
 
-export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, onClose, onSelect }: Props) {
+export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, initialKind, onClose, onSelect }: Props) {
   const [nameDraft, setNameDraft] = useState('');
   const [kindDraft, setKindDraft] = useState<ModelKind>('archimate');
   const [viewpointDraft, setViewpointDraft] = useState<string>(VIEWPOINTS[0]?.id ?? 'layered');
@@ -23,9 +26,17 @@ export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, onCl
   useEffect(() => {
     if (!isOpen) return;
     setNameDraft('');
-    setKindDraft('archimate');
-    setViewpointDraft(VIEWPOINTS.find((v) => v.id === 'layered')?.id ?? VIEWPOINTS[0]?.id ?? 'layered');
-  }, [isOpen]);
+    const k: ModelKind = initialKind ?? 'archimate';
+    setKindDraft(k);
+    // Pick a reasonable default viewpoint for the selected kind.
+    const wantsQualified = k !== 'archimate';
+    const eligible = VIEWPOINTS.filter((vp) => {
+      const hasQualified = vp.allowedElementTypes.some((t) => String(t).includes('.'));
+      return wantsQualified ? hasQualified : !hasQualified;
+    });
+    const preferred = k === 'uml' ? eligible.find((v) => v.id === 'uml-class') : eligible.find((v) => v.id === 'layered');
+    setViewpointDraft(preferred?.id ?? eligible[0]?.id ?? (k === 'uml' ? 'uml-class' : 'layered'));
+  }, [isOpen, initialKind]);
 
   const viewpointOptions = useMemo(() => {
     return VIEWPOINTS.filter((vp) => {

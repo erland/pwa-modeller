@@ -10,6 +10,7 @@ import {
 import type { NavNode } from './types';
 import { DND_ELEMENT_MIME, DND_FOLDER_MIME, DND_VIEW_MIME } from './types';
 import { NavigatorNodeRow } from './NavigatorNodeRow';
+import type { ModelKind } from '../../../domain';
 
 const DND_DEBUG = typeof window !== 'undefined' && window.localStorage?.getItem('pwaModellerDndDebug') === '1';
 function dndLog(...args: unknown[]) {
@@ -35,8 +36,8 @@ type Props = {
 
   // Create actions
   openCreateFolder: (parentFolderId: string) => void;
-  openCreateElement: (targetFolderId?: string) => void;
-  openCreateView: (targetFolderId?: string) => void;
+  openCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
+  openCreateView: (targetFolderId?: string, kind?: ModelKind) => void;
   openCreateCenteredView: (elementId: string) => void;
 
   /** Optional handler: move an element to a folder when dropped on a folder in the tree. */

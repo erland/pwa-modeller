@@ -136,6 +136,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       onSelect={onSelect}
       toolMode={tool.toolMode}
       setToolMode={tool.setToolMode}
+      beginPlaceExistingElement={tool.beginPlaceExistingElement}
+      findFolderContainingView={tool.findFolderContainingView}
       groupBoxDraft={tool.groupBoxDraft}
       viewportRef={viewport.viewportRef}
       surfaceRef={viewport.surfaceRef}

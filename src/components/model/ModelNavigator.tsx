@@ -32,10 +32,12 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
   const [createElementOpen, setCreateElementOpen] = useState(false);
   const [createElementFolderId, setCreateElementFolderId] = useState<string | null>(null);
+  const [createElementKind, setCreateElementKind] = useState<'archimate' | 'uml' | 'bpmn'>('archimate');
 
   const [createViewOpen, setCreateViewOpen] = useState(false);
   const [createViewFolderId, setCreateViewFolderId] = useState<string | null>(null);
   const [createViewCenteredElementId, setCreateViewCenteredElementId] = useState<string | null>(null);
+  const [createViewInitialKind, setCreateViewInitialKind] = useState<'archimate' | 'uml' | 'bpmn'>('archimate');
 
   const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
 
@@ -59,16 +61,18 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     setCreateFolderParentId(parentFolderId);
   };
 
-  const openCreateElement = (targetFolderId?: string) => {
+  const openCreateElement = (targetFolderId?: string, kind: 'archimate' | 'uml' | 'bpmn' = 'archimate') => {
     if (!rootFolder) return;
     setCreateElementFolderId(targetFolderId ?? rootFolder.id);
+    setCreateElementKind(kind);
     setCreateElementOpen(true);
   };
 
-  const openCreateView = (targetFolderId?: string) => {
+  const openCreateView = (targetFolderId?: string, kind: 'archimate' | 'uml' | 'bpmn' = 'archimate') => {
     if (!rootFolder) return;
     setCreateViewCenteredElementId(null);
     setCreateViewFolderId(targetFolderId ?? rootFolder.id);
+    setCreateViewInitialKind(kind);
     setCreateViewOpen(true);
   };
 
@@ -76,6 +80,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     if (!rootFolder) return;
     setCreateViewFolderId(null);
     setCreateViewCenteredElementId(elementId);
+    setCreateViewInitialKind('archimate');
     setCreateViewOpen(true);
   };
 
@@ -153,6 +158,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
       <CreateElementDialog
         isOpen={createElementOpen}
         targetFolderId={createElementFolderId ?? rootFolder.id}
+        kind={createElementKind}
         onClose={() => setCreateElementOpen(false)}
         onSelect={onSelect}
       />
@@ -161,6 +167,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
         isOpen={createViewOpen}
         targetFolderId={createViewFolderId ?? rootFolder.id}
         centerElementId={createViewCenteredElementId ?? undefined}
+        initialKind={createViewInitialKind}
         onClose={() => {
           setCreateViewOpen(false);
           setCreateViewCenteredElementId(null);

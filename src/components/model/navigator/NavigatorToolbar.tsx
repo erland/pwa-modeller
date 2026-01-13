@@ -6,7 +6,7 @@ import {
   Popover
 } from 'react-aria-components';
 
-import type { Model } from '../../../domain';
+import type { Model, ModelKind } from '../../../domain';
 import type { Selection } from '../selection';
 
 type Props = {
@@ -20,8 +20,8 @@ type Props = {
   setSearchQuery: (value: string) => void;
 
   onCreateFolder: (parentFolderId: string) => void;
-  onCreateElement: (targetFolderId?: string) => void;
-  onCreateView: (targetFolderId?: string) => void;
+  onCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
+  onCreateView: (targetFolderId?: string, kind?: ModelKind) => void;
 };
 
 export function NavigatorToolbar({
@@ -78,9 +78,13 @@ export function NavigatorToolbar({
                 if (k === 'folder') {
                   onCreateFolder(folderId);
                 } else if (k === 'element') {
-                  onCreateElement(folderId);
+                  onCreateElement(folderId, 'archimate');
+                } else if (k === 'umlElement') {
+                  onCreateElement(folderId, 'uml');
                 } else if (k === 'view') {
-                  onCreateView(folderId);
+                  onCreateView(folderId, 'archimate');
+                } else if (k === 'umlView') {
+                  onCreateView(folderId, 'uml');
                 }
               }}
             >
@@ -90,8 +94,14 @@ export function NavigatorToolbar({
               <MenuItem className="navMenuItem" id="element">
                 Element…
               </MenuItem>
+              <MenuItem className="navMenuItem" id="umlElement">
+                UML Element…
+              </MenuItem>
               <MenuItem className="navMenuItem" id="view">
                 View…
+              </MenuItem>
+              <MenuItem className="navMenuItem" id="umlView">
+                UML View…
               </MenuItem>
             </Menu>
           </Popover>

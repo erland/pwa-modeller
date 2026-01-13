@@ -1,13 +1,14 @@
 import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Model, View } from '../../../domain';
-import { createElement, createViewObject, createViewObjectNodeLayout, getDefaultViewObjectSize } from '../../../domain';
+import { createViewObject, createViewObjectNodeLayout, getDefaultViewObjectSize } from '../../../domain';
 import { modelStore } from '../../../store';
 import type { Selection } from '../../model/selection';
 import type { Point } from '../geometry';
 
 export type ToolMode =
   | 'select'
+  | 'placeElement'
   | 'addNote'
   | 'addLabel'
   | 'addGroupBox'
@@ -35,6 +36,8 @@ type Args = {
 export function useDiagramToolState({ model, activeViewId, activeView, clientToModelPoint, onSelect }: Args) {
   const [toolMode, setToolMode] = useState<ToolMode>('select');
 
+  const [pendingElementPlacement, setPendingElementPlacement] = useState<{ elementId: string } | null>(null);
+
   const [groupBoxDraft, setGroupBoxDraft] = useState<GroupBoxDraft | null>(null);
   const groupBoxDraftRef = useRef<GroupBoxDraft | null>(null);
 
@@ -43,6 +46,7 @@ export function useDiagramToolState({ model, activeViewId, activeView, clientToM
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setGroupBoxDraft(null);
+        setPendingElementPlacement(null);
         setToolMode('select');
       }
     }
@@ -115,40 +119,38 @@ export function useDiagramToolState({ model, activeViewId, activeView, clientToM
     []
   );
 
-  const createUmlElementInViewAt = useCallback(
-    (umlType: 'uml.class' | 'uml.interface' | 'uml.enum' | 'uml.package' | 'uml.note', x: number, y: number) => {
+  const beginPlaceExistingElement = useCallback(
+    (elementId: string) => {
+      if (!activeViewId || !activeView) return;
+      setPendingElementPlacement({ elementId });
+      setToolMode('placeElement');
+    },
+    [activeView, activeViewId]
+  );
+
+  const placePendingElementInViewAt = useCallback(
+    (elementId: string, x: number, y: number) => {
       if (!model || !activeViewId || !activeView) return;
-      if (activeView.kind !== 'uml') return;
 
-      const defaultName =
-        umlType === 'uml.class'
-          ? 'Class'
-          : umlType === 'uml.interface'
-            ? 'Interface'
-            : umlType === 'uml.enum'
-              ? 'Enum'
-              : umlType === 'uml.package'
-                ? 'Package'
-                : 'Note';
-
-      const el = createElement({ name: defaultName, type: umlType });
-      const folderId = findFolderContainingView(model, activeViewId);
-      modelStore.addElement(el, folderId);
-      modelStore.addElementToViewAt(activeViewId, el.id, x, y);
+      modelStore.addElementToViewAt(activeViewId, elementId, x, y);
 
       // Better default sizes for UML compartments.
-      const size =
-        umlType === 'uml.note'
-          ? { width: 220, height: 140 }
-          : umlType === 'uml.package'
-            ? { width: 220, height: 110 }
-            : { width: 220, height: 150 };
-      modelStore.updateViewNodeLayout(activeViewId, el.id, { width: size.width, height: size.height });
+      if (activeView.kind === 'uml') {
+        const umlType = String(model.elements[elementId]?.type ?? '');
+        const size =
+          umlType === 'uml.note'
+            ? { width: 220, height: 140 }
+            : umlType === 'uml.package'
+              ? { width: 220, height: 110 }
+              : { width: 220, height: 150 };
+        modelStore.updateViewNodeLayout(activeViewId, elementId, { width: size.width, height: size.height });
+      }
 
-      onSelect({ kind: 'viewNode', viewId: activeViewId, elementId: el.id });
+      onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
+      setPendingElementPlacement(null);
       setToolMode('select');
     },
-    [activeView, activeViewId, findFolderContainingView, model, onSelect]
+    [activeView, activeViewId, model, onSelect]
   );
 
   const onSurfacePointerDownCapture = useCallback(
@@ -181,16 +183,8 @@ export function useDiagramToolState({ model, activeViewId, activeView, clientToM
         setToolMode('select');
       } else if (toolMode === 'addGroupBox') {
         beginGroupBoxDraft(p);
-      } else if (toolMode === 'addUmlClass') {
-        createUmlElementInViewAt('uml.class', p.x, p.y);
-      } else if (toolMode === 'addUmlInterface') {
-        createUmlElementInViewAt('uml.interface', p.x, p.y);
-      } else if (toolMode === 'addUmlEnum') {
-        createUmlElementInViewAt('uml.enum', p.x, p.y);
-      } else if (toolMode === 'addUmlPackage') {
-        createUmlElementInViewAt('uml.package', p.x, p.y);
-      } else if (toolMode === 'addUmlNote') {
-        createUmlElementInViewAt('uml.note', p.x, p.y);
+      } else if (toolMode === 'placeElement' && pendingElementPlacement) {
+        placePendingElementInViewAt(pendingElementPlacement.elementId, p.x, p.y);
       }
     },
     [
@@ -198,12 +192,20 @@ export function useDiagramToolState({ model, activeViewId, activeView, clientToM
       activeViewId,
       activeView,
       toolMode,
+      pendingElementPlacement,
       clientToModelPoint,
       beginGroupBoxDraft,
-      createUmlElementInViewAt,
+      placePendingElementInViewAt,
       onSelect,
     ]
   );
 
-  return { toolMode, setToolMode, groupBoxDraft, onSurfacePointerDownCapture };
+  return {
+    toolMode,
+    setToolMode,
+    groupBoxDraft,
+    onSurfacePointerDownCapture,
+    beginPlaceExistingElement,
+    findFolderContainingView
+  };
 }

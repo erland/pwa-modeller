@@ -37,6 +37,20 @@ export const VIEWPOINTS: Viewpoint[] = [
     description: 'How application components/services cooperate and exchange information.',
     allowedElementTypes: ['ApplicationComponent', 'ApplicationService', 'DataObject'],
     allowedRelationshipTypes: ['Serving', 'Flow', 'Association', 'Realization', 'Access']
+  },
+  {
+    id: 'uml-class',
+    name: 'UML Class Diagram',
+    description: 'UML class diagram (v1).',
+    allowedElementTypes: ['uml.class', 'uml.interface', 'uml.enum', 'uml.package', 'uml.note'],
+    allowedRelationshipTypes: [
+      'uml.association',
+      'uml.aggregation',
+      'uml.composition',
+      'uml.generalization',
+      'uml.realization',
+      'uml.dependency'
+    ]
   }
 ];
 

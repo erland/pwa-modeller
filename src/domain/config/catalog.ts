@@ -1,4 +1,4 @@
-import type { ArchimateLayer, ElementType, RelationshipType } from '../types';
+import type { ArchimateLayer, ElementType, ModelKind, RelationshipType } from '../types';
 
 export const ARCHIMATE_LAYERS: ArchimateLayer[] = [
   'Strategy',
@@ -143,3 +143,30 @@ export const RELATIONSHIP_TYPES: RelationshipType[] = [
   'Triggering',
   'Specialization'
 ];
+
+// -------------------------
+// UML (Class diagram v1)
+// -------------------------
+
+export const UML_ELEMENT_TYPES: ElementType[] = ['uml.class', 'uml.interface', 'uml.enum', 'uml.package', 'uml.note'];
+
+export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
+  'uml.association',
+  'uml.aggregation',
+  'uml.composition',
+  'uml.generalization',
+  'uml.realization',
+  'uml.dependency'
+];
+
+export function getElementTypesForKind(kind: ModelKind): ElementType[] {
+  if (kind === 'uml') return UML_ELEMENT_TYPES;
+  // TODO: BPMN
+  return ELEMENT_TYPES;
+}
+
+export function getRelationshipTypesForKind(kind: ModelKind): RelationshipType[] {
+  if (kind === 'uml') return UML_RELATIONSHIP_TYPES;
+  // TODO: BPMN
+  return RELATIONSHIP_TYPES;
+}

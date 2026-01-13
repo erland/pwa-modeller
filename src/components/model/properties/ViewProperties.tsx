@@ -26,6 +26,11 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
   const currentFolderId = findFolderContaining(model, 'view', view.id);
   const viewpointLabel = (id: string) => VIEWPOINTS.find((v) => v.id === id)?.name ?? id;
 
+  const viewpointOptions = VIEWPOINTS.filter((vp) => {
+    const hasQualified = vp.allowedElementTypes.some((t) => String(t).includes('.'));
+    return view.kind === 'archimate' ? !hasQualified : hasQualified;
+  });
+
   const isCentered = Boolean(view.centerElementId);
   const rootFolderId = viewFolders[0]?.id;
   const elementOptions = Object.values(model.elements)
@@ -50,7 +55,7 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
               value={view.viewpointId}
               onChange={(e) => actions.updateView(view.id, { viewpointId: e.target.value })}
             >
-              {VIEWPOINTS.map((vp) => (
+              {viewpointOptions.map((vp) => (
                 <option key={vp.id} value={vp.id}>
                   {vp.name}
                 </option>
@@ -171,42 +176,46 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
           </div>
         </div>
 
-        <div className="propertiesRow">
-          <div className="propertiesKey">Defaults</div>
-          <div className="propertiesValue" style={{ fontWeight: 400 }}>
-            <div className="panelHint" style={{ margin: 0 }}>
-              Default style tag per layer
-            </div>
-            <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-              {ARCHIMATE_LAYERS.map((layer) => {
-                const value = view.formatting?.layerStyleTags?.[layer] ?? '';
-                return (
-                  <div
-                    key={layer}
-                    style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, alignItems: 'center' }}
-                  >
-                    <div className="panelHint" style={{ margin: 0 }}>
-                      {layer}
+        {view.kind === 'archimate' ? (
+          <div className="propertiesRow">
+            <div className="propertiesKey">Defaults</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <div className="panelHint" style={{ margin: 0 }}>
+                Default style tag per layer
+              </div>
+              <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                {ARCHIMATE_LAYERS.map((layer) => {
+                  const value = view.formatting?.layerStyleTags?.[layer] ?? '';
+                  return (
+                    <div
+                      key={layer}
+                      style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, alignItems: 'center' }}
+                    >
+                      <div className="panelHint" style={{ margin: 0 }}>
+                        {layer}
+                      </div>
+                      <input
+                        aria-label={`Default style tag ${layer}`}
+                        className="textInput"
+                        placeholder="(none)"
+                        value={value}
+                        onChange={(e) => {
+                          const nextValue = e.target.value;
+                          const nextTags: Partial<Record<ArchimateLayer, string>> = {
+                            ...(view.formatting?.layerStyleTags ?? {}),
+                          };
+                          if (!nextValue) delete nextTags[layer];
+                          else nextTags[layer] = nextValue;
+                          actions.updateViewFormatting(view.id, { layerStyleTags: nextTags });
+                        }}
+                      />
                     </div>
-                    <input
-                      aria-label={`Default style tag ${layer}`}
-                      className="textInput"
-                      placeholder="(none)"
-                      value={value}
-                      onChange={(e) => {
-                        const nextValue = e.target.value;
-                        const nextTags: Partial<Record<ArchimateLayer, string>> = { ...(view.formatting?.layerStyleTags ?? {}) };
-                        if (!nextValue) delete nextTags[layer];
-                        else nextTags[layer] = nextValue;
-                        actions.updateViewFormatting(view.id, { layerStyleTags: nextTags });
-                      }}
-                    />
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
       <ExternalIdsSection externalIds={view.externalIds} />

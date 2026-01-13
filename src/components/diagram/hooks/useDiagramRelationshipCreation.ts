@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Model, RelationshipType } from '../../../domain';
-import { RELATIONSHIP_TYPES, createRelationship, getViewpointById } from '../../../domain';
+import { createRelationship, getRelationshipTypesForKind, getViewpointById } from '../../../domain';
 import { initRelationshipValidationMatrixFromBundledTable } from '../../../domain/config/archimatePalette';
 import { getNotation } from '../../../notations';
 
@@ -91,32 +91,48 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
     };
   }, [linkDrag, clientToModelPoint, lastRelType, nodes]);
 
+function defaultRelTypeForViewKind(kind: string | undefined): RelationshipType {
+  if (kind === 'uml') return 'uml.association';
+  // TODO: BPMN
+  return 'Association';
+}
+
+function isRelTypeForViewKind(kind: string | undefined, t: RelationshipType): boolean {
+  const s = String(t);
+  if (kind === 'uml') return s.startsWith('uml.');
+  if (kind === 'bpmn') return s.startsWith('bpmn.');
+  // ArchiMate: known types are unqualified (no dot) + Unknown.
+  return !s.includes('.') || s === 'Unknown';
+}
+
 const pendingRelTypeOptions = useMemo(() => {
   // Dependency tick to recompute when the relationship matrix loads/changes.
   void matrixLoadTick;
-  if (!model || !pendingCreateRel) return RELATIONSHIP_TYPES;
+  if (!model || !pendingCreateRel) return getRelationshipTypesForKind('archimate');
 
   const { sourceRef, targetRef } = pendingCreateRel;
 
-  // Start with the "best effort" allowed list (either ArchiMate rules or viewpoint guidance).
-  let allowed: RelationshipType[] = RELATIONSHIP_TYPES;
+  const view = model.views[pendingCreateRel.viewId];
+  const viewKind = view?.kind ?? 'archimate';
+
+  // Start with the "best effort" allowed list (notation kind aware).
+  let allowed: RelationshipType[] = getRelationshipTypesForKind(viewKind);
 
   // If both endpoints are elements, filter by notation rules (mode-aware).
   if (sourceRef.kind === 'element' && targetRef.kind === 'element') {
     const sourceType = model.elements[sourceRef.id]?.type;
     const targetType = model.elements[targetRef.id]?.type;
     if (sourceType && targetType) {
-      const view = model.views[pendingCreateRel.viewId];
-      const notation = getNotation(view?.kind ?? 'archimate');
-      allowed = (RELATIONSHIP_TYPES as RelationshipType[]).filter((t) =>
+      const notation = getNotation(viewKind);
+      allowed = (getRelationshipTypesForKind(viewKind) as RelationshipType[]).filter((t) =>
         notation.canCreateRelationship({ relationshipType: t, sourceType, targetType, mode: relationshipValidationMode }).allowed
       );
     }
   } else {
     // Otherwise, fall back to viewpoint guidance (connectors etc.).
-    const view = model.views[pendingCreateRel.viewId];
     const vp = view ? getViewpointById(view.viewpointId) : undefined;
-    allowed = (vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : RELATIONSHIP_TYPES) as RelationshipType[];
+    const fallback = getRelationshipTypesForKind(viewKind);
+    allowed = (vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : fallback) as RelationshipType[];
   }
 
   if (!showAllPendingRelTypes) return allowed;
@@ -130,7 +146,7 @@ const pendingRelTypeOptions = useMemo(() => {
       out.push(rt);
     }
   }
-  for (const rt of RELATIONSHIP_TYPES as RelationshipType[]) {
+  for (const rt of getRelationshipTypesForKind(viewKind) as RelationshipType[]) {
     if (!seen.has(rt)) {
       seen.add(rt);
       out.push(rt);
@@ -143,10 +159,18 @@ const pendingRelTypeOptions = useMemo(() => {
   useEffect(() => {
     if (!pendingCreateRel) return;
     const opts = pendingRelTypeOptions;
-    const next = opts.includes(lastRelType) ? lastRelType : opts[0] ?? 'Association';
+    const view = model?.views[pendingCreateRel.viewId];
+    const viewKind = view?.kind;
+
+    const preferred =
+      isRelTypeForViewKind(viewKind, lastRelType) && opts.includes(lastRelType)
+        ? lastRelType
+        : defaultRelTypeForViewKind(viewKind);
+
+    const next = opts.includes(preferred) ? preferred : (opts[0] ?? defaultRelTypeForViewKind(viewKind));
     setPendingRelType(next);
     setPendingRelError(null);
-  }, [pendingCreateRel, pendingRelTypeOptions, lastRelType]);
+  }, [pendingCreateRel, pendingRelTypeOptions, lastRelType, model]);
 
   const closePendingRelationshipDialog = useCallback(() => {
     setPendingCreateRel(null);

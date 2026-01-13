@@ -168,6 +168,56 @@ export function DiagramCanvasView({
           </button>
         </div>
 
+        {activeView?.kind === 'uml' ? (
+          <div className="diagramToolbarTools" role="group" aria-label="UML palette">
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addUmlClass' ? ' isActive' : '')}
+              onClick={() => setToolMode('addUmlClass')}
+              disabled={!activeViewId}
+              title="Place a UML Class (click to drop)"
+            >
+              Class
+            </button>
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addUmlInterface' ? ' isActive' : '')}
+              onClick={() => setToolMode('addUmlInterface')}
+              disabled={!activeViewId}
+              title="Place a UML Interface (click to drop)"
+            >
+              Interface
+            </button>
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addUmlEnum' ? ' isActive' : '')}
+              onClick={() => setToolMode('addUmlEnum')}
+              disabled={!activeViewId}
+              title="Place a UML Enum (click to drop)"
+            >
+              Enum
+            </button>
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addUmlPackage' ? ' isActive' : '')}
+              onClick={() => setToolMode('addUmlPackage')}
+              disabled={!activeViewId}
+              title="Place a UML Package (click to drop)"
+            >
+              Package
+            </button>
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addUmlNote' ? ' isActive' : '')}
+              onClick={() => setToolMode('addUmlNote')}
+              disabled={!activeViewId}
+              title="Place a UML Note (click to drop)"
+            >
+              UML Note
+            </button>
+          </div>
+        ) : null}
+
         <div className="diagramToolbarButtons">
           <button className="shellButton" type="button" onClick={zoomOut} aria-label="Zoom out">
             −
@@ -184,12 +234,16 @@ export function DiagramCanvasView({
           <button className="shellButton" type="button" onClick={fitToView} aria-label="Fit to view" disabled={!activeView || nodes.length === 0}>
             Fit
           </button>
-          <button className="shellButton" type="button" disabled={!activeViewId} title="Add AND junction" onClick={onAddAndJunction}>
-            +AND
-          </button>
-          <button className="shellButton" type="button" disabled={!activeViewId} title="Add OR junction" onClick={onAddOrJunction}>
-            +OR
-          </button>
+          {activeView?.kind === 'archimate' ? (
+            <>
+              <button className="shellButton" type="button" disabled={!activeViewId} title="Add AND junction" onClick={onAddAndJunction}>
+                +AND
+              </button>
+              <button className="shellButton" type="button" disabled={!activeViewId} title="Add OR junction" onClick={onAddOrJunction}>
+                +OR
+              </button>
+            </>
+          ) : null}
           <button className="shellButton" type="button" onClick={onExportImage} disabled={!canExportImage}>
             Export as Image
           </button>

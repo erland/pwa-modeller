@@ -1,12 +1,23 @@
 import type * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Model, View } from '../../../domain';
-import { createViewObject, createViewObjectNodeLayout, getDefaultViewObjectSize } from '../../../domain';
+import { createElement, createViewObject, createViewObjectNodeLayout, getDefaultViewObjectSize } from '../../../domain';
 import { modelStore } from '../../../store';
 import type { Selection } from '../../model/selection';
 import type { Point } from '../geometry';
 
-export type ToolMode = 'select' | 'addNote' | 'addLabel' | 'addGroupBox' | 'addDivider';
+export type ToolMode =
+  | 'select'
+  | 'addNote'
+  | 'addLabel'
+  | 'addGroupBox'
+  | 'addDivider'
+  // UML palette (class diagram v1)
+  | 'addUmlClass'
+  | 'addUmlInterface'
+  | 'addUmlEnum'
+  | 'addUmlPackage'
+  | 'addUmlNote';
 
 export type GroupBoxDraft = {
   start: Point;
@@ -92,6 +103,54 @@ export function useDiagramToolState({ model, activeViewId, activeView, clientToM
     [activeViewId, clientToModelPoint, onSelect]
   );
 
+  const findFolderContainingView = useCallback(
+    (m: Model, viewId: string): string | undefined => {
+      // Best-effort: place newly created elements in the same folder as the view.
+      // If the view is centered under an element (not in any folder), fall back to root.
+      for (const f of Object.values(m.folders)) {
+        if (f.viewIds.includes(viewId)) return f.id;
+      }
+      return undefined;
+    },
+    []
+  );
+
+  const createUmlElementInViewAt = useCallback(
+    (umlType: 'uml.class' | 'uml.interface' | 'uml.enum' | 'uml.package' | 'uml.note', x: number, y: number) => {
+      if (!model || !activeViewId || !activeView) return;
+      if (activeView.kind !== 'uml') return;
+
+      const defaultName =
+        umlType === 'uml.class'
+          ? 'Class'
+          : umlType === 'uml.interface'
+            ? 'Interface'
+            : umlType === 'uml.enum'
+              ? 'Enum'
+              : umlType === 'uml.package'
+                ? 'Package'
+                : 'Note';
+
+      const el = createElement({ name: defaultName, type: umlType });
+      const folderId = findFolderContainingView(model, activeViewId);
+      modelStore.addElement(el, folderId);
+      modelStore.addElementToViewAt(activeViewId, el.id, x, y);
+
+      // Better default sizes for UML compartments.
+      const size =
+        umlType === 'uml.note'
+          ? { width: 220, height: 140 }
+          : umlType === 'uml.package'
+            ? { width: 220, height: 110 }
+            : { width: 220, height: 150 };
+      modelStore.updateViewNodeLayout(activeViewId, el.id, { width: size.width, height: size.height });
+
+      onSelect({ kind: 'viewNode', viewId: activeViewId, elementId: el.id });
+      setToolMode('select');
+    },
+    [activeView, activeViewId, findFolderContainingView, model, onSelect]
+  );
+
   const onSurfacePointerDownCapture = useCallback(
     (e: React.PointerEvent) => {
       if (!model || !activeViewId || !activeView) return;
@@ -122,9 +181,28 @@ export function useDiagramToolState({ model, activeViewId, activeView, clientToM
         setToolMode('select');
       } else if (toolMode === 'addGroupBox') {
         beginGroupBoxDraft(p);
+      } else if (toolMode === 'addUmlClass') {
+        createUmlElementInViewAt('uml.class', p.x, p.y);
+      } else if (toolMode === 'addUmlInterface') {
+        createUmlElementInViewAt('uml.interface', p.x, p.y);
+      } else if (toolMode === 'addUmlEnum') {
+        createUmlElementInViewAt('uml.enum', p.x, p.y);
+      } else if (toolMode === 'addUmlPackage') {
+        createUmlElementInViewAt('uml.package', p.x, p.y);
+      } else if (toolMode === 'addUmlNote') {
+        createUmlElementInViewAt('uml.note', p.x, p.y);
       }
     },
-    [model, activeViewId, activeView, toolMode, clientToModelPoint, beginGroupBoxDraft, onSelect]
+    [
+      model,
+      activeViewId,
+      activeView,
+      toolMode,
+      clientToModelPoint,
+      beginGroupBoxDraft,
+      createUmlElementInViewAt,
+      onSelect,
+    ]
   );
 
   return { toolMode, setToolMode, groupBoxDraft, onSurfacePointerDownCapture };

@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { ArchimateLayer, ElementType, FolderOption, Model } from '../../../domain';
-import { ARCHIMATE_LAYERS, ELEMENT_TYPES, ELEMENT_TYPES_BY_LAYER, computeRelationshipTrace } from '../../../domain';
+import {
+  ARCHIMATE_LAYERS,
+  ELEMENT_TYPES,
+  ELEMENT_TYPES_BY_LAYER,
+  computeRelationshipTrace,
+  getElementTypesForKind,
+} from '../../../domain';
 
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
@@ -14,6 +20,13 @@ import { TaggedValuesSection } from './sections/TaggedValuesSection';
 import { PropertyRow } from './editors/PropertyRow';
 
 type TraceDirection = 'outgoing' | 'incoming' | 'both';
+
+function inferKindFromType(type: string | undefined): 'archimate' | 'uml' | 'bpmn' {
+  const t = (type ?? '').trim();
+  if (t.startsWith('uml.')) return 'uml';
+  if (t.startsWith('bpmn.')) return 'bpmn';
+  return 'archimate';
+}
 
 type Props = {
   model: Model;
@@ -28,6 +41,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
   // after all hooks have been invoked.
   const el = model.elements[elementId];
   const hasElement = Boolean(el);
+  const kind: 'archimate' | 'uml' | 'bpmn' = hasElement ? (el!.kind ?? inferKindFromType(el!.type as unknown as string)) : 'archimate';
   const safeLayer: ArchimateLayer = hasElement ? (el!.layer ?? ARCHIMATE_LAYERS[0]) : ARCHIMATE_LAYERS[0];
   const safeType: ElementType = hasElement ? el!.type : ('Unknown' as ElementType);
 
@@ -47,11 +61,24 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
     return m;
   }, []);
 
-  const allowedTypesForLayer = useMemo<ElementType[]>(() => ELEMENT_TYPES_BY_LAYER[safeLayer] ?? [], [safeLayer]);
+  const kindTypes = useMemo<ElementType[]>(() => getElementTypesForKind(kind), [kind]);
 
-  const isTypeOutOfSync = hasElement && safeType !== 'Unknown' && !allowedTypesForLayer.includes(safeType);
+  const allowedTypesForLayer = useMemo<ElementType[]>(() => {
+    if (kind !== 'archimate') return kindTypes;
+    return ELEMENT_TYPES_BY_LAYER[safeLayer] ?? [];
+  }, [kind, kindTypes, safeLayer]);
+
+  const isTypeOutOfSync = kind === 'archimate' && hasElement && safeType !== 'Unknown' && !allowedTypesForLayer.includes(safeType);
 
   const elementTypeOptions = useMemo<ElementType[]>(() => {
+    // For UML/BPMN we don't have layer-based filtering; just show the kind's catalog.
+    if (kind !== 'archimate') {
+      const base: ElementType[] = safeType === 'Unknown'
+        ? (['Unknown', ...kindTypes] as ElementType[])
+        : (kindTypes as ElementType[]);
+      return base.includes(safeType) ? base : ([safeType, ...base] as ElementType[]);
+    }
+
     const allOptions: ElementType[] =
       safeType === 'Unknown' ? (['Unknown', ...ELEMENT_TYPES] as ElementType[]) : (ELEMENT_TYPES as ElementType[]);
 
@@ -62,7 +89,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
 
     // Keep current value visible even if it is out-of-sync (e.g., imported data).
     return base.includes(safeType) ? base : ([safeType, ...base] as ElementType[]);
-  }, [safeType, allowedTypesForLayer, showAllElementTypes]);
+  }, [kind, kindTypes, safeType, allowedTypesForLayer, showAllElementTypes]);
 
   useEffect(() => {
     setTraceDirection('both');
@@ -92,7 +119,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   }, [model, hasElement, elementId]);
 
-  const canCreateRelationship = Object.keys(model.elements).length >= 2;
+  const canCreateRelationship = kind === 'archimate' && Object.keys(model.elements).length >= 2;
   const onSelectSafe = onSelect ?? (() => undefined);
 
   type RelationshipLike = { type: string; unknownType?: { name?: string } };
@@ -124,14 +151,23 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               value={el.type}
               onChange={(e) => {
                 const nextType = e.target.value as ElementType;
+                const nextKind = inferKindFromType(nextType as unknown as string);
+
+                // Switching between notations should keep the model internally consistent.
+                if (nextKind !== 'archimate') {
+                  actions.updateElement(el.id, { type: nextType, kind: nextKind, layer: undefined });
+                  return;
+                }
+
+                // ArchiMate: keep layer+type in sync.
                 if (nextType !== 'Unknown') {
                   const derivedLayer = layerForElementType.get(nextType);
-                  if (derivedLayer && derivedLayer !== el.layer) {
-                    actions.updateElement(el.id, { type: nextType, layer: derivedLayer });
+                  if (derivedLayer) {
+                    actions.updateElement(el.id, { type: nextType, kind: 'archimate', layer: derivedLayer });
                     return;
                   }
                 }
-                actions.updateElement(el.id, { type: nextType });
+                actions.updateElement(el.id, { type: nextType, kind: 'archimate' });
               }}
             >
               {elementTypeOptions.map((t) => {
@@ -147,18 +183,20 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
             </select>
         </PropertyRow>
 
-        <PropertyRow label="Type options">
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 400 }}>
-            <input
-              type="checkbox"
-              checked={showAllElementTypes}
-              onChange={(e) => setShowAllElementTypes(e.target.checked)}
-            />
-            Show all element types
-          </label>
-        </PropertyRow>
+        {kind === 'archimate' ? (
+          <PropertyRow label="Type options">
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 400 }}>
+              <input
+                type="checkbox"
+                checked={showAllElementTypes}
+                onChange={(e) => setShowAllElementTypes(e.target.checked)}
+              />
+              Show all element types
+            </label>
+          </PropertyRow>
+        ) : null}
 
-        {isTypeOutOfSync ? (
+        {kind === 'archimate' && isTypeOutOfSync ? (
           <div className="propertiesRow">
             <div className="propertiesKey">Warning</div>
             <div className="propertiesValue">
@@ -184,6 +222,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
             </div>
           </div>
         ) : null}
+        {kind === 'archimate' ? (
         <PropertyRow label="Layer">
             <select
               className="selectInput"
@@ -208,7 +247,10 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
                 </option>
               ))}
             </select>
-        </PropertyRow>        <DocumentationEditorRow
+        </PropertyRow>
+        ) : null}
+
+        <DocumentationEditorRow
           label="Documentation"
           ariaLabel="Element property documentation"
           value={el.documentation}
@@ -249,7 +291,13 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
             type="button"
             className="miniButton"
             disabled={!canCreateRelationship}
-            title={canCreateRelationship ? 'Create relationship' : 'Create at least two elements first'}
+            title={
+              kind !== 'archimate'
+                ? 'Relationship creation from this panel is ArchiMate-only (for now).'
+                : canCreateRelationship
+                  ? 'Create relationship'
+                  : 'Create at least two elements first'
+            }
             onClick={() => setCreateRelationshipOpen(true)}
           >
             New relationship…

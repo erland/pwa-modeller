@@ -6,12 +6,15 @@ import {
   ELEMENT_TYPES,
   ELEMENT_TYPES_BY_LAYER,
   computeRelationshipTrace,
+  createView,
   getElementTypesForKind,
 } from '../../../domain';
 
+import { modelStore } from '../../../store';
+
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
-import { findFolderContaining, getElementLabel, splitRelationshipsForElement } from './utils';
+import { findFolderByKind, findFolderContaining, getElementLabel, splitRelationshipsForElement } from './utils';
 import { CreateRelationshipDialog } from '../navigator/dialogs/CreateRelationshipDialog';
 import { NameEditorRow } from './editors/NameEditorRow';
 import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
@@ -119,8 +122,60 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   }, [model, hasElement, elementId]);
 
-  const canCreateRelationship = kind === 'archimate' && Object.keys(model.elements).length >= 2;
   const onSelectSafe = onSelect ?? (() => undefined);
+
+  const linkedUmlViews = useMemo(() => {
+    return Object.values(model.views)
+      .filter((v) => v.kind === 'uml' && v.ownerRef?.kind === 'archimate' && v.ownerRef.id === elementId)
+      .map((v) => ({ id: v.id, name: v.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }, [model, elementId]);
+
+  const getOrCreateChildFolder = (parentId: string, name: string): string => {
+    const current = modelStore.getState().model;
+    if (!current) throw new Error('No model loaded');
+    const parent = current.folders[parentId];
+    if (!parent) throw new Error(`Folder not found: ${parentId}`);
+
+    const trimmed = name.trim();
+    const needle = trimmed.toLocaleLowerCase();
+    const existing = parent.folderIds.find((fid) => {
+      const f = current.folders[fid];
+      return Boolean(f && f.name.trim().toLocaleLowerCase() === needle);
+    });
+    if (existing) return existing;
+    return modelStore.createFolder(parentId, trimmed);
+  };
+
+  const createLinkedUmlDiagram = (): void => {
+    if (!hasElement) return;
+    if (kind !== 'archimate') return;
+
+    // Base folder: the folder containing the element, otherwise fall back to the standard views folder.
+    const baseFolderId = currentFolderId ?? (() => {
+      try {
+        return findFolderByKind(model, 'views').id;
+      } catch {
+        return findFolderByKind(model, 'root').id;
+      }
+    })();
+
+    const umlRootFolderId = getOrCreateChildFolder(baseFolderId, 'UML');
+    const elementFolderName = (el.name || el.id).trim() || el.id;
+    const elementUmlFolderId = getOrCreateChildFolder(umlRootFolderId, elementFolderName);
+
+    const viewName = `${el.name || el.id} (UML)`;
+    const created = createView({
+      name: viewName,
+      kind: 'uml',
+      viewpointId: 'uml-class',
+      ownerRef: { kind: 'archimate', id: el.id }
+    });
+    modelStore.addView(created, elementUmlFolderId);
+    onSelectSafe({ kind: 'view', viewId: created.id });
+  };
+
+  const canCreateRelationship = kind === 'archimate' && Object.keys(model.elements).length >= 2;
 
   type RelationshipLike = { type: string; unknownType?: { name?: string } };
   const relationshipTypeLabel = (r: unknown): string => {
@@ -133,6 +188,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
   };
 
   if (!hasElement) return <p className="panelHint">Element not found.</p>;
+
 
   return (
     <div>
@@ -273,6 +329,48 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
             </select>
         </PropertyRow>
       </div>
+
+      {kind === 'archimate' ? (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <p className="panelHint" style={{ margin: 0 }}>
+              UML drill-down
+            </p>
+            <button
+              type="button"
+              className="miniButton"
+              title="Create a linked UML Class Diagram view for this element"
+              onClick={createLinkedUmlDiagram}
+            >
+              Create UML diagram…
+            </button>
+          </div>
+          <div className="propertiesGrid">
+            <div className="propertiesRow">
+              <div className="propertiesKey">Linked UML views</div>
+              <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                {linkedUmlViews.length === 0 ? (
+                  <span style={{ opacity: 0.7 }}>None</span>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {linkedUmlViews.map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className="miniButton"
+                        aria-label={`Open UML view ${v.name}`}
+                        onClick={() => onSelectSafe({ kind: 'view', viewId: v.id })}
+                      >
+                        {v.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ExternalIdsSection externalIds={el.externalIds} />
 

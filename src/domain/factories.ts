@@ -106,11 +106,14 @@ export function createView(input: CreateViewInput): View {
     id: input.id ?? createId('view'),
     name: input.name.trim(),
     kind: input.kind ?? 'archimate',
+    ownerRef: input.ownerRef,
     viewpointId: input.viewpointId.trim(),
     documentation: input.documentation?.trim() || undefined,
     stakeholders: input.stakeholders,
     formatting,
     connections: input.connections ?? [],
+    externalIds: input.externalIds,
+    taggedValues: input.taggedValues,
     // View-local diagram objects (notes/labels/group boxes). Optional in the schema, but
     // new views should start with an empty map for a predictable runtime shape.
     objects: input.objects ?? {},

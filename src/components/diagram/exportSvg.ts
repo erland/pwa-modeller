@@ -1,6 +1,5 @@
-import type { Model, ViewNodeLayout, ArchimateLayer, ElementType, ViewConnection, RelationshipType } from '../../domain';
+import type { Model, ViewNodeLayout, ArchimateLayer, ElementType, ViewConnection } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
-import { RELATIONSHIP_TYPES } from '../../domain/config/catalog';
 import { refKey } from './connectable';
 import { getConnectionPath, polylineToSvgPath } from './connectionPath';
 import { applyLaneOffsetsSafely } from './connectionLanes';
@@ -15,9 +14,9 @@ import {
   unitPerp,
   type Point,
 } from './geometry';
-import { archimateRelationshipStyle } from '../../diagram/relationships/archimateStyle';
 import { dasharrayForPattern } from '../../diagram/relationships/style';
 import { markerId, renderSvgMarkerDefs } from '../../diagram/relationships/markers';
+import { getNotation } from '../../notations';
 
 const ELEMENT_TYPE_TO_LAYER: Partial<Record<ElementType, ArchimateLayer>> = (() => {
   const map: Partial<Record<ElementType, ArchimateLayer>> = {};
@@ -44,12 +43,6 @@ type RelationshipVisual = {
   midLabel?: string;
 };
 
-const RELATIONSHIP_TYPE_SET: ReadonlySet<string> = new Set(RELATIONSHIP_TYPES);
-
-function isRelationshipType(t: string): t is RelationshipType {
-  return RELATIONSHIP_TYPE_SET.has(t);
-}
-
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
@@ -65,12 +58,17 @@ function pickArchimateAttrs(attrs: unknown): { isDirected?: boolean; accessType?
   return Object.keys(out).length ? out : undefined;
 }
 
-function relationshipVisual(rel: { type: string; attrs?: unknown }): RelationshipVisual {
-  // Export currently supports ArchiMate visuals; as UML/BPMN are added,
-  // export will switch based on view.kind via the notation registry.
-  const style = isRelationshipType(rel.type)
-    ? archimateRelationshipStyle({ type: rel.type, attrs: pickArchimateAttrs(rel.attrs) })
-    : { markerEnd: 'arrowOpen' as const };
+function relationshipVisual(
+  rel: { type: string; attrs?: unknown },
+  viewKind: 'archimate' | 'uml' | 'bpmn'
+): RelationshipVisual {
+  // Use the notation registry for styling so exports stay consistent as new notations are added.
+  const notation = getNotation(viewKind);
+
+  // ArchiMate expects specific attrs; normalize for better compatibility when exporting.
+  const normalizedRel = viewKind === 'archimate' ? { ...rel, attrs: pickArchimateAttrs(rel.attrs) } : rel;
+
+  const style = notation.getRelationshipStyle(normalizedRel);
   const dasharray = style.line?.dasharray ?? dasharrayForPattern(style.line?.pattern);
   return {
     markerStartId: markerId(style.markerStart, false),
@@ -241,7 +239,7 @@ export function createViewSvg(model: Model, viewId: string): string {
         points = offsetPolyline(points, perp, offset);
       }
 
-      const visual = relationshipVisual(rel);
+      const visual = relationshipVisual(rel, (view.kind ?? 'archimate') as 'archimate' | 'uml' | 'bpmn');
       relItems.push({ id: conn.id, relId: conn.relationshipId, points, label: rel.type, visual });
     }
   }

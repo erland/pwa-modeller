@@ -1,11 +1,22 @@
 import type { RelationshipStyle } from '../../diagram/relationships/style';
 import type { Notation } from '../types';
-import { isUmlNodeType, isUmlRelationshipType } from './nodeTypes';
+import { isUmlClassifierType, isUmlNodeType, isUmlNoteType, isUmlPackageType, isUmlRelationshipType } from './nodeTypes';
 import { renderUmlNodeSymbol } from './renderNodeSymbol';
 import { renderUmlNodeContent } from './renderNodeContent';
 
+type UmlRelAttrs = {
+  /** Optional navigability for associations (v1: boolean directed). */
+  isDirected?: boolean;
+};
+
+function normalizeUmlRelAttrs(attrs: unknown): UmlRelAttrs {
+  if (!attrs || typeof attrs !== 'object') return {};
+  const a = attrs as Record<string, unknown>;
+  return { isDirected: typeof a.isDirected === 'boolean' ? a.isDirected : undefined };
+}
+
 function umlRelationshipStyle(type: string): RelationshipStyle {
-  // Step 3 refines these styles further; v1 focuses on node rendering.
+  // Step 3: class-diagram relationship styles using the shared marker registry.
   switch (type) {
     case 'uml.generalization':
       return { markerEnd: 'triangleOpen' };
@@ -19,7 +30,8 @@ function umlRelationshipStyle(type: string): RelationshipStyle {
       return { markerStart: 'diamondFilled' };
     case 'uml.association':
     default:
-      return { markerEnd: 'none' };
+      // Default association is an undirected solid line.
+      return {};
   }
 }
 
@@ -44,6 +56,13 @@ export const umlNotation: Notation = {
       // Unknown in UML view: keep it visible but neutral.
       return { markerEnd: 'arrowOpen' };
     }
+
+    if (rel.type === 'uml.association') {
+      const a = normalizeUmlRelAttrs(rel.attrs);
+      // Optional directed association (navigability v1).
+      return a.isDirected ? { markerEnd: 'arrowOpen' } : {};
+    }
+
     return umlRelationshipStyle(rel.type);
   },
 
@@ -65,6 +84,53 @@ export const umlNotation: Notation = {
       return { allowed: false, reason: 'UML relationships require UML nodes.' };
     }
 
-    return { allowed: true };
+    // Notes are not connectable.
+    if (isUmlNoteType(sourceType) || isUmlNoteType(targetType)) {
+      return { allowed: false, reason: 'Notes cannot participate in relationships.' };
+    }
+
+    // Basic class diagram rules (kept intentionally permissive for v1).
+    switch (relationshipType) {
+      case 'uml.generalization':
+        if (!isUmlClassifierType(sourceType) || !isUmlClassifierType(targetType)) {
+          return { allowed: false, reason: 'Generalization is allowed between classifiers (class/interface/enum).' };
+        }
+        return { allowed: true };
+
+      case 'uml.realization':
+        // Class realizes an interface (keep v1 strict).
+        if (sourceType !== 'uml.class' || targetType !== 'uml.interface') {
+          return { allowed: false, reason: 'Realization is allowed from Class to Interface.' };
+        }
+        return { allowed: true };
+
+      case 'uml.aggregation':
+      case 'uml.composition':
+        // Whole/part: keep it between classes/enums.
+        if (sourceType !== 'uml.class') {
+          return { allowed: false, reason: 'Aggregation/Composition source should be a Class.' };
+        }
+        if (!(targetType === 'uml.class' || targetType === 'uml.enum')) {
+          return { allowed: false, reason: 'Aggregation/Composition target should be a Class or Enum.' };
+        }
+        return { allowed: true };
+
+      case 'uml.dependency':
+        // Allow dependency between packages, and between any non-note UML nodes.
+        if (isUmlPackageType(sourceType) || isUmlPackageType(targetType)) {
+          return isUmlPackageType(sourceType) && isUmlPackageType(targetType)
+            ? { allowed: true }
+            : { allowed: false, reason: 'Package dependencies should be between Packages.' };
+        }
+        return { allowed: true };
+
+      case 'uml.association':
+      default:
+        // Association: classifiers only (avoid packages for now).
+        if (!isUmlClassifierType(sourceType) || !isUmlClassifierType(targetType)) {
+          return { allowed: false, reason: 'Association is allowed between classifiers (class/interface/enum).' };
+        }
+        return { allowed: true };
+    }
   },
 };

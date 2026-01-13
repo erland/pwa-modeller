@@ -1,4 +1,4 @@
-import { AccessType, RelationshipAttributes, RelationshipType } from './types';
+import type { AccessType, RelationshipType } from './types';
 
 const ACCESS_TYPES: ReadonlySet<AccessType> = new Set(['Access', 'Read', 'Write', 'ReadWrite']);
 
@@ -13,37 +13,47 @@ function coerceTrimmedString(v: unknown): string | undefined {
   return t.length ? t : undefined;
 }
 
+type ArchimateRelAttrs = {
+  accessType?: AccessType;
+  isDirected?: boolean;
+  influenceStrength?: string;
+};
+
+function normalizeArchimateAttrs(attrs: unknown): ArchimateRelAttrs {
+  if (!attrs || typeof attrs !== 'object') return {};
+  const a = attrs as Record<string, unknown>;
+  return {
+    accessType: isValidAccessType(a.accessType) ? (a.accessType as AccessType) : undefined,
+    isDirected: typeof a.isDirected === 'boolean' ? a.isDirected : undefined,
+    influenceStrength: coerceTrimmedString(a.influenceStrength)
+  };
+}
+
 /**
  * Normalize/clean relationship attributes so they are consistent with the
  * relationship type.
  *
- * Rules:
- * - Access: only keep `accessType` and only if it is valid.
- * - Association: only keep `isDirected` if it is a boolean.
- * - Influence: only keep `influenceStrength` if it is a non-empty string.
- * - All other relationship types: drop all attributes.
+ * - For ArchiMate relationship types, we keep only the supported fields and drop the rest.
+ * - For non-ArchiMate (e.g. "uml.*" / "bpmn.*"), we preserve attrs as-is (notation will interpret it).
  */
-export function sanitizeRelationshipAttrs(
-  relationshipType: RelationshipType,
-  attrs?: RelationshipAttributes
-): RelationshipAttributes | undefined {
-  if (!attrs) return undefined;
+export function sanitizeRelationshipAttrs(relationshipType: RelationshipType, attrs?: unknown): unknown | undefined {
+  if (attrs === undefined) return undefined;
 
-  const next: RelationshipAttributes = {};
+  // Preserve notation-specific attributes for non-ArchiMate types.
+  if (typeof relationshipType === 'string' && (relationshipType.startsWith('uml.') || relationshipType.startsWith('bpmn.'))) {
+    return attrs === null ? undefined : attrs;
+  }
+
+  // ArchiMate normalization
+  const a = normalizeArchimateAttrs(attrs);
+  const next: Record<string, unknown> = {};
 
   if (relationshipType === 'Access') {
-    if (isValidAccessType(attrs.accessType)) {
-      next.accessType = attrs.accessType;
-    }
+    if (a.accessType) next.accessType = a.accessType;
   } else if (relationshipType === 'Association') {
-    if (typeof attrs.isDirected === 'boolean') {
-      next.isDirected = attrs.isDirected;
-    }
+    if (typeof a.isDirected === 'boolean') next.isDirected = a.isDirected;
   } else if (relationshipType === 'Influence') {
-    const strength = coerceTrimmedString(('influenceStrength' in (attrs as object) ? (attrs as { influenceStrength?: unknown }).influenceStrength : undefined));
-    if (strength) {
-      next.influenceStrength = strength;
-    }
+    if (a.influenceStrength) next.influenceStrength = a.influenceStrength;
   }
 
   return Object.keys(next).length ? next : undefined;

@@ -27,7 +27,7 @@ Goal: **Add UML support** as *separate UML views* (no mixed ArchiMate/UML in the
   - implement style mapping for UML relations (see Step 3).
 - `canCreateNode({ nodeType }): boolean`  
   - return true only for UML node types you define (strings).
-- `canCreateRelationship(...) => GuardResult`  
+- `canCreateRelationship(…) => GuardResult`  
   - return allowed only for UML relationship types + endpoint compatibility (see Step 3).
 
 **UML type IDs (strings) to start**
@@ -162,7 +162,7 @@ Implement in `umlNotation.canCreateRelationship`:
   - creates a UML view:
     - `kind:'uml'`
     - `ownerRef: { kind:'archimate', id:<elementId> }`
-    - sensible folder placement (e.g. `Design/UML/<Element Name>/...`)
+    - sensible folder placement (e.g. `Design/UML/<Element Name>/…`)
 - Also list linked UML diagrams for the element:
   - search views where `view.ownerRef.id === elementId && ownerRef.kind==='archimate'`
 

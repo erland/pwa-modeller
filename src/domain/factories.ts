@@ -14,6 +14,13 @@ import type {
   ViewObjectTextAlign
 } from './types';
 
+function inferKindFromType(type: string | undefined): 'archimate' | 'uml' | 'bpmn' {
+  const t = (type ?? '').trim();
+  if (t.startsWith('uml.')) return 'uml';
+  if (t.startsWith('bpmn.')) return 'bpmn';
+  return 'archimate';
+}
+
 function requireNonBlank(value: string, field: string): void {
   if (value.trim().length === 0) {
     throw new Error(`${field} must be a non-empty string`);
@@ -23,16 +30,22 @@ function requireNonBlank(value: string, field: string): void {
 export type CreateElementInput = Omit<Element, 'id'> & { id?: string; description?: string };
 export function createElement(input: CreateElementInput): Element {
   requireNonBlank(input.name, 'Element.name');
-  // layer/type are required at compile-time; this runtime check gives clearer errors.
-  if (!input.layer) throw new Error('Element.layer is required');
+  // type is required at compile-time; runtime check gives clearer errors.
   if (!input.type) throw new Error('Element.type is required');
+
+  const kind = input.kind ?? inferKindFromType(input.type);
+  if (kind === 'archimate' && !input.layer) throw new Error('Element.layer is required for archimate elements');
 
   return {
     id: input.id ?? createId('el'),
+    kind,
     name: input.name.trim(),
     layer: input.layer,
     type: input.type,
-    documentation: (input.documentation ?? input.description)?.trim() || undefined
+    unknownType: input.unknownType,
+    documentation: (input.documentation ?? input.description)?.trim() || undefined,
+    externalIds: input.externalIds && input.externalIds.length ? input.externalIds : undefined,
+    taggedValues: input.taggedValues && input.taggedValues.length ? input.taggedValues : undefined
   };
 }
 
@@ -44,8 +57,11 @@ export function createRelationship(input: CreateRelationshipInput): Relationship
   if (!hasTarget) throw new Error('Relationship target endpoint is required');
   if (!input.type) throw new Error('Relationship.type is required');
 
+  const kind = input.kind ?? inferKindFromType(input.type as unknown as string);
+
   return {
     id: input.id ?? createId('rel'),
+    kind,
     sourceElementId: input.sourceElementId,
     sourceConnectorId: input.sourceConnectorId,
     targetElementId: input.targetElementId,

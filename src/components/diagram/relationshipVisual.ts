@@ -8,19 +8,41 @@ export type RelationshipVisual = {
   midLabel?: string;
 };
 
+type ArchimateRelAttrs = {
+  isDirected?: boolean;
+  accessType?: string;
+  influenceStrength?: string;
+};
+
+function normalizeArchimateAttrs(attrs: unknown): ArchimateRelAttrs {
+  if (!attrs || typeof attrs !== 'object') return {};
+  const a = attrs as Record<string, unknown>;
+  const isDirected = typeof a.isDirected === 'boolean' ? a.isDirected : undefined;
+  const accessType = typeof a.accessType === 'string' ? a.accessType : undefined;
+  const influenceStrength = typeof a.influenceStrength === 'string' ? a.influenceStrength : undefined;
+  return { isDirected, accessType, influenceStrength };
+}
+
 export function relationshipVisual(
-  rel: { type: RelationshipType; attrs?: { isDirected?: boolean; accessType?: string; influenceStrength?: string } },
+  rel: { type: RelationshipType; attrs?: unknown },
   isSelected: boolean
 ): RelationshipVisual {
   const suffix = isSelected ? 'Sel' : '';
 
-  const accessType = (rel.attrs?.accessType ?? '').trim();
-  const influenceStrength = (rel.attrs?.influenceStrength ?? '').trim();
+  // Relationship visuals here are ArchiMate-oriented. For non-ArchiMate types
+  // we fall back to a simple arrow by default (notation-specific styling can override elsewhere).
+  if (typeof rel.type === 'string' && (rel.type.startsWith('uml.') || rel.type.startsWith('bpmn.'))) {
+    return { markerEnd: `url(#arrowOpen${suffix})` };
+  }
+
+  const a = normalizeArchimateAttrs(rel.attrs);
+  const accessType = (a.accessType ?? '').trim();
+  const influenceStrength = (a.influenceStrength ?? '').trim();
 
   switch (rel.type) {
     case 'Association':
       // ArchiMate 3.1+ supports directed associations.
-      return rel.attrs?.isDirected ? { markerEnd: `url(#arrowOpen${suffix})` } : {};
+      return a.isDirected ? { markerEnd: `url(#arrowOpen${suffix})` } : {};
     case 'Composition':
       return { markerStart: `url(#diamondFilled${suffix})` };
     case 'Aggregation':
@@ -48,13 +70,13 @@ export function relationshipVisual(
               ? 'W'
               : accessType === 'ReadWrite'
                 ? 'RW'
-                : undefined,
+                : undefined
       };
     case 'Influence':
       return {
         markerEnd: `url(#arrowOpen${suffix})`,
         dasharray: '2 4',
-        midLabel: influenceStrength || '±',
+        midLabel: influenceStrength || '±'
       };
     default:
       return { markerEnd: `url(#arrowOpen${suffix})` };

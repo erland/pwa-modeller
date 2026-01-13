@@ -60,7 +60,7 @@ export function ReportsWorkspace() {
 
   const layerOptions = useMemo(() => {
     if (!model) return [] as ArchimateLayer[];
-    const present = new Set(Object.values(model.elements).map((e) => e.layer as ArchimateLayer));
+    const present = new Set(Object.values(model.elements).map((e) => e.layer).filter((l): l is ArchimateLayer => Boolean(l)));
     return ARCHIMATE_LAYERS.filter((l) => present.has(l));
   }, [model]);
 

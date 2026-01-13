@@ -88,6 +88,14 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
   }, [showAllRelationshipTypes, allowedRelationshipTypes, relType, relIsUnknown]);
 
   if (!rel) return <p className="panelHint">Relationship not found.</p>;
+
+  const attrsObj: Record<string, unknown> =
+    rel.attrs && typeof rel.attrs === 'object' ? (rel.attrs as Record<string, unknown>) : {};
+  const accessType = typeof attrsObj.accessType === 'string' ? (attrsObj.accessType as string) : undefined;
+  const influenceStrength =
+    typeof attrsObj.influenceStrength === 'string' ? (attrsObj.influenceStrength as string) : undefined;
+  const isDirected = typeof attrsObj.isDirected === 'boolean' ? (attrsObj.isDirected as boolean) : false;
+
   const elementOptions = Object.values(model.elements)
     .filter(Boolean)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
@@ -185,10 +193,10 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
               <select
                 className="selectInput"
                 aria-label="Relationship property access type"
-                value={rel.attrs?.accessType ?? 'Access'}
+                value={accessType ?? 'Access'}
                 onChange={(e) =>
                   actions.updateRelationship(rel.id, {
-                    attrs: { ...(rel.attrs ?? {}), accessType: e.target.value as AccessType }
+                    attrs: { ...attrsObj, accessType: e.target.value as AccessType }
                   })
                 }
               >
@@ -213,10 +221,10 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
                 className="textInput"
                 aria-label="Relationship property influence strength"
                 placeholder="e.g. +, ++, -, --, 5"
-                value={rel.attrs?.influenceStrength ?? ''}
+                value={influenceStrength ?? ''}
                 onChange={(e) =>
                   actions.updateRelationship(rel.id, {
-                    attrs: { ...(rel.attrs ?? {}), influenceStrength: e.target.value || undefined }
+                    attrs: { ...attrsObj, influenceStrength: e.target.value || undefined }
                   })
                 }
               />
@@ -235,10 +243,10 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
                 <input
                   type="checkbox"
                   aria-label="Relationship property association directed"
-                  checked={!!rel.attrs?.isDirected}
+                  checked={!!isDirected}
                   onChange={(e) =>
                     actions.updateRelationship(rel.id, {
-                      attrs: { ...(rel.attrs ?? {}), isDirected: e.target.checked ? true : undefined }
+                      attrs: { ...attrsObj, isDirected: e.target.checked ? true : undefined }
                     })
                   }
                 />

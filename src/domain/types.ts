@@ -23,6 +23,16 @@ export type ArchimateLayer =
 export type ModelKind = 'archimate' | 'uml' | 'bpmn';
 
 /**
+ * Qualified type ids for non-ArchiMate notations.
+ *
+ * We keep ArchiMate as plain type names (e.g. "ApplicationComponent") for backward compatibility,
+ * while allowing UML/BPMN to use qualified ids like "uml.class" or "bpmn.task".
+ */
+export type QualifiedNotation = Exclude<ModelKind, 'archimate'>;
+export type QualifiedElementType = `${QualifiedNotation}.${string}`;
+export type QualifiedRelationshipType = `${QualifiedNotation}.${string}`;
+
+/**
  * A reference to an object that lives in a view/model of a given notation.
  * Used for cross-diagram drill-down and traceability (e.g. ArchiMate element -> UML/BPMN view).
  */
@@ -107,7 +117,7 @@ export type KnownElementType =
   | 'Location'
   | 'Grouping';
 
-export type ElementType = KnownElementType | 'Unknown';
+export type ElementType = KnownElementType | 'Unknown' | QualifiedElementType;
 
 
 // NOTE: Also a pragmatic subset for the MVP foundation.
@@ -124,7 +134,7 @@ export type KnownRelationshipType =
   | 'Triggering'
   | 'Specialization';
 
-export type RelationshipType = KnownRelationshipType | 'Unknown';
+export type RelationshipType = KnownRelationshipType | 'Unknown' | QualifiedRelationshipType;
 
 
 
@@ -251,8 +261,11 @@ export interface ViewObject {
 
 export interface Element extends HasTaggedValues, HasExternalIds {
   id: string;
+  /** Optional semantic kind; if omitted, inferred from `type` (defaults to 'archimate'). */
+  kind?: ModelKind;
   name: string;
-  layer: ArchimateLayer;
+  /** ArchiMate-only. For UML/BPMN elements this is typically undefined. */
+  layer?: ArchimateLayer;
   type: ElementType;
   /** Present only when type === 'Unknown'. */
   unknownType?: UnknownTypeInfo;
@@ -261,6 +274,8 @@ export interface Element extends HasTaggedValues, HasExternalIds {
 
 export interface Relationship extends HasTaggedValues, HasExternalIds {
   id: string;
+  /** Optional semantic kind; if omitted, inferred from `type` (defaults to 'archimate'). */
+  kind?: ModelKind;
   /** Exactly one of sourceElementId / sourceConnectorId must be set. */
   sourceElementId?: string;
   sourceConnectorId?: string;
@@ -272,7 +287,8 @@ export interface Relationship extends HasTaggedValues, HasExternalIds {
   unknownType?: UnknownTypeInfo;
   name?: string;
   documentation?: string;
-  attrs?: RelationshipAttributes;
+  /** Notation-specific attributes (ArchiMate uses RelationshipAttributes). */
+  attrs?: unknown;
 }
 
 export interface Viewpoint {

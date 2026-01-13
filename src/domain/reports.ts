@@ -94,7 +94,7 @@ export function generateElementReport(
       id: e.id,
       name: e.name,
       type: e.type,
-      layer: e.layer,
+      layer: e.layer ?? '',
       folderPath: folderPath(model, findFolderContainingElement(model, e.id))
     }))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));

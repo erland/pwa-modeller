@@ -28,7 +28,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
   // after all hooks have been invoked.
   const el = model.elements[elementId];
   const hasElement = Boolean(el);
-  const safeLayer: ArchimateLayer = hasElement ? el!.layer : ARCHIMATE_LAYERS[0];
+  const safeLayer: ArchimateLayer = hasElement ? (el!.layer ?? ARCHIMATE_LAYERS[0]) : ARCHIMATE_LAYERS[0];
   const safeType: ElementType = hasElement ? el!.type : ('Unknown' as ElementType);
 
   const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);

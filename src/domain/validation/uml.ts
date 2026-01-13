@@ -1,0 +1,147 @@
+import type { Model } from '../types';
+import { UML_ELEMENT_TYPES, UML_RELATIONSHIP_TYPES } from '../config/catalog';
+import { makeIssue } from './issues';
+import type { ValidationIssue } from './types';
+
+function inferKindFromType(type: string | undefined): 'archimate' | 'uml' | 'bpmn' {
+  const t = (type ?? '').trim();
+  if (t.startsWith('uml.')) return 'uml';
+  if (t.startsWith('bpmn.')) return 'bpmn';
+  return 'archimate';
+}
+
+const UML_CLASSIFIER_TYPES = new Set(['uml.class', 'uml.interface', 'uml.enum']);
+
+export function validateUmlBasics(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  // ------------------------------
+  // Unknown UML element/relationship types
+  // ------------------------------
+  const allowedElements = new Set(UML_ELEMENT_TYPES);
+  const allowedRelationships = new Set(UML_RELATIONSHIP_TYPES);
+
+  for (const el of Object.values(model.elements)) {
+    const kind = el.kind ?? inferKindFromType(el.type);
+    if (kind !== 'uml') continue;
+    if (el.type !== 'Unknown' && !allowedElements.has(el.type)) {
+      issues.push(
+        makeIssue(
+          'warning',
+          `UML element ${el.id} has unknown type: ${el.type}`,
+          { kind: 'element', elementId: el.id },
+          `uml-el-unknown-type:${el.id}`
+        )
+      );
+    }
+  }
+
+  for (const rel of Object.values(model.relationships)) {
+    const kind = rel.kind ?? inferKindFromType(rel.type);
+    if (kind !== 'uml') continue;
+    if (rel.type !== 'Unknown' && !allowedRelationships.has(rel.type)) {
+      issues.push(
+        makeIssue(
+          'warning',
+          `UML relationship ${rel.id} has unknown type: ${rel.type}`,
+          { kind: 'relationship', relationshipId: rel.id },
+          `uml-rel-unknown-type:${rel.id}`
+        )
+      );
+    }
+  }
+
+  // ------------------------------
+  // View node kind mismatches (e.g. ArchiMate element placed in a UML view)
+  // ------------------------------
+  for (const view of Object.values(model.views)) {
+    if (view.kind !== 'uml') continue;
+    const nodes = view.layout?.nodes ?? [];
+    for (const n of nodes) {
+      if (!n.elementId) continue;
+      const el = model.elements[n.elementId];
+      if (!el) continue;
+      const kind = el.kind ?? inferKindFromType(el.type);
+      if (kind !== 'uml') {
+        issues.push(
+          makeIssue(
+            'warning',
+            `UML view ${view.name} (${view.id}) contains a non-UML element: ${el.name} (${el.type})`,
+            { kind: 'viewNode', viewId: view.id, elementId: el.id },
+            `uml-viewnode-kind-mismatch:${view.id}:${el.id}`
+          )
+        );
+      }
+    }
+  }
+
+  // ------------------------------
+  // Generalization cycle detection (classifier graph)
+  // ------------------------------
+  // Build adjacency: subclass -> superclass via uml.generalization
+  const adj = new Map<string, Array<{ to: string; relId: string }>>();
+  const umlClassifiers = new Set<string>();
+  for (const el of Object.values(model.elements)) {
+    const kind = el.kind ?? inferKindFromType(el.type);
+    if (kind === 'uml' && UML_CLASSIFIER_TYPES.has(el.type)) umlClassifiers.add(el.id);
+  }
+
+  for (const rel of Object.values(model.relationships)) {
+    if (rel.type !== 'uml.generalization') continue;
+    if (!rel.sourceElementId || !rel.targetElementId) continue;
+    if (!umlClassifiers.has(rel.sourceElementId) || !umlClassifiers.has(rel.targetElementId)) continue;
+    const from = rel.sourceElementId;
+    const to = rel.targetElementId;
+    const list = adj.get(from) ?? [];
+    list.push({ to, relId: rel.id });
+    adj.set(from, list);
+  }
+
+  const visited = new Set<string>();
+  const inStack = new Set<string>();
+  const parent = new Map<string, { prev: string; relId: string }>();
+  const cycleRelIds = new Set<string>();
+
+  function dfs(u: string) {
+    visited.add(u);
+    inStack.add(u);
+
+    for (const e of adj.get(u) ?? []) {
+      const v = e.to;
+      if (!visited.has(v)) {
+        parent.set(v, { prev: u, relId: e.relId });
+        dfs(v);
+      } else if (inStack.has(v)) {
+        // Found a back edge u -> v. Collect rel ids on the cycle.
+        cycleRelIds.add(e.relId);
+        let cur = u;
+        // Walk back until we reach v, collecting relationship ids along the path.
+        while (cur !== v) {
+          const p = parent.get(cur);
+          if (!p) break;
+          cycleRelIds.add(p.relId);
+          cur = p.prev;
+        }
+      }
+    }
+
+    inStack.delete(u);
+  }
+
+  for (const nodeId of umlClassifiers) {
+    if (!visited.has(nodeId)) dfs(nodeId);
+  }
+
+  for (const relId of cycleRelIds) {
+    issues.push(
+      makeIssue(
+        'error',
+        `Generalization cycle detected (relationship ${relId}). UML generalization must be acyclic.`,
+        { kind: 'relationship', relationshipId: relId },
+        `uml-generalization-cycle:${relId}`
+      )
+    );
+  }
+
+  return issues;
+}

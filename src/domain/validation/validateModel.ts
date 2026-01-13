@@ -6,6 +6,7 @@ import { makeIssue } from './issues';
 import type { ValidationIssue } from './types';
 import { listDuplicatesInLayout } from './layout';
 import { validateExternalIdsForTarget, validateTaggedValuesForTarget } from './externalMetadata';
+import { validateUmlBasics } from './uml';
 
 export function validateModel(model: Model, relationshipValidationMode: RelationshipValidationMode = 'minimal'): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -147,7 +148,12 @@ for (const folder of Object.values(model.folders)) {
     }
   }
 
+    // ------------------------------
+  // UML-specific validations (v1 stub)
   // ------------------------------
+  issues.push(...validateUmlBasics(model));
+
+// ------------------------------
   // Folder structural consistency
   // ------------------------------
   for (const folder of Object.values(model.folders)) {

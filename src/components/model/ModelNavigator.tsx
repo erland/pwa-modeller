@@ -36,8 +36,8 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
   const [createViewOpen, setCreateViewOpen] = useState(false);
   const [createViewFolderId, setCreateViewFolderId] = useState<string | null>(null);
-  const [createViewCenteredElementId, setCreateViewCenteredElementId] = useState<string | null>(null);
   const [createViewInitialKind, setCreateViewInitialKind] = useState<'archimate' | 'uml' | 'bpmn'>('archimate');
+  const [createViewOwnerElementId, setCreateViewOwnerElementId] = useState<string | null>(null);
 
   const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
 
@@ -68,19 +68,11 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     setCreateElementOpen(true);
   };
 
-  const openCreateView = (targetFolderId?: string, kind: 'archimate' | 'uml' | 'bpmn' = 'archimate') => {
+  const openCreateView = (opts: { targetFolderId?: string; ownerElementId?: string; initialKind?: 'archimate' | 'uml' | 'bpmn' } = {}) => {
     if (!rootFolder) return;
-    setCreateViewCenteredElementId(null);
-    setCreateViewFolderId(targetFolderId ?? rootFolder.id);
-    setCreateViewInitialKind(kind);
-    setCreateViewOpen(true);
-  };
-
-  const openCreateCenteredView = (elementId: string) => {
-    if (!rootFolder) return;
-    setCreateViewFolderId(null);
-    setCreateViewCenteredElementId(elementId);
-    setCreateViewInitialKind('archimate');
+    setCreateViewFolderId(opts.targetFolderId ?? rootFolder.id);
+    setCreateViewOwnerElementId(opts.ownerElementId ?? null);
+    setCreateViewInitialKind(opts.initialKind ?? 'archimate');
     setCreateViewOpen(true);
   };
 
@@ -127,7 +119,6 @@ export function ModelNavigator({ selection, onSelect }: Props) {
           openCreateFolder={openCreateFolder}
           openCreateElement={openCreateElement}
           openCreateView={openCreateView}
-          openCreateCenteredView={openCreateCenteredView}
           onMoveElementToFolder={(elementId, targetFolderId) => {
             // Action is on the store instance (not part of the Zustand state snapshot).
             modelStore.moveElementToFolder(elementId, targetFolderId);
@@ -166,11 +157,11 @@ export function ModelNavigator({ selection, onSelect }: Props) {
       <CreateViewDialog
         isOpen={createViewOpen}
         targetFolderId={createViewFolderId ?? rootFolder.id}
-        centerElementId={createViewCenteredElementId ?? undefined}
+        ownerElementId={createViewOwnerElementId ?? undefined}
         initialKind={createViewInitialKind}
         onClose={() => {
           setCreateViewOpen(false);
-          setCreateViewCenteredElementId(null);
+          setCreateViewOwnerElementId(null);
         }}
         onSelect={onSelect}
       />

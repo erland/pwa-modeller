@@ -37,8 +37,7 @@ type Props = {
   // Create actions
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
-  openCreateView: (targetFolderId?: string, kind?: ModelKind) => void;
-  openCreateCenteredView: (elementId: string) => void;
+  openCreateView: (opts?: { targetFolderId?: string; ownerElementId?: string; initialKind?: ModelKind }) => void;
 
   /** Optional handler: move an element to a folder when dropped on a folder in the tree. */
   onMoveElementToFolder?: (elementId: string, targetFolderId: string) => void;
@@ -174,7 +173,6 @@ export function ModelNavigatorTree({
   openCreateFolder,
   openCreateElement,
   openCreateView,
-  openCreateCenteredView,
   onMoveElementToFolder,
   onMoveViewToFolder,
   onMoveViewToElement,
@@ -376,7 +374,7 @@ if (maybeFolderDragId && isFolderTarget && maybeFolderDragId === row.dataset.fol
             openCreateFolder={openCreateFolder}
             openCreateElement={openCreateElement}
             openCreateView={openCreateView}
-            openCreateCenteredView={openCreateCenteredView}          />
+          />
         </TreeItemContent>
 
         {hasChildren

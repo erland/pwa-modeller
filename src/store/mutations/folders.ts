@@ -47,13 +47,16 @@ export function moveViewToFolder(model: Model, viewId: string, targetFolderId: s
   const view = getView(model, viewId);
   const fromId = findFolderContainingView(model, viewId);
 
-  // If the view is currently centered on an element, it might not be in any folder.
-  if (!fromId && !view.centerElementId) {
+    const ownedElementId =
+    view.ownerRef?.kind === 'archimate' && model.elements[view.ownerRef.id] ? view.ownerRef.id : undefined;
+
+  // If the view is currently owned by an element (or legacy-centered), it might not be in any folder.
+  if (!fromId && !ownedElementId) {
     throw new Error(`View not found in any folder: ${viewId}`);
   }
 
   // If already in the target folder and not centered, nothing to do.
-  if (fromId === targetFolderId && !view.centerElementId) return;
+  if (fromId === targetFolderId && !ownedElementId) return;
 
   // Remove from the previous folder (if any).
   if (fromId) {
@@ -61,9 +64,9 @@ export function moveViewToFolder(model: Model, viewId: string, targetFolderId: s
     model.folders[fromId] = { ...from, viewIds: from.viewIds.filter((id) => id !== viewId) };
   }
 
-  // Clear centering when moving to a folder.
-  if (view.centerElementId) {
-    model.views[viewId] = { ...view, centerElementId: undefined };
+  // Clear ownership/centering when moving to a folder.
+  if (ownedElementId) {
+        model.views[viewId] = { ...view, ownerRef: undefined };
   }
 
   // Ensure not duplicated in any folder list (defensive).
@@ -94,7 +97,7 @@ export function moveViewToElement(model: Model, viewId: string, elementId: strin
   }
 
   // Update placement on the view.
-  model.views[viewId] = { ...view, centerElementId: elementId };
+  model.views[viewId] = { ...view, ownerRef: { kind: 'archimate', id: elementId } };
 }
 
 export function moveFolderToFolder(model: Model, folderId: string, targetFolderId: string): void {

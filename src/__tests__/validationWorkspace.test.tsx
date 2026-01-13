@@ -32,7 +32,7 @@ describe('Validation UI', () => {
     };
     const createElement = async (opts: { name: string; layer: string; type: string }) => {
       await openCreateMenu();
-      await user.click(await screen.findByRole('menuitem', { name: 'Element…' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'ArchiMate Element…' }));
       const dlg = screen.getByRole('dialog', { name: 'Create element' });
       await user.selectOptions(within(dlg).getByLabelText('Layer'), opts.layer);
       await user.selectOptions(within(dlg).getByLabelText('Type'), opts.type);

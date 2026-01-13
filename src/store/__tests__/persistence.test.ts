@@ -155,6 +155,28 @@ describe('persistence', () => {
     expect((parsed.views[view.id] as any).objects).toEqual({});
   });
 
+  test('deserializeModel adds ownerRef for centered views (dual-read compatibility)', () => {
+    const model = createEmptyModel({ name: 'Centered view legacy' }) as any;
+
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    model.elements[el.id] = el;
+
+    const view = createView({ name: 'Centered', viewpointId: 'layered', ownerRef: { kind: 'archimate', id: el.id } }) as any;
+    // Simulate legacy shape: centered view without an ownerRef
+    delete view.ownerRef;
+    // Legacy centered views used centerElementId rather than ownerRef
+    view.centerElementId = el.id;
+    model.views[view.id] = view;
+
+    const parsed = deserializeModel(serializeModel(model));
+    const parsedView: any = parsed.views[view.id] as any;
+
+    // Provide ownerRef for legacy centered views (migration).
+    expect(parsedView.ownerRef).toEqual({ kind: 'archimate', id: el.id });
+    // Legacy field should be removed.
+    expect(Object.prototype.hasOwnProperty.call(parsedView, 'centerElementId')).toBe(false);
+  });
+
   test('deserializeModel migrates v6 models by moving legacy description to documentation (concept objects)', () => {
     const modelV6 = createEmptyModel({ name: 'Legacy v6' }) as any;
     modelV6.schemaVersion = 6;

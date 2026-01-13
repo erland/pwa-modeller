@@ -37,7 +37,7 @@ describe('Elements & Relationships CRUD', () => {
     };
 
     const createElement = async (opts: { name: string; layer: string; type: string }) => {
-      await chooseCreate('Element…');
+      await chooseCreate('ArchiMate Element…');
       const dlg = screen.getByRole('dialog', { name: 'Create element' });
       await user.selectOptions(within(dlg).getByLabelText('Layer'), opts.layer);
       await user.selectOptions(within(dlg).getByLabelText('Type'), opts.type);

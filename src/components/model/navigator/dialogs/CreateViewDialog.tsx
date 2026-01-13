@@ -9,8 +9,8 @@ import type { Selection } from '../../selection';
 type Props = {
   isOpen: boolean;
   targetFolderId: string;
-  /** If set, the view will be created nested under (centered around) this element and will not be placed in any folder. */
-  centerElementId?: string;
+  /** If set, the view will be created owned by this element and will not be placed in any folder. */
+  ownerElementId?: string;
 
   /** Optional initial kind (useful when launching from a navigator shortcut such as “UML View…”). */
   initialKind?: ModelKind;
@@ -18,7 +18,7 @@ type Props = {
   onSelect: (selection: Selection) => void;
 };
 
-export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, initialKind, onClose, onSelect }: Props) {
+export function CreateViewDialog({ isOpen, targetFolderId, ownerElementId, initialKind, onClose, onSelect }: Props) {
   const [nameDraft, setNameDraft] = useState('');
   const [kindDraft, setKindDraft] = useState<ModelKind>('archimate');
   const [viewpointDraft, setViewpointDraft] = useState<string>(VIEWPOINTS[0]?.id ?? 'layered');
@@ -63,19 +63,20 @@ export function CreateViewDialog({ isOpen, targetFolderId, centerElementId, init
   }, [isViewpointValid, defaultViewpointId]);
 
   const canCreate = nameDraft.trim().length > 0;
-const doCreate = () => {
-  if (!canCreate) return;
+  const doCreate = () => {
+    if (!canCreate) return;
     const created = createView({
       name: nameDraft.trim(),
       kind: kindDraft,
       viewpointId: viewpointDraft,
-      centerElementId: centerElementId || undefined
+      // Step 4: create "owned" views using ownerRef (navigator groups by ownerRef).
+      ownerRef: ownerElementId ? { kind: 'archimate', id: ownerElementId } : undefined
     });
-    // Centered views are not placed in folders (store enforces this invariant).
-    modelStore.addView(created, centerElementId ? undefined : (targetFolderId ?? undefined));
+    // Owned views are not placed in folders (store enforces this invariant).
+    modelStore.addView(created, ownerElementId ? undefined : (targetFolderId ?? undefined));
     onClose();
     onSelect({ kind: 'view', viewId: created.id });
-};
+  };
 
 return (
     <Dialog
@@ -98,7 +99,7 @@ return (
         </div>
       }
     >
-      {centerElementId ? (
+      {ownerElementId ? (
         <p className="panelHint" style={{ marginTop: 0 }}>
           This view will be nested under the selected element in the navigator.
         </p>

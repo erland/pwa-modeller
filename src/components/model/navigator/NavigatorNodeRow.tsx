@@ -41,8 +41,7 @@ type Props = {
   // Create actions
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
-  openCreateView: (targetFolderId?: string, kind?: ModelKind) => void;
-  openCreateCenteredView: (elementId: string) => void;
+  openCreateView: (opts?: { targetFolderId?: string; ownerElementId?: string; initialKind?: ModelKind }) => void;
 };
 
 export function NavigatorNodeRow({
@@ -63,8 +62,7 @@ export function NavigatorNodeRow({
   clearEditing,
   openCreateFolder,
   openCreateElement,
-  openCreateView,
-  openCreateCenteredView
+  openCreateView
 }: Props) {
   // Single "Create…" button (Explorer/Finder-like) with a menu for all create actions
   // relevant to this node.
@@ -87,16 +85,17 @@ export function NavigatorNodeRow({
                 const k = String(key);
                 if (k === 'folder' && node.folderId) {
                   openCreateFolder(node.folderId);
-                } else if (k === 'element' && node.folderId) {
+                } else if (k === 'archimateElement' && node.folderId) {
                   openCreateElement(node.folderId, 'archimate');
                 } else if (k === 'umlElement' && node.folderId) {
                   openCreateElement(node.folderId, 'uml');
-                } else if (k === 'view' && node.folderId) {
-                  openCreateView(node.folderId, 'archimate');
-                } else if (k === 'umlView' && node.folderId) {
-                  openCreateView(node.folderId, 'uml');
-                } else if (k === 'centeredView' && node.elementId) {
-                  openCreateCenteredView(node.elementId);
+                } else if (k === 'view') {
+                  if (node.folderId) {
+                    openCreateView({ targetFolderId: node.folderId });
+                  } else if (node.elementId) {
+                    // Create a view owned by the element. The dialog lets the user pick kind (default ArchiMate).
+                    openCreateView({ ownerElementId: node.elementId });
+                  }
                 }
               }}
             >
@@ -104,19 +103,13 @@ export function NavigatorNodeRow({
                 <MenuItem className="navMenuItem" id="folder">Folder…</MenuItem>
               ) : null}
               {node.canCreateElement && node.folderId ? (
-                <MenuItem className="navMenuItem" id="element">Element…</MenuItem>
+                <MenuItem className="navMenuItem" id="archimateElement">ArchiMate Element…</MenuItem>
+              ) : null}
+              {(node.canCreateView && node.folderId) || (node.canCreateCenteredView && node.elementId) ? (
+                <MenuItem className="navMenuItem" id="view">View…</MenuItem>
               ) : null}
               {node.canCreateElement && node.folderId ? (
                 <MenuItem className="navMenuItem" id="umlElement">UML Element…</MenuItem>
-              ) : null}
-              {node.canCreateView && node.folderId ? (
-                <MenuItem className="navMenuItem" id="view">View…</MenuItem>
-              ) : null}
-              {node.canCreateView && node.folderId ? (
-                <MenuItem className="navMenuItem" id="umlView">UML View…</MenuItem>
-              ) : null}
-              {node.canCreateCenteredView && node.elementId ? (
-                <MenuItem className="navMenuItem" id="centeredView">Centered view…</MenuItem>
               ) : null}
             </Menu>
           </Popover>

@@ -8,24 +8,53 @@ import {
   getFolder
 } from './helpers';
 
-export function addView(model: Model, view: View, folderId?: string): void {
-  model.views[view.id] = view;
+function getOwnedElementId(model: Model, view: View): string | undefined {
+  // New ownership model: use ownerRef when it points at an existing element.
+  const ownerId = view.ownerRef?.kind === 'archimate' ? view.ownerRef.id : undefined;
+  if (ownerId && model.elements[ownerId]) return ownerId;
+  return undefined;
+}
 
-  // If the view is centered on an element, it should not live in any folder.
-  if (view.centerElementId) {
-    for (const fid of Object.keys(model.folders)) {
-      const f = model.folders[fid];
-      if (f.viewIds.includes(view.id)) {
-        model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== view.id) };
-      }
+function removeViewFromAllFolders(model: Model, viewId: string): void {
+  for (const fid of Object.keys(model.folders)) {
+    const f = model.folders[fid];
+    if (f.viewIds.includes(viewId)) {
+      model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
     }
+  }
+}
+
+function ensureViewInRootFolder(model: Model, viewId: string): void {
+  const inFolder = Object.values(model.folders).some((f) => f.viewIds.includes(viewId));
+  if (inFolder) return;
+  const rootId = findFolderIdByKind(model, 'root');
+  const root = getFolder(model, rootId);
+  model.folders[rootId] = root.viewIds.includes(viewId) ? root : { ...root, viewIds: [...root.viewIds, viewId] };
+}
+
+export function addView(model: Model, view: View, folderId?: string): void {
+  // Normalize: if we have a legacy centered view, also persist an ownerRef.
+  const ownedId = getOwnedElementId(model, view);
+  const normalized: View =
+    ownedId && !view.ownerRef
+      ? {
+          ...view,
+          ownerRef: { kind: 'archimate', id: ownedId }
+        }
+      : view;
+
+  model.views[normalized.id] = normalized;
+
+  // Owned views should not live in any folder (they are nested under their owning element).
+  if (ownedId) {
+    removeViewFromAllFolders(model, normalized.id);
     return;
   }
 
   const targetFolderId = folderId ?? findFolderIdByKind(model, 'root');
   const folder = getFolder(model, targetFolderId);
-  if (!folder.viewIds.includes(view.id)) {
-    model.folders[targetFolderId] = { ...folder, viewIds: [...folder.viewIds, view.id] };
+  if (!folder.viewIds.includes(normalized.id)) {
+    model.folders[targetFolderId] = { ...folder, viewIds: [...folder.viewIds, normalized.id] };
   }
 }
 
@@ -33,29 +62,15 @@ export function updateView(model: Model, viewId: string, patch: Partial<Omit<Vie
   const current = model.views[viewId];
   if (!current) throw new Error(`View not found: ${viewId}`);
 
-  const next: View = { ...current, ...patch, id: current.id };
+  const next: View = { ...current, ...patch };
 
-  // Maintain placement invariant when centerElementId is modified.
-  if ('centerElementId' in patch) {
-    const nextCenter = patch.centerElementId;
-
-    if (typeof nextCenter === 'string' && nextCenter) {
-      // Centered views should not be present in any folder list.
-      for (const fid of Object.keys(model.folders)) {
-        const f = model.folders[fid];
-        if (f.viewIds.includes(viewId)) {
-          model.folders[fid] = { ...f, viewIds: f.viewIds.filter((id) => id !== viewId) };
-        }
-      }
-    } else if (!nextCenter) {
-      // Clearing centering: ensure the view is in a folder (default to root).
-      const inFolder = Object.values(model.folders).some((f) => f.viewIds.includes(viewId));
-      if (!inFolder) {
-        const rootId = findFolderIdByKind(model, 'root');
-        const root = getFolder(model, rootId);
-        model.folders[rootId] = root.viewIds.includes(viewId) ? root : { ...root, viewIds: [...root.viewIds, viewId] };
-      }
-    }
+  const ownedId = getOwnedElementId(model, next);
+  if (ownedId) {
+    // Owned views should not live in any folder.
+    removeViewFromAllFolders(model, viewId);
+  } else {
+    // Non-owned views must live in at least one folder (root fallback).
+    ensureViewInRootFolder(model, viewId);
   }
 
   next.externalIds = tidyExternalIds(next.externalIds);
@@ -144,20 +159,23 @@ export function cloneView(model: Model, viewId: string): string | null {
     documentation: original.documentation,
     stakeholders: original.stakeholders ? [...original.stakeholders] : undefined,
     formatting: original.formatting ? JSON.parse(JSON.stringify(original.formatting)) : undefined,
-    centerElementId: original.centerElementId,
+    ownerRef: original.ownerRef ? { ...original.ownerRef } : undefined,
     objects: nextObjects,
     layout: nextLayout
   });
 
   model.views[clone.id] = clone;
 
-  // Preserve placement: if the original is centered on an element, keep the clone centered too.
-  if (!original.centerElementId) {
+  // Preserve placement: if the original is owned/centered, keep it out of folders.
+  const owned = getOwnedElementId(model, clone);
+  if (!owned) {
     const folderId = findFolderContainingView(model, viewId) ?? findFolderIdByKind(model, 'root');
     model.folders[folderId] = {
       ...model.folders[folderId],
       viewIds: [...model.folders[folderId].viewIds, clone.id]
     };
+  } else {
+    removeViewFromAllFolders(model, clone.id);
   }
 
   return clone.id;

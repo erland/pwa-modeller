@@ -431,9 +431,6 @@ export interface View extends HasTaggedValues, HasExternalIds {
   /** View-local diagram objects (notes/labels/group boxes, etc.). */
   objects?: Record<string, ViewObject>;
 
-  /** If set, the view is nested under (and conceptually centered around) this element in the navigator. */
-  centerElementId?: string;
-
   layout?: ViewLayout;
 }
 

@@ -11,6 +11,7 @@ import {
   sanitizeModelViewConnections,
   sanitizeModelViewKinds,
   sanitizeModelViewOwnerRefs,
+  sanitizeModelViewOwnerRefsFromCentered,
 } from './sanitize';
 
 /**
@@ -36,6 +37,7 @@ export function deserializeModel(json: string): Model {
   const sanitized = ensureModelFolderExtensions(
     sanitizeModelViewKinds(
       sanitizeModelViewOwnerRefs(
+      sanitizeModelViewOwnerRefsFromCentered(
       sanitizeModelViewConnections(
       sanitizeModelRelationshipAttrs(
         sanitizeModelUnknownTypes(
@@ -43,6 +45,7 @@ export function deserializeModel(json: string): Model {
             sanitizeModelTaggedValues(migrated.model)
           )
         )
+      )
       )
       )
       )

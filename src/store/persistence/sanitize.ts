@@ -219,6 +219,38 @@ export function sanitizeModelViewOwnerRefs(model: Model): Model {
   return model;
 }
 
+/**
+ * Migration for legacy "centered views".
+ *
+ * Older persisted models stored the owning element on `centerElementId`.
+ * The ownership model now uses `ownerRef`.
+ *
+ * This pass:
+ *  - Adds a best-effort `ownerRef` when `centerElementId` exists and `ownerRef` is missing
+ *  - Removes `centerElementId` from the persisted view object
+ */
+export function sanitizeModelViewOwnerRefsFromCentered(model: Model): Model {
+  for (const vid of Object.keys(model.views)) {
+    const v: any = model.views[vid] as any;
+    const centered = typeof (v as any)?.centerElementId === 'string' ? String((v as any).centerElementId).trim() : '';
+    if (!centered) continue;
+
+    const hasOwnerProp = Object.prototype.hasOwnProperty.call(v, 'ownerRef');
+    const owner = (v as any).ownerRef;
+    // If ownerRef is missing (or explicitly undefined), add one.
+    if (!hasOwnerProp || owner === undefined) {
+      model.views[vid] = { ...(v as any), ownerRef: { kind: 'archimate', id: centered } };
+    }
+
+    // Drop the legacy field after migration.
+    if (Object.prototype.hasOwnProperty.call(model.views[vid] as any, 'centerElementId')) {
+      const { centerElementId: _legacy, ...rest } = model.views[vid] as any;
+      model.views[vid] = rest as any;
+    }
+  }
+  return model;
+}
+
 
 export function ensureModelFolderExtensions(model: Model): Model {
   const m: any = model as any;

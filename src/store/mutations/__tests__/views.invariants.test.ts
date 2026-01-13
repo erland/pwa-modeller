@@ -27,17 +27,17 @@ describe('store mutations: views invariants', () => {
     const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
     model.elements[el.id] = el;
 
-    const view = createView({ name: 'Centered', viewpointId: 'layered', centerElementId: el.id });
+    const view = createView({ name: 'Centered', viewpointId: 'layered', ownerRef: { kind: 'archimate', id: el.id } });
     // Simulate bad state: it is listed in root.
     model.folders[rootId] = { ...model.folders[rootId], viewIds: [view.id] };
 
     addView(model, view);
 
-    expect(model.views[view.id].centerElementId).toBe(el.id);
+    expect(model.views[view.id].ownerRef).toEqual({ kind: 'archimate', id: el.id });
     expect(model.folders[rootId].viewIds).not.toContain(view.id);
   });
 
-  test('updateView maintains placement invariant when centerElementId is set and cleared', () => {
+  test('updateView maintains placement invariant when ownerRef is set and cleared', () => {
     const model = createEmptyModel({ name: 'M' });
     const rootId = getRootFolderId(model);
 
@@ -49,11 +49,11 @@ describe('store mutations: views invariants', () => {
     expect(model.folders[rootId].viewIds).toContain(view.id);
 
     // Set centering -> must be removed from folders
-    updateView(model, view.id, { centerElementId: el.id });
+    updateView(model, view.id, { ownerRef: { kind: 'archimate', id: el.id } });
     expect(model.folders[rootId].viewIds).not.toContain(view.id);
 
     // Clear centering -> must re-appear in root folder
-    updateView(model, view.id, { centerElementId: undefined });
+    updateView(model, view.id, { ownerRef: undefined });
     expect(model.folders[rootId].viewIds).toContain(view.id);
   });
 

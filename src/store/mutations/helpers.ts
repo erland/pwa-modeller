@@ -154,14 +154,15 @@ export function deleteElementInModel(model: Model, elementId: string): void {
     }
   }
 
-  // If there are views centered on this element, move them back to the root folder.
+  // If there are views owned/centered on this element, move them back to the root folder.
   const rootId = findFolderIdByKind(model, 'root');
   const rootFolder = getFolder(model, rootId);
   let rootViewIds = rootFolder.viewIds;
   let rootChanged = false;
   for (const view of Object.values(model.views)) {
-    if (view.centerElementId === elementId) {
-      model.views[view.id] = { ...view, centerElementId: undefined };
+    const isOwned = view.ownerRef?.kind === 'archimate' && view.ownerRef.id === elementId;
+    if (isOwned) {
+      model.views[view.id] = { ...view, ownerRef: undefined };
       if (!rootViewIds.includes(view.id)) {
         if (!rootChanged) rootViewIds = [...rootViewIds];
         rootViewIds.push(view.id);

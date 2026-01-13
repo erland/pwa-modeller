@@ -6,16 +6,14 @@ import {
   ELEMENT_TYPES,
   ELEMENT_TYPES_BY_LAYER,
   computeRelationshipTrace,
-  createView,
   getElementTypesForKind,
   getElementTypeLabel,
 } from '../../../domain';
 
-import { modelStore } from '../../../store';
-
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
 import { findFolderByKind, findFolderContaining, getElementLabel, splitRelationshipsForElement } from './utils';
+import { CreateViewDialog } from '../navigator/dialogs/CreateViewDialog';
 import { CreateRelationshipDialog } from '../navigator/dialogs/CreateRelationshipDialog';
 import { NameEditorRow } from './editors/NameEditorRow';
 import { DocumentationEditorRow } from './editors/DocumentationEditorRow';
@@ -132,49 +130,17 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   }, [model, elementId]);
 
-  const getOrCreateChildFolder = (parentId: string, name: string): string => {
-    const current = modelStore.getState().model;
-    if (!current) throw new Error('No model loaded');
-    const parent = current.folders[parentId];
-    if (!parent) throw new Error(`Folder not found: ${parentId}`);
+  // Step 5: make UML drill-down reuse the same “View…” creation flow.
+  // We reuse CreateViewDialog with an ownerElementId and preselect UML.
+  const [createUmlViewOpen, setCreateUmlViewOpen] = useState(false);
 
-    const trimmed = name.trim();
-    const needle = trimmed.toLocaleLowerCase();
-    const existing = parent.folderIds.find((fid) => {
-      const f = current.folders[fid];
-      return Boolean(f && f.name.trim().toLocaleLowerCase() === needle);
-    });
-    if (existing) return existing;
-    return modelStore.createFolder(parentId, trimmed);
-  };
-
-  const createLinkedUmlDiagram = (): void => {
-    if (!hasElement) return;
-    if (kind !== 'archimate') return;
-
-    // Base folder: the folder containing the element, otherwise fall back to the standard views folder.
-    const baseFolderId = currentFolderId ?? (() => {
-      try {
-        return findFolderByKind(model, 'views').id;
-      } catch {
-        return findFolderByKind(model, 'root').id;
-      }
-    })();
-
-    const umlRootFolderId = getOrCreateChildFolder(baseFolderId, 'UML');
-    const elementFolderName = (el.name || el.id).trim() || el.id;
-    const elementUmlFolderId = getOrCreateChildFolder(umlRootFolderId, elementFolderName);
-
-    const viewName = `${el.name || el.id} (UML)`;
-    const created = createView({
-      name: viewName,
-      kind: 'uml',
-      viewpointId: 'uml-class',
-      ownerRef: { kind: 'archimate', id: el.id }
-    });
-    modelStore.addView(created, elementUmlFolderId);
-    onSelectSafe({ kind: 'view', viewId: created.id });
-  };
+  const fallbackViewsFolderId = useMemo(() => {
+    try {
+      return findFolderByKind(model, 'views').id;
+    } catch {
+      return findFolderByKind(model, 'root').id;
+    }
+  }, [model]);
 
   const canCreateRelationship = kind === 'archimate' && Object.keys(model.elements).length >= 2;
 
@@ -342,7 +308,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               type="button"
               className="miniButton"
               title="Create a linked UML Class Diagram view for this element"
-              onClick={createLinkedUmlDiagram}
+              onClick={() => setCreateUmlViewOpen(true)}
             >
               Create UML diagram…
             </button>
@@ -645,6 +611,15 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
         isOpen={createRelationshipOpen}
         prefillSourceElementId={el.id}
         onClose={() => setCreateRelationshipOpen(false)}
+        onSelect={onSelectSafe}
+      />
+
+      <CreateViewDialog
+        isOpen={createUmlViewOpen}
+        targetFolderId={fallbackViewsFolderId}
+        ownerElementId={el.id}
+        initialKind="uml"
+        onClose={() => setCreateUmlViewOpen(false)}
         onSelect={onSelectSafe}
       />
     </div>

@@ -21,7 +21,7 @@ type Props = {
 
   onCreateFolder: (parentFolderId: string) => void;
   onCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
-  onCreateView: (targetFolderId?: string, kind?: ModelKind) => void;
+  onCreateView: (opts?: { targetFolderId?: string; ownerElementId?: string; initialKind?: ModelKind }) => void;
 };
 
 export function NavigatorToolbar({
@@ -77,31 +77,27 @@ export function NavigatorToolbar({
 
                 if (k === 'folder') {
                   onCreateFolder(folderId);
-                } else if (k === 'element') {
+                } else if (k === 'archimateElement') {
                   onCreateElement(folderId, 'archimate');
                 } else if (k === 'umlElement') {
                   onCreateElement(folderId, 'uml');
                 } else if (k === 'view') {
-                  onCreateView(folderId, 'archimate');
-                } else if (k === 'umlView') {
-                  onCreateView(folderId, 'uml');
+                  // Let the dialog select kind (default ArchiMate).
+                  onCreateView({ targetFolderId: folderId });
                 }
               }}
             >
               <MenuItem className="navMenuItem" id="folder">
                 Folder…
               </MenuItem>
-              <MenuItem className="navMenuItem" id="element">
-                Element…
-              </MenuItem>
-              <MenuItem className="navMenuItem" id="umlElement">
-                UML Element…
+              <MenuItem className="navMenuItem" id="archimateElement">
+                ArchiMate Element…
               </MenuItem>
               <MenuItem className="navMenuItem" id="view">
                 View…
               </MenuItem>
-              <MenuItem className="navMenuItem" id="umlView">
-                UML View…
+              <MenuItem className="navMenuItem" id="umlElement">
+                UML Element…
               </MenuItem>
             </Menu>
           </Popover>

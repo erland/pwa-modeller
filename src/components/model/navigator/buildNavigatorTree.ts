@@ -14,17 +14,20 @@ export function buildNavigatorTreeData(args: {
 }): NavNode[] {
   const { model, rootFolderId, searchTerm } = args;
 
-  // Precompute views that are centered on elements so we can render them nested under elements in the tree.
-  const centeredViewsByElementId = new Map<string, { id: string; name: string; viewpointId: string }[]>();
+  // Precompute views that are owned by elements so we can render them nested under elements in the tree.
+  // Views can be owned by elements via ownerRef.
+  const ownedViewsByElementId = new Map<string, { id: string; name: string; viewpointId: string }[]>();
   for (const v of Object.values(model.views)) {
-    if (!v.centerElementId) continue;
-    const arr = centeredViewsByElementId.get(v.centerElementId) ?? [];
+    const ownerElementId =
+      v.ownerRef && v.ownerRef.kind === 'archimate' ? v.ownerRef.id : undefined;
+    if (!ownerElementId) continue;
+    const arr = ownedViewsByElementId.get(ownerElementId) ?? [];
     arr.push({ id: v.id, name: v.name || '(unnamed)', viewpointId: v.viewpointId });
-    centeredViewsByElementId.set(v.centerElementId, arr);
+    ownedViewsByElementId.set(ownerElementId, arr);
   }
-  for (const [k, arr] of centeredViewsByElementId.entries()) {
+  for (const [k, arr] of ownedViewsByElementId.entries()) {
     arr.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }));
-    centeredViewsByElementId.set(k, arr);
+    ownedViewsByElementId.set(k, arr);
   }
 
   const buildFolder = (folderId: string): NavNode => {
@@ -39,8 +42,8 @@ export function buildNavigatorTreeData(args: {
       .filter(Boolean)
       .sort(sortByName)
       .map<NavNode>((el) => {
-        const centered = centeredViewsByElementId.get(el.id) ?? [];
-        const centeredViewNodes: NavNode[] = centered.map((v) => ({
+        const owned = ownedViewsByElementId.get(el.id) ?? [];
+        const ownedViewNodes: NavNode[] = owned.map((v) => ({
           key: makeKey('view', v.id),
           kind: 'view',
           label: v.name || '(unnamed)',
@@ -56,14 +59,19 @@ export function buildNavigatorTreeData(args: {
           tooltip: `${el.name || '(unnamed)'} (${el.type})`,
           canRename: true,
           canCreateCenteredView: true,
-          children: centeredViewNodes.length ? centeredViewNodes : undefined,
+          children: ownedViewNodes.length ? ownedViewNodes : undefined,
           elementId: el.id
         };
       });
 
     const viewLeaves = folder.viewIds
       .map((id) => model.views[id])
-      .filter(Boolean)
+      .filter((v) => {
+        if (!v) return false;
+        // Only show folder views that are not owned by an element.
+        // (Owned views are rendered under their owning element.)
+        return !v.ownerRef;
+      })
       .sort(sortByName)
       .map<NavNode>((v) => ({
         key: makeKey('view', v.id),

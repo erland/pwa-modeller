@@ -37,7 +37,7 @@ describe('Navigator CRUD', () => {
     };
 
     // Create element A (via dialog).
-    await chooseCreate('Element…');
+    await chooseCreate('ArchiMate Element…');
     const createElA = screen.getByRole('dialog', { name: 'Create element' });
     await user.type(within(createElA).getByLabelText('Element name'), 'A');
     await user.selectOptions(within(createElA).getByLabelText('Layer'), 'Business');
@@ -45,7 +45,7 @@ describe('Navigator CRUD', () => {
     await user.click(within(createElA).getByRole('button', { name: 'Create' }));
 
     // Create element B.
-    await chooseCreate('Element…');
+    await chooseCreate('ArchiMate Element…');
     const createElB = screen.getByRole('dialog', { name: 'Create element' });
     await user.type(within(createElB).getByLabelText('Element name'), 'B');
     await user.selectOptions(within(createElB).getByLabelText('Layer'), 'Business');

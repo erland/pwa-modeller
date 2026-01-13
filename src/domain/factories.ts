@@ -117,7 +117,6 @@ export function createView(input: CreateViewInput): View {
     // View-local diagram objects (notes/labels/group boxes). Optional in the schema, but
     // new views should start with an empty map for a predictable runtime shape.
     objects: input.objects ?? {},
-    centerElementId: input.centerElementId,
     layout: input.layout
   };
 }

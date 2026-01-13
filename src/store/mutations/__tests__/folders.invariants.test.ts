@@ -66,7 +66,7 @@ describe('store mutations: folders invariants', () => {
     const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
     model.elements[el.id] = el;
 
-    const view = createView({ name: 'Centered', viewpointId: 'layered', centerElementId: el.id });
+    const view = createView({ name: 'Centered', viewpointId: 'layered', ownerRef: { kind: 'archimate', id: el.id } });
     model.views[view.id] = view;
 
     // Defensive: even if a centered view was incorrectly listed in root, moving should clean it up.
@@ -74,12 +74,12 @@ describe('store mutations: folders invariants', () => {
 
     moveViewToFolder(model, view.id, targetFolderId);
 
-    expect(model.views[view.id].centerElementId).toBeUndefined();
+    expect(model.views[view.id].ownerRef).toBeUndefined();
     expect(model.folders[targetFolderId].viewIds).toContain(view.id);
     expect(model.folders[rootId].viewIds).not.toContain(view.id);
   });
 
-  test('moveViewToElement removes view from any folder and sets centerElementId', () => {
+  test('moveViewToElement removes view from any folder and sets ownerRef', () => {
     const model = createEmptyModel({ name: 'M' });
     const rootId = getRootFolderId(model);
 
@@ -92,7 +92,7 @@ describe('store mutations: folders invariants', () => {
 
     moveViewToElement(model, view.id, el.id);
 
-    expect(model.views[view.id].centerElementId).toBe(el.id);
+    expect(model.views[view.id].ownerRef).toEqual({ kind: 'archimate', id: el.id });
     expect(model.folders[rootId].viewIds).not.toContain(view.id);
   });
 

@@ -31,7 +31,7 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
     return view.kind === 'archimate' ? !hasQualified : hasQualified;
   });
 
-  const isCentered = Boolean(view.centerElementId);
+  const isCentered = Boolean(view.ownerRef && view.ownerRef.kind === 'archimate');
   const rootFolderId = viewFolders[0]?.id;
   const elementOptions = Object.values(model.elements)
     .slice()
@@ -88,7 +88,7 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
                 }
 
                 // mode === 'centered'
-                const preferred = view.centerElementId ?? elementOptions[0]?.id;
+                const preferred = (view.ownerRef && view.ownerRef.kind === 'archimate' ? view.ownerRef.id : undefined) ?? elementOptions[0]?.id;
                 if (preferred) actions.moveViewToElement(view.id, preferred);
               }}
             >
@@ -122,7 +122,7 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
                 <select
                   className="selectInput"
                   aria-label="View property centered element"
-                  value={view.centerElementId ?? ''}
+                  value={(view.ownerRef && view.ownerRef.kind === 'archimate' ? view.ownerRef.id : '')}
                   onChange={(e) => {
                     const targetId = e.target.value;
                     if (targetId) actions.moveViewToElement(view.id, targetId);
@@ -135,9 +135,9 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
                     </option>
                   ))}
                 </select>
-                {view.centerElementId ? (
+                {view.ownerRef && view.ownerRef.kind === 'archimate' ? (
                   <p className="panelHint" style={{ marginTop: 6 }}>
-                    Centered on: {model.elements[view.centerElementId]?.name ?? view.centerElementId}
+                    Centered on: {model.elements[view.ownerRef.id]?.name ?? view.ownerRef.id}
                   </p>
                 ) : null}
               </div>

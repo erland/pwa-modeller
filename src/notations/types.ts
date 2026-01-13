@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import type { ModelKind, RelationshipValidationMode } from '../domain';
+import type { Element, ModelKind, RelationshipValidationMode, ViewNodeLayout } from '../domain';
 import type { RelationshipStyle } from '../diagram/relationships/style';
 
 export type GuardResult = { allowed: true } | { allowed: false; reason?: string };
@@ -19,6 +19,14 @@ export type Notation = {
 
   /** Render a small notation-specific node symbol (e.g. ArchiMate icon, UML stereotype marker). */
   renderNodeSymbol: (args: { nodeType: string; title: string }) => React.ReactNode;
+
+  /**
+   * Optional: render the *full* inner content of a node.
+   *
+   * When provided, DiagramNode will use this instead of its default (ArchiMate-oriented) header/meta layout.
+   * This is useful for UML/BPMN where node shapes have their own internal structure (e.g. compartments).
+   */
+  renderNodeContent?: (args: { element: Element; node: ViewNodeLayout }) => React.ReactNode;
 
   /**
    * Relationship visual styling (markers, dash patterns, optional mid labels).

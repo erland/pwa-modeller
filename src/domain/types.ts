@@ -320,6 +320,13 @@ export interface ViewNodeLayout {
   label?: LabelOffset;
   /** Optional stacking order (higher renders on top). */
   zIndex?: number;
+
+  /**
+   * Optional notation-specific attributes for this node *instance in the view*.
+   *
+   * Example: UML class compartments (attributes/operations) are view-local and can live here.
+   */
+  attrs?: unknown;
 }
 
 export interface ViewRelationshipLayout {

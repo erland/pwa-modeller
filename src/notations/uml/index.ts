@@ -1,60 +1,11 @@
-import * as React from 'react';
 import type { RelationshipStyle } from '../../diagram/relationships/style';
 import type { Notation } from '../types';
-
-/**
- * Minimal UML notation implementation (Step 1).
- *
- * Rendering is intentionally simple; Step 2 adds proper compartment rendering.
- */
-
-export const UML_NODE_TYPES = [
-  'uml.class',
-  'uml.interface',
-  'uml.enum',
-  'uml.package',
-  'uml.note',
-] as const;
-
-export const UML_RELATIONSHIP_TYPES = [
-  'uml.association',
-  'uml.aggregation',
-  'uml.composition',
-  'uml.generalization',
-  'uml.realization',
-  'uml.dependency',
-] as const;
-
-const UML_NODE_TYPES_SET = new Set<string>(UML_NODE_TYPES);
-const UML_REL_TYPES_SET = new Set<string>(UML_RELATIONSHIP_TYPES);
-
-function isUmlNodeType(t: string): boolean {
-  return UML_NODE_TYPES_SET.has(t);
-}
-
-function isUmlRelationshipType(t: string): boolean {
-  return UML_REL_TYPES_SET.has(t);
-}
-
-function shortLabel(nodeType: string): string {
-  switch (nodeType) {
-    case 'uml.class':
-      return 'C';
-    case 'uml.interface':
-      return 'I';
-    case 'uml.enum':
-      return 'E';
-    case 'uml.package':
-      return 'P';
-    case 'uml.note':
-      return 'N';
-    default:
-      return 'UML';
-  }
-}
+import { isUmlNodeType, isUmlRelationshipType } from './nodeTypes';
+import { renderUmlNodeSymbol } from './renderNodeSymbol';
+import { renderUmlNodeContent } from './renderNodeContent';
 
 function umlRelationshipStyle(type: string): RelationshipStyle {
-  // Keep styles simple for Step 1; Step 3 refines markers and rules further.
+  // Step 3 refines these styles further; v1 focuses on node rendering.
   switch (type) {
     case 'uml.generalization':
       return { markerEnd: 'triangleOpen' };
@@ -72,35 +23,21 @@ function umlRelationshipStyle(type: string): RelationshipStyle {
   }
 }
 
+/**
+ * UML notation implementation.
+ *
+ * Step 2: provides compartment-style node rendering for UML class diagrams.
+ */
 export const umlNotation: Notation = {
   kind: 'uml',
 
-  // Neutral background: reuse an existing layer var to avoid requiring new CSS in Step 1.
+  // Neutral background: reuse an existing layer var to avoid requiring new CSS in Step 2.
   getElementBgVar: () => 'var(--arch-layer-application)',
 
-  // DiagramNode uses this as a small symbol/icon next to the title.
-  renderNodeSymbol: ({ nodeType }) => {
-    const label = shortLabel(nodeType);
-    return React.createElement(
-      'div',
-      {
-        style: {
-          width: 22,
-          height: 22,
-          border: '1px solid currentColor',
-          borderRadius: 4,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 11,
-          lineHeight: 1,
-          userSelect: 'none',
-        },
-        title: nodeType,
-      },
-      label
-    );
-  },
+  renderNodeSymbol: ({ nodeType }) => renderUmlNodeSymbol(nodeType),
+
+  // Replace the default ArchiMate-oriented node header/meta layout with UML compartments.
+  renderNodeContent: (args) => renderUmlNodeContent(args),
 
   getRelationshipStyle: (rel: { type: string; attrs?: unknown }): RelationshipStyle => {
     if (!isUmlRelationshipType(rel.type)) {

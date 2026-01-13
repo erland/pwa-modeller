@@ -133,24 +133,35 @@ export function DiagramNode({
       {/* Node content (label offsets apply here, not to the handle) */}
       <div
         className="diagramNodeContent"
-        style={n.label ? { transform: `translate(${n.label.dx}px, ${n.label.dy}px)` } : undefined}
+        style={
+          {
+            ...(n.label ? { transform: `translate(${n.label.dx}px, ${n.label.dy}px)` } : null),
+            ...(notation.renderNodeContent ? { height: '100%' } : null),
+          } as React.CSSProperties
+        }
       >
-        <div className="diagramNodeHeader">
-          <div className="diagramNodeSymbol" aria-hidden="true">
-            {notation.renderNodeSymbol({
-              nodeType: el.type,
-              title:
-                el.type === 'Unknown'
-                  ? el.unknownType?.name
-                    ? `Unknown: ${el.unknownType.name}`
-                    : 'Unknown'
-                  : el.type,
-            })}
-          </div>
-          <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
-        </div>
-        <div className="diagramNodeMeta">{typeLabel}</div>
-        {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
+        {notation.renderNodeContent ? (
+          notation.renderNodeContent({ element: el, node: n })
+        ) : (
+          <>
+            <div className="diagramNodeHeader">
+              <div className="diagramNodeSymbol" aria-hidden="true">
+                {notation.renderNodeSymbol({
+                  nodeType: el.type,
+                  title:
+                    el.type === 'Unknown'
+                      ? el.unknownType?.name
+                        ? `Unknown: ${el.unknownType.name}`
+                        : 'Unknown'
+                      : el.type,
+                })}
+              </div>
+              <div className="diagramNodeTitle">{el.name || '(unnamed)'}</div>
+            </div>
+            <div className="diagramNodeMeta">{typeLabel}</div>
+            {n.styleTag ? <div className="diagramNodeTag">{n.styleTag}</div> : null}
+          </>
+        )}
       </div>
 
       {/* Outgoing relationship handle */}

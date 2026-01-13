@@ -8,6 +8,7 @@ import {
   computeRelationshipTrace,
   createView,
   getElementTypesForKind,
+  getElementTypeLabel,
 } from '../../../domain';
 
 import { modelStore } from '../../../store';
@@ -229,7 +230,8 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               {elementTypeOptions.map((t) => {
                 const isCurrentInvalid = isTypeOutOfSync && t === el.type;
                 const derivedLayer = isCurrentInvalid ? layerForElementType.get(t) : undefined;
-                const label = isCurrentInvalid ? `⚠ ${t}${derivedLayer ? ` (${derivedLayer})` : ''}` : t;
+                const pretty = getElementTypeLabel(t);
+                const label = isCurrentInvalid ? `⚠ ${t}${derivedLayer ? ` (${derivedLayer})` : ''}` : pretty;
                 return (
                   <option key={t} value={t}>
                     {label}

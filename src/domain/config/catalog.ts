@@ -159,6 +159,46 @@ export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
   'uml.dependency'
 ];
 
+export type TypeOption<TId extends string = string> = { id: TId; label: string };
+
+const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
+  'uml.class': 'Class',
+  'uml.interface': 'Interface',
+  'uml.enum': 'Enum',
+  'uml.package': 'Package',
+  'uml.note': 'Note'
+};
+
+const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {
+  'uml.association': 'Association',
+  'uml.aggregation': 'Aggregation',
+  'uml.composition': 'Composition',
+  'uml.generalization': 'Generalization',
+  'uml.realization': 'Realization',
+  'uml.dependency': 'Dependency'
+};
+
+export function getElementTypeLabel(typeId: ElementType | string): string {
+  // We keep internal ids like "uml.class" but show a friendly label when available.
+  // ArchiMate element ids fall back to the id itself.
+  return (UML_ELEMENT_TYPE_LABELS as Record<string, string>)[typeId] ?? typeId;
+}
+
+export function getRelationshipTypeLabel(typeId: RelationshipType | string): string {
+  // Same pattern as element labels.
+  return (UML_RELATIONSHIP_TYPE_LABELS as Record<string, string>)[typeId] ?? typeId;
+}
+
+export function getElementTypeOptionsForKind(kind: ModelKind): TypeOption<ElementType>[] {
+  return getElementTypesForKind(kind).map((id) => ({ id, label: getElementTypeLabel(id) }));
+}
+
+export function getRelationshipTypeOptionsForKind(kind: ModelKind): TypeOption<RelationshipType>[] {
+  return getRelationshipTypesForKind(kind).map((id) => ({ id, label: getRelationshipTypeLabel(id) }));
+}
+
+
+
 export function getElementTypesForKind(kind: ModelKind): ElementType[] {
   if (kind === 'uml') return UML_ELEMENT_TYPES;
   // TODO: BPMN

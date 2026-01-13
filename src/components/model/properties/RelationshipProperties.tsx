@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { AccessType, Element, Model, RelationshipType, ViewConnectionRouteKind } from '../../../domain';
-import { getRelationshipTypesForKind } from '../../../domain';
+import { getRelationshipTypeLabel, getRelationshipTypesForKind } from '../../../domain';
 import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../domain/config/archimatePalette';
 import { getNotation } from '../../../notations/registry';
 
@@ -208,7 +208,7 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
             >
               {relationshipTypeOptions.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {getRelationshipTypeLabel(t)}
                 </option>
               ))}
             </select>

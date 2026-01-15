@@ -1,11 +1,22 @@
 import type * as React from 'react';
-import type { Element, ModelKind, RelationshipValidationMode, ViewNodeLayout } from '../domain';
+
+import type { Element, Model, ModelKind, RelationshipValidationMode, ViewNodeLayout } from '../domain';
+import type { ValidationIssue } from '../domain/validation/types';
 import type { RelationshipStyle } from '../diagram/relationships/style';
+
+import type { ModelActions } from '../components/model/properties/actions';
+import type { PropertiesSection } from '../components/model/properties/common/PropertiesPanelHost';
+import type { Selection } from '../components/model/selection';
 
 export type GuardResult = { allowed: true } | { allowed: false; reason?: string };
 
+export type TypeOption = { id: string; label: string };
+
 /**
  * Notation-specific behavior registry.
+ *
+ * v1 contract goal: centralize catalogs, rules, properties UI hooks and notation validation,
+ * so adding UML/BPMN doesn't turn into scattered kind checks.
  */
 export type Notation = {
   kind: ModelKind;
@@ -44,4 +55,37 @@ export type Notation = {
     targetType?: string;
     mode?: RelationshipValidationMode;
   }) => GuardResult;
+
+  // ------------------------------
+  // Notation plugin contract v1
+  // ------------------------------
+
+  /** Catalog of element types used for palette/type pickers. */
+  getElementTypeOptions: () => TypeOption[];
+
+  /** Catalog of relationship types used for palette/type pickers. */
+  getRelationshipTypeOptions: () => TypeOption[];
+
+  /** Provide notation-specific sections to be inserted into the element properties panel. */
+  getElementPropertySections: (args: {
+    model: Model;
+    element: Element;
+    actions: ModelActions;
+    onSelect?: (selection: Selection) => void;
+  }) => PropertiesSection[];
+
+  /** Render the relationship properties panel for relationships of this notation. */
+  renderRelationshipProperties: (args: {
+    model: Model;
+    relationshipId: string;
+    viewId?: string;
+    actions: ModelActions;
+    onSelect?: (selection: Selection) => void;
+  }) => React.ReactNode;
+
+  /** Notation-specific validations. Should only emit issues relevant to this notation. */
+  validateNotation: (args: {
+    model: Model;
+    relationshipValidationMode: RelationshipValidationMode;
+  }) => ValidationIssue[];
 };

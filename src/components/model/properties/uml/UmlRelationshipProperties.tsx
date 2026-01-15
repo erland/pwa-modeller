@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import type { Element, Model, RelationshipType } from '../../../../domain';
 import { getRelationshipTypesForKind, kindFromTypeId } from '../../../../domain';
-import { getNotation } from '../../../../notations/registry';
+import { canCreateUmlRelationship } from '../../../../notations/uml/rules';
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
@@ -38,7 +38,6 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
 
   // Hooks must be called unconditionally (even if we early-return).
   const relKind = rel ? kindFromTypeId(rel.type) : 'uml';
-  const notation = getNotation(relKind);
 
   const relationshipTypeOptions = useMemo<RelationshipType[]>(() => {
     const allForKind = getRelationshipTypesForKind(relKind) as RelationshipType[];
@@ -72,14 +71,14 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
     if (!sourceType || !targetType) return null;
     if (rel.type === 'Unknown') return null;
 
-    const res = notation.canCreateRelationship({
+    const res = canCreateUmlRelationship({
       relationshipType: rel.type as unknown as string,
       sourceType,
       targetType,
       mode: relationshipValidationMode,
     });
     return res.allowed ? null : (res.reason ?? 'This relationship is not allowed for the selected types.');
-  }, [notation, rel, sourceType, targetType, relationshipValidationMode]);
+  }, [rel, sourceType, targetType, relationshipValidationMode]);
 
   if (!rel) return <p className="panelHint">Relationship not found.</p>;
 

@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import type { ModelKind } from '../domain';
 import type { Notation } from './types';
 import { archimateNotation } from './archimate';
@@ -13,13 +15,18 @@ export function getNotation(kind: ModelKind): Notation {
     case 'uml':
       return umlNotation;
     case 'bpmn': {
-      // Until UML/BPMN are implemented we fall back to ArchiMate rendering defaults,
-      // but keep creation guards conservative.
+      // Placeholder: reuse ArchiMate rendering defaults so existing views remain visible,
+      // but keep catalogs/creation guards conservative until BPMN is implemented.
       return {
         ...archimateNotation,
         kind,
         canCreateNode: () => false,
         canCreateRelationship: () => ({ allowed: false, reason: 'Notation not implemented yet.' }),
+        getElementTypeOptions: () => [],
+        getRelationshipTypeOptions: () => [],
+        getElementPropertySections: () => [],
+        renderRelationshipProperties: () => React.createElement('p', { className: 'panelHint' }, 'BPMN properties not implemented yet.'),
+        validateNotation: () => [],
       };
     }
     default:

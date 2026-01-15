@@ -1,9 +1,9 @@
 import type { FolderOption, Model } from '../../../domain';
 import { kindFromTypeId } from '../../../domain';
+import { getNotation } from '../../../notations/registry';
 
 import type { Selection } from '../selection';
 import type { ModelActions } from './actions';
-import { ArchimateElementPropertiesExtras } from './archimate/ArchimateElementPropertiesExtras';
 import { CommonElementProperties } from './common/CommonElementProperties';
 
 type Props = {
@@ -19,6 +19,8 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
   if (!el) return <p className="panelHint">Element not found.</p>;
 
   const kind = kindFromTypeId(el.type);
+  const notation = getNotation(kind);
+  const notationSections = notation.getElementPropertySections({ model, element: el, actions, onSelect });
 
   return (
     <CommonElementProperties
@@ -27,16 +29,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
       actions={actions}
       elementFolders={elementFolders}
       onSelect={onSelect}
-      notationSections={
-        kind === 'archimate'
-          ? [
-              {
-                key: 'archimate',
-                content: <ArchimateElementPropertiesExtras model={model} element={el} actions={actions} onSelect={onSelect} />
-              }
-            ]
-          : undefined
-      }
+      notationSections={notationSections.length ? notationSections : undefined}
     />
   );
 }

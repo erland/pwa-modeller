@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ElementType, FolderOption, Model, View, ViewNodeLayout } from '../../../../domain';
-import { kindFromTypeId, computeRelationshipTrace, getElementTypesForKind, getElementTypeLabel } from '../../../../domain';
+import { kindFromTypeId, computeRelationshipTrace } from '../../../../domain';
+import { getNotation } from '../../../../notations/registry';
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
@@ -31,22 +32,24 @@ export function CommonElementProperties({ model, elementId, actions, elementFold
   const el = model.elements[elementId];
   const hasElement = Boolean(el);
   const kind: 'archimate' | 'uml' | 'bpmn' = hasElement ? (el!.kind ?? kindFromTypeId(el!.type as unknown as string)) : 'archimate';
-    const safeType: ElementType = hasElement ? (el!.type as ElementType) : ('Unknown' as ElementType);
+  const safeType: ElementType = hasElement ? (el!.type as ElementType) : ('Unknown' as ElementType);
 
   const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
 
   const [traceDirection, setTraceDirection] = useState<TraceDirection>('both');
   const [traceDepth, setTraceDepth] = useState<number>(1);
 
-  const kindTypes = useMemo(() => getElementTypesForKind(kind), [kind]);
+  const kindTypeOptions = useMemo(() => getNotation(kind).getElementTypeOptions(), [kind]);
+  const kindTypeIds = useMemo<ElementType[]>(() => kindTypeOptions.map((o) => o.id as ElementType), [kindTypeOptions]);
+  const kindTypeLabelById = useMemo(() => new Map(kindTypeOptions.map((o) => [o.id, o.label] as const)), [kindTypeOptions]);
 
   const elementTypeOptions = useMemo<ElementType[]>(() => {
-    const base = kindTypes;
+    const base = kindTypeIds;
     const withUnknown = safeType === 'Unknown' ? (['Unknown', ...base] as ElementType[]) : base;
 
     // Keep current value visible even if it is out-of-sync (e.g., imported data).
     return withUnknown.includes(safeType) ? withUnknown : ([safeType, ...withUnknown] as ElementType[]);
-  }, [kindTypes, safeType]);
+  }, [kindTypeIds, safeType]);
 
   useEffect(() => {
     setTraceDirection('both');
@@ -130,7 +133,7 @@ export function CommonElementProperties({ model, elementId, actions, elementFold
                     ? el.unknownType?.name
                       ? `Unknown: ${el.unknownType.name}`
                       : 'Unknown'
-                    : getElementTypeLabel(t);
+                    : (kindTypeLabelById.get(t) ?? t);
                 return (
                   <option key={t} value={t}>
                     {label}

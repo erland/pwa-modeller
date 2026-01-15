@@ -1,8 +1,20 @@
 import * as React from 'react';
+
 import type { ArchimateLayer, ElementType, RelationshipType, RelationshipValidationMode } from '../../domain';
-import { ELEMENT_TYPES, ELEMENT_TYPES_BY_LAYER, RELATIONSHIP_TYPES } from '../../domain';
+import {
+  ELEMENT_TYPES,
+  ELEMENT_TYPES_BY_LAYER,
+  RELATIONSHIP_TYPES,
+  getElementTypeOptionsForKind,
+  getRelationshipTypeOptionsForKind,
+} from '../../domain';
 import { validateRelationship } from '../../domain/config/archimatePalette';
+import { validateArchimateRelationshipRules } from '../../domain/validation/archimate';
+
 import { ArchimateSymbol } from '../../components/diagram/archimateSymbols';
+import { ArchimateElementPropertiesExtras } from '../../components/model/properties/archimate/ArchimateElementPropertiesExtras';
+import { ArchimateRelationshipProperties } from '../../components/model/properties/archimate/ArchimateRelationshipProperties';
+
 import { archimateRelationshipStyle } from '../../diagram/relationships/archimateStyle';
 import type { RelationshipStyle } from '../../diagram/relationships/style';
 import type { Notation } from '../types';
@@ -38,14 +50,21 @@ function isRelationshipType(t: string): t is RelationshipType {
 
 export const archimateNotation: Notation = {
   kind: 'archimate',
+
+  // ------------------------------
+  // Rendering + interaction
+  // ------------------------------
+
   getElementBgVar: (nodeType: string) => {
     const layer = isElementType(nodeType) ? ELEMENT_TYPE_TO_LAYER[nodeType] ?? 'Business' : 'Business';
     return LAYER_BG_VAR[layer];
   },
+
   renderNodeSymbol: ({ nodeType, title }) => {
     const type: ElementType = isElementType(nodeType) ? nodeType : 'Unknown';
     return React.createElement(ArchimateSymbol, { type, title });
   },
+
   getRelationshipStyle: (rel: { type: string; attrs?: unknown }): RelationshipStyle => {
     // Notation registry uses a generic contract; ArchiMate narrows it here.
     if (!isRelationshipType(rel.type)) {
@@ -74,5 +93,31 @@ export const archimateNotation: Notation = {
     const m: RelationshipValidationMode = (mode ?? 'minimal') as RelationshipValidationMode;
     const res = validateRelationship(s, t, rt, m);
     return res.allowed ? { allowed: true } : { allowed: false, reason: res.reason };
+  },
+
+  // ------------------------------
+  // Notation plugin contract v1
+  // ------------------------------
+
+  getElementTypeOptions: () => getElementTypeOptionsForKind('archimate'),
+
+  getRelationshipTypeOptions: () => getRelationshipTypeOptionsForKind('archimate'),
+
+  getElementPropertySections: ({ model, element, actions, onSelect }) => {
+    // ArchiMate-only element extras (layer/type + UML drill-down helpers)
+    return [
+      {
+        key: 'archimate',
+        content: React.createElement(ArchimateElementPropertiesExtras, { model, element, actions, onSelect }),
+      },
+    ];
+  },
+
+  renderRelationshipProperties: ({ model, relationshipId, viewId, actions, onSelect }) => {
+    return React.createElement(ArchimateRelationshipProperties, { model, relationshipId, viewId, actions, onSelect });
+  },
+
+  validateNotation: ({ model, relationshipValidationMode }) => {
+    return validateArchimateRelationshipRules(model, relationshipValidationMode);
   },
 };

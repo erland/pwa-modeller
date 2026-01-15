@@ -1,8 +1,16 @@
+import * as React from 'react';
+
 import type { RelationshipStyle } from '../../diagram/relationships/style';
+import { getElementTypeOptionsForKind, getRelationshipTypeOptionsForKind } from '../../domain';
+import { validateUmlBasics } from '../../domain/validation/uml';
+
 import type { Notation } from '../types';
-import { isUmlClassifierType, isUmlNodeType, isUmlNoteType, isUmlPackageType, isUmlRelationshipType } from './nodeTypes';
+import { isUmlRelationshipType } from './nodeTypes';
+import { canCreateUmlNode, canCreateUmlRelationship } from './rules';
 import { renderUmlNodeSymbol } from './renderNodeSymbol';
 import { renderUmlNodeContent } from './renderNodeContent';
+
+import { UmlRelationshipProperties } from '../../components/model/properties/uml/UmlRelationshipProperties';
 
 type UmlRelAttrs = {
   /** Optional navigability for associations (v1: boolean directed). */
@@ -43,6 +51,10 @@ function umlRelationshipStyle(type: string): RelationshipStyle {
 export const umlNotation: Notation = {
   kind: 'uml',
 
+  // ------------------------------
+  // Rendering + interaction
+  // ------------------------------
+
   // Neutral background: reuse an existing layer var to avoid requiring new CSS in Step 2.
   getElementBgVar: () => 'var(--arch-layer-application)',
 
@@ -68,69 +80,32 @@ export const umlNotation: Notation = {
 
   canCreateNode: ({ nodeType }) => {
     // Prevent dropping ArchiMate elements into UML views.
-    return isUmlNodeType(nodeType);
+    return canCreateUmlNode(nodeType);
   },
 
-  canCreateRelationship: ({ relationshipType, sourceType, targetType }) => {
-    if (!isUmlRelationshipType(relationshipType)) {
-      return { allowed: false, reason: 'Unknown UML relationship type.' };
-    }
+  canCreateRelationship: (args) => {
+    return canCreateUmlRelationship(args);
+  },
 
-    // If endpoints aren't known yet (e.g. preflight), allow.
-    if (!sourceType || !targetType) return { allowed: true };
+  // ------------------------------
+  // Notation plugin contract v1
+  // ------------------------------
 
-    // Minimal v1 rule: only allow UML-to-UML relationships.
-    if (!isUmlNodeType(sourceType) || !isUmlNodeType(targetType)) {
-      return { allowed: false, reason: 'UML relationships require UML nodes.' };
-    }
+  getElementTypeOptions: () => getElementTypeOptionsForKind('uml'),
 
-    // Notes are not connectable.
-    if (isUmlNoteType(sourceType) || isUmlNoteType(targetType)) {
-      return { allowed: false, reason: 'Notes cannot participate in relationships.' };
-    }
+  getRelationshipTypeOptions: () => getRelationshipTypeOptionsForKind('uml'),
 
-    // Basic class diagram rules (kept intentionally permissive for v1).
-    switch (relationshipType) {
-      case 'uml.generalization':
-        if (!isUmlClassifierType(sourceType) || !isUmlClassifierType(targetType)) {
-          return { allowed: false, reason: 'Generalization is allowed between classifiers (class/interface/enum).' };
-        }
-        return { allowed: true };
+  getElementPropertySections: () => {
+    // v1: UML element properties are handled by the common panel.
+    // UML-specific compartments/attrs can be added here later as sections.
+    return [];
+  },
 
-      case 'uml.realization':
-        // Class realizes an interface (keep v1 strict).
-        if (sourceType !== 'uml.class' || targetType !== 'uml.interface') {
-          return { allowed: false, reason: 'Realization is allowed from Class to Interface.' };
-        }
-        return { allowed: true };
+  renderRelationshipProperties: ({ model, relationshipId, viewId, actions, onSelect }) => {
+    return React.createElement(UmlRelationshipProperties, { model, relationshipId, viewId, actions, onSelect });
+  },
 
-      case 'uml.aggregation':
-      case 'uml.composition':
-        // Whole/part: keep it between classes/enums.
-        if (sourceType !== 'uml.class') {
-          return { allowed: false, reason: 'Aggregation/Composition source should be a Class.' };
-        }
-        if (!(targetType === 'uml.class' || targetType === 'uml.enum')) {
-          return { allowed: false, reason: 'Aggregation/Composition target should be a Class or Enum.' };
-        }
-        return { allowed: true };
-
-      case 'uml.dependency':
-        // Allow dependency between packages, and between any non-note UML nodes.
-        if (isUmlPackageType(sourceType) || isUmlPackageType(targetType)) {
-          return isUmlPackageType(sourceType) && isUmlPackageType(targetType)
-            ? { allowed: true }
-            : { allowed: false, reason: 'Package dependencies should be between Packages.' };
-        }
-        return { allowed: true };
-
-      case 'uml.association':
-      default:
-        // Association: classifiers only (avoid packages for now).
-        if (!isUmlClassifierType(sourceType) || !isUmlClassifierType(targetType)) {
-          return { allowed: false, reason: 'Association is allowed between classifiers (class/interface/enum).' };
-        }
-        return { allowed: true };
-    }
+  validateNotation: ({ model }) => {
+    return validateUmlBasics(model);
   },
 };

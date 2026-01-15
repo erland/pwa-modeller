@@ -7,7 +7,6 @@ import {
   initRelationshipValidationMatrixFromBundledTable,
   validateRelationship,
 } from '../../../../domain/config/archimatePalette';
-import { getNotation } from '../../../../notations/registry';
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
@@ -40,7 +39,6 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
 
   // Hooks must be called unconditionally (even if we early-return).
   const relKind = rel ? kindFromTypeId(rel.type) : 'archimate';
-  const notation = getNotation(relKind);
 
   const [matrixLoadTick, setMatrixLoadTick] = useState(0);
 
@@ -88,19 +86,9 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
     if (!sourceType || !targetType) return null;
     if (relIsUnknown) return null;
 
-    if (relKind === 'archimate') {
-      const res = validateRelationship(sourceType, targetType, relType as RelationshipType, relationshipValidationMode);
-      return res.allowed ? null : res.reason;
-    }
-
-    const res = notation.canCreateRelationship({
-      relationshipType: relType as unknown as string,
-      sourceType,
-      targetType,
-      mode: relationshipValidationMode,
-    });
-    return res.allowed ? null : (res.reason ?? 'This relationship is not allowed for the selected types.');
-  }, [sourceType, targetType, relType, relIsUnknown, relationshipValidationMode, matrixLoadTick, relKind, notation, rel]);
+    const res = validateRelationship(sourceType, targetType, relType as RelationshipType, relationshipValidationMode);
+    return res.allowed ? null : res.reason;
+  }, [sourceType, targetType, relType, relIsUnknown, relationshipValidationMode, matrixLoadTick, rel]);
 
   const relationshipTypeOptions = useMemo<RelationshipType[]>(() => {
     const allForKind = getRelationshipTypesForKind(relKind) as RelationshipType[];

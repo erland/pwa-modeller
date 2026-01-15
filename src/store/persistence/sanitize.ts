@@ -241,11 +241,11 @@ export function sanitizeModelViewOwnerRefsFromCentered(model: Model): Model {
     if (!hasOwnerProp || owner === undefined) {
       model.views[vid] = { ...(v as any), ownerRef: { kind: 'archimate', id: centered } };
     }
-
     // Drop the legacy field after migration.
     if (Object.prototype.hasOwnProperty.call(model.views[vid] as any, 'centerElementId')) {
-      const { centerElementId: _legacy, ...rest } = model.views[vid] as any;
-      model.views[vid] = rest as any;
+      const next = { ...(model.views[vid] as any) };
+      delete (next as any).centerElementId;
+      model.views[vid] = next as any;
     }
   }
   return model;

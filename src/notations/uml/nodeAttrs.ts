@@ -23,7 +23,7 @@ function asString(v: unknown): string | undefined {
  * We keep this intentionally permissive for v1: only strings are read, everything else is ignored.
  */
 export function readUmlNodeAttrs(node: ViewNodeLayout): UmlNodeAttrs {
-  const raw = (node as any)?.attrs;
+  const raw = (node as unknown as { attrs?: unknown }).attrs;
   if (!isRecord(raw)) return {};
 
   return {

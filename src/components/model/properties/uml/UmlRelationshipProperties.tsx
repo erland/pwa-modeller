@@ -36,10 +36,52 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
   const rel = model.relationships[relationshipId];
   const relationshipValidationMode = useModelStore((s) => s.relationshipValidationMode);
 
-  if (!rel) return <p className="panelHint">Relationship not found.</p>;
-
-  const relKind = kindFromTypeId(rel.type);
+  // Hooks must be called unconditionally (even if we early-return).
+  const relKind = rel ? kindFromTypeId(rel.type) : 'uml';
   const notation = getNotation(relKind);
+
+  const relationshipTypeOptions = useMemo<RelationshipType[]>(() => {
+    const allForKind = getRelationshipTypesForKind(relKind) as RelationshipType[];
+    if (!rel) return allForKind;
+
+    const list: RelationshipType[] = [...allForKind];
+    const seen = new Set(list);
+
+    if (rel.type === 'Unknown') return ['Unknown', ...list.filter((t) => t !== 'Unknown')];
+
+    if (rel.type && !seen.has(rel.type as RelationshipType)) return [rel.type as RelationshipType, ...list];
+    return list;
+  }, [rel, relKind]);
+
+  const elementOptions: Element[] = useMemo(() => {
+    const elems = Object.values(model.elements)
+      .filter(Boolean)
+      .filter((e) => {
+        const maybeKind = (e as unknown as { kind?: string }).kind;
+        const ek = maybeKind ?? kindFromTypeId(e.type as unknown as string);
+        return ek === relKind;
+      });
+
+    return elems.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }));
+  }, [model, relKind]);
+
+  const sourceType = rel?.sourceElementId ? model.elements[rel.sourceElementId]?.type : undefined;
+  const targetType = rel?.targetElementId ? model.elements[rel.targetElementId]?.type : undefined;
+  const relationshipRuleWarning = useMemo(() => {
+    if (!rel) return null;
+    if (!sourceType || !targetType) return null;
+    if (rel.type === 'Unknown') return null;
+
+    const res = notation.canCreateRelationship({
+      relationshipType: rel.type as unknown as string,
+      sourceType,
+      targetType,
+      mode: relationshipValidationMode,
+    });
+    return res.allowed ? null : (res.reason ?? 'This relationship is not allowed for the selected types.');
+  }, [notation, rel, sourceType, targetType, relationshipValidationMode]);
+
+  if (!rel) return <p className="panelHint">Relationship not found.</p>;
 
   const attrsObj: Record<string, unknown> =
     rel.attrs && typeof rel.attrs === 'object' ? (rel.attrs as Record<string, unknown>) : {};
@@ -55,43 +97,6 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
   const updateAttrs = (patch: Record<string, unknown>): void => {
     actions.updateRelationship(rel.id, { attrs: pruneAttrs({ ...attrsObj, ...patch }) });
   };
-
-  const relationshipTypeOptions = useMemo<RelationshipType[]>(() => {
-    const allForKind = getRelationshipTypesForKind(relKind) as RelationshipType[];
-    const list: RelationshipType[] = [...allForKind];
-    const seen = new Set(list);
-
-    if (rel.type === 'Unknown') return ['Unknown', ...list.filter((t) => t !== 'Unknown')];
-
-    if (rel.type && !seen.has(rel.type as RelationshipType)) return [rel.type as RelationshipType, ...list];
-    return list;
-  }, [rel.type, relKind]);
-
-  const elementOptions: Element[] = useMemo(() => {
-    const elems = Object.values(model.elements)
-      .filter(Boolean)
-      .filter((e) => {
-        const ek = (e as any).kind ?? kindFromTypeId(e.type as unknown as string);
-        return ek === relKind;
-      });
-
-    return elems.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }));
-  }, [model, relKind]);
-
-  const sourceType = rel.sourceElementId ? model.elements[rel.sourceElementId]?.type : undefined;
-  const targetType = rel.targetElementId ? model.elements[rel.targetElementId]?.type : undefined;
-  const relationshipRuleWarning = useMemo(() => {
-    if (!sourceType || !targetType) return null;
-    if (rel.type === 'Unknown') return null;
-
-    const res = notation.canCreateRelationship({
-      relationshipType: rel.type as unknown as string,
-      sourceType,
-      targetType,
-      mode: relationshipValidationMode,
-    });
-    return res.allowed ? null : (res.reason ?? 'This relationship is not allowed for the selected types.');
-  }, [notation, rel.type, sourceType, targetType, relationshipValidationMode]);
 
   const typeExtra = relationshipRuleWarning ? (
     <div className="panelHint" style={{ color: '#ffb3b3', opacity: 0.95 }}>
@@ -129,28 +134,32 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
                   checked={!!isDirected}
                   onChange={(e) => updateAttrs({ isDirected: e.target.checked ? true : undefined })}
                 />
-                Directed association
+                Show arrow direction
               </label>
-              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                If checked, render as a navigable association (direction support can be improved later).
-              </div>
             </div>
           </div>
 
           <div className="propertiesRow">
-            <div className="propertiesKey">Source end</div>
-            <div className="propertiesValue" style={{ fontWeight: 400, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="propertiesKey">Source role</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
               <input
                 className="textInput"
-                aria-label="UML relationship source role"
-                placeholder="Role name (optional)"
+                aria-label="UML association source role"
+                placeholder="(optional)"
                 value={umlSourceRole ?? ''}
                 onChange={(e) => updateAttrs({ sourceRole: asTrimmedOrUndef(e.target.value) })}
               />
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Shown near the source end.</div>
+            </div>
+          </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">Source multiplicity</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
               <input
                 className="textInput"
-                aria-label="UML relationship source multiplicity"
-                placeholder="Multiplicity (e.g. 1, 0..1, 0..*, 1..*)"
+                aria-label="UML association source multiplicity"
+                placeholder="(optional)"
                 value={umlSourceMultiplicity ?? ''}
                 onChange={(e) => updateAttrs({ sourceMultiplicity: asTrimmedOrUndef(e.target.value) })}
               />
@@ -158,19 +167,26 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
           </div>
 
           <div className="propertiesRow">
-            <div className="propertiesKey">Target end</div>
-            <div className="propertiesValue" style={{ fontWeight: 400, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div className="propertiesKey">Target role</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
               <input
                 className="textInput"
-                aria-label="UML relationship target role"
-                placeholder="Role name (optional)"
+                aria-label="UML association target role"
+                placeholder="(optional)"
                 value={umlTargetRole ?? ''}
                 onChange={(e) => updateAttrs({ targetRole: asTrimmedOrUndef(e.target.value) })}
               />
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Shown near the target end.</div>
+            </div>
+          </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">Target multiplicity</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
               <input
                 className="textInput"
-                aria-label="UML relationship target multiplicity"
-                placeholder="Multiplicity (e.g. 1, 0..1, 0..*, 1..*)"
+                aria-label="UML association target multiplicity"
+                placeholder="(optional)"
                 value={umlTargetMultiplicity ?? ''}
                 onChange={(e) => updateAttrs({ targetMultiplicity: asTrimmedOrUndef(e.target.value) })}
               />

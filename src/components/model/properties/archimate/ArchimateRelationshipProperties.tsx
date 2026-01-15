@@ -37,6 +37,8 @@ type Props = {
 export function ArchimateRelationshipProperties({ model, relationshipId, viewId, actions, onSelect }: Props) {
   const rel = model.relationships[relationshipId];
   const relationshipValidationMode = useModelStore((s) => s.relationshipValidationMode);
+
+  // Hooks must be called unconditionally (even if we early-return).
   const relKind = rel ? kindFromTypeId(rel.type) : 'archimate';
   const notation = getNotation(relKind);
 
@@ -60,21 +62,12 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
     setShowAllRelationshipTypes(false);
   }, [relationshipId]);
 
-  if (!rel) return <p className="panelHint">Relationship not found.</p>;
-
-  const attrsObj: Record<string, unknown> =
-    rel.attrs && typeof rel.attrs === 'object' ? (rel.attrs as Record<string, unknown>) : {};
-  const accessType = typeof attrsObj.accessType === 'string' ? (attrsObj.accessType as string) : undefined;
-
-  const updateAttrs = (patch: Record<string, unknown>): void => {
-    actions.updateRelationship(rel.id, { attrs: pruneAttrs({ ...attrsObj, ...patch }) });
-  };
-
-  const sourceElement = rel.sourceElementId ? model.elements[rel.sourceElementId] : undefined;
-  const targetElement = rel.targetElementId ? model.elements[rel.targetElementId] : undefined;
+  const sourceElement = rel?.sourceElementId ? model.elements[rel.sourceElementId] : undefined;
+  const targetElement = rel?.targetElementId ? model.elements[rel.targetElementId] : undefined;
   const sourceType = sourceElement?.type;
   const targetType = targetElement?.type;
-  const relType = rel.type;
+
+  const relType = rel?.type ?? 'Unknown';
   const relIsUnknown = relType === 'Unknown';
 
   const allowedRelationshipTypes = useMemo(() => {
@@ -90,6 +83,8 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
   const relationshipRuleWarning = useMemo(() => {
     // Dependency tick to recompute when the relationship matrix loads/changes.
     void matrixLoadTick;
+
+    if (!rel) return null;
     if (!sourceType || !targetType) return null;
     if (relIsUnknown) return null;
 
@@ -105,10 +100,12 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
       mode: relationshipValidationMode,
     });
     return res.allowed ? null : (res.reason ?? 'This relationship is not allowed for the selected types.');
-  }, [sourceType, targetType, relType, relIsUnknown, relationshipValidationMode, matrixLoadTick, relKind, notation]);
+  }, [sourceType, targetType, relType, relIsUnknown, relationshipValidationMode, matrixLoadTick, relKind, notation, rel]);
 
   const relationshipTypeOptions = useMemo<RelationshipType[]>(() => {
     const allForKind = getRelationshipTypesForKind(relKind) as RelationshipType[];
+    if (!rel) return allForKind;
+
     const base: RelationshipType[] = showAllRelationshipTypes ? allForKind : allowedRelationshipTypes;
     const list: RelationshipType[] = [...base];
 
@@ -121,13 +118,23 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
 
     if (relType && !seen.has(relType as RelationshipType)) return [relType as RelationshipType, ...list];
     return list;
-  }, [showAllRelationshipTypes, allowedRelationshipTypes, relType, relIsUnknown, relKind]);
+  }, [showAllRelationshipTypes, allowedRelationshipTypes, relType, relIsUnknown, relKind, rel]);
 
   const elementOptions: Element[] = useMemo(() => {
     const elems = Object.values(model.elements).filter(Boolean);
     // ArchiMate relationships can connect across model kinds (current behaviour).
     return elems.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }));
   }, [model]);
+
+  if (!rel) return <p className="panelHint">Relationship not found.</p>;
+
+  const attrsObj: Record<string, unknown> =
+    rel.attrs && typeof rel.attrs === 'object' ? (rel.attrs as Record<string, unknown>) : {};
+  const accessType = typeof attrsObj.accessType === 'string' ? (attrsObj.accessType as string) : undefined;
+
+  const updateAttrs = (patch: Record<string, unknown>): void => {
+    actions.updateRelationship(rel.id, { attrs: pruneAttrs({ ...attrsObj, ...patch }) });
+  };
 
   const typeExtra = (
     <>
@@ -173,9 +180,6 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
               </option>
             ))}
           </select>
-          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-            Access specifies whether data is read, written, or both.
-          </div>
         </div>
       </div>
     ) : null;

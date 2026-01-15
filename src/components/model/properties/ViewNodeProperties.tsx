@@ -93,7 +93,7 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
 
           {(() => {
             const uml = readUmlNodeAttrs(node);
-            const rawAttrs = (node as any).attrs;
+            const rawAttrs = (node as unknown as { attrs?: unknown }).attrs;
             const base: Record<string, unknown> = isRecord(rawAttrs) ? { ...rawAttrs } : {};
 
             const nodeType = element.type;

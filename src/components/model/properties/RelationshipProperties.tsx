@@ -20,20 +20,12 @@ type Props = {
 
 export function RelationshipProperties({ model, relationshipId, viewId, actions, onSelect }: Props) {
   const rel = model.relationships[relationshipId];
-  if (!rel) return <p className="panelHint">Relationship not found.</p>;
 
-  const kind = kindFromTypeId(rel.type);
+  // Hooks must be called unconditionally (even if we early-return).
+  const kind = rel ? kindFromTypeId(rel.type) : 'archimate';
 
-  if (kind === 'archimate') {
-    return <ArchimateRelationshipProperties model={model} relationshipId={relationshipId} viewId={viewId} actions={actions} onSelect={onSelect} />;
-  }
-
-  if (kind === 'uml') {
-    return <UmlRelationshipProperties model={model} relationshipId={relationshipId} viewId={viewId} actions={actions} onSelect={onSelect} />;
-  }
-
-  // BPMN or other kinds: show common properties with the kind's type catalog.
   const relationshipTypeOptions = useMemo<RelationshipType[]>(() => {
+    if (!rel) return [];
     const allForKind = getRelationshipTypesForKind(kind) as RelationshipType[];
     const list: RelationshipType[] = [...allForKind];
     const seen = new Set(list);
@@ -41,18 +33,45 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
     if (rel.type === 'Unknown') return ['Unknown', ...list.filter((t) => t !== 'Unknown')];
     if (rel.type && !seen.has(rel.type as RelationshipType)) return [rel.type as RelationshipType, ...list];
     return list;
-  }, [kind, rel.type]);
+  }, [kind, rel]);
 
-  const elementOptions: Element[] = useMemo(() => {
+  const elementOptions = useMemo<Element[]>(() => {
     const elems = Object.values(model.elements)
       .filter(Boolean)
       .filter((e) => {
-        const ek = (e as any).kind ?? kindFromTypeId(e.type as unknown as string);
+        const maybeKind = (e as unknown as { kind?: string }).kind;
+        const ek = maybeKind ?? kindFromTypeId(e.type as unknown as string);
         return ek === kind;
       });
 
     return elems.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }));
   }, [model, kind]);
+
+  if (!rel) return <p className="panelHint">Relationship not found.</p>;
+
+  if (kind === 'archimate') {
+    return (
+      <ArchimateRelationshipProperties
+        model={model}
+        relationshipId={relationshipId}
+        viewId={viewId}
+        actions={actions}
+        onSelect={onSelect}
+      />
+    );
+  }
+
+  if (kind === 'uml') {
+    return (
+      <UmlRelationshipProperties
+        model={model}
+        relationshipId={relationshipId}
+        viewId={viewId}
+        actions={actions}
+        onSelect={onSelect}
+      />
+    );
+  }
 
   return (
     <CommonRelationshipProperties

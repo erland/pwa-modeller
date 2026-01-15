@@ -89,12 +89,15 @@ export function useNavigatorState({ model, treeData, searchTerm, selection, onSe
     const set = keys as Set<Key>;
     const first = set?.values?.().next?.().value as string | undefined;
     if (!first) {
-      onSelect({ kind: 'model' });
+      // iOS/Safari can transiently emit an empty selection set on touchend
+      // (effectively a deselect). We keep the previous selection instead of
+      // snapping back to the model/root, since selection is controlled by
+      // Workspace state and will re-assert the last selected key.
       return;
     }
     const parsed = parseKey(first);
     if (!parsed) {
-      onSelect({ kind: 'model' });
+      // Same reasoning as above: ignore transient/invalid selection changes.
       return;
     }
     switch (parsed.kind) {

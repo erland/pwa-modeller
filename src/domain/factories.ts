@@ -1,4 +1,5 @@
 import { createId } from './id';
+import { kindFromTypeId } from './kindFromTypeId';
 import type {
   Element,
   Relationship,
@@ -14,13 +15,6 @@ import type {
   ViewObjectTextAlign
 } from './types';
 
-function inferKindFromType(type: string | undefined): 'archimate' | 'uml' | 'bpmn' {
-  const t = (type ?? '').trim();
-  if (t.startsWith('uml.')) return 'uml';
-  if (t.startsWith('bpmn.')) return 'bpmn';
-  return 'archimate';
-}
-
 function requireNonBlank(value: string, field: string): void {
   if (value.trim().length === 0) {
     throw new Error(`${field} must be a non-empty string`);
@@ -33,7 +27,7 @@ export function createElement(input: CreateElementInput): Element {
   // type is required at compile-time; runtime check gives clearer errors.
   if (!input.type) throw new Error('Element.type is required');
 
-  const kind = input.kind ?? inferKindFromType(input.type);
+  const kind = input.kind ?? kindFromTypeId(input.type);
   if (kind === 'archimate' && !input.layer) throw new Error('Element.layer is required for archimate elements');
 
   return {
@@ -57,7 +51,7 @@ export function createRelationship(input: CreateRelationshipInput): Relationship
   if (!hasTarget) throw new Error('Relationship target endpoint is required');
   if (!input.type) throw new Error('Relationship.type is required');
 
-  const kind = input.kind ?? inferKindFromType(input.type as unknown as string);
+  const kind = input.kind ?? kindFromTypeId(input.type as unknown as string);
 
   return {
     id: input.id ?? createId('rel'),

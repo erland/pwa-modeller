@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { AccessType, Element, Model, RelationshipType, ViewConnectionRouteKind } from '../../../domain';
-import { getRelationshipTypeLabel, getRelationshipTypesForKind } from '../../../domain';
+import { getRelationshipTypeLabel, getRelationshipTypesForKind, kindFromTypeId } from '../../../domain';
 import { getAllowedRelationshipTypes, initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../../domain/config/archimatePalette';
 import { getNotation } from '../../../notations/registry';
 
@@ -15,13 +15,6 @@ import { TaggedValuesSection } from './sections/TaggedValuesSection';
 import { useModelStore } from '../../../store';
 
 const ACCESS_TYPES: AccessType[] = ['Access', 'Read', 'Write', 'ReadWrite'];
-
-function inferKindFromType(type: string | undefined): 'archimate' | 'uml' | 'bpmn' {
-  const t = (type ?? '').trim();
-  if (t.startsWith('uml.')) return 'uml';
-  if (t.startsWith('bpmn.')) return 'bpmn';
-  return 'archimate';
-}
 
 
 function asTrimmedOrUndef(v: string): string | undefined {
@@ -51,7 +44,7 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
   const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
 
   const rel = model.relationships[relationshipId];
-  const relKind = rel ? (rel.kind ?? inferKindFromType(rel.type as unknown as string)) : 'archimate';
+  const relKind = rel ? (rel.kind ?? kindFromTypeId(rel.type as unknown as string)) : 'archimate';
   const notation = getNotation(relKind);
 
   const [matrixLoadTick, setMatrixLoadTick] = useState(0);
@@ -162,7 +155,7 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
     .filter(Boolean)
     .filter((e) => {
       if (relKind === 'archimate') return true;
-      const ek = e.kind ?? inferKindFromType(e.type as unknown as string);
+      const ek = e.kind ?? kindFromTypeId(e.type as unknown as string);
       return ek === relKind;
     })
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));

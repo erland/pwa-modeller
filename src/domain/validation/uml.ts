@@ -1,14 +1,8 @@
 import type { Model } from '../types';
 import { UML_ELEMENT_TYPES, UML_RELATIONSHIP_TYPES } from '../config/catalog';
+import { kindFromTypeId } from '../kindFromTypeId';
 import { makeIssue } from './issues';
 import type { ValidationIssue } from './types';
-
-function inferKindFromType(type: string | undefined): 'archimate' | 'uml' | 'bpmn' {
-  const t = (type ?? '').trim();
-  if (t.startsWith('uml.')) return 'uml';
-  if (t.startsWith('bpmn.')) return 'bpmn';
-  return 'archimate';
-}
 
 const UML_CLASSIFIER_TYPES = new Set(['uml.class', 'uml.interface', 'uml.enum']);
 
@@ -22,7 +16,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
   const allowedRelationships = new Set(UML_RELATIONSHIP_TYPES);
 
   for (const el of Object.values(model.elements)) {
-    const kind = el.kind ?? inferKindFromType(el.type);
+    const kind = el.kind ?? kindFromTypeId(el.type);
     if (kind !== 'uml') continue;
     if (el.type !== 'Unknown' && !allowedElements.has(el.type)) {
       issues.push(
@@ -37,7 +31,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
   }
 
   for (const rel of Object.values(model.relationships)) {
-    const kind = rel.kind ?? inferKindFromType(rel.type);
+    const kind = rel.kind ?? kindFromTypeId(rel.type);
     if (kind !== 'uml') continue;
     if (rel.type !== 'Unknown' && !allowedRelationships.has(rel.type)) {
       issues.push(
@@ -61,7 +55,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
       if (!n.elementId) continue;
       const el = model.elements[n.elementId];
       if (!el) continue;
-      const kind = el.kind ?? inferKindFromType(el.type);
+      const kind = el.kind ?? kindFromTypeId(el.type);
       if (kind !== 'uml') {
         issues.push(
           makeIssue(
@@ -82,7 +76,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
   const adj = new Map<string, Array<{ to: string; relId: string }>>();
   const umlClassifiers = new Set<string>();
   for (const el of Object.values(model.elements)) {
-    const kind = el.kind ?? inferKindFromType(el.type);
+    const kind = el.kind ?? kindFromTypeId(el.type);
     if (kind === 'uml' && UML_CLASSIFIER_TYPES.has(el.type)) umlClassifiers.add(el.id);
   }
 

@@ -5,6 +5,7 @@ import {
   ARCHIMATE_LAYERS,
   ELEMENT_TYPES,
   ELEMENT_TYPES_BY_LAYER,
+  kindFromTypeId,
   computeRelationshipTrace,
   getElementTypesForKind,
   getElementTypeLabel,
@@ -23,13 +24,6 @@ import { PropertyRow } from './editors/PropertyRow';
 
 type TraceDirection = 'outgoing' | 'incoming' | 'both';
 
-function inferKindFromType(type: string | undefined): 'archimate' | 'uml' | 'bpmn' {
-  const t = (type ?? '').trim();
-  if (t.startsWith('uml.')) return 'uml';
-  if (t.startsWith('bpmn.')) return 'bpmn';
-  return 'archimate';
-}
-
 type Props = {
   model: Model;
   elementId: string;
@@ -43,7 +37,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
   // after all hooks have been invoked.
   const el = model.elements[elementId];
   const hasElement = Boolean(el);
-  const kind: 'archimate' | 'uml' | 'bpmn' = hasElement ? (el!.kind ?? inferKindFromType(el!.type as unknown as string)) : 'archimate';
+  const kind: 'archimate' | 'uml' | 'bpmn' = hasElement ? (el!.kind ?? kindFromTypeId(el!.type as unknown as string)) : 'archimate';
   const safeLayer: ArchimateLayer = hasElement ? (el!.layer ?? ARCHIMATE_LAYERS[0]) : ARCHIMATE_LAYERS[0];
   const safeType: ElementType = hasElement ? el!.type : ('Unknown' as ElementType);
 
@@ -174,7 +168,7 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
               value={el.type}
               onChange={(e) => {
                 const nextType = e.target.value as ElementType;
-                const nextKind = inferKindFromType(nextType as unknown as string);
+                const nextKind = kindFromTypeId(nextType as unknown as string);
 
                 // Switching between notations should keep the model internally consistent.
                 if (nextKind !== 'archimate') {

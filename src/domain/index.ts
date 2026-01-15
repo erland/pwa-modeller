@@ -1,5 +1,6 @@
 export * from './types';
 export * from './id';
+export * from './kindFromTypeId';
 export * from './factories';
 export * from './validation';
 export * from './modelValidation';

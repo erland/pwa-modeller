@@ -1,23 +1,17 @@
 import type { Element, Model, Relationship } from './types';
+import { kindFromTypeId } from './kindFromTypeId';
 
 export type ValidationResult = {
   ok: boolean;
   errors: string[];
 };
 
-function inferKindFromType(type: string | undefined): 'archimate' | 'uml' | 'bpmn' {
-  const t = (type ?? '').trim();
-  if (t.startsWith('uml.')) return 'uml';
-  if (t.startsWith('bpmn.')) return 'bpmn';
-  return 'archimate';
-}
-
 export function validateElement(element: Element): ValidationResult {
   const errors: string[] = [];
   if (!element.id) errors.push('Element.id is required');
   if (!element.name || element.name.trim().length === 0) errors.push('Element.name must be non-empty');
   if (!element.type) errors.push('Element.type is required');
-  const kind = element.kind ?? inferKindFromType(element.type);
+  const kind = element.kind ?? kindFromTypeId(element.type);
   if (kind === 'archimate' && !element.layer) errors.push('Element.layer is required');
   return { ok: errors.length === 0, errors };
 }

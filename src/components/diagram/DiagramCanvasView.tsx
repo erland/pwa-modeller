@@ -1,9 +1,7 @@
 import type * as React from 'react';
-import { useMemo, useState } from 'react';
-import type { ElementType, Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
+import type { Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
 import type { Notation } from '../../notations';
 import { Dialog } from '../dialog/Dialog';
-import { CreateElementDialog } from '../model/navigator/dialogs/CreateElementDialog';
 
 import type { Selection } from '../model/selection';
 import type { Point } from './geometry';
@@ -11,6 +9,7 @@ import type { DiagramLinkDrag, DiagramNodeDragState } from './DiagramNode';
 import type { ConnectableRef } from './connectable';
 
 import type { GroupBoxDraft, ToolMode } from './hooks/useDiagramToolState';
+import { DiagramToolbar } from './DiagramToolbar';
 import { DiagramNodesLayer } from './layers/DiagramNodesLayer';
 import type { ConnectionRenderItem } from './layers/DiagramRelationshipsLayer';
 import { DiagramRelationshipsLayer } from './layers/DiagramRelationshipsLayer';
@@ -122,170 +121,28 @@ export function DiagramCanvasView({
   onAddAndJunction,
   onAddOrJunction,
 }: DiagramCanvasViewProps) {
-  const [umlPaletteDialog, setUmlPaletteDialog] = useState<{ initialTypeId: ElementType } | null>(null);
-
-  const rootFolderId = useMemo(() => {
-    // The model always has a root folder, but keep a defensive fallback.
-    return (
-      Object.values(model.folders).find((f) => f.kind === 'root')?.id ??
-      Object.values(model.folders)[0]?.id ??
-      ''
-    );
-  }, [model.folders]);
-
-  const paletteTargetFolderId = useMemo(() => {
-    if (!activeViewId) return rootFolderId;
-    return findFolderContainingView(model, activeViewId) ?? rootFolderId;
-  }, [activeViewId, findFolderContainingView, model, rootFolderId]);
-
   return (
     <div className="diagramWrap">
-      <div aria-label="Diagram toolbar" className="diagramToolbar">
-        <div className="diagramToolbarTools" role="group" aria-label="Diagram tools">
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'select' ? ' isActive' : '')}
-            onClick={() => setToolMode('select')}
-            disabled={!activeViewId}
-            title="Select tool"
-          >
-            Select
-          </button>
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'addNote' ? ' isActive' : '')}
-            onClick={() => setToolMode('addNote')}
-            disabled={!activeViewId}
-            title="Place a Note (click to drop)"
-          >
-            Note
-          </button>
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'addLabel' ? ' isActive' : '')}
-            onClick={() => setToolMode('addLabel')}
-            disabled={!activeViewId}
-            title="Place a Label (click to drop)"
-          >
-            Label
-          </button>
-
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'addDivider' ? ' isActive' : '')}
-            onClick={() => setToolMode('addDivider')}
-            disabled={!activeViewId}
-            title="Place a Divider/Separator (click to drop)"
-          >
-            Divider
-          </button>
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'addGroupBox' ? ' isActive' : '')}
-            onClick={() => setToolMode('addGroupBox')}
-            disabled={!activeViewId}
-            title="Place a Group box (drag to size)"
-          >
-            Group
-          </button>
-        </div>
-
-        {activeView?.kind === 'uml' ? (
-          <div className="diagramToolbarTools" role="group" aria-label="UML palette">
-            <button
-              type="button"
-              className="shellButton"
-              onClick={() => {
-                setToolMode('select');
-                setUmlPaletteDialog({ initialTypeId: 'uml.class' as ElementType });
-              }}
-              disabled={!activeViewId}
-              title="Place a UML Class (click to drop)"
-            >
-              Class
-            </button>
-            <button
-              type="button"
-              className="shellButton"
-              onClick={() => {
-                setToolMode('select');
-                setUmlPaletteDialog({ initialTypeId: 'uml.interface' as ElementType });
-              }}
-              disabled={!activeViewId}
-              title="Place a UML Interface (click to drop)"
-            >
-              Interface
-            </button>
-            <button
-              type="button"
-              className="shellButton"
-              onClick={() => {
-                setToolMode('select');
-                setUmlPaletteDialog({ initialTypeId: 'uml.enum' as ElementType });
-              }}
-              disabled={!activeViewId}
-              title="Place a UML Enum (click to drop)"
-            >
-              Enum
-            </button>
-            <button
-              type="button"
-              className="shellButton"
-              onClick={() => {
-                setToolMode('select');
-                setUmlPaletteDialog({ initialTypeId: 'uml.package' as ElementType });
-              }}
-              disabled={!activeViewId}
-              title="Place a UML Package (click to drop)"
-            >
-              Package
-            </button>
-            <button
-              type="button"
-              className="shellButton"
-              onClick={() => {
-                setToolMode('select');
-                setUmlPaletteDialog({ initialTypeId: 'uml.note' as ElementType });
-              }}
-              disabled={!activeViewId}
-              title="Place a UML Note (click to drop)"
-            >
-              UML Note
-            </button>
-          </div>
-        ) : null}
-
-        <div className="diagramToolbarButtons">
-          <button className="shellButton" type="button" onClick={zoomOut} aria-label="Zoom out">
-            −
-          </button>
-          <div className="diagramZoomLabel" aria-label="Zoom level">
-            {Math.round(zoom * 100)}%
-          </div>
-          <button className="shellButton" type="button" onClick={zoomIn} aria-label="Zoom in">
-            +
-          </button>
-          <button className="shellButton" type="button" onClick={zoomReset} aria-label="Reset zoom">
-            100%
-          </button>
-          <button className="shellButton" type="button" onClick={fitToView} aria-label="Fit to view" disabled={!activeView || nodes.length === 0}>
-            Fit
-          </button>
-          {activeView?.kind === 'archimate' ? (
-            <>
-              <button className="shellButton" type="button" disabled={!activeViewId} title="Add AND junction" onClick={onAddAndJunction}>
-                +AND
-              </button>
-              <button className="shellButton" type="button" disabled={!activeViewId} title="Add OR junction" onClick={onAddOrJunction}>
-                +OR
-              </button>
-            </>
-          ) : null}
-          <button className="shellButton" type="button" onClick={onExportImage} disabled={!canExportImage}>
-            Export as Image
-          </button>
-        </div>
-      </div>
+      <DiagramToolbar
+        model={model}
+        activeViewId={activeViewId}
+        activeView={activeView}
+        nodesCount={nodes.length}
+        toolMode={toolMode}
+        setToolMode={setToolMode}
+        zoom={zoom}
+        zoomIn={zoomIn}
+        zoomOut={zoomOut}
+        zoomReset={zoomReset}
+        fitToView={fitToView}
+        canExportImage={canExportImage}
+        onExportImage={onExportImage}
+        onAddAndJunction={onAddAndJunction}
+        onAddOrJunction={onAddOrJunction}
+        beginPlaceExistingElement={beginPlaceExistingElement}
+        findFolderContainingView={findFolderContainingView}
+        onSelect={onSelect}
+      />
 
       <div className="diagramCanvas">
         {views.length === 0 ? (
@@ -352,20 +209,6 @@ export function DiagramCanvasView({
           </div>
         )}
       </div>
-
-      {/* UML palette: create element first, then click to place in the view */}
-      <CreateElementDialog
-        isOpen={umlPaletteDialog !== null}
-        targetFolderId={paletteTargetFolderId}
-        kind="uml"
-        initialTypeId={umlPaletteDialog?.initialTypeId}
-        selectAfterCreate={false}
-        onCreated={(elementId) => {
-          beginPlaceExistingElement(elementId);
-        }}
-        onClose={() => setUmlPaletteDialog(null)}
-        onSelect={onSelect}
-      />
 
       {/* Relationship type picker shown after drag-drop */}
       <Dialog

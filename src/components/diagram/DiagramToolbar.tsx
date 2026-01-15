@@ -1,0 +1,146 @@
+import type { Model, View } from '../../domain';
+
+import type { Selection } from '../model/selection';
+
+import type { ToolMode } from './hooks/useDiagramToolState';
+
+import { ArchimateToolbar } from './toolbar/ArchimateToolbar';
+import { UmlToolbar } from './toolbar/UmlToolbar';
+
+export type DiagramToolbarProps = {
+  model: Model;
+  activeViewId: string | null;
+  activeView: View | null;
+
+  nodesCount: number;
+
+  toolMode: ToolMode;
+  setToolMode: (mode: ToolMode) => void;
+
+  zoom: number;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  zoomReset: () => void;
+  fitToView: () => void;
+
+  canExportImage: boolean;
+  onExportImage: () => void;
+  onAddAndJunction: () => void;
+  onAddOrJunction: () => void;
+
+  beginPlaceExistingElement: (elementId: string) => void;
+  findFolderContainingView: (m: Model, viewId: string) => string | undefined;
+  onSelect: (sel: Selection) => void;
+};
+
+export function DiagramToolbar({
+  model,
+  activeViewId,
+  activeView,
+  nodesCount,
+  toolMode,
+  setToolMode,
+  zoom,
+  zoomIn,
+  zoomOut,
+  zoomReset,
+  fitToView,
+  canExportImage,
+  onExportImage,
+  onAddAndJunction,
+  onAddOrJunction,
+  beginPlaceExistingElement,
+  findFolderContainingView,
+  onSelect,
+}: DiagramToolbarProps) {
+  const hasActiveView = Boolean(activeViewId && activeView);
+
+  return (
+    <>
+      <div aria-label="Diagram toolbar" className="diagramToolbar">
+        <div className="diagramToolbarTools" role="group" aria-label="Diagram tools">
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'select' ? ' isActive' : '')}
+            onClick={() => setToolMode('select')}
+            disabled={!hasActiveView}
+            title="Select tool"
+          >
+            Select
+          </button>
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'addNote' ? ' isActive' : '')}
+            onClick={() => setToolMode('addNote')}
+            disabled={!hasActiveView}
+            title="Place a Note (click to drop)"
+          >
+            Note
+          </button>
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'addLabel' ? ' isActive' : '')}
+            onClick={() => setToolMode('addLabel')}
+            disabled={!hasActiveView}
+            title="Place a Label (click to drop)"
+          >
+            Label
+          </button>
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'addDivider' ? ' isActive' : '')}
+            onClick={() => setToolMode('addDivider')}
+            disabled={!hasActiveView}
+            title="Place a Divider line (drag to size)"
+          >
+            Divider
+          </button>
+          <button
+            type="button"
+            className={'shellButton' + (toolMode === 'addGroupBox' ? ' isActive' : '')}
+            onClick={() => setToolMode('addGroupBox')}
+            disabled={!hasActiveView}
+            title="Place a Group box (drag to size)"
+          >
+            Group
+          </button>
+        </div>
+
+        <UmlToolbar
+          model={model}
+          activeViewId={activeViewId}
+          activeView={activeView}
+          hasActiveView={hasActiveView}
+          setToolMode={setToolMode}
+          beginPlaceExistingElement={beginPlaceExistingElement}
+          findFolderContainingView={findFolderContainingView}
+          onSelect={onSelect}
+        />
+
+        <div className="diagramToolbarTools" role="group" aria-label="Diagram view actions">
+          <button type="button" onClick={zoomIn} aria-label="Zoom in" disabled={!activeView}>
+            +
+          </button>
+          <span className="diagramToolbarZoom">{Math.round(zoom * 100)}%</span>
+          <button type="button" onClick={zoomOut} aria-label="Zoom out" disabled={!activeView}>
+            -
+          </button>
+          <button type="button" onClick={zoomReset} aria-label="Reset zoom" disabled={!activeView}>
+            100%
+          </button>
+          <button type="button" onClick={fitToView} aria-label="Fit to view" disabled={!activeView || nodesCount === 0}>
+            Fit
+          </button>
+
+          {activeView?.kind === 'archimate' ? (
+            <ArchimateToolbar hasActiveView={hasActiveView} onAddAndJunction={onAddAndJunction} onAddOrJunction={onAddOrJunction} />
+          ) : null}
+
+          <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>
+            Export as Image
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}

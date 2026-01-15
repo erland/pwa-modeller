@@ -1,19 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
-
-import type { ArchimateLayer, ElementType, FolderOption, Model, View, ViewNodeLayout } from '../../../../domain';
-import {
-  ARCHIMATE_LAYERS,
-  ELEMENT_TYPES,
-  ELEMENT_TYPES_BY_LAYER,
-  kindFromTypeId,
-  computeRelationshipTrace,
-  getElementTypesForKind,
-  getElementTypeLabel,
-} from '../../../../domain';
+import type { ElementType, FolderOption, Model, View, ViewNodeLayout } from '../../../../domain';
+import { kindFromTypeId, computeRelationshipTrace, getElementTypesForKind, getElementTypeLabel } from '../../../../domain';
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
+import { PropertiesPanelHost, type PropertiesSection } from './PropertiesPanelHost';
 import { findFolderContaining, getElementLabel, splitRelationshipsForElement } from '../utils';
 import { CreateRelationshipDialog } from '../../navigator/dialogs/CreateRelationshipDialog';
 import { NameEditorRow } from '../editors/NameEditorRow';
@@ -30,66 +21,32 @@ type Props = {
   actions: ModelActions;
   elementFolders: FolderOption[];
   onSelect?: (selection: Selection) => void;
-  /** Optional extra controls specific to a notation (e.g. ArchiMate layer, UML drill-down). */
-  extras?: ReactNode;
+  /** Notation-specific sections (rendered as-is). */
+  notationSections?: PropertiesSection[];
 };
 
-export function CommonElementProperties({ model, elementId, actions, elementFolders, onSelect, extras }: Props) {
+export function CommonElementProperties({ model, elementId, actions, elementFolders, onSelect, notationSections }: Props) {
   // Note: Avoid conditional hooks by allowing the component to render a fallback
   // after all hooks have been invoked.
   const el = model.elements[elementId];
   const hasElement = Boolean(el);
   const kind: 'archimate' | 'uml' | 'bpmn' = hasElement ? (el!.kind ?? kindFromTypeId(el!.type as unknown as string)) : 'archimate';
-  const safeLayer: ArchimateLayer = hasElement ? (el!.layer ?? ARCHIMATE_LAYERS[0]) : ARCHIMATE_LAYERS[0];
-  const safeType: ElementType = hasElement ? el!.type : ('Unknown' as ElementType);
+    const safeType: ElementType = hasElement ? (el!.type as ElementType) : ('Unknown' as ElementType);
 
   const [createRelationshipOpen, setCreateRelationshipOpen] = useState(false);
 
   const [traceDirection, setTraceDirection] = useState<TraceDirection>('both');
   const [traceDepth, setTraceDepth] = useState<number>(1);
-  // Keep this always false for now. If we decide to expose a UI toggle for "show all",
-  // we can re-introduce state here.
-  const showAllElementTypes = false;
 
-  const layerForElementType = useMemo(() => {
-    const m = new Map<ElementType, ArchimateLayer>();
-    for (const layer of ARCHIMATE_LAYERS) {
-      for (const t of ELEMENT_TYPES_BY_LAYER[layer] ?? []) {
-        m.set(t, layer);
-      }
-    }
-    return m;
-  }, []);
-
-  const kindTypes = useMemo<ElementType[]>(() => getElementTypesForKind(kind), [kind]);
-
-  const allowedTypesForLayer = useMemo<ElementType[]>(() => {
-    if (kind !== 'archimate') return kindTypes;
-    return ELEMENT_TYPES_BY_LAYER[safeLayer] ?? [];
-  }, [kind, kindTypes, safeLayer]);
-
-  const isTypeOutOfSync = kind === 'archimate' && hasElement && safeType !== 'Unknown' && !allowedTypesForLayer.includes(safeType);
+  const kindTypes = useMemo(() => getElementTypesForKind(kind), [kind]);
 
   const elementTypeOptions = useMemo<ElementType[]>(() => {
-    // For UML/BPMN we don't have layer-based filtering; just show the kind's catalog.
-    if (kind !== 'archimate') {
-      const base: ElementType[] = safeType === 'Unknown'
-        ? (['Unknown', ...kindTypes] as ElementType[])
-        : (kindTypes as ElementType[]);
-      return base.includes(safeType) ? base : ([safeType, ...base] as ElementType[]);
-    }
-
-    const allOptions: ElementType[] =
-      safeType === 'Unknown' ? (['Unknown', ...ELEMENT_TYPES] as ElementType[]) : (ELEMENT_TYPES as ElementType[]);
-
-    const filteredBase: ElementType[] =
-      safeType === 'Unknown' ? (['Unknown', ...allowedTypesForLayer] as ElementType[]) : allowedTypesForLayer;
-
-    const base = showAllElementTypes ? allOptions : filteredBase;
+    const base = kindTypes;
+    const withUnknown = safeType === 'Unknown' ? (['Unknown', ...base] as ElementType[]) : base;
 
     // Keep current value visible even if it is out-of-sync (e.g., imported data).
-    return base.includes(safeType) ? base : ([safeType, ...base] as ElementType[]);
-  }, [kind, kindTypes, safeType, allowedTypesForLayer, showAllElementTypes]);
+    return withUnknown.includes(safeType) ? withUnknown : ([safeType, ...withUnknown] as ElementType[]);
+  }, [kindTypes, safeType]);
 
   useEffect(() => {
     setTraceDirection('both');
@@ -150,37 +107,30 @@ export function CommonElementProperties({ model, elementId, actions, elementFold
           value={el.name}
           onChange={(next) => actions.updateElement(el.id, { name: next ?? '' })}
         />
-        <PropertyRow label="Type">
+                {kind !== 'archimate' ? (
+          <PropertyRow label="Type">
             <select
               className="selectInput"
-              aria-label="Element property type"
               value={el.type}
               onChange={(e) => {
                 const nextType = e.target.value as ElementType;
                 const nextKind = kindFromTypeId(nextType as unknown as string);
 
-                // Switching between notations should keep the model internally consistent.
-                if (nextKind !== 'archimate') {
+                // If switching between notations, keep the element consistent.
+                if (nextKind !== kind) {
                   actions.updateElement(el.id, { type: nextType, kind: nextKind, layer: undefined });
-                  return;
+                } else {
+                  actions.updateElement(el.id, { type: nextType });
                 }
-
-                // ArchiMate: keep layer+type in sync.
-                if (nextType !== 'Unknown') {
-                  const derivedLayer = layerForElementType.get(nextType);
-                  if (derivedLayer) {
-                    actions.updateElement(el.id, { type: nextType, kind: 'archimate', layer: derivedLayer });
-                    return;
-                  }
-                }
-                actions.updateElement(el.id, { type: nextType, kind: 'archimate' });
               }}
             >
               {elementTypeOptions.map((t) => {
-                const isCurrentInvalid = isTypeOutOfSync && t === el.type;
-                const derivedLayer = isCurrentInvalid ? layerForElementType.get(t) : undefined;
-                const pretty = getElementTypeLabel(t);
-                const label = isCurrentInvalid ? `⚠ ${t}${derivedLayer ? ` (${derivedLayer})` : ''}` : pretty;
+                const label =
+                  t === 'Unknown'
+                    ? el.unknownType?.name
+                      ? `Unknown: ${el.unknownType.name}`
+                      : 'Unknown'
+                    : getElementTypeLabel(t);
                 return (
                   <option key={t} value={t}>
                     {label}
@@ -188,35 +138,9 @@ export function CommonElementProperties({ model, elementId, actions, elementFold
                 );
               })}
             </select>
-        </PropertyRow>
-
-        {kind === 'archimate' && isTypeOutOfSync ? (
-          <div className="propertiesRow">
-            <div className="propertiesKey">Warning</div>
-            <div className="propertiesValue">
-              <div style={{ fontSize: 12, opacity: 0.85 }}>
-                This element&apos;s <strong>Type</strong> does not belong to its <strong>Layer</strong>. Select a Type (or
-                Layer) to re-sync. If you change Type, the Layer will update automatically.
-              </div>
-            </div>
-          </div>
+          </PropertyRow>
         ) : null}
 
-        {el.type === 'Unknown' ? (
-          <div className="propertiesRow">
-            <div className="propertiesKey">Original type</div>
-            <div className="propertiesValue" style={{ fontWeight: 400 }}>
-              <div style={{ opacity: 0.9 }}>
-                {el.unknownType?.ns ? `${el.unknownType.ns}:` : ''}
-                {el.unknownType?.name ?? 'Unknown'}
-              </div>
-              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                Map this element to a known type using the Type dropdown.
-              </div>
-            </div>
-          </div>
-        ) : null}
-        {extras}
 
         <DocumentationEditorRow
           label="Documentation"
@@ -242,7 +166,7 @@ export function CommonElementProperties({ model, elementId, actions, elementFold
         </PropertyRow>
       </div>
 
-      {extras}
+      {notationSections ? <PropertiesPanelHost sections={notationSections} /> : null}
 
       <ExternalIdsSection externalIds={el.externalIds} />
 

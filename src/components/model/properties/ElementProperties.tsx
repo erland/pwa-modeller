@@ -27,9 +27,16 @@ export function ElementProperties({ model, elementId, actions, elementFolders, o
       actions={actions}
       elementFolders={elementFolders}
       onSelect={onSelect}
-      extras={kind === 'archimate' ? (
-        <ArchimateElementPropertiesExtras model={model} element={el} actions={actions} onSelect={onSelect} />
-      ) : null}
+      notationSections={
+        kind === 'archimate'
+          ? [
+              {
+                key: 'archimate',
+                content: <ArchimateElementPropertiesExtras model={model} element={el} actions={actions} onSelect={onSelect} />
+              }
+            ]
+          : undefined
+      }
     />
   );
 }

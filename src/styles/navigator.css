@@ -40,6 +40,7 @@
   min-height: 0;
   overflow: auto;
   padding-bottom: 10px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .navEmpty {

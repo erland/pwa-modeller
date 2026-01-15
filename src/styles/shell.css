@@ -7,8 +7,21 @@
    The shell is intentionally simple and CSS-only.
 */
 
+
+html,
+body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  overflow: hidden;
+}
+
 .shell {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   max-width: 100%;
@@ -188,6 +201,9 @@
   grid-template-columns: 1fr;
   gap: 12px;
   padding: 12px;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 /* Docked layout: control which sidebars consume space */
@@ -294,6 +310,9 @@
 .shellSidebarContent {
   padding: 10px 12px;
   overflow: auto;
+  flex: 1;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .shellMain {
@@ -473,6 +492,7 @@
   border: 1px dashed var(--border-2);
   background: var(--surface-1);
   min-height: 420px;
+  overscroll-behavior: contain;
 }
 
 .diagramViewport.isDropTarget {
@@ -499,6 +519,7 @@
     transparent 1px,
     transparent 24px
   );
+  -webkit-touch-callout: none;
 }
 
 .diagramRelationships {
@@ -563,6 +584,8 @@
   color: rgba(0, 0, 0, 0.88);
   user-select: none;
   cursor: grab;
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .diagramConnectorNode {
@@ -576,6 +599,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .diagramConnectorShape {
@@ -604,6 +629,8 @@
   user-select: none;
   cursor: grab;
   overflow: hidden;
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .diagramViewObjectNode--note {

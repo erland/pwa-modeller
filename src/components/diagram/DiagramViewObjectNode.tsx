@@ -61,6 +61,10 @@ export function DiagramViewObjectNode({ node: n, object: obj, activeViewId, isSe
         onSelect({ kind: 'viewObject', viewId: activeViewId, objectId: obj.id });
       }}
       onPointerDown={(e) => {
+        if (e.pointerType !== 'mouse') {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         e.currentTarget.setPointerCapture(e.pointerId);
         onBeginNodeDrag({
           viewId: activeViewId,

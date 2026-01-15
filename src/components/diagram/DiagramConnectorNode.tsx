@@ -72,6 +72,10 @@ export function DiagramConnectorNode({
       }}
       onPointerDown={(e) => {
         if (linkDrag) return;
+        if (e.pointerType !== 'mouse') {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         e.currentTarget.setPointerCapture(e.pointerId);
         onBeginNodeDrag({
           viewId: activeViewId,

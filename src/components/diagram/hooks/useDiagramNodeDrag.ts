@@ -14,6 +14,8 @@ export function useDiagramNodeDrag(zoom: number) {
       const d = dragRef.current;
       if (!d) return;
 
+      // Prevent iOS Safari from scrolling/dragging the page while we drag a node.
+      if (e.pointerType !== 'mouse') e.preventDefault();
       const dx = (e.clientX - d.startX) / zoom;
       const dy = (e.clientY - d.startY) / zoom;
 

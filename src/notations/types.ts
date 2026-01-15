@@ -56,6 +56,28 @@ export type Notation = {
     mode?: RelationshipValidationMode;
   }) => GuardResult;
 
+  /**
+   * Optional hook to lazily load/prepare notation-specific validation data.
+   *
+   * Example: ArchiMate strict relationship validation relies on a relationship matrix
+   * that can be loaded from a bundled XML table.
+   */
+  prepareRelationshipValidation?: (mode: RelationshipValidationMode) => void | Promise<void>;
+
+  /**
+   * Optional helper to infer element metadata required by factories.
+   *
+   * Example: ArchiMate elements require a layer, which can be derived from the element type.
+   */
+  inferElementLayer?: (elementType: string) => string | undefined;
+
+
+  /** Optional: some notations (e.g. ArchiMate) expose layers for element creation dialogs. */
+  getElementLayerOptions?: () => TypeOption[];
+
+  /** Optional: get element type options filtered by a selected layer. */
+  getElementTypeOptionsForLayer?: (layerId: string) => TypeOption[];
+
   // ------------------------------
   // Notation plugin contract v1
   // ------------------------------

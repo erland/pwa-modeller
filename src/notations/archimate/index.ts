@@ -2,13 +2,15 @@ import * as React from 'react';
 
 import type { ArchimateLayer, ElementType, RelationshipType, RelationshipValidationMode } from '../../domain';
 import {
+  ARCHIMATE_LAYERS,
   ELEMENT_TYPES,
   ELEMENT_TYPES_BY_LAYER,
   RELATIONSHIP_TYPES,
+  getElementTypeLabel,
   getElementTypeOptionsForKind,
   getRelationshipTypeOptionsForKind,
 } from '../../domain';
-import { validateRelationship } from '../../domain/config/archimatePalette';
+import { initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../domain/config/archimatePalette';
 import { validateArchimateRelationshipRules } from '../../domain/validation/archimate';
 
 import { ArchimateSymbol } from '../../components/diagram/archimateSymbols';
@@ -93,6 +95,25 @@ export const archimateNotation: Notation = {
     const m: RelationshipValidationMode = (mode ?? 'minimal') as RelationshipValidationMode;
     const res = validateRelationship(s, t, rt, m);
     return res.allowed ? { allowed: true } : { allowed: false, reason: res.reason };
+  },
+
+  prepareRelationshipValidation: (mode) => {
+    if (mode === 'minimal') return;
+    // Best-effort: if this fails (e.g., tests/Node), the validator will fall back to minimal rules.
+    void initRelationshipValidationMatrixFromBundledTable();
+  },
+
+  inferElementLayer: (elementType) => {
+    // ArchiMate elements require a layer. Derive it from the type.
+    return (ELEMENT_TYPE_TO_LAYER[elementType as ElementType] ?? undefined) as unknown as string | undefined;
+  },
+
+  getElementLayerOptions: () => ARCHIMATE_LAYERS.map((l) => ({ id: l, label: l })),
+
+  getElementTypeOptionsForLayer: (layerId) => {
+    const layer = layerId as ArchimateLayer;
+    const types = ELEMENT_TYPES_BY_LAYER[layer] ?? [];
+    return types.map((t) => ({ id: t, label: getElementTypeLabel(t) }));
   },
 
   // ------------------------------

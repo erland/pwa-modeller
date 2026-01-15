@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { ArchimateLayer, ElementType, ModelKind, TypeOption } from '../../../../domain';
-import {
-  ARCHIMATE_LAYERS,
-  ELEMENT_TYPES_BY_LAYER,
-  createElement,
-  getElementTypeOptionsForKind
-} from '../../../../domain';
+import type { ArchimateLayer, ElementType, ModelKind } from '../../../../domain';
+import { createElement } from '../../../../domain';
+import { getNotation } from '../../../../notations';
 import { modelStore } from '../../../../store';
 import { Dialog } from '../../../dialog/Dialog';
 import type { Selection } from '../../selection';
@@ -42,20 +38,40 @@ type Props = {
   selectAfterCreate?: boolean;
 };
 
-const DEFAULT_ARCHIMATE_LAYER: ArchimateLayer = ARCHIMATE_LAYERS[1] ?? 'Business';
-
-function defaultArchimateTypeForLayer(layer: ArchimateLayer): ElementType {
-  const opts = ELEMENT_TYPES_BY_LAYER[layer] ?? [];
-  return (opts[0] ?? 'BusinessActor') as ElementType;
+function coerceElementType(id: string | undefined): ElementType {
+  return (id ?? 'BusinessActor') as ElementType;
 }
 
-function computeDefaultType(kind: ModelKind, initialTypeId: ElementType | undefined, layer: ArchimateLayer): ElementType {
-  if (kind === 'uml') {
-    if (initialTypeId?.startsWith('uml.')) return initialTypeId;
-    return 'uml.class';
+function computeDefaultLayer(kind: ModelKind, initialTypeId: ElementType | undefined): string | undefined {
+  const notation = getNotation(kind);
+  const layers = notation.getElementLayerOptions?.() ?? [];
+  if (layers.length === 0) return undefined;
+
+  // If an initial type is provided and the notation can infer a layer, prefer that.
+  if (initialTypeId && notation.inferElementLayer) {
+    const inferred = notation.inferElementLayer(initialTypeId as unknown as string);
+    if (inferred && layers.some((l) => l.id === inferred)) return inferred;
   }
-  // TODO: BPMN
-  return defaultArchimateTypeForLayer(layer);
+
+  return layers[0]?.id;
+}
+
+function computeDefaultType(kind: ModelKind, initialTypeId: ElementType | undefined, layerId: string | undefined): ElementType {
+  const notation = getNotation(kind);
+
+  const opts = (layerId && notation.getElementTypeOptionsForLayer
+    ? notation.getElementTypeOptionsForLayer(layerId)
+    : notation.getElementTypeOptions())
+    .map((o) => o.id);
+
+  if (initialTypeId && opts.includes(initialTypeId)) return initialTypeId;
+
+  // Prefer a stable default for UML.
+  if (kind === 'uml') {
+    return coerceElementType(opts.includes('uml.class') ? 'uml.class' : opts[0]);
+  }
+
+  return coerceElementType(opts[0]);
 }
 
 export function CreateElementDialog({
@@ -66,39 +82,44 @@ export function CreateElementDialog({
   kind,
   initialTypeId,
   onCreated,
-  selectAfterCreate
+  selectAfterCreate,
 }: Props) {
   const effectiveKind: ModelKind = kind ?? 'archimate';
+  const notation = useMemo(() => getNotation(effectiveKind), [effectiveKind]);
+
+  const layerOptions = useMemo(() => notation.getElementLayerOptions?.() ?? null, [notation]);
 
   const [nameDraft, setNameDraft] = useState('');
-  const [layerDraft, setLayerDraft] = useState<ArchimateLayer>(DEFAULT_ARCHIMATE_LAYER);
+  const [layerDraft, setLayerDraft] = useState<string | undefined>(() => computeDefaultLayer(effectiveKind, initialTypeId));
   const [typeDraft, setTypeDraft] = useState<ElementType>(() =>
-    computeDefaultType(effectiveKind, initialTypeId, DEFAULT_ARCHIMATE_LAYER)
+    computeDefaultType(effectiveKind, initialTypeId, computeDefaultLayer(effectiveKind, initialTypeId)),
   );
 
   // Reset drafts when opening (and when kind/initial type changes while open).
   useEffect(() => {
     if (!isOpen) return;
+    const nextLayer = computeDefaultLayer(effectiveKind, initialTypeId);
     setNameDraft('');
-    setLayerDraft(DEFAULT_ARCHIMATE_LAYER);
-    setTypeDraft(computeDefaultType(effectiveKind, initialTypeId, DEFAULT_ARCHIMATE_LAYER));
+    setLayerDraft(nextLayer);
+    setTypeDraft(computeDefaultType(effectiveKind, initialTypeId, nextLayer));
   }, [isOpen, effectiveKind, initialTypeId]);
 
-  // Keep element type selection valid when layer changes (ArchiMate only).
-  useEffect(() => {
-    if (effectiveKind !== 'archimate') return;
-    const opts = ELEMENT_TYPES_BY_LAYER[layerDraft] ?? [];
-    if (opts.length === 0) return;
-    if (!opts.includes(typeDraft)) setTypeDraft(opts[0] as ElementType);
-  }, [effectiveKind, layerDraft, typeDraft]);
+  const typeOptions = useMemo(() => {
+    const opts = layerDraft && notation.getElementTypeOptionsForLayer
+      ? notation.getElementTypeOptionsForLayer(layerDraft)
+      : notation.getElementTypeOptions();
+    return opts as Array<{ id: ElementType; label: string }>;
+  }, [notation, layerDraft]);
 
-  const typeOptions = useMemo<TypeOption<ElementType>[]>(() => {
-    if (effectiveKind === 'archimate') {
-      const opts = (ELEMENT_TYPES_BY_LAYER[layerDraft] ?? []) as ElementType[];
-      return opts.map((id) => ({ id, label: id }));
+  // If the layer changes and the current type no longer exists, snap to the first type in that layer.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (typeOptions.length === 0) return;
+    const ids = new Set(typeOptions.map((o) => o.id));
+    if (!ids.has(typeDraft)) {
+      setTypeDraft(typeOptions[0].id);
     }
-    return getElementTypeOptionsForKind(effectiveKind);
-  }, [effectiveKind, layerDraft]);
+  }, [isOpen, typeOptions, typeDraft]);
 
   const canCreate = nameDraft.trim().length > 0;
 
@@ -108,15 +129,13 @@ export function CreateElementDialog({
     const created = createElement({
       name: nameDraft.trim(),
       kind: effectiveKind,
-      layer: effectiveKind === 'archimate' ? layerDraft : undefined,
-      type: typeDraft
+      layer: effectiveKind === 'archimate' ? (layerDraft as ArchimateLayer | undefined) : undefined,
+      type: typeDraft,
     });
 
     modelStore.addElement(created, targetFolderId ?? undefined);
 
-    // Notify callers (e.g., palette flows) before we close/select.
     onCreated?.(created.id);
-
     onClose();
     if (selectAfterCreate !== false) {
       onSelect({ kind: 'element', elementId: created.id });
@@ -158,19 +177,19 @@ export function CreateElementDialog({
           </div>
         </div>
 
-        {effectiveKind === 'archimate' ? (
+        {layerOptions && layerOptions.length > 0 ? (
           <div className="propertiesRow">
             <div className="propertiesKey">Layer</div>
             <div className="propertiesValue">
               <select
                 className="selectInput"
                 aria-label="Layer"
-                value={layerDraft}
-                onChange={(e) => setLayerDraft(e.target.value as ArchimateLayer)}
+                value={layerDraft ?? layerOptions[0].id}
+                onChange={(e) => setLayerDraft(e.target.value)}
               >
-                {ARCHIMATE_LAYERS.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
+                {layerOptions.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
                   </option>
                 ))}
               </select>

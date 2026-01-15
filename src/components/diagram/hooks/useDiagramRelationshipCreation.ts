@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Model, RelationshipType } from '../../../domain';
-import { createRelationship, getRelationshipTypesForKind, getViewpointById } from '../../../domain';
-import { initRelationshipValidationMatrixFromBundledTable } from '../../../domain/config/archimatePalette';
+import { createRelationship, getViewpointById } from '../../../domain';
 import { getNotation } from '../../../notations';
 
 import { modelStore, useModelStore } from '../../../store';
@@ -30,13 +29,22 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
 
   const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
 
-  const [matrixLoadTick, setMatrixLoadTick] = useState(0);
+  const [validationDataTick, setValidationDataTick] = useState(0);
   useEffect(() => {
     if (relationshipValidationMode === 'minimal') return;
     let cancelled = false;
-    void initRelationshipValidationMatrixFromBundledTable().then(() => {
-      if (!cancelled) setMatrixLoadTick((t) => t + 1);
-    });
+    // Best-effort: allow notations to lazily load rule tables. For ArchiMate,
+    // this enables strict relationship validation via a bundled XML matrix.
+    const arch = getNotation('archimate');
+    const p = arch.prepareRelationshipValidation?.(relationshipValidationMode);
+    if (p && typeof (p as Promise<void>).then === 'function') {
+      void (p as Promise<void>).then(() => {
+        if (!cancelled) setValidationDataTick((t) => t + 1);
+      });
+    } else {
+      // Even if it is synchronous, bump a tick so dependent memos can recompute.
+      setValidationDataTick((t) => t + 1);
+    }
     return () => {
       cancelled = true;
     };
@@ -106,9 +114,11 @@ function isRelTypeForViewKind(kind: string | undefined, t: RelationshipType): bo
 }
 
 const pendingRelTypeOptions = useMemo(() => {
-  // Dependency tick to recompute when the relationship matrix loads/changes.
-  void matrixLoadTick;
-  if (!model || !pendingCreateRel) return getRelationshipTypesForKind('archimate');
+  // Dependency tick to recompute when validation data loads/changes.
+  void validationDataTick;
+  if (!model || !pendingCreateRel) {
+    return getNotation('archimate').getRelationshipTypeOptions().map((o) => o.id) as RelationshipType[];
+  }
 
   const { sourceRef, targetRef } = pendingCreateRel;
 
@@ -116,23 +126,23 @@ const pendingRelTypeOptions = useMemo(() => {
   const viewKind = view?.kind ?? 'archimate';
 
   // Start with the "best effort" allowed list (notation kind aware).
-  let allowed: RelationshipType[] = getRelationshipTypesForKind(viewKind);
+  const notation = getNotation(viewKind);
+  const allTypes = notation.getRelationshipTypeOptions().map((o) => o.id) as RelationshipType[];
+  let allowed: RelationshipType[] = allTypes;
 
   // If both endpoints are elements, filter by notation rules (mode-aware).
   if (sourceRef.kind === 'element' && targetRef.kind === 'element') {
     const sourceType = model.elements[sourceRef.id]?.type;
     const targetType = model.elements[targetRef.id]?.type;
     if (sourceType && targetType) {
-      const notation = getNotation(viewKind);
-      allowed = (getRelationshipTypesForKind(viewKind) as RelationshipType[]).filter((t) =>
+      allowed = allTypes.filter((t) =>
         notation.canCreateRelationship({ relationshipType: t, sourceType, targetType, mode: relationshipValidationMode }).allowed
       );
     }
   } else {
     // Otherwise, fall back to viewpoint guidance (connectors etc.).
     const vp = view ? getViewpointById(view.viewpointId) : undefined;
-    const fallback = getRelationshipTypesForKind(viewKind);
-    allowed = (vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : fallback) as RelationshipType[];
+    allowed = (vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : allTypes) as RelationshipType[];
   }
 
   if (!showAllPendingRelTypes) return allowed;
@@ -146,14 +156,14 @@ const pendingRelTypeOptions = useMemo(() => {
       out.push(rt);
     }
   }
-  for (const rt of getRelationshipTypesForKind(viewKind) as RelationshipType[]) {
+  for (const rt of allTypes) {
     if (!seen.has(rt)) {
       seen.add(rt);
       out.push(rt);
     }
   }
   return out;
-}, [model, pendingCreateRel, relationshipValidationMode, matrixLoadTick, showAllPendingRelTypes]);
+}, [model, pendingCreateRel, relationshipValidationMode, validationDataTick, showAllPendingRelTypes]);
 
   // When the dialog opens, default the type to last used (if allowed), otherwise first option.
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Model, RelationshipType } from '../../../../domain';
-import { RELATIONSHIP_TYPES, createRelationship } from '../../../../domain';
+import { RELATIONSHIP_TYPES, createRelationship, getRelationshipTypeLabel } from '../../../../domain';
 import { initRelationshipValidationMatrixFromBundledTable } from '../../../../domain/config/archimatePalette';
 import { getNotation } from '../../../../notations';
 import { modelStore } from '../../../../store';
@@ -135,7 +135,7 @@ const [nameDraft, setNameDraft] = useState('');
             >
               {allowedRelationshipTypes.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {getRelationshipTypeLabel(t)}
                 </option>
               ))}
             </select>

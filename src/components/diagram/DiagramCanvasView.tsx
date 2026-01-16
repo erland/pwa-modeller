@@ -1,5 +1,6 @@
 import type * as React from 'react';
 import type { Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
+import { getRelationshipTypeLabel } from '../../domain';
 import type { Notation } from '../../notations';
 import { Dialog } from '../dialog/Dialog';
 
@@ -254,7 +255,7 @@ export function DiagramCanvasView({
             >
               {rel.pendingRelTypeOptions.map((rt) => (
                 <option key={rt} value={rt}>
-                  {rt}
+                  {getRelationshipTypeLabel(rt)}
                 </option>
               ))}
             </select>

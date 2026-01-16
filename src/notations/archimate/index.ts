@@ -10,6 +10,7 @@ import {
   getElementTypeOptionsForKind,
   getRelationshipTypeOptionsForKind,
 } from '../../domain';
+import { kindsPresent } from '../../domain/validation/kindsPresent';
 import { initRelationshipValidationMatrixFromBundledTable, validateRelationship } from '../../domain/config/archimatePalette';
 import { validateArchimateRelationshipRules } from '../../domain/validation/archimate';
 
@@ -139,6 +140,9 @@ export const archimateNotation: Notation = {
   },
 
   validateNotation: ({ model, relationshipValidationMode }) => {
+    // Self-contained: if there are no ArchiMate entities in the model, don't emit issues.
+    // (This prevents cross-notation bleed in mixed-kind workspaces.)
+    if (!kindsPresent(model).has('archimate')) return [];
     return validateArchimateRelationshipRules(model, relationshipValidationMode);
   },
 };

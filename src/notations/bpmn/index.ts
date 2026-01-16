@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import type { RelationshipStyle } from '../../diagram/relationships/style';
 import { getElementTypeOptionsForKind, getRelationshipTypeOptionsForKind } from '../../domain';
+import { kindsPresent } from '../../domain/validation/kindsPresent';
 import { validateBpmnBasics } from '../../domain/validation/bpmn';
 
 import { renderBpmnNodeContent } from './renderNodeContent';
@@ -102,6 +103,8 @@ export const bpmnNotation: Notation = {
   },
 
   validateNotation: ({ model }) => {
+    // Self-contained: only validate when BPMN content is present.
+    if (!kindsPresent(model).has('bpmn')) return [];
     return validateBpmnBasics(model);
   },
 };

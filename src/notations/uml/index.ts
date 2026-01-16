@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import type { RelationshipStyle } from '../../diagram/relationships/style';
 import { getElementTypeOptionsForKind, getRelationshipTypeOptionsForKind } from '../../domain';
+import { kindsPresent } from '../../domain/validation/kindsPresent';
 import { validateUmlBasics } from '../../domain/validation/uml';
 
 import type { Notation } from '../types';
@@ -125,6 +126,8 @@ export const umlNotation: Notation = {
   },
 
   validateNotation: ({ model }) => {
+    // Self-contained: only validate when UML content is present.
+    if (!kindsPresent(model).has('uml')) return [];
     return validateUmlBasics(model);
   },
 };

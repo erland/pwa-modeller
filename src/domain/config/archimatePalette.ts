@@ -1,6 +1,4 @@
 import type { ArchimateLayer, ElementType, RelationshipType } from '../types';
-import type { RelationshipValidationMode } from '../relationshipValidationMode';
-import { includeDerivedRelationships } from '../relationshipValidationMode';
 import type { RelationshipMatrix } from '../validation/relationshipMatrix';
 import { getAllowedRelationshipTypesFromMatrix, parseRelationshipTableXml, validateRelationshipByMatrix } from '../validation/relationshipMatrix';
 /**
@@ -84,7 +82,7 @@ export const RELATIONSHIP_TYPES: RelationshipType[] = [
 ];
 
 // ------------------------------
-// Relationship rules (minimal)
+// Relationship rules (fallback heuristic)
 // ------------------------------
 
 const SERVICE_TYPES: Set<ElementType> = new Set(['BusinessService', 'ApplicationService', 'TechnologyService']);
@@ -156,7 +154,7 @@ function validateRelationshipMinimal(
     if (TECHNOLOGY_ACTIVE.has(sourceType) && targetType === 'TechnologyService') return { allowed: true };
     return {
       allowed: false,
-      reason: 'Assignment is only allowed from an active structure element to a behavior element (minimal rule set).'
+      reason: 'Assignment is only allowed from an active structure element to a behavior element (fallback rule set).'
     };
   }
 
@@ -186,7 +184,7 @@ function validateRelationshipMinimal(
       'ValueStream'
     ]);
     if (!behaviorish.has(sourceType) || !behaviorish.has(targetType)) {
-      return { allowed: false, reason: 'Triggering is only allowed between behavior-like elements (minimal rule set).' };
+      return { allowed: false, reason: 'Triggering is only allowed between behavior-like elements (fallback rule set).' };
     }
     return { allowed: true };
   }
@@ -200,7 +198,7 @@ function validateRelationshipMinimal(
       ...Array.from(SERVICE_TYPES)
     ]);
     if (!flowish.has(sourceType) || !flowish.has(targetType)) {
-      return { allowed: false, reason: 'Flow is only allowed between behavior/service/component elements (minimal rule set).' };
+      return { allowed: false, reason: 'Flow is only allowed between behavior/service/component elements (fallback rule set).' };
     }
     return { allowed: true };
   }
@@ -208,7 +206,7 @@ function validateRelationshipMinimal(
   if (relationshipType === 'Influence') {
     const influencers = new Set<ElementType>(['Stakeholder', 'Driver', 'Assessment', 'Constraint', 'Principle', 'Value', 'Meaning', 'Goal', 'Requirement', 'Outcome', 'CourseOfAction', 'ValueStream']);
     if (!influencers.has(sourceType)) {
-      return { allowed: false, reason: 'Influence must originate from a motivation/strategy element (minimal rule set).' };
+      return { allowed: false, reason: 'Influence must originate from a motivation/strategy element (fallback rule set).' };
     }
     return { allowed: true };
   }
@@ -222,11 +220,13 @@ function validateRelationshipMinimal(
   return { allowed: true };
 }
 /**
- * Relationship validation mode switch.
+ * Strict relationship validation.
  *
- * - 'minimal': current heuristic rules (fast, permissive defaults)
- * - 'full': uses the ArchiMate relationship table matrix (must be initialized)
- * - 'full_derived': like 'full', but also allows derived relationships when present in the matrix
+ * We validate against the ArchiMate relationship table matrix when it has been loaded.
+ * If the matrix isn't available (e.g. in some test/runtime contexts), we fall back to
+ * a small heuristic "minimal" rule set.
+ *
+ * Derived relationships from the table are always included when present.
  */
 let _relationshipMatrix: RelationshipMatrix | null = null;
 
@@ -264,23 +264,22 @@ export function initRelationshipValidationMatrixFromXml(xmlText: string): Relati
   return m;
 }
 
+
 export function validateRelationship(
   sourceType: ElementType,
   targetType: ElementType,
-  relationshipType: RelationshipType,
-  mode: RelationshipValidationMode = 'minimal'
+  relationshipType: RelationshipType
 ): RelationshipValidation {
-  if (mode === 'minimal') {
-    return validateRelationshipMinimal(sourceType, targetType, relationshipType);
-  }
-
   const matrix = ensureRelationshipMatrix();
   if (!matrix) {
+    // Fallback when the matrix is not available (e.g. Node/Jest or early app startup).
     return validateRelationshipMinimal(sourceType, targetType, relationshipType);
   }
 
-  const includeDerived = includeDerivedRelationships(mode);
-  const res = validateRelationshipByMatrix(matrix, sourceType, targetType, relationshipType, { includeDerived });
+  const res = validateRelationshipByMatrix(matrix, sourceType, targetType, relationshipType, {
+    includeDerived: true
+  });
+
   // The relationship table is largely about *compatibility* between concepts, but a few
   // relationships have directional semantics that we want to keep strict.
   //
@@ -291,35 +290,25 @@ export function validateRelationship(
   }
 
   if (res.allowed) return { allowed: true };
-
   return { allowed: false, reason: res.reason };
 }
+
 export function isRelationshipAllowed(
   sourceType: ElementType,
   targetType: ElementType,
-  relationshipType: RelationshipType,
-  mode: RelationshipValidationMode = 'minimal'
+  relationshipType: RelationshipType
 ): boolean {
-  return validateRelationship(sourceType, targetType, relationshipType, mode).allowed;
+  return validateRelationship(sourceType, targetType, relationshipType).allowed;
 }
 
-export function getAllowedRelationshipTypes(
-  sourceType: ElementType,
-  targetType: ElementType,
-  mode: RelationshipValidationMode = 'minimal'
-): RelationshipType[] {
-  if (mode === 'minimal') {
-    return RELATIONSHIP_TYPES.filter((t) => isRelationshipAllowed(sourceType, targetType, t, 'minimal'));
-  }
-
+export function getAllowedRelationshipTypes(sourceType: ElementType, targetType: ElementType): RelationshipType[] {
   const matrix = ensureRelationshipMatrix();
   if (!matrix) {
-    return RELATIONSHIP_TYPES.filter((t) => isRelationshipAllowed(sourceType, targetType, t, 'minimal'));
+    return RELATIONSHIP_TYPES.filter((t) => validateRelationshipMinimal(sourceType, targetType, t).allowed);
   }
 
-  const includeDerived = includeDerivedRelationships(mode);
-  const allowed = getAllowedRelationshipTypesFromMatrix(matrix, sourceType, targetType, { includeDerived });
-  // Keep deterministic ordering according to our canonical list.
+  const allowed = getAllowedRelationshipTypesFromMatrix(matrix, sourceType, targetType, { includeDerived: true });
   const allowedSet = new Set<RelationshipType>(allowed);
+  // Keep deterministic ordering according to our canonical list.
   return RELATIONSHIP_TYPES.filter((t) => allowedSet.has(t));
 }

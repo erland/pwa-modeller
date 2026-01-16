@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { ArchimateLayer, ElementType, RelationshipType, RelationshipValidationMode } from '../../domain';
+import type { ArchimateLayer, ElementType, RelationshipType } from '../../domain';
 import {
   ARCHIMATE_LAYERS,
   ELEMENT_TYPES,
@@ -82,7 +82,7 @@ export const archimateNotation: Notation = {
     return isElementType(nodeType) || nodeType === 'Unknown';
   },
 
-  canCreateRelationship: ({ relationshipType, sourceType, targetType, mode }) => {
+  canCreateRelationship: ({ relationshipType, sourceType, targetType }) => {
     // If endpoints aren't both semantic element types (e.g. connector endpoints),
     // treat as allowed and let higher-level UI rules/viewpoint guidance handle it.
     if (!sourceType || !targetType) return { allowed: true };
@@ -93,14 +93,12 @@ export const archimateNotation: Notation = {
     const s = sourceType;
     const t = targetType;
     const rt = relationshipType;
-    const m: RelationshipValidationMode = (mode ?? 'minimal') as RelationshipValidationMode;
-    const res = validateRelationship(s, t, rt, m);
+    const res = validateRelationship(s, t, rt);
     return res.allowed ? { allowed: true } : { allowed: false, reason: res.reason };
   },
 
-  prepareRelationshipValidation: (mode) => {
-    if (mode === 'minimal') return;
-    // Best-effort: if this fails (e.g., tests/Node), the validator will fall back to minimal rules.
+  prepareRelationshipValidation: () => {
+    // Best-effort: if this fails (e.g., tests/Node), the validator will fall back to heuristic rules.
     void initRelationshipValidationMatrixFromBundledTable();
   },
 
@@ -139,10 +137,10 @@ export const archimateNotation: Notation = {
     return React.createElement(ArchimateRelationshipProperties, { model, relationshipId, viewId, actions, onSelect });
   },
 
-  validateNotation: ({ model, relationshipValidationMode }) => {
+  validateNotation: ({ model }) => {
     // Self-contained: if there are no ArchiMate entities in the model, don't emit issues.
     // (This prevents cross-notation bleed in mixed-kind workspaces.)
     if (!kindsPresent(model).has('archimate')) return [];
-    return validateArchimateRelationshipRules(model, relationshipValidationMode);
+    return validateArchimateRelationshipRules(model);
   },
 };

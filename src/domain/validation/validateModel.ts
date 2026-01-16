@@ -1,5 +1,4 @@
 import type { Model } from '../types';
-import { STRONGEST_RELATIONSHIP_VALIDATION_MODE } from '../relationshipValidationMode';
 import type { ValidationIssue } from './types';
 import { validateCommonModel } from './validateCommonModel';
 import { kindsPresent } from './kindsPresent';
@@ -12,12 +11,7 @@ export function validateModel(model: Model): ValidationIssue[] {
 
   for (const kind of kindsPresent(model)) {
     const notation = getNotationValidator(kind);
-    issues.push(
-      ...notation.validateNotation({
-        model,
-        relationshipValidationMode: STRONGEST_RELATIONSHIP_VALIDATION_MODE,
-      })
-    );
+    issues.push(...notation.validateNotation(model));
   }
 
   // Keep deterministic ordering for tests/UI.

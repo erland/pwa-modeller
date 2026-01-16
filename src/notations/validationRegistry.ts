@@ -1,5 +1,4 @@
 import type { Model, ModelKind } from '../domain/types';
-import type { RelationshipValidationMode } from '../domain/relationshipValidationMode';
 import type { ValidationIssue } from '../domain/validation/types';
 
 import { validateArchimateRelationshipRules } from '../domain/validation/archimate';
@@ -15,26 +14,22 @@ import { validateUmlBasics } from '../domain/validation/uml';
 
 export type NotationValidator = {
   kind: ModelKind;
-  validateNotation: (args: { model: Model; relationshipValidationMode: RelationshipValidationMode }) => ValidationIssue[];
+  validateNotation: (model: Model) => ValidationIssue[];
 };
 
 const archimateValidator: NotationValidator = {
   kind: 'archimate',
-  validateNotation: ({ model, relationshipValidationMode }) =>
-    validateArchimateRelationshipRules(model, relationshipValidationMode),
+  validateNotation: (model) => validateArchimateRelationshipRules(model),
 };
 
 const umlValidator: NotationValidator = {
   kind: 'uml',
-  // UML basics validation does not use relationshipValidationMode.
-  // Keep the signature aligned with the Notation contract for simple dispatch.
-  validateNotation: ({ model }) => validateUmlBasics(model),
+  validateNotation: (model) => validateUmlBasics(model),
 };
 
 const bpmnValidator: NotationValidator = {
   kind: 'bpmn',
-  // BPMN basics validation does not use relationshipValidationMode.
-  validateNotation: ({ model }) => validateBpmnBasics(model),
+  validateNotation: (model) => validateBpmnBasics(model),
 };
 
 const VALIDATORS: Record<ModelKind, NotationValidator> = {

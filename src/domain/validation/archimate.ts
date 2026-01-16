@@ -1,14 +1,10 @@
 import type { Model } from '../types';
-import type { RelationshipValidationMode } from '../relationshipValidationMode';
 import { validateRelationship as validateRelationshipRule } from '../config/archimatePalette';
 import { kindFromTypeId } from '../kindFromTypeId';
 import { makeIssue } from './issues';
 import type { ValidationIssue } from './types';
 
-export function validateArchimateRelationshipRules(
-  model: Model,
-  relationshipValidationMode: RelationshipValidationMode
-): ValidationIssue[] {
+export function validateArchimateRelationshipRules(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   for (const rel of Object.values(model.relationships)) {
@@ -26,7 +22,7 @@ export function validateArchimateRelationshipRules(
 
     if (!source || !target) continue;
 
-    const result = validateRelationshipRule(source.type, target.type, rel.type, relationshipValidationMode);
+    const result = validateRelationshipRule(source.type, target.type, rel.type);
     if (!result.allowed) {
       issues.push(
         makeIssue(

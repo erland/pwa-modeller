@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { AccessType, Element, Model, RelationshipType } from '../../../../domain';
-import { getRelationshipTypesForKind, kindFromTypeId, STRONGEST_RELATIONSHIP_VALIDATION_MODE } from '../../../../domain';
+import { getRelationshipTypesForKind, kindFromTypeId } from '../../../../domain';
 import {
   getAllowedRelationshipTypes,
   initRelationshipValidationMatrixFromBundledTable,
@@ -71,7 +71,7 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
 
     const allForKind = getRelationshipTypesForKind(relKind) as RelationshipType[];
     if (!sourceType || !targetType) return allForKind;
-    const allowed = getAllowedRelationshipTypes(sourceType, targetType, STRONGEST_RELATIONSHIP_VALIDATION_MODE);
+    const allowed = getAllowedRelationshipTypes(sourceType, targetType);
     return (allowed.length > 0 ? allowed : allForKind) as RelationshipType[];
   }, [sourceType, targetType, matrixLoadTick, relKind]);
 
@@ -83,7 +83,7 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
     if (!sourceType || !targetType) return null;
     if (relIsUnknown) return null;
 
-    const res = validateRelationship(sourceType, targetType, relType as RelationshipType, STRONGEST_RELATIONSHIP_VALIDATION_MODE);
+    const res = validateRelationship(sourceType, targetType, relType as RelationshipType);
     return res.allowed ? null : res.reason;
   }, [sourceType, targetType, relType, relIsUnknown, matrixLoadTick, rel]);
 

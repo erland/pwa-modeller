@@ -106,8 +106,5 @@ export type Notation = {
   }) => React.ReactNode;
 
   /** Notation-specific validations. Should only emit issues relevant to this notation. */
-  validateNotation: (args: {
-    model: Model;
-    relationshipValidationMode: RelationshipValidationMode;
-  }) => ValidationIssue[];
+  validateNotation: (args: { model: Model }) => ValidationIssue[];
 };

@@ -57,6 +57,30 @@ export function BpmnToolbar({
           className="shellButton"
           onClick={() => {
             setToolMode('select');
+            setBpmnPaletteDialog({ initialTypeId: 'bpmn.pool' as ElementType });
+          }}
+          disabled={!hasActiveView}
+          title="Place a Pool/Participant (container)"
+        >
+          Pool
+        </button>
+        <button
+          type="button"
+          className="shellButton"
+          onClick={() => {
+            setToolMode('select');
+            setBpmnPaletteDialog({ initialTypeId: 'bpmn.lane' as ElementType });
+          }}
+          disabled={!hasActiveView}
+          title="Place a Lane (container)"
+        >
+          Lane
+        </button>
+        <button
+          type="button"
+          className="shellButton"
+          onClick={() => {
+            setToolMode('select');
             setBpmnPaletteDialog({ initialTypeId: 'bpmn.task' as ElementType });
           }}
           disabled={!hasActiveView}

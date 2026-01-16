@@ -24,11 +24,49 @@ function NodeLabel({ text }: { text: string }) {
   );
 }
 
+function ContainerLabel({ text, vertical }: { text: string; vertical?: boolean }) {
+  if (vertical) {
+    return (
+      <div
+        style={{
+          writingMode: 'vertical-rl',
+          transform: 'rotate(180deg)',
+          fontSize: 12,
+          fontWeight: 800,
+          letterSpacing: 0.3,
+          opacity: 0.85,
+          userSelect: 'none',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {text}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        fontSize: 12,
+        fontWeight: 800,
+        lineHeight: 1.1,
+        opacity: 0.88,
+        userSelect: 'none',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
 /**
- * BPMN node content rendering for v1.
+ * BPMN node content rendering.
  *
- * We keep it intentionally simple: recognisable shapes + element name.
- * More BPMN fidelity (markers, icons, subprocess, pools/lanes) can be layered on later.
+ * v1: tasks/events/gateways
+ * v2: pools/lanes as lightweight containers (geometry-based containment)
  */
 export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLayout }): React.ReactNode {
   const { element, node } = args;
@@ -40,6 +78,64 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
 
   // Size used for circle/diamond symbols so they don't stretch into ovals.
   const symbolSize = Math.max(28, Math.min(w, h) - 8);
+
+  if (type === 'bpmn.pool') {
+    // Participant / Pool: container with a vertical label band on the left.
+    const bandW = Math.min(36, Math.max(24, Math.round(w * 0.06)));
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          border: '2px solid rgba(0,0,0,0.32)',
+          borderRadius: 6,
+          background: 'rgba(255,255,255,0.92)',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'stretch',
+        }}
+      >
+        <div
+          style={{
+            width: bandW,
+            borderRight: '2px solid rgba(0,0,0,0.24)',
+            background: 'rgba(0,0,0,0.03)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 4,
+            boxSizing: 'border-box',
+          }}
+        >
+          <ContainerLabel text={name} vertical />
+        </div>
+        <div style={{ flex: 1 }} />
+      </div>
+    );
+  }
+
+  if (type === 'bpmn.lane') {
+    // Lane: simple horizontal band container.
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          border: '2px solid rgba(0,0,0,0.22)',
+          borderRadius: 4,
+          background: 'rgba(0,0,0,0.02)',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          padding: '6px 8px',
+          display: 'flex',
+          alignItems: 'flex-start',
+        }}
+      >
+        <ContainerLabel text={name} />
+      </div>
+    );
+  }
 
   if (type === 'bpmn.task') {
     return (

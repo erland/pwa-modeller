@@ -3,7 +3,7 @@ import * as React from 'react';
 /**
  * Small, consistent symbols used in list UIs (and as a fallback if node content isn't overridden).
  *
- * Step 2 (v1) goal: give BPMN nodes recognizable shapes without pulling in a full SVG icon set.
+ * v1+v2 goal: recognizable BPMN shapes without pulling in an external icon set.
  */
 export function renderBpmnNodeSymbol(nodeType: string): React.ReactNode {
   const frame: React.CSSProperties = {
@@ -18,6 +18,47 @@ export function renderBpmnNodeSymbol(nodeType: string): React.ReactNode {
   };
 
   switch (nodeType) {
+    case 'bpmn.pool':
+      return (
+        <div
+          style={{
+            ...frame,
+            border: '1px solid currentColor',
+            borderRadius: 2,
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+          title={nodeType}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 5,
+              background: 'currentColor',
+              opacity: 0.25,
+            }}
+          />
+        </div>
+      );
+
+    case 'bpmn.lane':
+      return (
+        <div
+          style={{
+            ...frame,
+            border: '1px solid currentColor',
+            borderRadius: 2,
+            position: 'relative',
+          }}
+          title={nodeType}
+        >
+          <div style={{ width: 16, height: 1, background: 'currentColor', opacity: 0.55 }} />
+        </div>
+      );
+
     case 'bpmn.task':
       return (
         <div

@@ -51,8 +51,18 @@ export function addElementToView(model: Model, viewId: string, elementId: string
   const x = 24 + (i % cols) * 160;
   const y = 24 + Math.floor(i / cols) * 110;
 
+  const isBpmn = viewWithLayout.kind === 'bpmn';
+  const isPool = isBpmn && element.type === 'bpmn.pool';
+  const isLane = isBpmn && element.type === 'bpmn.lane';
+
+  const nodeW = isPool ? 680 : isLane ? 680 : 140;
+  const nodeH = isPool ? 300 : isLane ? 140 : 70;
+
   const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
-  const node: ViewNodeLayout = { elementId, x, y, width: 140, height: 70, zIndex: maxZ + 1 };
+  const minZ = layout.nodes.reduce((m, n, idx) => Math.min(m, typeof n.zIndex === 'number' ? n.zIndex : idx), 0);
+  const z = isPool ? minZ - 2 : isLane ? minZ - 1 : maxZ + 1;
+
+  const node: ViewNodeLayout = { elementId, x, y, width: nodeW, height: nodeH, zIndex: z };
 
   model.views[viewId] = {
     ...viewWithLayout,
@@ -79,8 +89,12 @@ export function addElementToViewAt(model: Model, viewId: string, elementId: stri
   const snap = Boolean(viewWithLayout.formatting?.snapToGrid);
   const grid = viewWithLayout.formatting?.gridSize ?? 20;
 
-  const nodeW = 140;
-  const nodeH = 70;
+  const isBpmn = viewWithLayout.kind === 'bpmn';
+  const isPool = isBpmn && element.type === 'bpmn.pool';
+  const isLane = isBpmn && element.type === 'bpmn.lane';
+
+  const nodeW = isPool ? 680 : isLane ? 680 : 140;
+  const nodeH = isPool ? 300 : isLane ? 140 : 70;
   // Drop position is interpreted as the cursor position; center the node under it.
   let nx = Math.max(0, x - nodeW / 2);
   let ny = Math.max(0, y - nodeH / 2);
@@ -98,7 +112,9 @@ export function addElementToViewAt(model: Model, viewId: string, elementId: stri
   }
 
   const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
-  const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: maxZ + 1 };
+  const minZ = layout.nodes.reduce((m, n, idx) => Math.min(m, typeof n.zIndex === 'number' ? n.zIndex : idx), 0);
+  const z = isPool ? minZ - 2 : isLane ? minZ - 1 : maxZ + 1;
+  const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: z };
   model.views[viewId] = {
     ...viewWithLayout,
     layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }

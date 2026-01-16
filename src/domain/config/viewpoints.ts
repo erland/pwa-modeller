@@ -55,12 +55,12 @@ export const VIEWPOINTS: Viewpoint[] = [
   {
     id: 'bpmn-process',
     name: 'BPMN Process',
-    description: 'BPMN process diagram (v1).',
-    allowedElementTypes: ['bpmn.task', 'bpmn.startEvent', 'bpmn.endEvent', 'bpmn.gatewayExclusive'],
-    allowedRelationshipTypes: ['bpmn.sequenceFlow']
+    description: 'BPMN process/collaboration diagram (v2: pools/lanes + message flow).',
+    allowedElementTypes: ['bpmn.pool', 'bpmn.lane', 'bpmn.task', 'bpmn.startEvent', 'bpmn.endEvent', 'bpmn.gatewayExclusive'],
+    allowedRelationshipTypes: ['bpmn.sequenceFlow', 'bpmn.messageFlow']
   }
 ];
 
 export function getViewpointById(id: string): Viewpoint | undefined {
-  return VIEWPOINTS.find(vp => vp.id === id);
+  return VIEWPOINTS.find((vp) => vp.id === id);
 }

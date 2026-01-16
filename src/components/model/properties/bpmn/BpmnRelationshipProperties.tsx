@@ -53,13 +53,26 @@ export function BpmnRelationshipProperties({ model, relationshipId, viewId, acti
 
   const relationshipRuleWarning = useMemo(() => {
     if (!rel) return null;
-    if (rel.type !== 'bpmn.sequenceFlow') return null;
     if (!sourceType || !targetType) return null;
 
-    const sourceOk = String(sourceType).startsWith('bpmn.');
-    const targetOk = String(targetType).startsWith('bpmn.');
-    if (sourceOk && targetOk) return null;
-    return 'Sequence Flow must connect two BPMN elements.';
+    if (rel.type === 'bpmn.sequenceFlow') {
+      const sourceOk = String(sourceType).startsWith('bpmn.');
+      const targetOk = String(targetType).startsWith('bpmn.');
+      if (!sourceOk || !targetOk) return 'Sequence Flow must connect two BPMN elements.';
+      if (sourceType === 'bpmn.pool' || sourceType === 'bpmn.lane') return 'Sequence Flow cannot start from a Pool or Lane.';
+      if (targetType === 'bpmn.pool' || targetType === 'bpmn.lane') return 'Sequence Flow cannot end at a Pool or Lane.';
+      return null;
+    }
+
+    if (rel.type === 'bpmn.messageFlow') {
+      const sourceOk = String(sourceType).startsWith('bpmn.');
+      const targetOk = String(targetType).startsWith('bpmn.');
+      if (!sourceOk || !targetOk) return 'Message Flow must connect two BPMN elements.';
+      if (sourceType === 'bpmn.lane' || targetType === 'bpmn.lane') return 'Message Flow cannot connect to a Lane directly.';
+      return 'Message Flow is intended for communication between different Pools/Participants.';
+    }
+
+    return null;
   }, [rel, sourceType, targetType]);
 
   if (!rel) return <p className="panelHint">Relationship not found.</p>;

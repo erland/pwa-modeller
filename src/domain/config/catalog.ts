@@ -164,13 +164,15 @@ export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
 // -------------------------
 
 export const BPMN_ELEMENT_TYPES: ElementType[] = [
+  'bpmn.pool',
+  'bpmn.lane',
   'bpmn.task',
   'bpmn.startEvent',
   'bpmn.endEvent',
   'bpmn.gatewayExclusive'
 ];
 
-export const BPMN_RELATIONSHIP_TYPES: RelationshipType[] = ['bpmn.sequenceFlow'];
+export const BPMN_RELATIONSHIP_TYPES: RelationshipType[] = ['bpmn.sequenceFlow', 'bpmn.messageFlow'];
 
 export type TypeOption<TId extends string = string> = { id: TId; label: string };
 
@@ -183,6 +185,8 @@ const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
 };
 
 const BPMN_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
+  'bpmn.pool': 'Pool (Participant)',
+  'bpmn.lane': 'Lane',
   'bpmn.task': 'Task',
   'bpmn.startEvent': 'Start Event',
   'bpmn.endEvent': 'End Event',
@@ -199,7 +203,8 @@ const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = 
 };
 
 const BPMN_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {
-  'bpmn.sequenceFlow': 'Sequence Flow'
+  'bpmn.sequenceFlow': 'Sequence Flow',
+  'bpmn.messageFlow': 'Message Flow'
 };
 
 export function getElementTypeLabel(typeId: ElementType | string): string {

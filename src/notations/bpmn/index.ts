@@ -11,23 +11,20 @@ import type { Notation } from '../types';
 
 import { BpmnRelationshipProperties } from '../../components/model/properties/bpmn/BpmnRelationshipProperties';
 
-function isBpmnType(t: unknown): boolean {
-  return String(t).startsWith('bpmn.');
-}
 
-function isLaneOrPool(t: unknown): boolean {
-  const s = String(t);
-  return s === 'bpmn.pool' || s === 'bpmn.lane';
-}
 
-function isFlowNode(t: unknown): boolean {
-  const s = String(t);
-  return s === 'bpmn.task' || s === 'bpmn.startEvent' || s === 'bpmn.endEvent' || s === 'bpmn.gatewayExclusive';
-}
 
 /**
  * BPMN notation implementation.
  */
+function isBpmnFlowNodeType(t: string): boolean {
+  return t === 'bpmn.task' || t === 'bpmn.startEvent' || t === 'bpmn.endEvent' || t === 'bpmn.gatewayExclusive';
+}
+
+function isBpmnContainerType(t: string): boolean {
+  return t === 'bpmn.pool' || t === 'bpmn.lane';
+}
+
 export const bpmnNotation: Notation = {
   kind: 'bpmn',
 
@@ -68,42 +65,23 @@ export const bpmnNotation: Notation = {
   },
 
   canCreateRelationship: ({ relationshipType, sourceType, targetType }) => {
-    const relType = String(relationshipType);
+    // v2: Disallow connecting to containers (pools/lanes). Relationships are between flow nodes.
+    if (sourceType && isBpmnContainerType(sourceType)) return { allowed: false, reason: 'Cannot connect from Pool/Lane' };
+    if (targetType && isBpmnContainerType(targetType)) return { allowed: false, reason: 'Cannot connect to Pool/Lane' };
 
-    // Only BPMN relationships in BPMN views.
-    if (!relType.startsWith('bpmn.')) return { allowed: false, reason: 'Only BPMN relationships are allowed in BPMN views.' };
-
-    // If semantic types are provided, enforce that both ends are BPMN elements.
-    if (sourceType && !isBpmnType(sourceType)) {
-      return { allowed: false, reason: 'Relationship must start from a BPMN element.' };
-    }
-    if (targetType && !isBpmnType(targetType)) {
-      return { allowed: false, reason: 'Relationship must end at a BPMN element.' };
-    }
-
-    if (relType === 'bpmn.sequenceFlow') {
-      // Sequence flows connect flow nodes only (not pools/lanes).
-      if (sourceType && !isFlowNode(sourceType)) return { allowed: false, reason: 'Sequence Flow must start from a BPMN flow node.' };
-      if (targetType && !isFlowNode(targetType)) return { allowed: false, reason: 'Sequence Flow must end at a BPMN flow node.' };
+    if (relationshipType === 'bpmn.sequenceFlow') {
+      if (sourceType && !isBpmnFlowNodeType(sourceType)) return { allowed: false, reason: 'Sequence Flow must start from a BPMN flow node' };
+      if (targetType && !isBpmnFlowNodeType(targetType)) return { allowed: false, reason: 'Sequence Flow must end at a BPMN flow node' };
       return { allowed: true };
     }
 
-    if (relType === 'bpmn.messageFlow') {
-      // Message flows: allow between participants or flow nodes, but not lanes.
-      if (sourceType && String(sourceType) === 'bpmn.lane') return { allowed: false, reason: 'Message Flow cannot start from a Lane.' };
-      if (targetType && String(targetType) === 'bpmn.lane') return { allowed: false, reason: 'Message Flow cannot end at a Lane.' };
-
-      // Pools can connect to pools or to nodes in other pools (cross-pool is validated later).
-      if (sourceType && isLaneOrPool(sourceType) && String(sourceType) === 'bpmn.pool') return { allowed: true };
-      if (targetType && isLaneOrPool(targetType) && String(targetType) === 'bpmn.pool') return { allowed: true };
-
-      // Otherwise, allow between flow nodes (semantic cross-pool rules validated later).
-      if (sourceType && !isFlowNode(sourceType)) return { allowed: false, reason: 'Message Flow must start from a BPMN flow node or Pool.' };
-      if (targetType && !isFlowNode(targetType)) return { allowed: false, reason: 'Message Flow must end at a BPMN flow node or Pool.' };
+    if (relationshipType === 'bpmn.messageFlow') {
+      if (sourceType && !isBpmnFlowNodeType(sourceType)) return { allowed: false, reason: 'Message Flow must start from a BPMN flow node' };
+      if (targetType && !isBpmnFlowNodeType(targetType)) return { allowed: false, reason: 'Message Flow must end at a BPMN flow node' };
       return { allowed: true };
     }
 
-    return { allowed: false, reason: 'Unsupported BPMN relationship type.' };
+    return { allowed: false, reason: 'Only Sequence Flow and Message Flow are supported in BPMN v2' };
   },
 
   // ------------------------------

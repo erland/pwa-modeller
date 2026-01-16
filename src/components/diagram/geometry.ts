@@ -44,18 +44,42 @@ export function nodeRefFromLayout(n: ViewNodeLayout): ConnectableRef | null {
 }
 
 export function hitTestConnectable(nodes: ViewNodeLayout[], p: Point, exclude: ConnectableRef | null): ConnectableRef | null {
-  // Iterate from end to start so later-rendered nodes win if they overlap.
-  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+  // Prefer the *topmost* candidate by zIndex, and if tied prefer the *smallest* area.
+  // This prevents large container shapes (e.g. lanes/pools) from stealing the hit when a smaller node is inside.
+  let best: { ref: ConnectableRef; z: number; area: number } | null = null;
+
+  for (let i = 0; i < nodes.length; i += 1) {
     const n = nodes[i];
     const r = nodeRefFromLayout(n);
     if (!r) continue;
     if (exclude && exclude.kind === r.kind && exclude.id === r.id) continue;
+
     const w = n.width ?? (n.connectorId ? 24 : 120);
     const h = n.height ?? (n.connectorId ? 24 : 60);
-    if (p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h) return r;
+    if (!(p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h)) continue;
+
+    const z = typeof (n as any).zIndex === 'number' ? (n as any).zIndex : i;
+    const area = w * h;
+
+    if (!best) {
+      best = { ref: r, z, area };
+      continue;
+    }
+
+    if (z > best.z) {
+      best = { ref: r, z, area };
+      continue;
+    }
+
+    if (z === best.z && area < best.area) {
+      best = { ref: r, z, area };
+      continue;
+    }
   }
-  return null;
+
+  return best?.ref ?? null;
 }
+
 
 export function rectEdgeAnchor(n: ViewNodeLayout, toward: Point): Point {
   // Returns a point on the rectangle border of node n in the direction of `toward`.

@@ -112,6 +112,33 @@ export function UmlToolbar({
         >
           Note
         </button>
+
+        <span className="diagramToolbarDivider" aria-hidden="true" />
+
+        <button
+          type="button"
+          className="shellButton"
+          onClick={() => {
+            setToolMode('select');
+            setUmlPaletteDialog({ initialTypeId: 'uml.actor' as ElementType });
+          }}
+          disabled={!hasActiveView}
+          title="Place a UML Actor (click to drop)"
+        >
+          Actor
+        </button>
+        <button
+          type="button"
+          className="shellButton"
+          onClick={() => {
+            setToolMode('select');
+            setUmlPaletteDialog({ initialTypeId: 'uml.usecase' as ElementType });
+          }}
+          disabled={!hasActiveView}
+          title="Place a UML Use Case (click to drop)"
+        >
+          Use Case
+        </button>
       </div>
 
       {/* UML palette: create element first, then click to place in the view */}

@@ -122,6 +122,8 @@ export function DiagramCanvasView({
   onAddAndJunction,
   onAddOrJunction,
 }: DiagramCanvasViewProps) {
+  const createRelDisabled = Boolean(rel.pendingRelError) && !rel.showAllPendingRelTypes;
+
   return (
     <div className="diagramWrap">
       <DiagramToolbar
@@ -221,7 +223,13 @@ export function DiagramCanvasView({
             <button type="button" className="shellButton" onClick={rel.closePendingRelationshipDialog}>
               Cancel
             </button>
-            <button type="button" className="shellButton" onClick={rel.confirmCreatePendingRelationship}>
+            <button
+              type="button"
+              className="shellButton"
+              onClick={rel.confirmCreatePendingRelationship}
+              disabled={createRelDisabled}
+              title={createRelDisabled ? (rel.pendingRelError ?? "Not allowed") : "Create relationship"}
+            >
               Create
             </button>
           </div>
@@ -245,7 +253,7 @@ export function DiagramCanvasView({
             </div>
 
             <label htmlFor="diagram-rel-type" style={{ display: 'block', marginBottom: 6 }}>
-              Stereotype (relationship type)
+              Relationship type
             </label>
             <select
               id="diagram-rel-type"

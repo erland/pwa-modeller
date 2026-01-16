@@ -1001,3 +1001,11 @@ body {
   align-items: center;
   flex-wrap: wrap;
 }
+
+.diagramToolbarDivider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-2);
+  border-radius: 1px;
+  opacity: 0.9;
+}

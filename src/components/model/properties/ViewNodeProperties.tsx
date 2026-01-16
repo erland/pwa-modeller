@@ -101,16 +101,20 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
             const isPackage = nodeType === 'uml.package';
             const isEnum = nodeType === 'uml.enum';
             const isInterface = nodeType === 'uml.interface';
+            const isClass = nodeType === 'uml.class';
+            const isClassifier = isClass || isInterface;
 
-            const attrLabel = isNote
-              ? 'Text'
-              : isEnum
-                ? 'Literals'
-                : isPackage
-                  ? 'Body'
-                  : 'Attributes';
+            const attrLabel = isNote ? 'Text' : isEnum ? 'Literals' : isPackage ? 'Body' : 'Attributes';
+            const showOperationsText = !isNote && !isPackage && !isClassifier;
 
-            const showOperations = !isNote && !isPackage; // enums can still have ops in UML, but v1 keeps it optional
+            const collapsed = uml.collapsed ?? false;
+            const showAttributes = uml.showAttributes ?? true;
+            const showOperations = uml.showOperations ?? true;
+
+            const setAttrs = (patch: Record<string, unknown>) => {
+              const next = { ...base, ...patch };
+              actions.updateViewNodeLayout(view.id, element.id, { attrs: pruneAttrs(next) });
+            };
 
             return (
               <div className="propertiesGrid">
@@ -122,14 +126,9 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
                       aria-label="UML node display name"
                       placeholder="(optional override)"
                       value={uml.name ?? ''}
-                      onChange={(e) => {
-                        const next = { ...base, name: asTrimmedOrUndef(e.target.value) };
-                        actions.updateViewNodeLayout(view.id, element.id, { attrs: pruneAttrs(next) });
-                      }}
+                      onChange={(e) => setAttrs({ name: asTrimmedOrUndef(e.target.value) })}
                     />
-                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                      If empty, the element name is used.
-                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>If empty, the element name is used.</div>
                   </div>
                 </div>
 
@@ -141,35 +140,78 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
                       aria-label="UML node stereotype"
                       placeholder={isInterface ? 'interface' : isEnum ? 'enumeration' : isPackage ? 'package' : ''}
                       value={uml.stereotype ?? ''}
-                      onChange={(e) => {
-                        const next = { ...base, stereotype: asTrimmedOrUndef(e.target.value) };
-                        actions.updateViewNodeLayout(view.id, element.id, { attrs: pruneAttrs(next) });
-                      }}
+                      onChange={(e) => setAttrs({ stereotype: asTrimmedOrUndef(e.target.value) })}
                     />
-                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                      Shown as «stereotype». Leave blank for default.
+                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Shown as «stereotype». Leave blank for default.</div>
+                  </div>
+                </div>
+
+                {isClassifier ? (
+                  <>
+                    <div className="propertiesRow">
+                      <div className="propertiesKey">Collapsed</div>
+                      <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            aria-label="UML node collapsed"
+                            checked={collapsed}
+                            onChange={(e) => setAttrs({ collapsed: e.target.checked })}
+                          />
+                          Collapse compartments
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="propertiesRow">
+                      <div className="propertiesKey">Show attributes</div>
+                      <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            aria-label="UML node show attributes"
+                            checked={showAttributes}
+                            onChange={(e) => setAttrs({ showAttributes: e.target.checked })}
+                          />
+                          Attributes compartment
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="propertiesRow">
+                      <div className="propertiesKey">Show operations</div>
+                      <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            aria-label="UML node show operations"
+                            checked={showOperations}
+                            onChange={(e) => setAttrs({ showOperations: e.target.checked })}
+                          />
+                          Operations compartment
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+
+                {!isClassifier ? (
+                  <div className="propertiesRow">
+                    <div className="propertiesKey">{attrLabel}</div>
+                    <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                      <textarea
+                        className="textArea"
+                        aria-label="UML node attributes"
+                        rows={6}
+                        placeholder={isNote ? 'Write note text…' : 'One item per line'}
+                        value={uml.attributesText ?? ''}
+                        onChange={(e) => setAttrs({ attributesText: asMultilineOrUndef(e.target.value) })}
+                      />
                     </div>
                   </div>
-                </div>
+                ) : null}
 
-                <div className="propertiesRow">
-                  <div className="propertiesKey">{attrLabel}</div>
-                  <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                    <textarea
-                      className="textArea"
-                      aria-label="UML node attributes"
-                      rows={6}
-                      placeholder={isNote ? 'Write note text…' : 'One item per line'}
-                      value={uml.attributesText ?? ''}
-                      onChange={(e) => {
-                        const next = { ...base, attributesText: asMultilineOrUndef(e.target.value) };
-                        actions.updateViewNodeLayout(view.id, element.id, { attrs: pruneAttrs(next) });
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {showOperations ? (
+                {showOperationsText ? (
                   <div className="propertiesRow">
                     <div className="propertiesKey">Operations</div>
                     <div className="propertiesValue" style={{ fontWeight: 400 }}>
@@ -179,10 +221,7 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
                         rows={6}
                         placeholder="One operation per line"
                         value={uml.operationsText ?? ''}
-                        onChange={(e) => {
-                          const next = { ...base, operationsText: asMultilineOrUndef(e.target.value) };
-                          actions.updateViewNodeLayout(view.id, element.id, { attrs: pruneAttrs(next) });
-                        }}
+                        onChange={(e) => setAttrs({ operationsText: asMultilineOrUndef(e.target.value) })}
                       />
                     </div>
                   </div>

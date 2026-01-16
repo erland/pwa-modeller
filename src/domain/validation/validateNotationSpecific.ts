@@ -4,6 +4,7 @@ import type { ValidationIssue } from './types';
 import { validateArchimateRelationshipRules } from './archimate';
 import { validateUmlBasics } from './uml';
 import { validateBpmnBasics } from './bpmn';
+import { kindsPresent } from './kindsPresent';
 
 export function validateNotationSpecific(
   model: Model,
@@ -11,14 +12,22 @@ export function validateNotationSpecific(
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
+  const kinds = kindsPresent(model);
+
   // ArchiMate-specific structural rules
-  issues.push(...validateArchimateRelationshipRules(model, relationshipValidationMode));
+  if (kinds.has('archimate')) {
+    issues.push(...validateArchimateRelationshipRules(model, relationshipValidationMode));
+  }
 
   // UML-specific validations
-  issues.push(...validateUmlBasics(model));
+  if (kinds.has('uml')) {
+    issues.push(...validateUmlBasics(model));
+  }
 
   // BPMN-specific validations (v1 minimal)
-  issues.push(...validateBpmnBasics(model));
+  if (kinds.has('bpmn')) {
+    issues.push(...validateBpmnBasics(model));
+  }
 
   return issues;
 }

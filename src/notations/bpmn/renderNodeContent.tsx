@@ -10,7 +10,7 @@ function NodeLabel({ text }: { text: string }) {
   return (
     <div
       style={{
-        marginTop: 6,
+        padding: '0 4px',
         fontSize: 12,
         fontWeight: 700,
         lineHeight: 1.15,
@@ -76,7 +76,8 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
   const w = node.width ?? 120;
   const h = node.height ?? 60;
 
-  // Size used for circle/diamond symbols so they don't stretch into ovals.
+  // Size used for square-ish symbols. Events/gateways also need room for a label,
+  // so they use a smaller per-type size below.
   const symbolSize = Math.max(28, Math.min(w, h) - 8);
 
   if (type === 'bpmn.pool') {
@@ -172,6 +173,10 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
   if (type === 'bpmn.startEvent' || type === 'bpmn.endEvent') {
     const borderWidth = type === 'bpmn.endEvent' ? 4 : 2;
 
+    // Leave room for the label under the symbol. The previous sizing used
+    // nearly the full node height which caused clipping on smaller nodes.
+    const eventSymbolSize = Math.max(22, Math.min(w, Math.round(h * 0.55)));
+
     return (
       <div
         style={{
@@ -181,13 +186,16 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: 4,
+          padding: '4px 4px 6px',
+          boxSizing: 'border-box',
           overflow: 'hidden',
         }}
       >
         <div
           style={{
-            width: symbolSize,
-            height: symbolSize,
+            width: eventSymbolSize,
+            height: eventSymbolSize,
             borderRadius: 999,
             border: `${borderWidth}px solid rgba(0,0,0,0.40)`,
             background: 'rgba(255,255,255,0.92)',
@@ -201,6 +209,10 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
 
   if (type === 'bpmn.gatewayExclusive') {
     // Diamond with X.
+
+    // Leave room for the label under the symbol.
+    const gatewaySymbolSize = Math.max(22, Math.min(w, Math.round(h * 0.55)));
+
     return (
       <div
         style={{
@@ -210,14 +222,17 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          gap: 4,
+          padding: '4px 4px 6px',
+          boxSizing: 'border-box',
           overflow: 'hidden',
         }}
       >
         <div
           style={{
-            width: symbolSize,
-            height: symbolSize,
-            transform: 'rotate(45deg) scale(0.78)',
+            width: gatewaySymbolSize,
+            height: gatewaySymbolSize,
+            transform: 'rotate(45deg) scale(0.66)',
             border: '2px solid rgba(0,0,0,0.40)',
             background: 'rgba(255,255,255,0.92)',
             boxSizing: 'border-box',

@@ -63,6 +63,27 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
   useEffect(() => {
     if (!linkDrag) return;
 
+    function filterDropTarget(args: {
+      viewId: string;
+      sourceRef: ConnectableRef;
+      targetRef: ConnectableRef | null;
+    }): ConnectableRef | null {
+      const { viewId, targetRef } = args;
+      if (!model || !targetRef) return targetRef;
+
+      const view = model.views[viewId];
+      const viewKind = view?.kind ?? 'archimate';
+
+      // BPMN v2 containers (pool/lane) should not be offered as relationship drop targets.
+      // They are model elements, but Sequence Flow / Message Flow are intended to connect flow nodes.
+      if (viewKind === 'bpmn' && targetRef.kind === 'element') {
+        const t = model.elements[targetRef.id]?.type;
+        if (t === 'bpmn.pool' || t === 'bpmn.lane') return null;
+      }
+
+      return targetRef;
+    }
+
     function onMove(e: PointerEvent) {
       const p = clientToModelPoint(e.clientX, e.clientY);
       if (!p) return;
@@ -71,7 +92,8 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
       // in model coordinates to detect the current drop target.
       setLinkDrag((prev) => {
         if (!prev) return prev;
-        const targetRef = hitTestConnectable(nodes, p, prev.sourceRef);
+        const rawTargetRef = hitTestConnectable(nodes, p, prev.sourceRef);
+        const targetRef = filterDropTarget({ viewId: prev.viewId, sourceRef: prev.sourceRef, targetRef: rawTargetRef });
         return { ...prev, currentPoint: p, targetRef };
       });
     }
@@ -80,7 +102,8 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
       const p = clientToModelPoint(e.clientX, e.clientY);
       setLinkDrag((prev) => {
         if (!prev) return prev;
-        const target = p ? hitTestConnectable(nodes, p, prev.sourceRef) : prev.targetRef;
+        const rawTarget = p ? hitTestConnectable(nodes, p, prev.sourceRef) : prev.targetRef;
+        const target = filterDropTarget({ viewId: prev.viewId, sourceRef: prev.sourceRef, targetRef: rawTarget });
         if (target && !sameRef(target, prev.sourceRef)) {
           setPendingCreateRel({ viewId: prev.viewId, sourceRef: prev.sourceRef, targetRef: target });
           setPendingRelType(lastRelType);
@@ -97,7 +120,7 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
-  }, [linkDrag, clientToModelPoint, lastRelType, nodes]);
+  }, [linkDrag, clientToModelPoint, lastRelType, nodes, model]);
 
 function defaultRelTypeForViewKind(kind: string | undefined): RelationshipType {
   if (kind === 'uml') return 'uml.association';

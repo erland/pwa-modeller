@@ -1,5 +1,5 @@
 import type { Model, ViewNodeLayout, ArchimateLayer, ElementType, ViewConnection } from '../../domain';
-import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
+import { ELEMENT_TYPES_BY_LAYER, getElementTypeLabel, getRelationshipTypeLabel } from '../../domain';
 import { refKey } from './connectable';
 import { getConnectionPath, polylineToSvgPath } from './connectionPath';
 import { applyLaneOffsetsSafely } from './connectionLanes';
@@ -102,6 +102,7 @@ function nodeRect(n: ViewNodeLayout): { x: number; y: number; w: number; h: numb
   const { w, h } = nodeSize(n);
   return { x: n.x, y: n.y, w, h };
 }
+
 
 export function createViewSvg(model: Model, viewId: string): string {
   const view = model.views[viewId];
@@ -240,7 +241,7 @@ export function createViewSvg(model: Model, viewId: string): string {
       }
 
       const visual = relationshipVisual(rel, (view.kind ?? 'archimate') as 'archimate' | 'uml' | 'bpmn');
-      relItems.push({ id: conn.id, relId: conn.relationshipId, points, label: rel.type, visual });
+      relItems.push({ id: conn.id, relId: conn.relationshipId, points, label: getRelationshipTypeLabel(rel.type), visual });
     }
   }
 
@@ -285,54 +286,77 @@ export function createViewSvg(model: Model, viewId: string): string {
     })
     .join('');
 
-  const nodesSvg = nodes
-    .map((n) => {
-      const x = n.x;
-      const y = n.y;
-      const { w, h } = nodeSize(n);
+  const isContainerType = (typeId: string): boolean => typeId === 'bpmn.pool' || typeId === 'bpmn.lane';
 
-      if (n.connectorId) {
-        const c = model.connectors?.[n.connectorId];
-        const cx = x + w / 2;
-        const cy = y + h / 2;
-        const r = Math.min(w, h) / 2;
-        const symbol = c?.type === 'OrJunction' ? '∨' : '∧';
+  const renderNodeSvg = (n: ViewNodeLayout): string => {
+    const x = n.x;
+    const y = n.y;
+    const { w, h } = nodeSize(n);
 
-        return `
-          <g>
-            <circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff" stroke="#475569" stroke-width="2" />
-            <text x="${cx}" y="${cy + 4}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" font-weight="800" fill="#0f172a" text-anchor="middle">${symbol}</text>
-          </g>
-        `;
-      }
-
-      const el = n.elementId ? model.elements[n.elementId] : null;
-      if (!el) return '';
-
-      const name = el.name || '(unnamed)';
-      const type = el.type;
-      const layer = (ELEMENT_TYPE_TO_LAYER[el.type] ?? 'Business') as ArchimateLayer;
-      const fill = LAYER_FILL[layer];
-      const tag = n.styleTag;
-      const highlight = n.highlighted;
-
-      const tagSvg = tag
-        ? `<g>
-            <rect x="${x + 8}" y="${y + h - 22}" width="${Math.max(28, tag.length * 7)}" height="16" rx="8" fill="#e2e8f0" />
-            <text x="${x + 14}" y="${y + h - 10}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#0f172a">${escapeXml(tag)}</text>
-          </g>`
-        : '';
+    if (n.connectorId) {
+      const c = model.connectors?.[n.connectorId];
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      const r = Math.min(w, h) / 2;
+      const symbol = c?.type === 'OrJunction' ? '∨' : '∧';
 
       return `
         <g>
-          <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="${fill}" stroke="${highlight ? '#f59e0b' : '#cbd5e1'}" stroke-width="${highlight ? 2 : 1}" />
-          <text x="${x + 10}" y="${y + 22}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="13" font-weight="700" fill="#0f172a">${escapeXml(name)}</text>
-          <text x="${x + 10}" y="${y + 40}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" fill="#334155">${escapeXml(type)}</text>
-          ${tagSvg}
+          <circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff" stroke="#475569" stroke-width="2" />
+          <text x="${cx}" y="${cy + 4}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" font-weight="800" fill="#0f172a" text-anchor="middle">${symbol}</text>
         </g>
       `;
-    })
-    .join('');
+    }
+
+    const el = n.elementId ? model.elements[n.elementId] : null;
+    if (!el) return '';
+
+    const name = el.name || '(unnamed)';
+    const type = el.type;
+    const typeLabel = getElementTypeLabel(type);
+
+    const layer = (ELEMENT_TYPE_TO_LAYER[type] ?? 'Business') as ArchimateLayer;
+    const fill = LAYER_FILL[layer];
+    const tag = n.styleTag;
+    const highlight = n.highlighted;
+
+    // Use higher-contrast strokes in SVG exports so borders remain visible even when nodes are nested.
+    const stroke = highlight ? '#f59e0b' : '#475569';
+    const strokeWidth = 2;
+
+    const tagSvg = tag
+      ? `<g>
+          <rect x="${x + 8}" y="${y + h - 22}" width="${Math.max(28, tag.length * 7)}" height="16" rx="8" fill="#e2e8f0" />
+          <text x="${x + 14}" y="${y + h - 10}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#0f172a">${escapeXml(tag)}</text>
+        </g>`
+      : '';
+
+    return `
+      <g>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />
+        <text x="${x + 10}" y="${y + 22}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="13" font-weight="700" fill="#0f172a">${escapeXml(name)}</text>
+        <text x="${x + 10}" y="${y + 40}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" fill="#334155">${escapeXml(typeLabel)}</text>
+        ${tagSvg}
+      </g>
+    `;
+  };
+
+  // If we have container nodes (e.g. BPMN pools/lanes), render them *behind* relationships
+  // so edges remain visible when drawn inside containers.
+  const containerNodes = nodes.filter((n) => {
+    if (!n.elementId) return false;
+    const el = model.elements[n.elementId];
+    return Boolean(el && isContainerType(el.type));
+  });
+  const foregroundNodes = nodes.filter((n) => {
+    if (n.connectorId) return true;
+    if (!n.elementId) return false;
+    const el = model.elements[n.elementId];
+    return Boolean(el && !isContainerType(el.type));
+  });
+
+  const containersSvg = containerNodes.map(renderNodeSvg).join('');
+  const nodesSvg = foregroundNodes.map(renderNodeSvg).join('');
 
   // Export uses a neutral light background so diagrams remain readable when
   // embedded in documents regardless of the app's current theme.
@@ -347,6 +371,7 @@ export function createViewSvg(model: Model, viewId: string): string {
   <rect x="0" y="0" width="${width}" height="${height}" fill="${backgroundFill}" />
   <text x="${padding}" y="${padding}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" font-weight="700" fill="#0f172a">${title}</text>
   <g transform="translate(0, 12)">
+    ${containersSvg}
     ${linesSvg}
     ${nodesSvg}
   </g>

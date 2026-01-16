@@ -29,9 +29,17 @@ export const bpmnNotation: Notation = {
   // BPMN has strong shape semantics, so we override the full node content.
   renderNodeContent: ({ element, node }) => renderBpmnNodeContent({ element, node }),
 
-  getRelationshipStyle: (_rel: { type: string; attrs?: unknown }): RelationshipStyle => {
-    // Step 3 will introduce proper BPMN sequence flow styling.
-    return { markerEnd: 'arrowOpen' };
+  getRelationshipStyle: (rel: { type: string; attrs?: unknown }): RelationshipStyle => {
+    // BPMN v1: only Sequence Flow.
+    if (rel.type === 'bpmn.sequenceFlow') {
+      return {
+        markerEnd: 'arrowFilled',
+        line: { pattern: 'solid' },
+      };
+    }
+
+    // Fallback (should rarely be hit because canCreateRelationship blocks others).
+    return { markerEnd: 'arrowFilled', line: { pattern: 'solid' } };
   },
 
   canCreateNode: ({ nodeType }) => {
@@ -39,9 +47,21 @@ export const bpmnNotation: Notation = {
     return String(nodeType).startsWith('bpmn.');
   },
 
-  canCreateRelationship: ({ relationshipType }) => {
-    // Step 3 will introduce stricter BPMN rules.
-    return String(relationshipType).startsWith('bpmn.') ? { allowed: true } : { allowed: false };
+  canCreateRelationship: ({ relationshipType, sourceType, targetType }) => {
+    const relType = String(relationshipType);
+    if (relType !== 'bpmn.sequenceFlow') {
+      return { allowed: false, reason: 'Only Sequence Flow is supported in BPMN v1.' };
+    }
+
+    // If semantic types are provided, enforce that both ends are BPMN elements.
+    if (sourceType && !String(sourceType).startsWith('bpmn.')) {
+      return { allowed: false, reason: 'Sequence Flow must start from a BPMN element.' };
+    }
+    if (targetType && !String(targetType).startsWith('bpmn.')) {
+      return { allowed: false, reason: 'Sequence Flow must end at a BPMN element.' };
+    }
+
+    return { allowed: true };
   },
 
   // ------------------------------

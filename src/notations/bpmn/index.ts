@@ -3,6 +3,9 @@ import * as React from 'react';
 import type { RelationshipStyle } from '../../diagram/relationships/style';
 import { getElementTypeOptionsForKind, getRelationshipTypeOptionsForKind } from '../../domain';
 
+import { renderBpmnNodeContent } from './renderNodeContent';
+import { renderBpmnNodeSymbol } from './renderNodeSymbol';
+
 import type { Notation } from '../types';
 
 /**
@@ -18,28 +21,13 @@ export const bpmnNotation: Notation = {
   // Rendering + interaction (minimal v1)
   // ------------------------------
 
-  // Reuse an existing background var until BPMN-specific styling is introduced.
-  getElementBgVar: () => 'var(--arch-layer-business)',
+  // BPMN diagrams typically use neutral whites; keep the canvas readable and consistent.
+  getElementBgVar: () => 'rgba(255, 255, 255, 0.92)',
 
-  // Step 2 will replace this with real BPMN symbols.
-  renderNodeSymbol: ({ nodeType }) => {
-    const s = String(nodeType);
-    const label = s.startsWith('bpmn.') ? 'B' : '?';
-    return React.createElement(
-      'span',
-      {
-        style: {
-          fontSize: 10,
-          fontWeight: 700,
-          lineHeight: '12px',
-          padding: '0 4px',
-          borderRadius: 6,
-          border: '1px solid rgba(0,0,0,0.25)'
-        }
-      },
-      label
-    );
-  },
+  renderNodeSymbol: ({ nodeType }) => renderBpmnNodeSymbol(String(nodeType)),
+
+  // BPMN has strong shape semantics, so we override the full node content.
+  renderNodeContent: ({ element, node }) => renderBpmnNodeContent({ element, node }),
 
   getRelationshipStyle: (_rel: { type: string; attrs?: unknown }): RelationshipStyle => {
     // Step 3 will introduce proper BPMN sequence flow styling.

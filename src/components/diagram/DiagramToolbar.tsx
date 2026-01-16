@@ -6,6 +6,7 @@ import type { ToolMode } from './hooks/useDiagramToolState';
 
 import { ArchimateToolbar } from './toolbar/ArchimateToolbar';
 import { UmlToolbar } from './toolbar/UmlToolbar';
+import { BpmnToolbar } from './toolbar/BpmnToolbar';
 
 export type DiagramToolbarProps = {
   model: Model;
@@ -107,6 +108,17 @@ export function DiagramToolbar({
         </div>
 
         <UmlToolbar
+          model={model}
+          activeViewId={activeViewId}
+          activeView={activeView}
+          hasActiveView={hasActiveView}
+          setToolMode={setToolMode}
+          beginPlaceExistingElement={beginPlaceExistingElement}
+          findFolderContainingView={findFolderContainingView}
+          onSelect={onSelect}
+        />
+
+        <BpmnToolbar
           model={model}
           activeViewId={activeViewId}
           activeView={activeView}

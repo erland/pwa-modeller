@@ -10,6 +10,7 @@ import {
   sanitizeModelUnknownTypes,
   sanitizeModelViewConnections,
   sanitizeModelViewKinds,
+  sanitizeModelUmlClassifierNodeLegacyMemberText,
   sanitizeModelViewOwnerRefs,
   sanitizeModelViewOwnerRefsFromCentered,
 } from './sanitize';
@@ -35,23 +36,24 @@ export function deserializeModel(json: string): Model {
   const migrated = runMigrations(parsed as unknown as Model);
 
   const sanitized = ensureModelFolderExtensions(
-    sanitizeModelViewKinds(
-      sanitizeModelViewOwnerRefs(
-      sanitizeModelViewOwnerRefsFromCentered(
-      sanitizeModelViewConnections(
-      sanitizeModelRelationshipAttrs(
-        sanitizeModelUnknownTypes(
-          sanitizeModelExternalIds(
-            sanitizeModelTaggedValues(migrated.model)
+    sanitizeModelUmlClassifierNodeLegacyMemberText(
+      sanitizeModelViewKinds(
+        sanitizeModelViewOwnerRefs(
+          sanitizeModelViewOwnerRefsFromCentered(
+            sanitizeModelViewConnections(
+              sanitizeModelRelationshipAttrs(
+                sanitizeModelUnknownTypes(
+                  sanitizeModelExternalIds(
+                    sanitizeModelTaggedValues(migrated.model)
+                  )
+                )
+              )
+            )
           )
         )
-      )
-      )
-      )
       )
     )
   );
 
   return applyModelInvariants(sanitized);
-
 }

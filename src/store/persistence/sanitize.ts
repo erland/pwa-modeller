@@ -190,6 +190,39 @@ export function sanitizeModelViewKinds(model: Model): Model {
   return model;
 }
 
+export function sanitizeModelUmlClassifierNodeLegacyMemberText(model: Model): Model {
+  // Drop legacy node-level class/interface member text fields (attrs.attributesText/attrs.operationsText).
+  // Member data is now stored on the UML element itself.
+  for (const vid of Object.keys(model.views)) {
+    const v: any = model.views[vid] as any;
+    const nodes: any = v?.layout?.nodes;
+    if (!Array.isArray(nodes)) continue;
+
+    for (let i = 0; i < nodes.length; i++) {
+      const n: any = nodes[i];
+      const elementId = typeof n?.elementId === 'string' ? String(n.elementId).trim() : '';
+      if (!elementId) continue;
+
+      const el: any = (model.elements as any)[elementId];
+      if (!el) continue;
+      if (el.type !== 'uml.class' && el.type !== 'uml.interface') continue;
+
+      const rawAttrs = n?.attrs;
+      if (!isRecord(rawAttrs)) continue;
+      if (!Object.prototype.hasOwnProperty.call(rawAttrs, 'attributesText') && !Object.prototype.hasOwnProperty.call(rawAttrs, 'operationsText')) {
+        continue;
+      }
+
+      const nextAttrs: any = { ...rawAttrs };
+      delete nextAttrs.attributesText;
+      delete nextAttrs.operationsText;
+      nodes[i] = { ...(n as any), attrs: nextAttrs };
+    }
+  }
+
+  return model;
+}
+
 export function sanitizeModelViewOwnerRefs(model: Model): Model {
   // ownerRef is optional; if present, ensure it has a valid shape.
   for (const vid of Object.keys(model.views)) {

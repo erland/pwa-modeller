@@ -243,6 +243,7 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
           style={{
             width: '100%',
             height: '100%',
+            boxSizing: 'border-box',
             border: '1px solid rgba(0,0,0,0.32)',
             borderRadius: 999,
             display: 'flex',

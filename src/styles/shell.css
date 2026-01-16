@@ -434,14 +434,21 @@ body {
 /* Diagram canvas (Step 8) */
 .diagramToolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
   padding: 12px;
   border: 1px solid var(--border-1);
   border-radius: 12px;
   background: var(--surface-2);
   margin-bottom: 10px;
+}
+
+.diagramToolbarRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .diagramToolbarButtons {

@@ -59,98 +59,116 @@ export function DiagramToolbar({
   return (
     <>
       <div aria-label="Diagram toolbar" className="diagramToolbar">
-        <div className="diagramToolbarTools" role="group" aria-label="Diagram tools">
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'select' ? ' isActive' : '')}
-            onClick={() => setToolMode('select')}
-            disabled={!hasActiveView}
-            title="Select tool"
-          >
-            Select
-          </button>
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'addNote' ? ' isActive' : '')}
-            onClick={() => setToolMode('addNote')}
-            disabled={!hasActiveView}
-            title="Place a Note (click to drop)"
-          >
-            Note
-          </button>
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'addLabel' ? ' isActive' : '')}
-            onClick={() => setToolMode('addLabel')}
-            disabled={!hasActiveView}
-            title="Place a Label (click to drop)"
-          >
-            Label
-          </button>
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'addDivider' ? ' isActive' : '')}
-            onClick={() => setToolMode('addDivider')}
-            disabled={!hasActiveView}
-            title="Place a Divider line (drag to size)"
-          >
-            Divider
-          </button>
-          <button
-            type="button"
-            className={'shellButton' + (toolMode === 'addGroupBox' ? ' isActive' : '')}
-            onClick={() => setToolMode('addGroupBox')}
-            disabled={!hasActiveView}
-            title="Place a Group box (drag to size)"
-          >
-            Group
-          </button>
+        {/* Row 1: generic node objects/tools */}
+        <div className="diagramToolbarRow" aria-label="Diagram tools row">
+          <div className="diagramToolbarTools" role="group" aria-label="Diagram tools">
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'select' ? ' isActive' : '')}
+              onClick={() => setToolMode('select')}
+              disabled={!hasActiveView}
+              title="Select tool"
+            >
+              Select
+            </button>
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addNote' ? ' isActive' : '')}
+              onClick={() => setToolMode('addNote')}
+              disabled={!hasActiveView}
+              title="Place a Note (click to drop)"
+            >
+              Note
+            </button>
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addLabel' ? ' isActive' : '')}
+              onClick={() => setToolMode('addLabel')}
+              disabled={!hasActiveView}
+              title="Place a Label (click to drop)"
+            >
+              Label
+            </button>
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addDivider' ? ' isActive' : '')}
+              onClick={() => setToolMode('addDivider')}
+              disabled={!hasActiveView}
+              title="Place a Divider line (drag to size)"
+            >
+              Divider
+            </button>
+            <button
+              type="button"
+              className={'shellButton' + (toolMode === 'addGroupBox' ? ' isActive' : '')}
+              onClick={() => setToolMode('addGroupBox')}
+              disabled={!hasActiveView}
+              title="Place a Group box (drag to size)"
+            >
+              Group
+            </button>
+          </div>
         </div>
 
-        <UmlToolbar
-          model={model}
-          activeViewId={activeViewId}
-          activeView={activeView}
-          hasActiveView={hasActiveView}
-          setToolMode={setToolMode}
-          beginPlaceExistingElement={beginPlaceExistingElement}
-          findFolderContainingView={findFolderContainingView}
-          onSelect={onSelect}
-        />
+        {/* Row 2: notation specific palettes */}
+        <div className="diagramToolbarRow" aria-label="Diagram palette row">
+          <ArchimateToolbar
+            model={model}
+            activeViewId={activeViewId}
+            activeView={activeView}
+            hasActiveView={hasActiveView}
+            setToolMode={setToolMode}
+            beginPlaceExistingElement={beginPlaceExistingElement}
+            findFolderContainingView={findFolderContainingView}
+            onSelect={onSelect}
+            onAddAndJunction={onAddAndJunction}
+            onAddOrJunction={onAddOrJunction}
+          />
 
-        <BpmnToolbar
-          model={model}
-          activeViewId={activeViewId}
-          activeView={activeView}
-          hasActiveView={hasActiveView}
-          setToolMode={setToolMode}
-          beginPlaceExistingElement={beginPlaceExistingElement}
-          findFolderContainingView={findFolderContainingView}
-          onSelect={onSelect}
-        />
+          <UmlToolbar
+            model={model}
+            activeViewId={activeViewId}
+            activeView={activeView}
+            hasActiveView={hasActiveView}
+            setToolMode={setToolMode}
+            beginPlaceExistingElement={beginPlaceExistingElement}
+            findFolderContainingView={findFolderContainingView}
+            onSelect={onSelect}
+          />
 
-        <div className="diagramToolbarTools" role="group" aria-label="Diagram view actions">
-          <button type="button" onClick={zoomIn} aria-label="Zoom in" disabled={!activeView}>
-            +
-          </button>
-          <span className="diagramToolbarZoom">{Math.round(zoom * 100)}%</span>
-          <button type="button" onClick={zoomOut} aria-label="Zoom out" disabled={!activeView}>
-            -
-          </button>
-          <button type="button" onClick={zoomReset} aria-label="Reset zoom" disabled={!activeView}>
-            100%
-          </button>
-          <button type="button" onClick={fitToView} aria-label="Fit to view" disabled={!activeView || nodesCount === 0}>
-            Fit
-          </button>
+          <BpmnToolbar
+            model={model}
+            activeViewId={activeViewId}
+            activeView={activeView}
+            hasActiveView={hasActiveView}
+            setToolMode={setToolMode}
+            beginPlaceExistingElement={beginPlaceExistingElement}
+            findFolderContainingView={findFolderContainingView}
+            onSelect={onSelect}
+          />
+        </div>
 
-          {activeView?.kind === 'archimate' ? (
-            <ArchimateToolbar hasActiveView={hasActiveView} onAddAndJunction={onAddAndJunction} onAddOrJunction={onAddOrJunction} />
-          ) : null}
+        {/* Row 3: zoom/fit/export */}
+        <div className="diagramToolbarRow" aria-label="Diagram view actions row">
+          <div className="diagramToolbarTools" role="group" aria-label="Diagram view actions">
+            <button type="button" onClick={zoomIn} aria-label="Zoom in" disabled={!activeView}>
+              +
+            </button>
+            <span className="diagramToolbarZoom">{Math.round(zoom * 100)}%</span>
+            <button type="button" onClick={zoomOut} aria-label="Zoom out" disabled={!activeView}>
+              -
+            </button>
+            <button type="button" onClick={zoomReset} aria-label="Reset zoom" disabled={!activeView}>
+              100%
+            </button>
+            <button type="button" onClick={fitToView} aria-label="Fit to view" disabled={!activeView || nodesCount === 0}>
+              Fit
+            </button>
 
-          <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>
-            Export as Image
-          </button>
+            <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>
+              Export as Image
+            </button>
+          </div>
         </div>
       </div>
     </>

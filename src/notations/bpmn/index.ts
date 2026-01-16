@@ -2,11 +2,14 @@ import * as React from 'react';
 
 import type { RelationshipStyle } from '../../diagram/relationships/style';
 import { getElementTypeOptionsForKind, getRelationshipTypeOptionsForKind } from '../../domain';
+import { validateBpmnBasics } from '../../domain/validation/bpmn';
 
 import { renderBpmnNodeContent } from './renderNodeContent';
 import { renderBpmnNodeSymbol } from './renderNodeSymbol';
 
 import type { Notation } from '../types';
+
+import { BpmnRelationshipProperties } from '../../components/model/properties/bpmn/BpmnRelationshipProperties';
 
 /**
  * BPMN notation implementation (Process diagram v1).
@@ -77,13 +80,11 @@ export const bpmnNotation: Notation = {
     return [];
   },
 
-  renderRelationshipProperties: () => {
-    // Step 4 will add a BPMN-specific relationship properties component.
-    return React.createElement('div', { className: 'panelHint' }, 'BPMN properties not implemented yet.');
+  renderRelationshipProperties: ({ model, relationshipId, viewId, actions, onSelect }) => {
+    return React.createElement(BpmnRelationshipProperties, { model, relationshipId, viewId, actions, onSelect });
   },
 
-  validateNotation: () => {
-    // Step 4 will add basic BPMN validation.
-    return [];
-  }
+  validateNotation: ({ model }) => {
+    return validateBpmnBasics(model);
+  },
 };

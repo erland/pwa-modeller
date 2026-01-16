@@ -3,6 +3,7 @@ import type { RelationshipValidationMode } from '../relationshipValidationMode';
 import type { ValidationIssue } from './types';
 import { validateArchimateRelationshipRules } from './archimate';
 import { validateUmlBasics } from './uml';
+import { validateBpmnBasics } from './bpmn';
 
 export function validateNotationSpecific(
   model: Model,
@@ -16,7 +17,8 @@ export function validateNotationSpecific(
   // UML-specific validations
   issues.push(...validateUmlBasics(model));
 
-  // BPMN-specific validations can be added here later.
+  // BPMN-specific validations (v1 minimal)
+  issues.push(...validateBpmnBasics(model));
 
   return issues;
 }

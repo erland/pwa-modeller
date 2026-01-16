@@ -32,7 +32,7 @@ describe('persistence', () => {
     expect(stripUndefinedDeep(parsed)).toEqual(stripUndefinedDeep(model));
   });
 
-  test('serializeModel + deserializeModel round-trip preserves UML classifier members and strips legacy node member text', () => {
+  test('serializeModel + deserializeModel round-trip preserves UML classifier members and strips legacy UML node view attrs', () => {
     const model = createEmptyModel({ name: 'UML Members', description: 'desc' });
 
     const cls = createElement({
@@ -40,6 +40,7 @@ describe('persistence', () => {
       kind: 'uml',
       type: 'uml.class',
       attrs: {
+        stereotype: 'entity',
         attributes: [{ name: 'id' }],
         operations: [{ name: 'getId' }],
       },
@@ -63,6 +64,8 @@ describe('persistence', () => {
               showAttributes: true,
               showOperations: false,
               collapsed: false,
+              name: 'Legacy override',
+              stereotype: 'legacy',
               attributesText: 'LEGACY',
               operationsText: 'LEGACY',
             },
@@ -80,6 +83,8 @@ describe('persistence', () => {
     const parsedNode: any = (parsed.views[view.id] as any).layout.nodes[0];
     expect(parsedNode.attrs?.attributesText).toBeUndefined();
     expect(parsedNode.attrs?.operationsText).toBeUndefined();
+    expect(parsedNode.attrs?.name).toBeUndefined();
+    expect(parsedNode.attrs?.stereotype).toBeUndefined();
     expect(parsedNode.attrs?.showAttributes).toBe(true);
     expect(parsedNode.attrs?.showOperations).toBe(false);
     expect(parsedNode.attrs?.collapsed).toBe(false);

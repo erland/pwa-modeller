@@ -12,6 +12,7 @@ import { renderUmlNodeContent } from './renderNodeContent';
 
 import { UmlRelationshipProperties } from '../../components/model/properties/uml/UmlRelationshipProperties';
 import { UmlClassifierMembersSection } from '../../components/model/properties/uml/UmlClassifierMembersSection';
+import { UmlStereotypeSection } from '../../components/model/properties/uml/UmlStereotypeSection';
 
 type UmlRelAttrs = {
   /** Optional navigability for associations (v1: boolean directed). */
@@ -97,16 +98,27 @@ export const umlNotation: Notation = {
   getRelationshipTypeOptions: () => getRelationshipTypeOptionsForKind('uml'),
 
   getElementPropertySections: ({ element, actions }) => {
-    // Class/Interface members are semantic and stored on the element.
-    // (View-local toggles for showing/hiding compartments live on the node.)
-    if (element.type !== 'uml.class' && element.type !== 'uml.interface') return [];
-    return [
+    if (typeof element.type !== "string" || !element.type.startsWith("uml.")) return [];
+
+    const sections = [
       {
-        key: 'uml.classifier.members',
-        content: React.createElement(UmlClassifierMembersSection, { element, actions }),
+        key: "uml.stereotype",
+        content: React.createElement(UmlStereotypeSection, { element, actions }),
       },
     ];
+
+    // Class/Interface members are semantic and stored on the element.
+    // (View-local toggles for showing/hiding compartments live on the node.)
+    if (element.type === "uml.class" || element.type === "uml.interface") {
+      sections.push({
+        key: "uml.classifier.members",
+        content: React.createElement(UmlClassifierMembersSection, { element, actions }),
+      });
+    }
+
+    return sections;
   },
+
 
   renderRelationshipProperties: ({ model, relationshipId, viewId, actions, onSelect }) => {
     return React.createElement(UmlRelationshipProperties, { model, relationshipId, viewId, actions, onSelect });

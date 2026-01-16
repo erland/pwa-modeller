@@ -166,28 +166,31 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
   const { element, node } = args;
   const attrs = readUmlNodeAttrs(node);
 
-  const name = (attrs.name ?? '').trim() || element.name || '(unnamed)';
-  const stereotype = attrs.stereotype;
+  // Node labels are semantic (element-level).
+  const name = element.name || "(unnamed)";
+
+  // Stereotype is semantic (element-level).
+  const elementStereo = isRecord(element.attrs) ? asString(element.attrs['stereotype']) : undefined;
 
   const attrLines = splitLines(attrs.attributesText);
   const opLines = splitLines(attrs.operationsText);
 
   const nodeType = element.type;
-  const isInterface = nodeType === 'uml.interface';
-  const isEnum = nodeType === 'uml.enum';
-  const isPackage = nodeType === 'uml.package';
-  const isNote = nodeType === 'uml.note';
-  const isClass = nodeType === 'uml.class';
+  const isInterface = nodeType === "uml.interface";
+  const isEnum = nodeType === "uml.enum";
+  const isPackage = nodeType === "uml.package";
+  const isNote = nodeType === "uml.note";
+  const isClass = nodeType === "uml.class";
 
   // Presentation flags are view-local; default to "show" to keep old diagrams usable.
   const collapsed = attrs.collapsed ?? false;
   const showAttributes = attrs.showAttributes ?? true;
   const showOperations = attrs.showOperations ?? true;
 
-  // Default stereotype hints if not explicitly set.
+  // Default stereotype hints if not explicitly set on the element.
   const defaultStereo =
-    stereotype ??
-    (isInterface ? 'interface' : isEnum ? 'enumeration' : isPackage ? 'package' : undefined);
+    elementStereo ?? (isInterface ? "interface" : isEnum ? "enumeration" : isPackage ? "package" : undefined);
+
 
   if (isNote) {
     return (

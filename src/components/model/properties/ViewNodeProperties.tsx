@@ -9,11 +9,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function asTrimmedOrUndef(v: string): string | undefined {
-  const s = v.trim();
-  return s.length ? s : undefined;
-}
-
 function asMultilineOrUndef(v: string): string | undefined {
   // Keep internal whitespace; only treat empty/whitespace-only as undefined.
   return v.trim().length ? v : undefined;
@@ -118,33 +113,7 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
 
             return (
               <div className="propertiesGrid">
-                <div className="propertiesRow">
-                  <div className="propertiesKey">Display name</div>
-                  <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                    <input
-                      className="textInput"
-                      aria-label="UML node display name"
-                      placeholder="(optional override)"
-                      value={uml.name ?? ''}
-                      onChange={(e) => setAttrs({ name: asTrimmedOrUndef(e.target.value) })}
-                    />
-                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>If empty, the element name is used.</div>
-                  </div>
-                </div>
 
-                <div className="propertiesRow">
-                  <div className="propertiesKey">Stereotype</div>
-                  <div className="propertiesValue" style={{ fontWeight: 400 }}>
-                    <input
-                      className="textInput"
-                      aria-label="UML node stereotype"
-                      placeholder={isInterface ? 'interface' : isEnum ? 'enumeration' : isPackage ? 'package' : ''}
-                      value={uml.stereotype ?? ''}
-                      onChange={(e) => setAttrs({ stereotype: asTrimmedOrUndef(e.target.value) })}
-                    />
-                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>Shown as «stereotype». Leave blank for default.</div>
-                  </div>
-                </div>
 
                 {isClassifier ? (
                   <>

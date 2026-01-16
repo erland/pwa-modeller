@@ -10,7 +10,7 @@ import {
   sanitizeModelUnknownTypes,
   sanitizeModelViewConnections,
   sanitizeModelViewKinds,
-  sanitizeModelUmlClassifierNodeLegacyMemberText,
+  sanitizeModelUmlNodeLegacyViewAttrs,
   sanitizeModelViewOwnerRefs,
   sanitizeModelViewOwnerRefsFromCentered,
 } from './sanitize';
@@ -36,7 +36,7 @@ export function deserializeModel(json: string): Model {
   const migrated = runMigrations(parsed as unknown as Model);
 
   const sanitized = ensureModelFolderExtensions(
-    sanitizeModelUmlClassifierNodeLegacyMemberText(
+    sanitizeModelUmlNodeLegacyViewAttrs(
       sanitizeModelViewKinds(
         sanitizeModelViewOwnerRefs(
           sanitizeModelViewOwnerRefsFromCentered(

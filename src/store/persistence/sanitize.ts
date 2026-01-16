@@ -190,9 +190,9 @@ export function sanitizeModelViewKinds(model: Model): Model {
   return model;
 }
 
-export function sanitizeModelUmlClassifierNodeLegacyMemberText(model: Model): Model {
-  // Drop legacy node-level class/interface member text fields (attrs.attributesText/attrs.operationsText).
-  // Member data is now stored on the UML element itself.
+export function sanitizeModelUmlNodeLegacyViewAttrs(model: Model): Model {
+  // Drop legacy UML per-node label/stereotype overrides, and legacy classifier member text fields.
+  // Semantic data now lives on the UML element itself.
   for (const vid of Object.keys(model.views)) {
     const v: any = model.views[vid] as any;
     const nodes: any = v?.layout?.nodes;
@@ -200,28 +200,42 @@ export function sanitizeModelUmlClassifierNodeLegacyMemberText(model: Model): Mo
 
     for (let i = 0; i < nodes.length; i++) {
       const n: any = nodes[i];
-      const elementId = typeof n?.elementId === 'string' ? String(n.elementId).trim() : '';
+      const elementId = typeof n?.elementId === "string" ? String(n.elementId).trim() : "";
       if (!elementId) continue;
 
       const el: any = (model.elements as any)[elementId];
       if (!el) continue;
-      if (el.type !== 'uml.class' && el.type !== 'uml.interface') continue;
+      const elType = typeof el.type === "string" ? el.type : "";
+      if (!elType.startsWith("uml.")) continue;
 
       const rawAttrs = n?.attrs;
       if (!isRecord(rawAttrs)) continue;
-      if (!Object.prototype.hasOwnProperty.call(rawAttrs, 'attributesText') && !Object.prototype.hasOwnProperty.call(rawAttrs, 'operationsText')) {
-        continue;
-      }
+
 
       const nextAttrs: any = { ...rawAttrs };
-      delete nextAttrs.attributesText;
-      delete nextAttrs.operationsText;
-      nodes[i] = { ...(n as any), attrs: nextAttrs };
+      delete nextAttrs.name;
+      delete nextAttrs.stereotype;
+
+      // Class/Interface members are semantic (element-level).
+      if (elType === "uml.class" || elType === "uml.interface") {
+        delete nextAttrs.attributesText;
+        delete nextAttrs.operationsText;
+      }
+
+      const hasKeys = Object.keys(nextAttrs).length > 0;
+      if (hasKeys) {
+        nodes[i] = { ...(n as any), attrs: nextAttrs };
+      } else {
+        const nextNode: any = { ...(n as any) };
+        delete nextNode.attrs;
+        nodes[i] = nextNode;
+      }
     }
   }
 
   return model;
 }
+
 
 export function sanitizeModelViewOwnerRefs(model: Model): Model {
   // ownerRef is optional; if present, ensure it has a valid shape.

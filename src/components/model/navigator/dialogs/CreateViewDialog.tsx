@@ -34,8 +34,13 @@ export function CreateViewDialog({ isOpen, targetFolderId, ownerElementId, initi
       const hasQualified = vp.allowedElementTypes.some((t) => String(t).includes('.'));
       return wantsQualified ? hasQualified : !hasQualified;
     });
-    const preferred = k === 'uml' ? eligible.find((v) => v.id === 'uml-class') : eligible.find((v) => v.id === 'layered');
-    setViewpointDraft(preferred?.id ?? eligible[0]?.id ?? (k === 'uml' ? 'uml-class' : 'layered'));
+    const preferred =
+      k === 'uml'
+        ? eligible.find((v) => v.id === 'uml-class')
+        : k === 'bpmn'
+          ? eligible.find((v) => v.id === 'bpmn-process')
+          : eligible.find((v) => v.id === 'layered');
+    setViewpointDraft(preferred?.id ?? eligible[0]?.id ?? (k === 'uml' ? 'uml-class' : k === 'bpmn' ? 'bpmn-process' : 'layered'));
   }, [isOpen, initialKind]);
 
   const viewpointOptions = useMemo(() => {
@@ -48,6 +53,9 @@ export function CreateViewDialog({ isOpen, targetFolderId, ownerElementId, initi
   const defaultViewpointId = useMemo(() => {
     if (kindDraft === 'uml') {
       return viewpointOptions.find((v) => v.id === 'uml-class')?.id ?? viewpointOptions[0]?.id ?? 'uml-class';
+    }
+    if (kindDraft === 'bpmn') {
+      return viewpointOptions.find((v) => v.id === 'bpmn-process')?.id ?? viewpointOptions[0]?.id ?? 'bpmn-process';
     }
     return viewpointOptions.find((v) => v.id === 'layered')?.id ?? viewpointOptions[0]?.id ?? 'layered';
   }, [kindDraft, viewpointOptions]);
@@ -133,9 +141,7 @@ return (
             >
               <option value="archimate">ArchiMate</option>
               <option value="uml">UML</option>
-              <option value="bpmn" disabled>
-                BPMN (coming soon)
-              </option>
+              <option value="bpmn">BPMN</option>
             </select>
           </div>
         </div>

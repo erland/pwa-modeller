@@ -51,6 +51,13 @@ export const VIEWPOINTS: Viewpoint[] = [
       'uml.realization',
       'uml.dependency'
     ]
+  },
+  {
+    id: 'bpmn-process',
+    name: 'BPMN Process',
+    description: 'BPMN process diagram (v1).',
+    allowedElementTypes: ['bpmn.task', 'bpmn.startEvent', 'bpmn.endEvent', 'bpmn.gatewayExclusive'],
+    allowedRelationshipTypes: ['bpmn.sequenceFlow']
   }
 ];
 

@@ -101,7 +101,7 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
 
 function defaultRelTypeForViewKind(kind: string | undefined): RelationshipType {
   if (kind === 'uml') return 'uml.association';
-  // TODO: BPMN
+  if (kind === 'bpmn') return 'bpmn.sequenceFlow';
   return 'Association';
 }
 

@@ -17,6 +17,7 @@ vite.config.d.ts
 digest*
 pwa-modeller*
 ea-modeller*.zip
+ea_modeller*.zip
 
 # Editor directories and files
 .vscode/*

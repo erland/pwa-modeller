@@ -159,6 +159,19 @@ export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
   'uml.dependency'
 ];
 
+// -------------------------
+// BPMN (Process diagram v1)
+// -------------------------
+
+export const BPMN_ELEMENT_TYPES: ElementType[] = [
+  'bpmn.task',
+  'bpmn.startEvent',
+  'bpmn.endEvent',
+  'bpmn.gatewayExclusive'
+];
+
+export const BPMN_RELATIONSHIP_TYPES: RelationshipType[] = ['bpmn.sequenceFlow'];
+
 export type TypeOption<TId extends string = string> = { id: TId; label: string };
 
 const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
@@ -167,6 +180,13 @@ const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   'uml.enum': 'Enum',
   'uml.package': 'Package',
   'uml.note': 'Note'
+};
+
+const BPMN_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
+  'bpmn.task': 'Task',
+  'bpmn.startEvent': 'Start Event',
+  'bpmn.endEvent': 'End Event',
+  'bpmn.gatewayExclusive': 'Exclusive Gateway'
 };
 
 const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {
@@ -178,15 +198,27 @@ const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = 
   'uml.dependency': 'Dependency'
 };
 
+const BPMN_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {
+  'bpmn.sequenceFlow': 'Sequence Flow'
+};
+
 export function getElementTypeLabel(typeId: ElementType | string): string {
   // We keep internal ids like "uml.class" but show a friendly label when available.
   // ArchiMate element ids fall back to the id itself.
-  return (UML_ELEMENT_TYPE_LABELS as Record<string, string>)[typeId] ?? typeId;
+  const labels = {
+    ...UML_ELEMENT_TYPE_LABELS,
+    ...BPMN_ELEMENT_TYPE_LABELS
+  } as Record<string, string>;
+  return labels[typeId] ?? typeId;
 }
 
 export function getRelationshipTypeLabel(typeId: RelationshipType | string): string {
   // Same pattern as element labels.
-  return (UML_RELATIONSHIP_TYPE_LABELS as Record<string, string>)[typeId] ?? typeId;
+  const labels = {
+    ...UML_RELATIONSHIP_TYPE_LABELS,
+    ...BPMN_RELATIONSHIP_TYPE_LABELS
+  } as Record<string, string>;
+  return labels[typeId] ?? typeId;
 }
 
 export function getElementTypeOptionsForKind(kind: ModelKind): TypeOption<ElementType>[] {
@@ -201,12 +233,12 @@ export function getRelationshipTypeOptionsForKind(kind: ModelKind): TypeOption<R
 
 export function getElementTypesForKind(kind: ModelKind): ElementType[] {
   if (kind === 'uml') return UML_ELEMENT_TYPES;
-  // TODO: BPMN
+  if (kind === 'bpmn') return BPMN_ELEMENT_TYPES;
   return ELEMENT_TYPES;
 }
 
 export function getRelationshipTypesForKind(kind: ModelKind): RelationshipType[] {
   if (kind === 'uml') return UML_RELATIONSHIP_TYPES;
-  // TODO: BPMN
+  if (kind === 'bpmn') return BPMN_RELATIONSHIP_TYPES;
   return RELATIONSHIP_TYPES;
 }

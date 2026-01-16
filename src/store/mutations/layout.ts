@@ -12,6 +12,14 @@ function syncViewConnections(model: Model, viewId: string): void {
   }
 }
 
+function defaultUmlNodePresentationAttrs(elementType: string): Record<string, unknown> | undefined {
+  // Only apply to class/interface nodes for now.
+  if (elementType === 'uml.class' || elementType === 'uml.interface') {
+    return { showAttributes: true, showOperations: true, collapsed: false };
+  }
+  return undefined;
+}
+
 
 export function updateViewNodeLayout(
   model: Model,
@@ -62,7 +70,9 @@ export function addElementToView(model: Model, viewId: string, elementId: string
   const minZ = layout.nodes.reduce((m, n, idx) => Math.min(m, typeof n.zIndex === 'number' ? n.zIndex : idx), 0);
   const z = isPool ? minZ - 2 : isLane ? minZ - 1 : maxZ + 1;
 
-  const node: ViewNodeLayout = { elementId, x, y, width: nodeW, height: nodeH, zIndex: z };
+  const attrs = viewWithLayout.kind === 'uml' ? defaultUmlNodePresentationAttrs(String(element.type)) : undefined;
+
+  const node: ViewNodeLayout = { elementId, x, y, width: nodeW, height: nodeH, zIndex: z, attrs };
 
   model.views[viewId] = {
     ...viewWithLayout,
@@ -114,7 +124,8 @@ export function addElementToViewAt(model: Model, viewId: string, elementId: stri
   const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
   const minZ = layout.nodes.reduce((m, n, idx) => Math.min(m, typeof n.zIndex === 'number' ? n.zIndex : idx), 0);
   const z = isPool ? minZ - 2 : isLane ? minZ - 1 : maxZ + 1;
-  const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: z };
+  const attrs = viewWithLayout.kind === 'uml' ? defaultUmlNodePresentationAttrs(String(element.type)) : undefined;
+  const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: z, attrs };
   model.views[viewId] = {
     ...viewWithLayout,
     layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }

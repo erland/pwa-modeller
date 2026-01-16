@@ -42,6 +42,44 @@ describe('store mutations: layout invariants', () => {
     expect(node.height).toBe(70);
   });
 
+  test('addElementToViewAt sets default UML node presentation flags for class/interface in UML views', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const el = createElement({ name: 'C', type: 'uml.class' });
+    model.elements[el.id] = el;
+
+    const view = createView({
+      name: 'UML',
+      viewpointId: 'layered',
+      kind: 'uml',
+      formatting: { snapToGrid: false, gridSize: 20, layerStyleTags: {} }
+    });
+    putView(model, view);
+
+    addElementToViewAt(model, view.id, el.id, 100, 100);
+
+    const node = model.views[view.id].layout!.nodes.find((n) => n.elementId === el.id)!;
+    expect(node.attrs).toEqual({ showAttributes: true, showOperations: true, collapsed: false });
+  });
+
+  test('addElementToViewAt does not set UML presentation flags for non-class/interface element types', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const el = createElement({ name: 'N', type: 'uml.note' });
+    model.elements[el.id] = el;
+
+    const view = createView({
+      name: 'UML',
+      viewpointId: 'layered',
+      kind: 'uml',
+      formatting: { snapToGrid: false, gridSize: 20, layerStyleTags: {} }
+    });
+    putView(model, view);
+
+    addElementToViewAt(model, view.id, el.id, 100, 100);
+
+    const node = model.views[view.id].layout!.nodes.find((n) => n.elementId === el.id)!;
+    expect(node.attrs).toBeUndefined();
+  });
+
   test('addElementToViewAt is idempotent and updates position when node already exists', () => {
     const model = createEmptyModel({ name: 'M' });
     const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });

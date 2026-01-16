@@ -4,7 +4,7 @@ import { kindFromTypeId } from '../kindFromTypeId';
 import { makeIssue } from './issues';
 import type { ValidationIssue } from './types';
 
-const UML_CLASSIFIER_TYPES = new Set(['uml.class', 'uml.interface', 'uml.enum']);
+const UML_GENERALIZABLE_TYPES = new Set(['uml.class', 'uml.interface', 'uml.enum', 'uml.actor', 'uml.usecase']);
 
 export function validateUmlBasics(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -74,16 +74,16 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
   // ------------------------------
   // Build adjacency: subclass -> superclass via uml.generalization
   const adj = new Map<string, Array<{ to: string; relId: string }>>();
-  const umlClassifiers = new Set<string>();
+  const umlGeneralizables = new Set<string>();
   for (const el of Object.values(model.elements)) {
     const kind = el.kind ?? kindFromTypeId(el.type);
-    if (kind === 'uml' && UML_CLASSIFIER_TYPES.has(el.type)) umlClassifiers.add(el.id);
+    if (kind === 'uml' && UML_GENERALIZABLE_TYPES.has(el.type)) umlGeneralizables.add(el.id);
   }
 
   for (const rel of Object.values(model.relationships)) {
     if (rel.type !== 'uml.generalization') continue;
     if (!rel.sourceElementId || !rel.targetElementId) continue;
-    if (!umlClassifiers.has(rel.sourceElementId) || !umlClassifiers.has(rel.targetElementId)) continue;
+    if (!umlGeneralizables.has(rel.sourceElementId) || !umlGeneralizables.has(rel.targetElementId)) continue;
     const from = rel.sourceElementId;
     const to = rel.targetElementId;
     const list = adj.get(from) ?? [];
@@ -122,7 +122,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
     inStack.delete(u);
   }
 
-  for (const nodeId of umlClassifiers) {
+  for (const nodeId of umlGeneralizables) {
     if (!visited.has(nodeId)) dfs(nodeId);
   }
 

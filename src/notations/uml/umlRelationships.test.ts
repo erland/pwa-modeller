@@ -46,4 +46,22 @@ describe('umlNotation relationship guard rules', () => {
       umlNotation.canCreateRelationship({ relationshipType: 'uml.realization', sourceType: 'uml.interface', targetType: 'uml.class' })
     ).toEqual({ allowed: false, reason: 'Realization is allowed from Class to Interface.' });
   });
+
+  test('association is allowed in use case diagrams (actor/usecase and usecase/usecase)', () => {
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.association', sourceType: 'uml.actor', targetType: 'uml.usecase' })
+    ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.association', sourceType: 'uml.usecase', targetType: 'uml.actor' })
+    ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.association', sourceType: 'uml.usecase', targetType: 'uml.usecase' })
+    ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.association', sourceType: 'uml.actor', targetType: 'uml.actor' })
+    ).toEqual({ allowed: false, reason: 'Association is allowed between classifiers, between use cases, or between an actor and a use case.' });
+  });
 });

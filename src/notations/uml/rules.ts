@@ -1,6 +1,14 @@
 import type { RelationshipValidationMode } from '../../domain';
 
-import { isUmlClassifierType, isUmlNodeType, isUmlNoteType, isUmlPackageType, isUmlRelationshipType } from './nodeTypes';
+import {
+  isUmlActorType,
+  isUmlClassifierType,
+  isUmlNodeType,
+  isUmlNoteType,
+  isUmlPackageType,
+  isUmlRelationshipType,
+  isUmlUseCaseType,
+} from './nodeTypes';
 
 export type UmlGuardResult = { allowed: true } | { allowed: false; reason?: string };
 
@@ -36,10 +44,18 @@ export function canCreateUmlRelationship(args: {
   // Basic class diagram rules (kept intentionally permissive for v1).
   switch (relationshipType) {
     case 'uml.generalization':
-      if (!isUmlClassifierType(sourceType) || !isUmlClassifierType(targetType)) {
-        return { allowed: false, reason: 'Generalization is allowed between classifiers (class/interface/enum).' };
+      // Allow generalization between classifiers, actors, or use cases.
+      if (
+        (isUmlClassifierType(sourceType) && isUmlClassifierType(targetType)) ||
+        (isUmlActorType(sourceType) && isUmlActorType(targetType)) ||
+        (isUmlUseCaseType(sourceType) && isUmlUseCaseType(targetType))
+      ) {
+        return { allowed: true };
       }
-      return { allowed: true };
+      return {
+        allowed: false,
+        reason: 'Generalization is allowed between classifiers (class/interface/enum), between actors, or between use cases.',
+      };
 
     case 'uml.realization':
       // Class realizes an interface (keep v1 strict).
@@ -70,10 +86,24 @@ export function canCreateUmlRelationship(args: {
 
     case 'uml.association':
     default:
-      // Association: classifiers only (avoid packages for now).
-      if (!isUmlClassifierType(sourceType) || !isUmlClassifierType(targetType)) {
-        return { allowed: false, reason: 'Association is allowed between classifiers (class/interface/enum).' };
+      // Association:
+      // - Class diagram: between classifiers.
+      // - Use case diagram: actor<->usecase or usecase<->usecase.
+      if (isUmlClassifierType(sourceType) && isUmlClassifierType(targetType)) {
+        return { allowed: true };
       }
-      return { allowed: true };
+
+      if ((isUmlActorType(sourceType) && isUmlUseCaseType(targetType)) || (isUmlUseCaseType(sourceType) && isUmlActorType(targetType))) {
+        return { allowed: true };
+      }
+
+      if (isUmlUseCaseType(sourceType) && isUmlUseCaseType(targetType)) {
+        return { allowed: true };
+      }
+
+      return {
+        allowed: false,
+        reason: 'Association is allowed between classifiers, between use cases, or between an actor and a use case.',
+      };
   }
 }

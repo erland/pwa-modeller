@@ -1,4 +1,12 @@
-export const UML_NODE_TYPES = ['uml.class', 'uml.interface', 'uml.enum', 'uml.package', 'uml.note'] as const;
+export const UML_NODE_TYPES = [
+  'uml.class',
+  'uml.interface',
+  'uml.enum',
+  'uml.package',
+  'uml.usecase',
+  'uml.actor',
+  'uml.note',
+] as const;
 export type UmlNodeType = (typeof UML_NODE_TYPES)[number];
 
 export const UML_RELATIONSHIP_TYPES = [
@@ -20,6 +28,14 @@ export function isUmlNodeType(t: string): t is UmlNodeType {
 
 export function isUmlClassifierType(t: string): t is 'uml.class' | 'uml.interface' | 'uml.enum' {
   return t === 'uml.class' || t === 'uml.interface' || t === 'uml.enum';
+}
+
+export function isUmlUseCaseType(t: string): t is 'uml.usecase' {
+  return t === 'uml.usecase';
+}
+
+export function isUmlActorType(t: string): t is 'uml.actor' {
+  return t === 'uml.actor';
 }
 
 export function isUmlPackageType(t: string): t is 'uml.package' {

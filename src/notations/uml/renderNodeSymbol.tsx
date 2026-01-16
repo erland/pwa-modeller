@@ -19,6 +19,12 @@ export function renderUmlNodeSymbol(nodeType: string): React.ReactNode {
     case 'uml.note':
       label = 'N';
       break;
+    case 'uml.usecase':
+      label = 'UC';
+      break;
+    case 'uml.actor':
+      label = 'A';
+      break;
   }
 
   return (

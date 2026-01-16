@@ -43,6 +43,8 @@ describe('UML notation contract', () => {
     const elementTypeIds = elementTypeOptions.map((x) => x.id);
     expect(elementTypeIds).toContain('uml.class');
     expect(elementTypeIds).toContain('uml.interface');
+    expect(elementTypeIds).toContain('uml.usecase');
+    expect(elementTypeIds).toContain('uml.actor');
 
     // Every element type listed in the catalog must be creatable in UML.
     for (const id of elementTypeIds) {

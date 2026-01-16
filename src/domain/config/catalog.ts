@@ -148,7 +148,15 @@ export const RELATIONSHIP_TYPES: RelationshipType[] = [
 // UML (Class diagram v1)
 // -------------------------
 
-export const UML_ELEMENT_TYPES: ElementType[] = ['uml.class', 'uml.interface', 'uml.enum', 'uml.package', 'uml.note'];
+export const UML_ELEMENT_TYPES: ElementType[] = [
+  'uml.class',
+  'uml.interface',
+  'uml.enum',
+  'uml.package',
+  'uml.usecase',
+  'uml.actor',
+  'uml.note',
+];
 
 export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
   'uml.association',
@@ -181,6 +189,8 @@ const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   'uml.interface': 'Interface',
   'uml.enum': 'Enum',
   'uml.package': 'Package',
+  'uml.usecase': 'Use Case',
+  'uml.actor': 'Actor',
   'uml.note': 'Note'
 };
 

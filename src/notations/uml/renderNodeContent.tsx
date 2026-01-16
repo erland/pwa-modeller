@@ -179,6 +179,8 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
   const isInterface = nodeType === "uml.interface";
   const isEnum = nodeType === "uml.enum";
   const isPackage = nodeType === "uml.package";
+  const isUseCase = nodeType === "uml.usecase";
+  const isActor = nodeType === "uml.actor";
   const isNote = nodeType === "uml.note";
   const isClass = nodeType === "uml.class";
 
@@ -229,6 +231,47 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Header stereotype={defaultStereo} name={name} />
         {attrLines.length ? <Section>{attrLines.join('\n')}</Section> : null}
+      </div>
+    );
+  }
+
+  if (isUseCase) {
+    // Minimal use case rendering: draw an ellipse-like container inside the node.
+    return (
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            border: '1px solid rgba(0,0,0,0.32)',
+            borderRadius: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            padding: '6px 10px',
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          {name}
+        </div>
+      </div>
+    );
+  }
+
+  if (isActor) {
+    // Minimal actor rendering: stick figure + name.
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true" style={{ opacity: 0.9 }}>
+          <circle cx="22" cy="10" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
+          <line x1="22" y1="16" x2="22" y2="30" stroke="currentColor" strokeWidth="2" />
+          <line x1="10" y1="20" x2="34" y2="20" stroke="currentColor" strokeWidth="2" />
+          <line x1="22" y1="30" x2="12" y2="42" stroke="currentColor" strokeWidth="2" />
+          <line x1="22" y1="30" x2="32" y2="42" stroke="currentColor" strokeWidth="2" />
+        </svg>
+        <div style={{ marginTop: 4, textAlign: 'center', fontSize: 13, fontWeight: 700 }}>{name}</div>
       </div>
     );
   }

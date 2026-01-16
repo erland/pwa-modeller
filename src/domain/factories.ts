@@ -30,6 +30,15 @@ export function createElement(input: CreateElementInput): Element {
   const kind = input.kind ?? kindFromTypeId(input.type);
   if (kind === 'archimate' && !input.layer) throw new Error('Element.layer is required for archimate elements');
 
+  // Notation-specific semantic attributes.
+  // For UML Class/Interface we default to empty member lists so the UI never has to handle undefined.
+  const attrs =
+    input.attrs !== undefined
+      ? input.attrs
+      : kind === 'uml' && (input.type === 'uml.class' || input.type === 'uml.interface')
+        ? { attributes: [], operations: [] }
+        : undefined;
+
   return {
     id: input.id ?? createId('el'),
     kind,
@@ -37,6 +46,7 @@ export function createElement(input: CreateElementInput): Element {
     layer: input.layer,
     type: input.type,
     unknownType: input.unknownType,
+    attrs,
     documentation: (input.documentation ?? input.description)?.trim() || undefined,
     externalIds: input.externalIds && input.externalIds.length ? input.externalIds : undefined,
     taggedValues: input.taggedValues && input.taggedValues.length ? input.taggedValues : undefined

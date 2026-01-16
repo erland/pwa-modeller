@@ -269,6 +269,8 @@ export interface Element extends HasTaggedValues, HasExternalIds {
   type: ElementType;
   /** Present only when type === 'Unknown'. */
   unknownType?: UnknownTypeInfo;
+  /** Notation-specific attributes (notation-defined shape, e.g. UML members). */
+  attrs?: unknown;
   documentation?: string;
 }
 
@@ -324,7 +326,7 @@ export interface ViewNodeLayout {
   /**
    * Optional notation-specific attributes for this node *instance in the view*.
    *
-   * Example: UML class compartments (attributes/operations) are view-local and can live here.
+   * Example: UML view-local presentation flags (collapsed/show compartments) can live here.
    */
   attrs?: unknown;
 }

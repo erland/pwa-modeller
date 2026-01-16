@@ -15,6 +15,21 @@ describe('domain factories', () => {
     expect(el.documentation).toBe('docs');
   });
 
+  test('createElement defaults UML class/interface attrs to empty member arrays', () => {
+    const c = createElement({ name: 'C', type: 'uml.class' as any });
+    expect(c.kind).toBe('uml');
+    expect(c.attrs).toEqual({ attributes: [], operations: [] });
+
+    const i = createElement({ name: 'I', type: 'uml.interface' as any });
+    expect(i.kind).toBe('uml');
+    expect(i.attrs).toEqual({ attributes: [], operations: [] });
+
+    const a = createElement({ name: 'Actor', layer: 'Business', type: 'BusinessActor' });
+    expect(a.kind ?? 'archimate').toBe('archimate');
+    expect(a.attrs).toBeUndefined();
+  });
+
+
   test('createElement enforces non-empty name', () => {
     expect(() =>
       createElement({

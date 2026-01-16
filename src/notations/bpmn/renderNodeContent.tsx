@@ -76,10 +76,6 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
   const w = node.width ?? 120;
   const h = node.height ?? 60;
 
-  // Size used for square-ish symbols. Events/gateways also need room for a label,
-  // so they use a smaller per-type size below.
-  const symbolSize = Math.max(28, Math.min(w, h) - 8);
-
   if (type === 'bpmn.pool') {
     // Participant / Pool: container with a vertical label band on the left.
     const bandW = Math.min(36, Math.max(24, Math.round(w * 0.06)));

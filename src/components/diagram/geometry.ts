@@ -48,6 +48,12 @@ export function hitTestConnectable(nodes: ViewNodeLayout[], p: Point, exclude: C
   // This prevents large container shapes (e.g. lanes/pools) from stealing the hit when a smaller node is inside.
   let best: { ref: ConnectableRef; z: number; area: number } | null = null;
 
+  type WithZIndex = { zIndex?: unknown };
+  const getZIndex = (n: ViewNodeLayout, fallback: number): number => {
+    const maybe = (n as unknown as WithZIndex).zIndex;
+    return typeof maybe === 'number' ? maybe : fallback;
+  };
+
   for (let i = 0; i < nodes.length; i += 1) {
     const n = nodes[i];
     const r = nodeRefFromLayout(n);
@@ -58,7 +64,7 @@ export function hitTestConnectable(nodes: ViewNodeLayout[], p: Point, exclude: C
     const h = n.height ?? (n.connectorId ? 24 : 60);
     if (!(p.x >= n.x && p.x <= n.x + w && p.y >= n.y && p.y <= n.y + h)) continue;
 
-    const z = typeof (n as any).zIndex === 'number' ? (n as any).zIndex : i;
+    const z = getZIndex(n, i);
     const area = w * h;
 
     if (!best) {

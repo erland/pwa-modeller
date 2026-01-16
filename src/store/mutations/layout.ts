@@ -207,12 +207,74 @@ export function updateViewNodePositionAny(
   if (!view.layout) return;
 
   const layout = view.layout;
+  const moved = layout.nodes.find((n) => {
+    if (ref.elementId && n.elementId === ref.elementId) return true;
+    if (ref.connectorId && n.connectorId === ref.connectorId) return true;
+    if (ref.objectId && n.objectId === ref.objectId) return true;
+    return false;
+  });
+
+  // If the node does not exist, we can't apply the move.
+  if (!moved) return;
+
+  // TypeScript doesn't reliably preserve narrowing for captured variables inside
+  // nested helper functions. Use a non-optional local for those helpers.
+  const movedNode: ViewNodeLayout = moved;
+
+  const dx = x - movedNode.x;
+  const dy = y - movedNode.y;
+
+  // Identify nodes fully contained within the moved node (prior to the move),
+  // and move them by the same delta. This makes "container" nodes behave as
+  // expected (e.g. Pools/Lanes), and is generally useful for group-like shapes.
+  const pad = 2; // small tolerance so touching borders still counts as "inside"
+  const container = { x: movedNode.x, y: movedNode.y, w: movedNode.width, h: movedNode.height };
+
+  function isSameNode(n: ViewNodeLayout): boolean {
+    if (movedNode.elementId && n.elementId === movedNode.elementId) return true;
+    if (movedNode.connectorId && n.connectorId === movedNode.connectorId) return true;
+    if (movedNode.objectId && n.objectId === movedNode.objectId) return true;
+    return false;
+  }
+
+  function isFullyInside(n: ViewNodeLayout): boolean {
+    // Guard against missing sizes (shouldn't happen, but keep it safe).
+    const w = n.width ?? 0;
+    const h = n.height ?? 0;
+    return (
+      n.x >= container.x + pad &&
+      n.y >= container.y + pad &&
+      n.x + w <= container.x + container.w - pad &&
+      n.y + h <= container.y + container.h - pad
+    );
+  }
+
+  const moveAlso = dx !== 0 || dy !== 0 ? new Set<string>() : null;
+
+  if (moveAlso) {
+    for (const n of layout.nodes) {
+      if (isSameNode(n)) continue;
+      if (!isFullyInside(n)) continue;
+
+      // Use a stable key for Set membership across element/connector/object nodes.
+      if (n.elementId) moveAlso.add(`e:${n.elementId}`);
+      else if (n.connectorId) moveAlso.add(`c:${n.connectorId}`);
+      else if (n.objectId) moveAlso.add(`o:${n.objectId}`);
+    }
+  }
+
   const nextNodes = layout.nodes.map((n) => {
     const matchesElement = ref.elementId && n.elementId === ref.elementId;
     const matchesConnector = ref.connectorId && n.connectorId === ref.connectorId;
     const matchesObject = ref.objectId && n.objectId === ref.objectId;
-    if (!matchesElement && !matchesConnector && !matchesObject) return n;
-    return { ...n, x, y };
+    const isPrimary = Boolean(matchesElement || matchesConnector || matchesObject);
+
+    const key = n.elementId ? `e:${n.elementId}` : n.connectorId ? `c:${n.connectorId}` : n.objectId ? `o:${n.objectId}` : '';
+    const shouldMoveWith = Boolean(moveAlso && key && moveAlso.has(key));
+
+    if (!isPrimary && !shouldMoveWith) return n;
+    if (isPrimary) return { ...n, x, y };
+    return { ...n, x: n.x + dx, y: n.y + dy };
   });
 
   model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };

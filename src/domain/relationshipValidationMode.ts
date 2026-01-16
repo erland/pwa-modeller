@@ -8,6 +8,13 @@ export type RelationshipValidationMode = 'minimal' | 'full' | 'full_derived';
 
 export const RELATIONSHIP_VALIDATION_MODES: RelationshipValidationMode[] = ['minimal', 'full', 'full_derived'];
 
+/**
+ * The strongest relationship validation mode.
+ *
+ * The app no longer exposes a UI switch; we always run the strictest rules.
+ */
+export const STRONGEST_RELATIONSHIP_VALIDATION_MODE: RelationshipValidationMode = 'full_derived';
+
 export function isFullRelationshipValidationMode(mode: RelationshipValidationMode): boolean {
   return mode === 'full' || mode === 'full_derived';
 }
@@ -21,5 +28,5 @@ export function includeDerivedRelationships(mode: RelationshipValidationMode): b
  */
 export function coerceRelationshipValidationMode(value: unknown): RelationshipValidationMode {
   if (value === 'minimal' || value === 'full' || value === 'full_derived') return value;
-  return 'minimal';
+  return STRONGEST_RELATIONSHIP_VALIDATION_MODE;
 }

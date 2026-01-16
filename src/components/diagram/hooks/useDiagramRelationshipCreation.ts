@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Model, RelationshipType } from '../../../domain';
-import { createRelationship, getViewpointById } from '../../../domain';
+import { createRelationship, getViewpointById, STRONGEST_RELATIONSHIP_VALIDATION_MODE } from '../../../domain';
 import { getNotation } from '../../../notations';
 
-import { modelStore, useModelStore } from '../../../store';
+import { modelStore } from '../../../store';
 import type { Selection } from '../../model/selection';
 import type { Point } from '../geometry';
 import { hitTestConnectable } from '../geometry';
@@ -26,17 +26,13 @@ type Args = {
 };
 
 export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoint, onSelect }: Args) {
-
-  const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
-
   const [validationDataTick, setValidationDataTick] = useState(0);
   useEffect(() => {
-    if (relationshipValidationMode === 'minimal') return;
     let cancelled = false;
     // Best-effort: allow notations to lazily load rule tables. For ArchiMate,
     // this enables strict relationship validation via a bundled XML matrix.
     const arch = getNotation('archimate');
-    const p = arch.prepareRelationshipValidation?.(relationshipValidationMode);
+    const p = arch.prepareRelationshipValidation?.(STRONGEST_RELATIONSHIP_VALIDATION_MODE);
     if (p && typeof (p as Promise<void>).then === 'function') {
       void (p as Promise<void>).then(() => {
         if (!cancelled) setValidationDataTick((t) => t + 1);
@@ -48,7 +44,7 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
     return () => {
       cancelled = true;
     };
-  }, [relationshipValidationMode]);
+  }, []);
 
   const [linkDrag, setLinkDrag] = useState<DiagramLinkDrag | null>(null);
 
@@ -159,7 +155,7 @@ const pendingRelTypeOptions = useMemo(() => {
     const targetType = model.elements[targetRef.id]?.type;
     if (sourceType && targetType) {
       allowed = allTypes.filter((t) =>
-        notation.canCreateRelationship({ relationshipType: t, sourceType, targetType, mode: relationshipValidationMode }).allowed
+        notation.canCreateRelationship({ relationshipType: t, sourceType, targetType, mode: STRONGEST_RELATIONSHIP_VALIDATION_MODE }).allowed
       );
     }
   } else {
@@ -186,7 +182,7 @@ const pendingRelTypeOptions = useMemo(() => {
     }
   }
   return out;
-}, [model, pendingCreateRel, relationshipValidationMode, validationDataTick, showAllPendingRelTypes]);
+}, [model, pendingCreateRel, validationDataTick, showAllPendingRelTypes]);
 
   // When the dialog opens, default the type to last used (if allowed), otherwise first option.
   useEffect(() => {
@@ -236,7 +232,7 @@ const pendingRelTypeOptions = useMemo(() => {
           relationshipType: pendingRelType,
           sourceType,
           targetType,
-          mode: relationshipValidationMode,
+          mode: STRONGEST_RELATIONSHIP_VALIDATION_MODE,
         });
         if (!v.allowed) {
           setPendingRelError(v.reason ?? 'Invalid relationship');
@@ -257,7 +253,7 @@ const pendingRelTypeOptions = useMemo(() => {
     setLastRelType(pendingRelType);
     setPendingCreateRel(null);
     onSelect({ kind: 'relationship', relationshipId: rel.id, viewId: pendingCreateRel.viewId });
-  }, [model, pendingCreateRel, pendingRelType, onSelect, relationshipValidationMode, showAllPendingRelTypes]);
+  }, [model, pendingCreateRel, pendingRelType, onSelect, showAllPendingRelTypes]);
 
   const startLinkDrag = useCallback((drag: DiagramLinkDrag) => {
     setLinkDrag(drag);

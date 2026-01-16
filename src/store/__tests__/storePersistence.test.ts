@@ -2,7 +2,7 @@ import { createEmptyModel } from '../../domain';
 import { clearPersistedStoreState, loadPersistedStoreState, persistStoreState } from '../storePersistence';
 
 // Keep this in sync with src/store/storePersistence.ts.
-const STORAGE_KEY = 'pwa-modeller:storeState:v1';
+const STORAGE_KEY = 'pwa-modeller:storeState:v2';
 
 describe('storePersistence', () => {
   beforeEach(() => {
@@ -12,7 +12,7 @@ describe('storePersistence', () => {
   test('persistStoreState + loadPersistedStoreState round-trip a valid model envelope', () => {
     const model = createEmptyModel({ name: 'Test Model' }, 'model_test');
 
-    persistStoreState({ model, fileName: 'test.json', isDirty: true, relationshipValidationMode: 'full' });
+    persistStoreState({ model, fileName: 'test.json', isDirty: true });
 
     const restored = loadPersistedStoreState();
     expect(restored).not.toBeNull();
@@ -25,7 +25,7 @@ describe('storePersistence', () => {
   test('loadPersistedStoreState returns null for unsupported envelope version', () => {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ v: 2, state: { model: null, fileName: null, isDirty: false } })
+      JSON.stringify({ v: 1, state: { model: null, fileName: null, isDirty: false } })
     );
     expect(loadPersistedStoreState()).toBeNull();
   });
@@ -34,7 +34,7 @@ describe('storePersistence', () => {
     // model object is present but does not satisfy deserializeModel requirements.
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ v: 1, state: { model: {}, fileName: null, isDirty: false } })
+      JSON.stringify({ v: 2, state: { model: {}, fileName: null, isDirty: false } })
     );
 
     expect(loadPersistedStoreState()).toBeNull();
@@ -44,7 +44,7 @@ describe('storePersistence', () => {
   test('clearPersistedStoreState removes persisted envelope', () => {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ v: 1, state: { model: null, fileName: null, isDirty: false, relationshipValidationMode: 'minimal' } })
+      JSON.stringify({ v: 2, state: { model: null, fileName: null, isDirty: false } })
     );
     clearPersistedStoreState();
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();

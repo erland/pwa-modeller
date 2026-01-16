@@ -12,7 +12,6 @@ import type {
   ViewObject,
   ViewObjectType,
   ViewConnectionRouteKind,
-  RelationshipValidationMode
 } from '../domain';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
 import {
@@ -34,8 +33,6 @@ export type ModelStoreState = {
   fileName: string | null;
   /** Tracks if there are unsaved changes since last load/save. */
   isDirty: boolean;
-  /** Relationship validation rule set used while drawing and in validation workspace. */
-  relationshipValidationMode: RelationshipValidationMode;
 };
 
 type Listener = () => void;
@@ -44,8 +41,7 @@ export class ModelStore {
   private state: ModelStoreState = {
     model: null,
     fileName: null,
-    isDirty: false,
-    relationshipValidationMode: 'minimal'
+    isDirty: false
   };
 
   private listeners = new Set<Listener>();
@@ -114,22 +110,16 @@ export class ModelStore {
    * `isDirty` flag as well.
    */
   hydrate = (
-    state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty' | 'relationshipValidationMode'>
+    state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>
   ): void => {
     this.setState({
       model: state.model,
       fileName: state.fileName,
-      isDirty: state.isDirty,
-      relationshipValidationMode: state.relationshipValidationMode ?? 'minimal'
+      isDirty: state.isDirty
     });
   };
 
-  
-  setRelationshipValidationMode = (mode: RelationshipValidationMode): void => {
-    this.setState({ relationshipValidationMode: mode });
-  };
-
-reset = (): void => {
+  reset = (): void => {
     this.setState({ model: null, fileName: null, isDirty: false });
   };
 

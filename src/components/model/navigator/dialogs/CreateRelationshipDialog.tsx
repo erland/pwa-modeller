@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Model, RelationshipType } from '../../../../domain';
-import { RELATIONSHIP_TYPES, createRelationship, getRelationshipTypeLabel } from '../../../../domain';
+import { RELATIONSHIP_TYPES, STRONGEST_RELATIONSHIP_VALIDATION_MODE, createRelationship, getRelationshipTypeLabel } from '../../../../domain';
 import { initRelationshipValidationMatrixFromBundledTable } from '../../../../domain/config/archimatePalette';
 import { getNotation } from '../../../../notations';
 import { modelStore } from '../../../../store';
 import { Dialog } from '../../../dialog/Dialog';
 import type { Selection } from '../../selection';
 import { elementOptionLabel } from '../navUtils';
-import { useModelStore } from '../../../../store';
 
 type Props = {
   model: Model;
@@ -19,13 +18,10 @@ type Props = {
 };
 
 export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId, onClose, onSelect }: Props) {
-  
-  const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
-
   const [matrixLoadTick, setMatrixLoadTick] = useState(0);
 
   useEffect(() => {
-    if (relationshipValidationMode === 'minimal') return;
+    if (!isOpen) return;
     let cancelled = false;
     void initRelationshipValidationMatrixFromBundledTable().then(() => {
       if (!cancelled) setMatrixLoadTick((t) => t + 1);
@@ -33,8 +29,9 @@ export function CreateRelationshipDialog({ model, isOpen, prefillSourceElementId
     return () => {
       cancelled = true;
     };
-  }, [relationshipValidationMode]);
-const [nameDraft, setNameDraft] = useState('');
+  }, [isOpen]);
+
+  const [nameDraft, setNameDraft] = useState('');
   const [documentationDraft, setDocumentationDraft] = useState('');
   const [sourceId, setSourceId] = useState('');
   const [targetId, setTargetId] = useState('');
@@ -64,10 +61,10 @@ const [nameDraft, setNameDraft] = useState('');
     if (!s || !t) return RELATIONSHIP_TYPES as RelationshipType[];
     const notation = getNotation('archimate');
     const allowed = (RELATIONSHIP_TYPES as RelationshipType[]).filter((rt) =>
-      notation.canCreateRelationship({ relationshipType: rt, sourceType: s.type, targetType: t.type, mode: relationshipValidationMode }).allowed
+      notation.canCreateRelationship({ relationshipType: rt, sourceType: s.type, targetType: t.type, mode: STRONGEST_RELATIONSHIP_VALIDATION_MODE }).allowed
     );
     return (allowed.length > 0 ? allowed : RELATIONSHIP_TYPES) as RelationshipType[];
-  }, [model, sourceId, targetId, relationshipValidationMode, matrixLoadTick]);
+  }, [model, sourceId, targetId, matrixLoadTick]);
 
   // Keep relationship type valid for chosen endpoints.
   useEffect(() => {
@@ -82,9 +79,9 @@ const [nameDraft, setNameDraft] = useState('');
     const t = model.elements[targetId];
     if (!s || !t) return null;
     const notation = getNotation('archimate');
-    const res = notation.canCreateRelationship({ relationshipType: typeDraft, sourceType: s.type, targetType: t.type, mode: relationshipValidationMode });
+    const res = notation.canCreateRelationship({ relationshipType: typeDraft, sourceType: s.type, targetType: t.type, mode: STRONGEST_RELATIONSHIP_VALIDATION_MODE });
     return res.allowed ? null : res.reason ?? 'Invalid relationship';
-  }, [model, sourceId, targetId, typeDraft, relationshipValidationMode, matrixLoadTick]);
+  }, [model, sourceId, targetId, typeDraft, matrixLoadTick]);
 
   return (
     <Dialog

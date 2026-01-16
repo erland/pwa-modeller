@@ -3,9 +3,8 @@ import type { CSSProperties } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 import '../../styles/shell.css';
-import { modelStore, useModelStore } from '../../store';
+import { useModelStore } from '../../store';
 import { initRelationshipValidationMatrixFromBundledTable } from '../../domain/config/archimatePalette';
-import type { RelationshipValidationMode } from '../../domain';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -121,18 +120,17 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const shellBodyRef = useRef<HTMLDivElement | null>(null);
   const [isResizing, setIsResizing] = useState<null | 'left' | 'right'>(null);
   const [isNavigatorDragging, setIsNavigatorDragging] = useState(false);
-const { isDirty, model, relationshipValidationMode } = useModelStore((s) => ({
+  const { isDirty, model } = useModelStore((s) => ({
     isDirty: s.isDirty,
-    model: s.model,
-    relationshipValidationMode: s.relationshipValidationMode,
+    model: s.model
   }));
 
+  // We always use strict ArchiMate relationship validation now. Best-effort preload.
   useEffect(() => {
-    if (relationshipValidationMode !== 'minimal') {
-      void initRelationshipValidationMatrixFromBundledTable().catch(() => undefined);
-    }
-  }, [relationshipValidationMode]);
-const online = useOnlineStatus();
+    void initRelationshipValidationMatrixFromBundledTable().catch(() => undefined);
+  }, []);
+
+  const online = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
 
   const confirmNavigate = useMemo(() => {
@@ -248,20 +246,6 @@ const online = useOnlineStatus();
             {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
             {model && isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}
           </div>
-          <label className="shellValidationMode" aria-label="Relationship validation mode" title="Välj valideringsnivå för relationer medan du modellerar">
-            <span className="shellValidationModeLabel">Validering</span>
-            <select
-              className="shellSelect"
-              value={relationshipValidationMode}
-              onChange={(e) => modelStore.setRelationshipValidationMode(e.target.value as RelationshipValidationMode)}
-              aria-label="Valideringsnivå"
-            >
-              <option value="minimal">Minimal</option>
-              <option value="full">Full</option>
-              <option value="full_derived">Full inkl. härledda</option>
-            </select>
-          </label>
-
           <button type="button"
             className="shellIconButton"
             aria-label="Toggle theme"

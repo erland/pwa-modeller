@@ -38,8 +38,7 @@ export function initStorePersistence(): void {
     persistStoreState({
       model: s.model,
       fileName: s.fileName,
-      isDirty: s.isDirty,
-      relationshipValidationMode: s.relationshipValidationMode
+      isDirty: s.isDirty
     });
   };
 

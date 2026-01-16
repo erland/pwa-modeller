@@ -33,9 +33,7 @@ function describeTarget(issue: ValidationIssue): string {
 }
 
 export function ValidationWorkspace({ onSelect, onGoToDiagram }: Props) {
-  
-  const { relationshipValidationMode } = useModelStore((s) => ({ relationshipValidationMode: s.relationshipValidationMode }));
-const model = useModelStore((s) => s.model);
+  const model = useModelStore((s) => s.model);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
 
   const summary = useMemo(() => {
@@ -47,7 +45,7 @@ const model = useModelStore((s) => s.model);
 
   function runValidation() {
     if (!model) return;
-    setIssues(validateModel(model, relationshipValidationMode));
+    setIssues(validateModel(model));
   }
 
   function navigate(issue: ValidationIssue) {
@@ -92,7 +90,7 @@ const model = useModelStore((s) => s.model);
       <div className="crudHeader">
         <div>
           <h2 className="crudTitle">Validation</h2>
-          <p className="crudHint">Run consistency checks and minimal ArchiMate structural validation.</p>
+          <p className="crudHint">Run consistency checks and strict notation validation.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button type="button" className="shellButton" onClick={runValidation}>

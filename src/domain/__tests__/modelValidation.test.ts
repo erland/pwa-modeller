@@ -58,7 +58,7 @@ describe('validateModel', () => {
   });
 
   
-it('supports full relationship-table validation modes', () => {
+it('uses relationship-table validation when the relationship matrix is loaded', () => {
   initRelationshipValidationMatrixFromXml(readRelationshipTable());
 
   const model = createEmptyModel({ name: 'M' });
@@ -71,11 +71,8 @@ it('supports full relationship-table validation modes', () => {
   const rel = createRelationship({ type: 'Serving', sourceElementId: coa.id, targetElementId: cap.id });
   model.relationships[rel.id] = rel;
 
-  const issuesMinimal = validateModel(model, 'minimal');
-  expect(issuesMinimal.some((i) => i.message.includes('Serving relationships must originate from a Service'))).toBe(true);
-
-  const issuesFull = validateModel(model, 'full');
-  expect(issuesFull.some((i) => i.message.includes('Serving relationships must originate from a Service'))).toBe(false);
+  const issues = validateModel(model);
+  expect(issues.some((i) => i.message.includes('Serving relationships must originate from a Service'))).toBe(false);
 });
 
 it('reports invalid ArchiMate structural combinations', () => {

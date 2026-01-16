@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { AccessType, Element, Model, RelationshipType } from '../../../../domain';
-import { getRelationshipTypesForKind, kindFromTypeId } from '../../../../domain';
+import { getRelationshipTypesForKind, kindFromTypeId, STRONGEST_RELATIONSHIP_VALIDATION_MODE } from '../../../../domain';
 import {
   getAllowedRelationshipTypes,
   initRelationshipValidationMatrixFromBundledTable,
@@ -10,7 +10,6 @@ import {
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
-import { useModelStore } from '../../../../store';
 import { CommonRelationshipProperties } from '../common/CommonRelationshipProperties';
 
 const ACCESS_TYPES: AccessType[] = ['Access', 'Read', 'Write', 'ReadWrite'];
@@ -35,7 +34,6 @@ type Props = {
 
 export function ArchimateRelationshipProperties({ model, relationshipId, viewId, actions, onSelect }: Props) {
   const rel = model.relationships[relationshipId];
-  const relationshipValidationMode = useModelStore((s) => s.relationshipValidationMode);
 
   // Hooks must be called unconditionally (even if we early-return).
   const relKind = rel ? kindFromTypeId(rel.type) : 'archimate';
@@ -44,7 +42,6 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
 
   useEffect(() => {
     if (relKind !== 'archimate') return;
-    if (relationshipValidationMode === 'minimal') return;
     let cancelled = false;
     void initRelationshipValidationMatrixFromBundledTable().then(() => {
       if (!cancelled) setMatrixLoadTick((t) => t + 1);
@@ -52,7 +49,7 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
     return () => {
       cancelled = true;
     };
-  }, [relationshipValidationMode, relKind]);
+  }, [relKind]);
 
   const [showAllRelationshipTypes, setShowAllRelationshipTypes] = useState(false);
   useEffect(() => {
@@ -74,9 +71,9 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
 
     const allForKind = getRelationshipTypesForKind(relKind) as RelationshipType[];
     if (!sourceType || !targetType) return allForKind;
-    const allowed = getAllowedRelationshipTypes(sourceType, targetType, relationshipValidationMode);
+    const allowed = getAllowedRelationshipTypes(sourceType, targetType, STRONGEST_RELATIONSHIP_VALIDATION_MODE);
     return (allowed.length > 0 ? allowed : allForKind) as RelationshipType[];
-  }, [sourceType, targetType, relationshipValidationMode, matrixLoadTick, relKind]);
+  }, [sourceType, targetType, matrixLoadTick, relKind]);
 
   const relationshipRuleWarning = useMemo(() => {
     // Dependency tick to recompute when the relationship matrix loads/changes.
@@ -86,9 +83,9 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
     if (!sourceType || !targetType) return null;
     if (relIsUnknown) return null;
 
-    const res = validateRelationship(sourceType, targetType, relType as RelationshipType, relationshipValidationMode);
+    const res = validateRelationship(sourceType, targetType, relType as RelationshipType, STRONGEST_RELATIONSHIP_VALIDATION_MODE);
     return res.allowed ? null : res.reason;
-  }, [sourceType, targetType, relType, relIsUnknown, relationshipValidationMode, matrixLoadTick, rel]);
+  }, [sourceType, targetType, relType, relIsUnknown, matrixLoadTick, rel]);
 
   const relationshipTypeOptions = useMemo<RelationshipType[]>(() => {
     const allForKind = getRelationshipTypesForKind(relKind) as RelationshipType[];

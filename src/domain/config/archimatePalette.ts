@@ -281,6 +281,15 @@ export function validateRelationship(
 
   const includeDerived = includeDerivedRelationships(mode);
   const res = validateRelationshipByMatrix(matrix, sourceType, targetType, relationshipType, { includeDerived });
+  // The relationship table is largely about *compatibility* between concepts, but a few
+  // relationships have directional semantics that we want to keep strict.
+  //
+  // Example: when a Service is involved, the Service should be the origin of a Serving
+  // relationship ("a service serves X").
+  if (relationshipType === 'Serving' && SERVICE_TYPES.has(targetType) && !SERVICE_TYPES.has(sourceType)) {
+    return { allowed: false, reason: 'Serving relationships must originate from a Service.' };
+  }
+
   if (res.allowed) return { allowed: true };
 
   return { allowed: false, reason: res.reason };

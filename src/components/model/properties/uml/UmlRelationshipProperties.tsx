@@ -1,12 +1,11 @@
 import { useMemo } from 'react';
 
 import type { Element, Model, RelationshipType } from '../../../../domain';
-import { getRelationshipTypesForKind, kindFromTypeId } from '../../../../domain';
+import { getRelationshipTypesForKind, kindFromTypeId, STRONGEST_RELATIONSHIP_VALIDATION_MODE } from '../../../../domain';
 import { canCreateUmlRelationship } from '../../../../notations/uml/rules';
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
-import { useModelStore } from '../../../../store';
 import { CommonRelationshipProperties } from '../common/CommonRelationshipProperties';
 
 function asTrimmedOrUndef(v: string): string | undefined {
@@ -34,7 +33,7 @@ type Props = {
 
 export function UmlRelationshipProperties({ model, relationshipId, viewId, actions, onSelect }: Props) {
   const rel = model.relationships[relationshipId];
-  const relationshipValidationMode = useModelStore((s) => s.relationshipValidationMode);
+  const relationshipValidationMode = STRONGEST_RELATIONSHIP_VALIDATION_MODE;
 
   // Hooks must be called unconditionally (even if we early-return).
   const relKind = rel ? kindFromTypeId(rel.type) : 'uml';

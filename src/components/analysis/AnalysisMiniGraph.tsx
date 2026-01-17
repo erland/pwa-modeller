@@ -1,8 +1,17 @@
 import { useMemo } from 'react';
 
-import type { Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
+import type {
+  Model,
+  PathsBetweenResult,
+  RelatedElementsResult,
+  TraversalStep
+} from '../../domain';
+import type { AnalysisEdge } from '../../domain/analysis/graph';
+import type { ModelKind } from '../../domain/types';
 import type { Selection } from '../model/selection';
 import type { AnalysisMode } from './AnalysisQueryPanel';
+
+import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 
 type GraphNode = {
   id: string;
@@ -11,13 +20,7 @@ type GraphNode = {
   order: number;
 };
 
-type GraphEdge = {
-  relationshipId: string;
-  fromId: string;
-  toId: string;
-  relationshipType: string;
-  reversed: boolean;
-};
+type GraphEdge = TraversalStep;
 
 type GraphData = {
   nodes: GraphNode[];
@@ -32,13 +35,25 @@ type GraphData = {
 const MAX_NODES = 150;
 const MAX_EDGES = 300;
 
-function labelFor(model: Model, id: string): string {
-  const e = model.elements[id];
-  return e?.name || '(unnamed)';
+function stableName(labelForId: (id: string) => string, id: string): string {
+  return `${labelForId(id)}\u0000${id}`;
 }
 
-function stableName(model: Model, id: string): string {
-  return `${labelFor(model, id)}\u0000${id}`;
+function relationshipIsExplicitlyUndirected(s: TraversalStep): boolean {
+  const attrs = s.relationship?.attrs as unknown as { isDirected?: boolean } | undefined;
+  return attrs?.isDirected === false;
+}
+
+function edgeFromStep(s: TraversalStep): AnalysisEdge {
+  return {
+    relationshipId: s.relationshipId,
+    relationshipType: s.relationshipType,
+    relationship: s.relationship,
+    fromId: s.fromId,
+    toId: s.toId,
+    reversed: s.reversed,
+    undirected: relationshipIsExplicitlyUndirected(s)
+  };
 }
 
 function uniqEdges(edges: GraphEdge[]): GraphEdge[] {
@@ -53,7 +68,7 @@ function uniqEdges(edges: GraphEdge[]): GraphEdge[] {
   return out;
 }
 
-function graphFromRelated(model: Model, related: RelatedElementsResult): GraphData {
+function graphFromRelated(related: RelatedElementsResult, labelForId: (id: string) => string): GraphData {
   const startId = related.startElementId;
   const hits = related.hits;
 
@@ -62,7 +77,7 @@ function graphFromRelated(model: Model, related: RelatedElementsResult): GraphDa
   );
 
   // Cap nodes (prefer closer distances first).
-  nodesWanted.sort((a, b) => a.distance - b.distance || stableName(model, a.id).localeCompare(stableName(model, b.id)));
+  nodesWanted.sort((a, b) => a.distance - b.distance || stableName(labelForId, a.id).localeCompare(stableName(labelForId, b.id)));
   const trimmedNodes = nodesWanted.length > MAX_NODES;
   const kept = nodesWanted.slice(0, MAX_NODES);
 
@@ -76,11 +91,7 @@ function graphFromRelated(model: Model, related: RelatedElementsResult): GraphDa
     if (!via) continue;
     if (!nodeSet.has(via.fromId) || !nodeSet.has(via.toId)) continue;
     edges.push({
-      relationshipId: via.relationshipId,
-      fromId: via.fromId,
-      toId: via.toId,
-      relationshipType: String(via.relationshipType),
-      reversed: Boolean(via.reversed)
+      ...via
     });
   }
 
@@ -100,9 +111,9 @@ function graphFromRelated(model: Model, related: RelatedElementsResult): GraphDa
   const nodes: GraphNode[] = [];
   let maxLevel = 0;
   for (const [level, ids] of byLevel.entries()) {
-    ids.sort((a, b) => stableName(model, a).localeCompare(stableName(model, b)));
+    ids.sort((a, b) => stableName(labelForId, a).localeCompare(stableName(labelForId, b)));
     maxLevel = Math.max(maxLevel, level);
-    ids.forEach((id, order) => nodes.push({ id, label: labelFor(model, id), level, order }));
+    ids.forEach((id, order) => nodes.push({ id, label: labelForId(id), level, order }));
   }
 
   return {
@@ -124,7 +135,7 @@ function levelForPathsNode(paths: PathsBetweenResult, nodeId: string): number {
   return best ?? 0;
 }
 
-function graphFromPaths(model: Model, res: PathsBetweenResult): GraphData {
+function graphFromPaths(res: PathsBetweenResult, labelForId: (id: string) => string): GraphData {
   const nodeSet = new Set<string>();
   const edges: GraphEdge[] = [];
 
@@ -132,19 +143,17 @@ function graphFromPaths(model: Model, res: PathsBetweenResult): GraphData {
   for (const p of res.paths) {
     for (const id of p.elementIds) nodeSet.add(id);
     for (const s of p.steps) {
-      edges.push({
-        relationshipId: s.relationshipId,
-        fromId: s.fromId,
-        toId: s.toId,
-        relationshipType: String(s.relationshipType),
-        reversed: Boolean(s.reversed)
-      });
+      edges.push(s);
     }
   }
 
   // Cap nodes (prefer nearer to source by computed level).
   const nodeList = Array.from(nodeSet);
-  nodeList.sort((a, b) => levelForPathsNode(res, a) - levelForPathsNode(res, b) || stableName(model, a).localeCompare(stableName(model, b)));
+  nodeList.sort(
+    (a, b) =>
+      levelForPathsNode(res, a) - levelForPathsNode(res, b) ||
+      stableName(labelForId, a).localeCompare(stableName(labelForId, b))
+  );
   const trimmedNodes = nodeList.length > MAX_NODES;
   const keptNodes = nodeList.slice(0, MAX_NODES);
   const keptSet = new Set<string>(keptNodes);
@@ -166,8 +175,8 @@ function graphFromPaths(model: Model, res: PathsBetweenResult): GraphData {
 
   const nodes: GraphNode[] = [];
   for (const [level, ids] of byLevel.entries()) {
-    ids.sort((a, b) => stableName(model, a).localeCompare(stableName(model, b)));
-    ids.forEach((id, order) => nodes.push({ id, label: labelFor(model, id), level, order }));
+    ids.sort((a, b) => stableName(labelForId, a).localeCompare(stableName(labelForId, b)));
+    ids.forEach((id, order) => nodes.push({ id, label: labelForId(id), level, order }));
   }
 
   return {
@@ -179,7 +188,7 @@ function graphFromPaths(model: Model, res: PathsBetweenResult): GraphData {
 }
 
 function buildGraphData(
-  model: Model,
+  labelForId: (id: string) => string,
   mode: AnalysisMode,
   relatedResult: RelatedElementsResult | null,
   pathsResult: PathsBetweenResult | null
@@ -188,11 +197,11 @@ function buildGraphData(
     if (!relatedResult) return null;
     if (!relatedResult.startElementId) return null;
     if (relatedResult.hits.length === 0) return null;
-    return graphFromRelated(model, relatedResult);
+    return graphFromRelated(relatedResult, labelForId);
   }
   if (!pathsResult) return null;
   if (pathsResult.paths.length === 0) return null;
-  return graphFromPaths(model, pathsResult);
+  return graphFromPaths(pathsResult, labelForId);
 }
 
 function nodeRect() {
@@ -235,6 +244,7 @@ function selectionToRelationshipId(sel: Selection | null | undefined): string | 
 
 export function AnalysisMiniGraph({
   model,
+  modelKind,
   mode,
   relatedResult,
   pathsResult,
@@ -243,6 +253,7 @@ export function AnalysisMiniGraph({
   onSelectRelationship
 }: {
   model: Model;
+  modelKind: ModelKind;
   mode: AnalysisMode;
   relatedResult: RelatedElementsResult | null;
   pathsResult: PathsBetweenResult | null;
@@ -250,7 +261,19 @@ export function AnalysisMiniGraph({
   onSelectElement: (elementId: string) => void;
   onSelectRelationship?: (relationshipId: string) => void;
 }) {
-  const data = useMemo(() => buildGraphData(model, mode, relatedResult, pathsResult), [model, mode, relatedResult, pathsResult]);
+  const adapter = getAnalysisAdapter(modelKind);
+
+  const labelForId = useMemo(() => {
+    return (id: string): string => {
+      const el = model.elements[id];
+      return el ? adapter.getNodeLabel(el, model) : '(missing)';
+    };
+  }, [adapter, model]);
+
+  const data = useMemo(
+    () => buildGraphData(labelForId, mode, relatedResult, pathsResult),
+    [labelForId, mode, relatedResult, pathsResult]
+  );
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
 
@@ -326,7 +349,12 @@ export function AnalysisMiniGraph({
               const isSelected = selectedRelationshipId === e.relationshipId;
               const key = `${e.relationshipId}:${e.fromId}->${e.toId}`;
 
-              const label = `${labelFor(model, e.fromId)} —[${e.relationshipType}]→ ${labelFor(model, e.toId)}${e.reversed ? ' (reversed)' : ''}`;
+              const analysisEdge = edgeFromStep(e);
+              const rel = adapter.getEdgeLabel(analysisEdge, model);
+              const directed = adapter.isEdgeDirected(analysisEdge, model);
+              const arrow = directed ? '→' : '—';
+              const rev = e.reversed && directed ? ' (reversed)' : '';
+              const label = `${labelForId(e.fromId)} —[${rel}]${arrow} ${labelForId(e.toId)}${rev}`;
 
               return (
                 <g key={key}>
@@ -353,8 +381,8 @@ export function AnalysisMiniGraph({
                     fill="none"
                     stroke="currentColor"
                     strokeWidth={isSelected ? 3 : 1.5}
-                    markerEnd="url(#arrow)"
-                    strokeDasharray={e.reversed ? '4 3' : undefined}
+                    markerEnd={directed ? 'url(#arrow)' : undefined}
+                    strokeDasharray={e.reversed && directed ? '4 3' : undefined}
                     opacity={isSelected ? 1 : 0.9}
                   >
                     <title>{label}</title>

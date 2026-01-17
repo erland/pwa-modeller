@@ -245,6 +245,7 @@ export function AnalysisWorkspace({
 
           <AnalysisResultTable
             model={model}
+            modelKind={modelKind}
             mode={mode}
             relatedResult={relatedResult}
             pathsResult={pathsResult}

@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 
 import type { AnalysisPath, Model, PathsBetweenResult, RelatedElementsResult, TraversalStep } from '../../domain';
+import type { AnalysisEdge } from '../../domain/analysis/graph';
+import type { ModelKind } from '../../domain/types';
 import type { AnalysisMode } from './AnalysisQueryPanel';
 import type { Selection } from '../model/selection';
+
+import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 
 import { AnalysisMiniGraph } from './AnalysisMiniGraph';
 
@@ -10,6 +14,7 @@ import '../../styles/crud.css';
 
 type Props = {
   model: Model;
+  modelKind: ModelKind;
   mode: AnalysisMode;
   relatedResult: RelatedElementsResult | null;
   pathsResult: PathsBetweenResult | null;
@@ -18,38 +23,32 @@ type Props = {
   onSelectElement: (elementId: string) => void;
 };
 
-function nameFor(model: Model, id: string): string {
-  const e = model.elements[id];
-  return e?.name || '(unnamed)';
+function stringFacetValue(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (Array.isArray(v)) return v.filter((x) => x !== null && x !== undefined).map(String).join(', ');
+  return String(v);
 }
 
-function typeFor(model: Model, id: string): string {
-  const e = model.elements[id];
-  return e?.type ? String(e.type) : '';
+function relationshipIsExplicitlyUndirected(s: TraversalStep): boolean {
+  const attrs = s.relationship?.attrs as unknown as { isDirected?: boolean } | undefined;
+  return attrs?.isDirected === false;
 }
 
-function layerFor(model: Model, id: string): string {
-  const e = model.elements[id];
-  return e?.layer ? String(e.layer) : '';
-}
-
-function stepSummary(model: Model, s: TraversalStep): string {
-  const from = nameFor(model, s.fromId);
-  const to = nameFor(model, s.toId);
-  const type = String(s.relationshipType);
-  const rev = s.reversed ? ' (reversed)' : '';
-  return `${from} —[${type}]→ ${to}${rev}`;
-}
-
-function pathTitle(model: Model, p: AnalysisPath): string {
-  const a = nameFor(model, p.elementIds[0] || '');
-  const b = nameFor(model, p.elementIds[p.elementIds.length - 1] || '');
-  const hops = Math.max(0, p.elementIds.length - 1);
-  return `${a} → ${b} (${hops} hops)`;
+function edgeFromStep(s: TraversalStep): AnalysisEdge {
+  return {
+    relationshipId: s.relationshipId,
+    relationshipType: s.relationshipType,
+    relationship: s.relationship,
+    fromId: s.fromId,
+    toId: s.toId,
+    reversed: s.reversed,
+    undirected: relationshipIsExplicitlyUndirected(s)
+  };
 }
 
 export function AnalysisResultTable({
   model,
+  modelKind,
   mode,
   relatedResult,
   pathsResult,
@@ -57,7 +56,48 @@ export function AnalysisResultTable({
   onSelectRelationship,
   onSelectElement
 }: Props) {
+  const adapter = getAnalysisAdapter(modelKind);
   const [showGraph, setShowGraph] = useState(false);
+
+  const nodeLabel = (id: string): string => {
+    const el = model.elements[id];
+    if (!el) return '(missing)';
+    return adapter.getNodeLabel(el, model);
+  };
+
+  const nodeType = (id: string): string => {
+    const el = model.elements[id];
+    if (!el) return '';
+    const facets = adapter.getNodeFacetValues(el, model);
+    return stringFacetValue(facets.elementType ?? facets.type ?? el.type);
+  };
+
+  const nodeLayer = (id: string): string => {
+    const el = model.elements[id];
+    if (!el) return '';
+    const facets = adapter.getNodeFacetValues(el, model);
+    return stringFacetValue(facets.archimateLayer ?? el.layer ?? '');
+  };
+
+  const edgeLabel = (s: TraversalStep): string => adapter.getEdgeLabel(edgeFromStep(s), model);
+  const edgeIsDirected = (s: TraversalStep): boolean => adapter.isEdgeDirected(edgeFromStep(s), model);
+
+  const stepSummary = (s: TraversalStep): string => {
+    const from = nodeLabel(s.fromId);
+    const to = nodeLabel(s.toId);
+    const rel = edgeLabel(s);
+    const directed = edgeIsDirected(s);
+    const arrow = directed ? '→' : '—';
+    const rev = s.reversed && directed ? ' (reversed)' : '';
+    return `${from} —[${rel}]${arrow} ${to}${rev}`;
+  };
+
+  const pathTitle = (p: AnalysisPath): string => {
+    const a = nodeLabel(p.elementIds[0] || '');
+    const b = nodeLabel(p.elementIds[p.elementIds.length - 1] || '');
+    const hops = Math.max(0, p.elementIds.length - 1);
+    return `${a} → ${b} (${hops} hops)`;
+  };
 
   // Auto-enable the graph once results appear (but don't force it back on if the user turns it off).
   useEffect(() => {
@@ -80,7 +120,7 @@ export function AnalysisResultTable({
             <p className="crudTitle">Results</p>
             <p className="crudHint">
               {startId
-                ? `Elements related to “${nameFor(model, startId)}”.`
+                ? `Elements related to “${nodeLabel(startId)}”.`
                 : 'Run an analysis to see results.'}
             </p>
           </div>
@@ -116,9 +156,9 @@ export function AnalysisResultTable({
               {hits.map((h) => (
                 <tr key={h.elementId}>
                   <td className="mono">{h.distance}</td>
-                  <td>{nameFor(model, h.elementId)}</td>
-                  <td className="mono">{typeFor(model, h.elementId)}</td>
-                  <td>{layerFor(model, h.elementId)}</td>
+                  <td>{nodeLabel(h.elementId)}</td>
+                  <td className="mono">{nodeType(h.elementId)}</td>
+                  <td>{nodeLayer(h.elementId)}</td>
                   <td>
                     <div className="rowActions">
                       <button
@@ -139,6 +179,7 @@ export function AnalysisResultTable({
         {showGraph ? (
           <AnalysisMiniGraph
             model={model}
+            modelKind={modelKind}
             mode={mode}
             relatedResult={relatedResult}
             pathsResult={null}
@@ -164,7 +205,7 @@ export function AnalysisResultTable({
           <p className="crudTitle">Results</p>
           <p className="crudHint">
             {sourceId && targetId
-              ? `Connection between “${nameFor(model, sourceId)}” and “${nameFor(model, targetId)}”.`
+              ? `Connection between “${nodeLabel(sourceId)}” and “${nodeLabel(targetId)}”.`
               : 'Run an analysis to see results.'}
           </p>
           {shortest !== undefined ? (
@@ -202,7 +243,7 @@ export function AnalysisResultTable({
           <tbody>
             {paths.map((p, idx) => {
               const hops = Math.max(0, p.elementIds.length - 1);
-              const title = pathTitle(model, p);
+              const title = pathTitle(p);
               const first = p.elementIds[0];
               const last = p.elementIds[p.elementIds.length - 1];
 
@@ -214,7 +255,7 @@ export function AnalysisResultTable({
                       <summary>{title}</summary>
                       <ol style={{ margin: '10px 0 0', paddingLeft: 18 }}>
                         {p.steps.map((s) => (
-                          <li key={`${s.relationshipId}:${s.fromId}->${s.toId}`}>{stepSummary(model, s)}</li>
+                          <li key={`${s.relationshipId}:${s.fromId}->${s.toId}`}>{stepSummary(s)}</li>
                         ))}
                       </ol>
                     </details>
@@ -251,6 +292,7 @@ export function AnalysisResultTable({
       {showGraph ? (
         <AnalysisMiniGraph
           model={model}
+          modelKind={modelKind}
           mode={mode}
           relatedResult={null}
           pathsResult={pathsResult}

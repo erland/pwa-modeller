@@ -38,8 +38,9 @@ export const archimateAnalysisAdapter: AnalysisAdapter = {
 
   getNodeLabel(node: Element, model: Model): string {
     const el = resolveElement(node, model);
-    // Keep it stable (matches other parts of the UI): name (Type)
-    return `${el.name} (${elementTypeLabel(el)})`;
+    // Keep behavior unchanged for the current Analysis UI: prefer the element name.
+    // (Type is already displayed in separate columns/places.)
+    return el.name || '(unnamed)';
   },
 
   getEdgeLabel(edge: AnalysisEdge, model: Model): string {

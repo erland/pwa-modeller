@@ -4,3 +4,5 @@ export * from './persistence';
 export * from './download';
 
 export * from './exportGuards';
+
+export * from './analysis';

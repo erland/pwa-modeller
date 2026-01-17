@@ -4,12 +4,14 @@ import { useModelStore } from './store';
 import { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
 
 import AboutPage from './pages/AboutPage';
+import AnalysisPage from './pages/AnalysisPage';
 import WorkspacePage from './pages/WorkspacePage';
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<WorkspacePage />} />
+      <Route path="/analysis" element={<AnalysisPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

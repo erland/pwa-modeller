@@ -1,0 +1,168 @@
+import { useEffect, useMemo, useState } from 'react';
+
+import type { Model, Element } from '../../domain';
+import type { Selection } from '../model/selection';
+import { useModelStore, useAnalysisPathsBetween, useAnalysisRelatedElements } from '../../store';
+
+import '../../styles/crud.css';
+
+import { AnalysisQueryPanel, type AnalysisMode } from './AnalysisQueryPanel';
+import { AnalysisResultTable } from './AnalysisResultTable';
+
+function sortElementsForPicker(model: Model): Element[] {
+  return Object.values(model.elements)
+    .slice()
+    .sort((a, b) => {
+      const an = a.name ?? '';
+      const bn = b.name ?? '';
+      const c = an.localeCompare(bn, undefined, { sensitivity: 'base', numeric: true });
+      if (c !== 0) return c;
+      return (a.id ?? '').localeCompare(b.id ?? '');
+    });
+}
+
+function selectionToElementId(sel: Selection): string | null {
+  switch (sel.kind) {
+    case 'element':
+      return sel.elementId;
+    case 'viewNode':
+      return sel.elementId;
+    case 'relationship':
+      // For now we don't map relationship -> endpoint; Step 4+ can add this if desired.
+      return null;
+    default:
+      return null;
+  }
+}
+
+export function AnalysisWorkspace({
+  selection,
+  onSelect
+}: {
+  selection: Selection;
+  onSelect: (sel: Selection) => void;
+}) {
+  const model = useModelStore((s) => s.model);
+
+  const [mode, setMode] = useState<AnalysisMode>('related');
+
+  // Draft inputs (user edits these).
+  const [draftStartId, setDraftStartId] = useState<string>('');
+  const [draftSourceId, setDraftSourceId] = useState<string>('');
+  const [draftTargetId, setDraftTargetId] = useState<string>('');
+
+  // Active ids (used for the current computed result).
+  const [activeStartId, setActiveStartId] = useState<string>('');
+  const [activeSourceId, setActiveSourceId] = useState<string>('');
+  const [activeTargetId, setActiveTargetId] = useState<string>('');
+
+  // If the user has an element selected and the draft is empty, prefill to reduce friction.
+  useEffect(() => {
+    const picked = selectionToElementId(selection);
+    if (!picked) return;
+
+    if (mode === 'related') {
+      if (!draftStartId) setDraftStartId(picked);
+      return;
+    }
+    if (mode === 'paths') {
+      if (!draftSourceId) setDraftSourceId(picked);
+      else if (!draftTargetId && draftSourceId !== picked) setDraftTargetId(picked);
+    }
+  }, [selection, mode, draftStartId, draftSourceId, draftTargetId]);
+
+  const elementsForPicker = useMemo(() => (model ? sortElementsForPicker(model) : []), [model]);
+
+  // Table-first v1: start with default options. Filters come in Step 4.
+  const relatedResult = useAnalysisRelatedElements(activeStartId || null, {});
+  const pathsResult = useAnalysisPathsBetween(activeSourceId || null, activeTargetId || null, {});
+
+  const canRun = Boolean(
+    model &&
+      (mode === 'related' ? draftStartId : draftSourceId && draftTargetId && draftSourceId !== draftTargetId)
+  );
+
+  function run() {
+    if (!model) return;
+    if (mode === 'related') {
+      setActiveStartId(draftStartId);
+      return;
+    }
+    setActiveSourceId(draftSourceId);
+    setActiveTargetId(draftTargetId);
+  }
+
+  function useSelectionAs(which: 'start' | 'source' | 'target') {
+    const picked = selectionToElementId(selection);
+    if (!picked) return;
+    if (which === 'start') setDraftStartId(picked);
+    if (which === 'source') setDraftSourceId(picked);
+    if (which === 'target') setDraftTargetId(picked);
+  }
+
+  return (
+    <div className="workspace" aria-label="Analysis workspace">
+      <div className="workspaceHeader">
+        <h1 className="workspaceTitle">Analysis</h1>
+        <div className="workspaceTabs" role="tablist" aria-label="Analysis tabs">
+          <button
+            type="button"
+            className={`tabButton ${mode === 'related' ? 'isActive' : ''}`}
+            role="tab"
+            aria-selected={mode === 'related'}
+            onClick={() => setMode('related')}
+          >
+            Related elements
+          </button>
+          <button
+            type="button"
+            className={`tabButton ${mode === 'paths' ? 'isActive' : ''}`}
+            role="tab"
+            aria-selected={mode === 'paths'}
+            onClick={() => setMode('paths')}
+          >
+            Connection between two
+          </button>
+        </div>
+      </div>
+
+      {!model ? (
+        <div className="crudSection" style={{ marginTop: 14 }}>
+          <div className="crudHeader">
+            <div>
+              <p className="crudTitle">No model loaded</p>
+              <p className="crudHint">Create or open a model to run analyses.</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <AnalysisQueryPanel
+            model={model}
+            elements={elementsForPicker}
+            mode={mode}
+            onChangeMode={setMode}
+            draftStartId={draftStartId}
+            onChangeDraftStartId={setDraftStartId}
+            draftSourceId={draftSourceId}
+            onChangeDraftSourceId={setDraftSourceId}
+            draftTargetId={draftTargetId}
+            onChangeDraftTargetId={setDraftTargetId}
+            onUseSelection={useSelectionAs}
+            canUseSelection={Boolean(selectionToElementId(selection))}
+            canRun={canRun}
+            onRun={run}
+          />
+
+          <AnalysisResultTable
+            model={model}
+            mode={mode}
+            relatedResult={relatedResult}
+            pathsResult={pathsResult}
+            onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+          />
+        </>
+      )}
+    </div>
+  );
+}

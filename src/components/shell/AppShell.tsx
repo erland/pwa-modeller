@@ -238,6 +238,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
 
         <nav className="shellNav" aria-label="Primary navigation" data-testid="app-nav">
           <TopNavLink to="/" label="Workspace" confirmNavigate={confirmNavigate} />
+          <TopNavLink to="/analysis" label="Analysis" confirmNavigate={confirmNavigate} />
           <TopNavLink to="/about" label="About" className="shellNavLinkAbout" confirmNavigate={confirmNavigate} />
         </nav>
 

@@ -1,4 +1,4 @@
-import type { ArchimateLayer, Element, ElementType, Relationship, RelationshipType } from '../types';
+import type { Element, ElementType, Relationship, RelationshipType } from '../types';
 
 export type AnalysisDirection = 'outgoing' | 'incoming' | 'both';
 
@@ -9,10 +9,11 @@ export interface AnalysisEdgeFilterOptions {
 
 export interface AnalysisNodeFilterOptions {
   /**
-   * Allowed ArchiMate layers. If provided, only elements whose `layer` is in this list are considered
-   * "included" for result sets. (Traversal may still walk through excluded nodes depending on query.)
+   * Allowed element layer values. If provided, only elements whose `layer` matches one of these
+   * values are considered "included" for result sets. (Traversal may still walk through excluded
+   * nodes depending on the query.)
    */
-  archimateLayers?: ArchimateLayer[];
+  layers?: string[];
 
   /**
    * Allowed element types. If provided, only elements whose `type` is in this list are considered
@@ -46,8 +47,8 @@ export function normalizeRelationshipTypeFilter(opts?: AnalysisEdgeFilterOptions
   return new Set(types);
 }
 
-export function normalizeLayerFilter(opts?: AnalysisNodeFilterOptions): ReadonlySet<ArchimateLayer> | undefined {
-  const layers = opts?.archimateLayers?.filter(Boolean);
+export function normalizeLayerFilter(opts?: AnalysisNodeFilterOptions): ReadonlySet<string> | undefined {
+  const layers = opts?.layers?.filter(Boolean);
   if (!layers || layers.length === 0) return undefined;
   return new Set(layers);
 }
@@ -63,9 +64,9 @@ export function relationshipPassesTypeFilter(relationship: Relationship, typeSet
   return typeSet.has(relationship.type);
 }
 
-export function elementPassesLayerFilter(element: Element, layerSet?: ReadonlySet<ArchimateLayer>): boolean {
+export function elementPassesLayerFilter(element: Element, layerSet?: ReadonlySet<string>): boolean {
   if (!layerSet) return true;
-  // If filtering by ArchiMate layers, non-archimate elements (no layer) are excluded.
+  // If filtering by layers, elements without layer information are excluded.
   if (!element.layer) return false;
   return layerSet.has(element.layer);
 }

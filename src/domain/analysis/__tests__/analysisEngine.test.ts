@@ -56,7 +56,7 @@ describe('domain analysis engine', () => {
     const res = queryRelatedElements(model, 'A', {
       direction: 'outgoing',
       maxDepth: 3,
-      archimateLayers: ['Technology']
+      layers: ['Technology']
     });
 
     // C is Technology, and should be included even though the path passes via B (Application).

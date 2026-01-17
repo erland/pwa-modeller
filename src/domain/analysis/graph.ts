@@ -1,4 +1,3 @@
-import type { RelationshipAttributes } from '../types';
 import type { Element, Model, Relationship, RelationshipType } from '../types';
 
 export type AnalysisEdge = {
@@ -20,9 +19,10 @@ export type AnalysisGraph = {
   incoming: Map<string, AnalysisEdge[]>;
 };
 
-function isUndirectedRelationship(r: Relationship): boolean {
-  if (r.type !== 'Association') return false;
-  const attrs = (r.attrs ?? undefined) as RelationshipAttributes | undefined;
+function relationshipIsExplicitlyUndirected(r: Relationship): boolean {
+  // Notation-agnostic: if the relationship has an attrs.isDirected flag and it is false,
+  // treat it as undirected for traversal.
+  const attrs = r.attrs as unknown as { isDirected?: boolean } | undefined;
   return attrs?.isDirected === false;
 }
 
@@ -52,7 +52,7 @@ export function buildAnalysisGraph(model: Model): AnalysisGraph {
     // Only include edges between elements that exist in the model.
     if (!nodes.has(r.sourceElementId) || !nodes.has(r.targetElementId)) continue;
 
-    const undirected = isUndirectedRelationship(r);
+    const undirected = relationshipIsExplicitlyUndirected(r);
 
     const forward: AnalysisEdge = {
       relationshipId: r.id,

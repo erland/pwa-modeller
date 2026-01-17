@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type {
   AnalysisDirection,
-  ArchimateLayer,
-  ElementType,
+    ElementType,
   Element,
   Model,
   ModelKind,
@@ -28,8 +27,8 @@ type Props = {
   onChangeDirection: (dir: AnalysisDirection) => void;
   relationshipTypes: RelationshipType[];
   onChangeRelationshipTypes: (types: RelationshipType[]) => void;
-  archimateLayers: ArchimateLayer[];
-  onChangeArchimateLayers: (layers: ArchimateLayer[]) => void;
+  layers: string[];
+  onChangeLayers: (layers: string[]) => void;
 
   // Related-only (refine within selected layers)
   elementTypes: ElementType[];
@@ -165,8 +164,8 @@ export function AnalysisQueryPanel({
   onChangeDirection,
   relationshipTypes,
   onChangeRelationshipTypes,
-  archimateLayers,
-  onChangeArchimateLayers,
+  layers,
+  onChangeLayers,
   elementTypes,
   onChangeElementTypes,
   maxDepth,
@@ -200,8 +199,8 @@ export function AnalysisQueryPanel({
 
   const availableRelationshipTypes = useMemo(() => getAvailableRelationshipTypes(model), [model]);
   const availableLayers = useMemo(() => {
-    if (!hasLayerFacet) return [] as ArchimateLayer[];
-    return collectFacetValues<ArchimateLayer>(model, modelKind, 'archimateLayer');
+    if (!hasLayerFacet) return [] as string[];
+    return collectFacetValues<string>(model, modelKind, 'archimateLayer');
   }, [hasLayerFacet, model, modelKind]);
 
   const relationshipTypeSetSize = availableRelationshipTypes.length;
@@ -212,26 +211,26 @@ export function AnalysisQueryPanel({
     [relationshipTypes]
   );
 
-  const archimateLayersSorted = useMemo(
-    () => dedupeSort(archimateLayers) as ArchimateLayer[],
-    [archimateLayers]
+  const layersSorted = useMemo(
+    () => dedupeSort(layers) as string[],
+    [layers]
   );
 
   const allowedElementTypes = useMemo(() => {
     if (!hasElementTypeFacet) return [] as ElementType[];
-    if (archimateLayersSorted.length === 0) return [] as ElementType[];
+    if (layersSorted.length === 0) return [] as ElementType[];
     const types = collectFacetValuesConstrained<ElementType>(
       model,
       modelKind,
       'elementType',
       'archimateLayer',
-      archimateLayersSorted
+      layersSorted
     );
     types.sort((a, b) =>
       getElementTypeLabel(a).localeCompare(getElementTypeLabel(b), undefined, { sensitivity: 'base' })
     );
     return types;
-  }, [hasElementTypeFacet, model, modelKind, archimateLayersSorted]);
+  }, [hasElementTypeFacet, model, modelKind, layersSorted]);
 
   const elementTypesSorted = useMemo(
     () => dedupeSort(elementTypes) as ElementType[],
@@ -245,9 +244,9 @@ export function AnalysisQueryPanel({
   }, [availableRelationshipTypes, onChangeRelationshipTypes, relationshipTypesSorted]);
 
   useEffect(() => {
-    const pruned = pruneToAllowed(archimateLayersSorted, availableLayers);
-    if (pruned !== archimateLayersSorted) onChangeArchimateLayers(pruned);
-  }, [archimateLayersSorted, availableLayers, onChangeArchimateLayers]);
+    const pruned = pruneToAllowed(layersSorted, availableLayers);
+    if (pruned !== layersSorted) onChangeLayers(pruned);
+  }, [layersSorted, availableLayers, onChangeLayers]);
 
   useEffect(() => {
     if (mode !== 'related') return;
@@ -257,7 +256,7 @@ export function AnalysisQueryPanel({
 
   const hasAnyFilters =
     relationshipTypesSorted.length > 0 ||
-    archimateLayersSorted.length > 0 ||
+    layersSorted.length > 0 ||
     (mode === 'related' && elementTypesSorted.length > 0) ||
     direction !== 'both' ||
     (mode === 'related' ? (maxDepth !== 4 || includeStart) : (maxPaths !== 10 || maxPathLength !== null));
@@ -531,7 +530,7 @@ export function AnalysisQueryPanel({
 
           {hasLayerFacet ? (
             <div className="toolbarGroup" style={{ minWidth: 260 }}>
-              <label>Layers ({archimateLayersSorted.length}/{layerSetSize})</label>
+              <label>Layers ({layersSorted.length}/{layerSetSize})</label>
               <div
                 style={{
                   maxHeight: 140,
@@ -554,10 +553,10 @@ export function AnalysisQueryPanel({
                     >
                       <input
                         type="checkbox"
-                        checked={archimateLayersSorted.includes(l)}
+                        checked={layersSorted.includes(l)}
                         onChange={() =>
-                          onChangeArchimateLayers(
-                            dedupeSort(toggle(archimateLayersSorted, l)) as ArchimateLayer[]
+                          onChangeLayers(
+                            dedupeSort(toggle(layersSorted, l)) as string[]
                           )
                         }
                       />
@@ -570,19 +569,19 @@ export function AnalysisQueryPanel({
                 <button
                   type="button"
                   className="miniLinkButton"
-                  onClick={() => onChangeArchimateLayers(availableLayers)}
+                  onClick={() => onChangeLayers(availableLayers)}
                   disabled={availableLayers.length === 0}
                 >
                   All
                 </button>
-                <button type="button" className="miniLinkButton" onClick={() => onChangeArchimateLayers([])}>
+                <button type="button" className="miniLinkButton" onClick={() => onChangeLayers([])}>
                   None
                 </button>
               </div>
             </div>
           ) : null}
 
-          {mode === 'related' && hasElementTypeFacet && archimateLayersSorted.length > 0 ? (
+          {mode === 'related' && hasElementTypeFacet && layersSorted.length > 0 ? (
             <div className="toolbarGroup" style={{ minWidth: 260 }}>
               <label>
                 Element types ({elementTypesSorted.length}/{allowedElementTypes.length})

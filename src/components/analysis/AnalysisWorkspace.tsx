@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type {
   AnalysisDirection,
-  ArchimateLayer,
-  ElementType,
+    ElementType,
   ModelKind,
   RelationshipType
 } from '../../domain';
@@ -47,7 +46,7 @@ export function AnalysisWorkspace({
   // -----------------------------
   const [direction, setDirection] = useState<AnalysisDirection>('both');
   const [relationshipTypes, setRelationshipTypes] = useState<RelationshipType[]>([]);
-  const [archimateLayers, setArchimateLayers] = useState<ArchimateLayer[]>([]);
+  const [layers, setLayers] = useState<string[]>([]);
   const [elementTypes, setElementTypes] = useState<ElementType[]>([]);
 
   // Related-only
@@ -89,10 +88,10 @@ export function AnalysisWorkspace({
       maxDepth,
       includeStart,
       relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
-      archimateLayers: archimateLayers.length ? archimateLayers : undefined,
+              layers: layers.length ? layers : undefined,
       elementTypes: elementTypes.length ? elementTypes : undefined
     }),
-    [direction, maxDepth, includeStart, relationshipTypes, archimateLayers, elementTypes]
+    [direction, maxDepth, includeStart, relationshipTypes, layers, elementTypes]
   );
 
   const pathsOpts = useMemo(
@@ -101,10 +100,10 @@ export function AnalysisWorkspace({
       maxPaths,
       maxPathLength: maxPathLength === null ? undefined : maxPathLength,
       relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
-      archimateLayers: archimateLayers.length ? archimateLayers : undefined,
+              layers: layers.length ? layers : undefined,
       elementTypes: elementTypes.length ? elementTypes : undefined
     }),
-    [direction, maxPaths, maxPathLength, relationshipTypes, archimateLayers, elementTypes]
+    [direction, maxPaths, maxPathLength, relationshipTypes, layers, elementTypes]
   );
 
   // Results are driven by active element selection + *draft* filters (QoL).
@@ -130,7 +129,7 @@ export function AnalysisWorkspace({
     if (presetId === 'clear') {
       setDirection('both');
       setRelationshipTypes([]);
-      setArchimateLayers([]);
+      setLayers([]);
       setElementTypes([]);
       setMaxDepth(4);
       setIncludeStart(false);
@@ -158,7 +157,7 @@ export function AnalysisWorkspace({
     // crossLayerTrace: Business → Application → Technology
     setDirection('both');
     setMaxDepth(4);
-    setArchimateLayers(['Business', 'Application', 'Technology']);
+    setLayers(['Business', 'Application', 'Technology']);
     setElementTypes([]);
     setRelationshipTypes(['Realization', 'Serving', 'Assignment', 'Access', 'Flow', 'Association']);
     setMaxPaths(10);
@@ -219,8 +218,8 @@ export function AnalysisWorkspace({
             onChangeDirection={setDirection}
             relationshipTypes={relationshipTypes}
             onChangeRelationshipTypes={setRelationshipTypes}
-            archimateLayers={archimateLayers}
-            onChangeArchimateLayers={setArchimateLayers}
+            layers={layers}
+            onChangeLayers={setLayers}
             elementTypes={elementTypes}
             onChangeElementTypes={setElementTypes}
             maxDepth={maxDepth}

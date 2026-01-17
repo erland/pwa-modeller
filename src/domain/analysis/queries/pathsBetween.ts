@@ -1,4 +1,4 @@
-import type { ArchimateLayer, ElementType, Model } from '../../types';
+import type { ElementType, Model } from '../../types';
 import { buildAnalysisGraph } from '../graph';
 import {
   elementPassesLayerFilter,
@@ -30,7 +30,7 @@ type Pred = { prevId: string; step: TraversalStep };
 function nodeAllowedForTraversal(
   model: Model,
   nodeId: string,
-  layerSet: ReadonlySet<ArchimateLayer> | undefined,
+  layerSet: ReadonlySet<string> | undefined,
   elementTypeSet: ReadonlySet<ElementType> | undefined,
   endpoints: { sourceId: string; targetId: string }
 ): boolean {
@@ -52,7 +52,7 @@ function predSortKey(p: Pred): string {
  *
  * Semantics (v1):
  * - Relationship type + direction filters are respected.
- * - If a layer filter is provided, paths may only traverse through nodes in the allowed layers
+ * - If a layer filter is provided, paths may only traverse through nodes in the allowed layer values
  *   (except the two endpoints, which are always allowed).
  */
 export function queryPathsBetween(

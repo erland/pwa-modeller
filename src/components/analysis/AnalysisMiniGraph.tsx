@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import type {
   Model,
@@ -15,6 +15,8 @@ import type { AnalysisMode } from './AnalysisQueryPanel';
 
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { useElementBgVar } from '../diagram/hooks/useElementBgVar';
+
+import { QuickTooltip } from './QuickTooltip';
 
 const ARCHIMATE_LAYER_BG_VAR: Record<ArchimateLayer, string> = {
   Strategy: 'var(--arch-layer-strategy)',
@@ -47,6 +49,13 @@ type GraphData = {
 
 const MAX_NODES = 150;
 const MAX_EDGES = 300;
+
+function docSnippet(doc: string | undefined): string {
+  const t = (doc ?? '').trim();
+  if (!t) return '';
+  if (t.length <= 240) return t;
+  return `${t.slice(0, 239)}…`;
+}
 
 function stableName(labelForId: (id: string) => string, id: string): string {
   return `${labelForId(id)}\u0000${id}`;
@@ -255,6 +264,13 @@ function selectionToRelationshipId(sel: Selection | null | undefined): string | 
   return sel.kind === 'relationship' ? sel.relationshipId : null;
 }
 
+function summarizeDoc(doc: string | undefined, max = 260): string {
+  const s = (doc ?? '').trim();
+  if (!s) return '';
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
 export function AnalysisMiniGraph({
   model,
   modelKind,
@@ -276,6 +292,12 @@ export function AnalysisMiniGraph({
 }) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    title: string;
+    lines: string[];
+  } | null>(null);
 
   const labelForId = useMemo(() => {
     return (id: string): string => {
@@ -283,6 +305,37 @@ export function AnalysisMiniGraph({
       return el ? adapter.getNodeLabel(el, model) : '(missing)';
     };
   }, [adapter, model]);
+
+  const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => {
+    const el = model.elements[elementId];
+    if (!el) return null;
+    const facets = adapter.getNodeFacetValues(el, model);
+    const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
+    const layer = String((facets.archimateLayer ?? el.layer) ?? '');
+    const doc = docSnippet(el.documentation);
+    const lines: string[] = [];
+    if (type) lines.push(`Type: ${type}`);
+    if (layer) lines.push(`Layer: ${layer}`);
+    if (doc) lines.push(`Documentation: ${doc}`);
+    return { title: el.name || '(unnamed)', lines };
+  };
+
+  const relationshipTooltip = (s: TraversalStep): { title: string; lines: string[] } | null => {
+    const r = s.relationship;
+    if (!r) return null;
+    const src = r.sourceElementId || s.fromId;
+    const tgt = r.targetElementId || s.toId;
+    const doc = docSnippet(r.documentation);
+    const analysisEdge = edgeFromStep(s);
+    const label = adapter.getEdgeLabel(analysisEdge, model);
+    const title = (r.name && r.name.trim()) ? r.name : label;
+    const lines: string[] = [];
+    lines.push(`Type: ${r.type}`);
+    if (src) lines.push(`From: ${labelForId(src)}`);
+    if (tgt) lines.push(`To: ${labelForId(tgt)}`);
+    if (doc) lines.push(`Documentation: ${doc}`);
+    return { title: title || '(relationship)', lines };
+  };
 
   const data = useMemo(
     () => buildGraphData(labelForId, mode, relatedResult, pathsResult),
@@ -368,7 +421,9 @@ export function AnalysisMiniGraph({
               const directed = adapter.isEdgeDirected(analysisEdge, model);
               const arrow = directed ? '→' : '—';
               const rev = e.reversed && directed ? ' (reversed)' : '';
+              const tip = relationshipTooltip(e);
               const label = `${labelForId(e.fromId)} —[${rel}]${arrow} ${labelForId(e.toId)}${rev}`;
+              const svgTitle = tip ? `${tip.title}\n${tip.lines.join('\n')}` : label;
 
               return (
                 <g key={key}>
@@ -382,7 +437,11 @@ export function AnalysisMiniGraph({
                       style={{ cursor: 'pointer' }}
                       role="button"
                       tabIndex={0}
-                      onClick={() => onSelectRelationship(e.relationshipId)}
+                      onClick={(ev) => {
+                        onSelectRelationship(e.relationshipId);
+                        const tip = relationshipTooltip(e);
+                        if (tip) setTooltip({ x: ev.clientX, y: ev.clientY, title: tip.title, lines: tip.lines });
+                      }}
                       onKeyDown={(ev) => {
                         if (ev.key === 'Enter' || ev.key === ' ') onSelectRelationship(e.relationshipId);
                       }}
@@ -399,7 +458,7 @@ export function AnalysisMiniGraph({
                     strokeDasharray={e.reversed && directed ? '4 3' : undefined}
                     opacity={isSelected ? 1 : 0.9}
                   >
-                    <title>{label}</title>
+                    <title>{svgTitle}</title>
                   </path>
                 </g>
               );
@@ -414,6 +473,8 @@ export function AnalysisMiniGraph({
               const label = n.label;
               const text = label.length > 26 ? `${label.slice(0, 25)}…` : label;
               const el = model.elements[n.id];
+              const tip = elementTooltip(n.id);
+              const svgTitle = tip ? `${tip.title}\n${tip.lines.join('\n')}` : label;
 
               let fill = 'rgba(255,255,255,0.9)';
               if (modelKind === 'archimate' && el) {
@@ -426,7 +487,11 @@ export function AnalysisMiniGraph({
                   key={n.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => onSelectElement(n.id)}
+                  onClick={(ev) => {
+                    onSelectElement(n.id);
+                    const tip = elementTooltip(n.id);
+                    if (tip) setTooltip({ x: ev.clientX, y: ev.clientY, title: tip.title, lines: tip.lines });
+                  }}
                   onKeyDown={(ev) => {
                     if (ev.key === 'Enter' || ev.key === ' ') onSelectElement(n.id);
                   }}
@@ -435,7 +500,7 @@ export function AnalysisMiniGraph({
                   <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={8} ry={8} fill={fill} stroke="rgba(0,0,0,0.25)" />
                   <text x={r.x + 10} y={r.y + 22} fontSize={12} style={{ userSelect: 'none' }}>
                     {text}
-                    <title>{label}</title>
+                    <title>{svgTitle}</title>
                   </text>
                 </g>
               );
@@ -443,6 +508,15 @@ export function AnalysisMiniGraph({
           </g>
         </svg>
       </div>
+
+      <QuickTooltip
+        open={Boolean(tooltip)}
+        x={tooltip?.x ?? 0}
+        y={tooltip?.y ?? 0}
+        title={tooltip?.title ?? ''}
+        lines={tooltip?.lines ?? []}
+        onClose={() => setTooltip(null)}
+      />
 
       {data.trimmed.nodes || data.trimmed.edges ? (
         <p className="crudHint" style={{ marginTop: 8 }}>

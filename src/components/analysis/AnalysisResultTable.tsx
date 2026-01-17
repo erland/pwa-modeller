@@ -9,6 +9,7 @@ import type { Selection } from '../model/selection';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 
 import { AnalysisMiniGraph } from './AnalysisMiniGraph';
+import { QuickTooltip } from './QuickTooltip';
 
 import '../../styles/crud.css';
 
@@ -22,6 +23,13 @@ type Props = {
   onSelectRelationship: (relationshipId: string) => void;
   onSelectElement: (elementId: string) => void;
 };
+
+function docSnippet(doc: string | undefined): string {
+  const t = (doc ?? '').trim();
+  if (!t) return '';
+  if (t.length <= 240) return t;
+  return `${t.slice(0, 239)}…`;
+}
 
 function stringFacetValue(v: unknown): string {
   if (v === null || v === undefined) return '';
@@ -58,6 +66,26 @@ export function AnalysisResultTable({
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const [showGraph, setShowGraph] = useState(false);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    title: string;
+    lines: string[];
+  } | null>(null);
+
+  const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => {
+    const el = model.elements[elementId];
+    if (!el) return null;
+    const facets = adapter.getNodeFacetValues(el, model);
+    const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
+    const layer = String((facets.archimateLayer ?? el.layer) ?? '');
+    const doc = docSnippet(el.documentation);
+    const lines: string[] = [];
+    if (type) lines.push(`Type: ${type}`);
+    if (layer) lines.push(`Layer: ${layer}`);
+    if (doc) lines.push(`Documentation: ${doc}`);
+    return { title: el.name || '(unnamed)', lines };
+  };
 
   const nodeLabel = (id: string): string => {
     const el = model.elements[id];
@@ -154,7 +182,13 @@ export function AnalysisResultTable({
             </thead>
             <tbody>
               {hits.map((h) => (
-                <tr key={h.elementId}>
+                <tr
+                  key={h.elementId}
+                  title={(() => {
+                    const tip = elementTooltip(h.elementId);
+                    return tip ? `${tip.title}\n${tip.lines.join('\n')}` : nodeLabel(h.elementId);
+                  })()}
+                >
                   <td className="mono">{h.distance}</td>
                   <td>{nodeLabel(h.elementId)}</td>
                   <td className="mono">{nodeType(h.elementId)}</td>
@@ -164,7 +198,11 @@ export function AnalysisResultTable({
                       <button
                         type="button"
                         className="miniLinkButton"
-                        onClick={() => onSelectElement(h.elementId)}
+                        onClick={(ev) => {
+                          onSelectElement(h.elementId);
+                          const tip = elementTooltip(h.elementId);
+                          if (tip) setTooltip({ x: ev.clientX, y: ev.clientY, title: tip.title, lines: tip.lines });
+                        }}
                       >
                         Select
                       </button>
@@ -188,6 +226,15 @@ export function AnalysisResultTable({
             onSelectElement={onSelectElement}
           />
         ) : null}
+
+        <QuickTooltip
+          open={Boolean(tooltip)}
+          x={tooltip?.x ?? 0}
+          y={tooltip?.y ?? 0}
+          title={tooltip?.title ?? ''}
+          lines={tooltip?.lines ?? []}
+          onClose={() => setTooltip(null)}
+        />
       </section>
     );
   }
@@ -266,7 +313,11 @@ export function AnalysisResultTable({
                         <button
                           type="button"
                           className="miniLinkButton"
-                          onClick={() => onSelectElement(first)}
+                          onClick={(ev) => {
+                            onSelectElement(first);
+                            const tip = elementTooltip(first);
+                            if (tip) setTooltip({ x: ev.clientX, y: ev.clientY, title: tip.title, lines: tip.lines });
+                          }}
                         >
                           Select source
                         </button>
@@ -275,7 +326,11 @@ export function AnalysisResultTable({
                         <button
                           type="button"
                           className="miniLinkButton"
-                          onClick={() => onSelectElement(last)}
+                          onClick={(ev) => {
+                            onSelectElement(last);
+                            const tip = elementTooltip(last);
+                            if (tip) setTooltip({ x: ev.clientX, y: ev.clientY, title: tip.title, lines: tip.lines });
+                          }}
                         >
                           Select target
                         </button>
@@ -301,6 +356,15 @@ export function AnalysisResultTable({
           onSelectElement={onSelectElement}
         />
       ) : null}
+
+      <QuickTooltip
+        open={Boolean(tooltip)}
+        x={tooltip?.x ?? 0}
+        y={tooltip?.y ?? 0}
+        title={tooltip?.title ?? ''}
+        lines={tooltip?.lines ?? []}
+        onClose={() => setTooltip(null)}
+      />
     </section>
   );
 }

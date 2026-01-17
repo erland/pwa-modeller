@@ -1,11 +1,9 @@
-import type {
-  AnalysisPath,
-  Model,
-  PathsBetweenResult,
-  RelatedElementsResult,
-  TraversalStep
-} from '../../domain';
+import { useEffect, useState } from 'react';
+
+import type { AnalysisPath, Model, PathsBetweenResult, RelatedElementsResult, TraversalStep } from '../../domain';
 import type { AnalysisMode } from './AnalysisQueryPanel';
+
+import { AnalysisMiniGraph } from './AnalysisMiniGraph';
 
 import '../../styles/crud.css';
 
@@ -54,6 +52,18 @@ export function AnalysisResultTable({
   pathsResult,
   onSelectElement
 }: Props) {
+  const [showGraph, setShowGraph] = useState(false);
+
+  // Auto-enable the graph once results appear (but don't force it back on if the user turns it off).
+  useEffect(() => {
+    if (showGraph) return;
+    if (mode === 'related') {
+      if ((relatedResult?.hits?.length ?? 0) > 0) setShowGraph(true);
+      return;
+    }
+    if ((pathsResult?.paths?.length ?? 0) > 0) setShowGraph(true);
+  }, [mode, relatedResult, pathsResult, showGraph]);
+
   if (mode === 'related') {
     const hits = relatedResult?.hits ?? [];
     const startId = relatedResult?.startElementId;
@@ -61,13 +71,24 @@ export function AnalysisResultTable({
     return (
       <section className="crudSection" aria-label="Analysis results">
         <div className="crudHeader">
-          <div>
+          <div style={{ flex: 1 }}>
             <p className="crudTitle">Results</p>
             <p className="crudHint">
               {startId
                 ? `Elements related to “${nameFor(model, startId)}”.`
                 : 'Run an analysis to see results.'}
             </p>
+          </div>
+          <div className="rowActions">
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => setShowGraph((v) => !v)}
+              disabled={hits.length === 0}
+              aria-disabled={hits.length === 0}
+            >
+              {showGraph ? 'Hide graph' : 'Show graph'}
+            </button>
           </div>
         </div>
 
@@ -109,6 +130,16 @@ export function AnalysisResultTable({
             </tbody>
           </table>
         )}
+
+        {showGraph ? (
+          <AnalysisMiniGraph
+            model={model}
+            mode={mode}
+            relatedResult={relatedResult}
+            pathsResult={null}
+            onSelectElement={onSelectElement}
+          />
+        ) : null}
       </section>
     );
   }
@@ -122,7 +153,7 @@ export function AnalysisResultTable({
   return (
     <section className="crudSection" aria-label="Analysis results">
       <div className="crudHeader">
-        <div>
+        <div style={{ flex: 1 }}>
           <p className="crudTitle">Results</p>
           <p className="crudHint">
             {sourceId && targetId
@@ -134,6 +165,17 @@ export function AnalysisResultTable({
               Shortest distance: <span className="mono">{shortest}</span> hops.
             </p>
           ) : null}
+        </div>
+        <div className="rowActions">
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={() => setShowGraph((v) => !v)}
+            disabled={paths.length === 0}
+            aria-disabled={paths.length === 0}
+          >
+            {showGraph ? 'Hide graph' : 'Show graph'}
+          </button>
         </div>
       </div>
 
@@ -198,6 +240,16 @@ export function AnalysisResultTable({
           </tbody>
         </table>
       )}
+
+      {showGraph ? (
+        <AnalysisMiniGraph
+          model={model}
+          mode={mode}
+          relatedResult={null}
+          pathsResult={pathsResult}
+          onSelectElement={onSelectElement}
+        />
+      ) : null}
     </section>
   );
 }

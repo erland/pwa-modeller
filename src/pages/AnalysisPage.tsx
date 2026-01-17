@@ -7,10 +7,51 @@ import { PropertiesPanel } from '../components/model/PropertiesPanel';
 import { noSelection, type Selection } from '../components/model/selection';
 import { AppShell } from '../components/shell/AppShell';
 import { AnalysisWorkspace } from '../components/analysis/AnalysisWorkspace';
+import type { Model, ModelKind } from '../domain';
+import { kindFromTypeId } from '../domain';
+import { useModelStore } from '../store';
+
+function inferAnalysisKind(model: Model | null, selection: Selection): ModelKind {
+  if (!model) return 'archimate';
+
+  const viewKind = (viewId: string | undefined): ModelKind | null => {
+    if (!viewId) return null;
+    const v = model.views?.[viewId];
+    return v?.kind ?? null;
+  };
+
+  // Prefer the kind of the selected view if available, since the Analysis workspace often
+  // acts on what the user is currently looking at.
+  switch (selection.kind) {
+    case 'view':
+    case 'viewNode':
+    case 'viewObject': {
+      return viewKind(selection.viewId) ?? 'archimate';
+    }
+    case 'relationship': {
+      const vk = viewKind(selection.viewId);
+      if (vk) return vk;
+      const r = model.relationships?.[selection.relationshipId];
+      return (r?.kind ?? (r ? kindFromTypeId(r.type) : null)) ?? 'archimate';
+    }
+    case 'element': {
+      const el = model.elements?.[selection.elementId];
+      return (el?.kind ?? (el ? kindFromTypeId(el.type) : null)) ?? 'archimate';
+    }
+    default:
+      break;
+  }
+
+  // Stable fallback: if there are any views, use the first view's kind; otherwise default.
+  const anyView = Object.values(model.views ?? {})[0];
+  return anyView?.kind ?? 'archimate';
+}
 
 export default function AnalysisPage() {
   const [selection, setSelection] = useState<Selection>(noSelection);
   const [modelPropsOpen, setModelPropsOpen] = useState(false);
+  const model = useModelStore((s) => s.model);
+  const modelKind = useMemo(() => inferAnalysisKind(model, selection), [model, selection]);
 
   // In Analysis, we mostly care about element/relationship selection, but keep this generic
   // so the same PropertiesPanel works.
@@ -34,7 +75,7 @@ export default function AnalysisPage() {
           />
         }
       >
-        <AnalysisWorkspace selection={selection} onSelect={setSelection} />
+        <AnalysisWorkspace modelKind={modelKind} selection={selection} onSelect={setSelection} />
       </AppShell>
 
       <ModelPropertiesDialog isOpen={modelPropsOpen} onClose={() => setModelPropsOpen(false)} />

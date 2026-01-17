@@ -4,6 +4,7 @@ import type {
   AnalysisDirection,
   ArchimateLayer,
   ElementType,
+  ModelKind,
   RelationshipType
 } from '../../domain';
 import type { Selection } from '../model/selection';
@@ -29,12 +30,16 @@ function selectionToElementId(sel: Selection): string | null {
 }
 
 export function AnalysisWorkspace({
+  modelKind,
   selection,
   onSelect
 }: {
+  modelKind: ModelKind;
   selection: Selection;
   onSelect: (sel: Selection) => void;
 }) {
+  // Reserved for future multi-notation analysis UI; keep explicit at entry points already now.
+  void modelKind;
   const model = useModelStore((s) => s.model);
 
   const [mode, setMode] = useState<AnalysisMode>('related');

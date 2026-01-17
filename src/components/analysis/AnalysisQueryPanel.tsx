@@ -3,10 +3,12 @@ import { useMemo } from 'react';
 import type {
   AnalysisDirection,
   ArchimateLayer,
+  ElementType,
   Element,
   Model,
   RelationshipType
 } from '../../domain';
+import { ELEMENT_TYPES_BY_LAYER, getElementTypeLabel } from '../../domain';
 
 export type AnalysisMode = 'related' | 'paths';
 
@@ -25,6 +27,10 @@ type Props = {
   onChangeRelationshipTypes: (types: RelationshipType[]) => void;
   archimateLayers: ArchimateLayer[];
   onChangeArchimateLayers: (layers: ArchimateLayer[]) => void;
+
+  // Related-only (refine within selected layers)
+  elementTypes: ElementType[];
+  onChangeElementTypes: (types: ElementType[]) => void;
 
   // Related-only
   maxDepth: number;
@@ -81,6 +87,20 @@ const RELATIONSHIP_TYPE_OPTIONS: RelationshipType[] = [
   'Unknown'
 ];
 
+function elementTypesForLayers(layers: readonly ArchimateLayer[]): ElementType[] {
+  const out: ElementType[] = [];
+  const seen = new Set<ElementType>();
+  for (const layer of layers) {
+    for (const t of ELEMENT_TYPES_BY_LAYER[layer] ?? []) {
+      if (seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+    }
+  }
+  out.sort((a, b) => getElementTypeLabel(a).localeCompare(getElementTypeLabel(b), undefined, { sensitivity: 'base' }));
+  return out;
+}
+
 function toggle<T extends string>(arr: readonly T[], v: T): T[] {
   return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
 }
@@ -107,6 +127,8 @@ export function AnalysisQueryPanel({
   onChangeRelationshipTypes,
   archimateLayers,
   onChangeArchimateLayers,
+  elementTypes,
+  onChangeElementTypes,
   maxDepth,
   onChangeMaxDepth,
   includeStart,
@@ -147,9 +169,20 @@ export function AnalysisQueryPanel({
     [archimateLayers]
   );
 
+  const allowedElementTypes = useMemo(() => {
+    if (archimateLayersSorted.length === 0) return [] as ElementType[];
+    return elementTypesForLayers(archimateLayersSorted);
+  }, [archimateLayersSorted]);
+
+  const elementTypesSorted = useMemo(
+    () => dedupeSort(elementTypes) as ElementType[],
+    [elementTypes]
+  );
+
   const hasAnyFilters =
     relationshipTypesSorted.length > 0 ||
     archimateLayersSorted.length > 0 ||
+    (mode === 'related' && elementTypesSorted.length > 0) ||
     direction !== 'both' ||
     (mode === 'related' ? (maxDepth !== 4 || includeStart) : (maxPaths !== 10 || maxPathLength !== null));
 
@@ -432,6 +465,64 @@ export function AnalysisQueryPanel({
               </button>
             </div>
           </div>
+
+          {mode === 'related' && archimateLayersSorted.length > 0 ? (
+            <div className="toolbarGroup" style={{ minWidth: 260 }}>
+              <label>
+                Element types ({elementTypesSorted.length}/{allowedElementTypes.length})
+              </label>
+              <div
+                style={{
+                  maxHeight: 180,
+                  overflow: 'auto',
+                  border: '1px solid var(--border-1)',
+                  borderRadius: 10,
+                  padding: '8px 10px',
+                  background: 'rgba(255,255,255,0.02)'
+                }}
+              >
+                {allowedElementTypes.map((t) => (
+                  <label
+                    key={t}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 12,
+                      opacity: 0.9,
+                      marginBottom: 6
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={elementTypesSorted.includes(t)}
+                      onChange={() =>
+                        onChangeElementTypes(
+                          dedupeSort(toggle(elementTypesSorted, t)) as ElementType[]
+                        )
+                      }
+                    />
+                    <span className="mono">{getElementTypeLabel(t)}</span>
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="miniLinkButton"
+                  onClick={() => onChangeElementTypes(allowedElementTypes)}
+                >
+                  All
+                </button>
+                <button type="button" className="miniLinkButton" onClick={() => onChangeElementTypes([])}>
+                  None
+                </button>
+              </div>
+              <p className="crudHint" style={{ marginTop: 8 }}>
+                Options are limited to the selected layer(s).
+              </p>
+            </div>
+          ) : null}
 
           <div className="toolbarGroup" style={{ minWidth: 220 }}>
             <label>Presets</label>

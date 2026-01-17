@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState } from 'react';
 import type {
   AnalysisDirection,
   ArchimateLayer,
+  ElementType,
   Element,
   Model,
   RelationshipType
 } from '../../domain';
+import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import type { Selection } from '../model/selection';
 import { useModelStore, useAnalysisPathsBetween, useAnalysisRelatedElements } from '../../store';
 
@@ -58,6 +60,7 @@ export function AnalysisWorkspace({
   const [direction, setDirection] = useState<AnalysisDirection>('both');
   const [relationshipTypes, setRelationshipTypes] = useState<RelationshipType[]>([]);
   const [archimateLayers, setArchimateLayers] = useState<ArchimateLayer[]>([]);
+  const [elementTypes, setElementTypes] = useState<ElementType[]>([]);
 
   // Related-only
   const [maxDepth, setMaxDepth] = useState<number>(4);
@@ -92,6 +95,23 @@ export function AnalysisWorkspace({
     }
   }, [selection, mode, draftStartId, draftSourceId, draftTargetId]);
 
+  // Keep element type filter compatible with selected layers.
+  useEffect(() => {
+    if (archimateLayers.length === 0) {
+      if (elementTypes.length) setElementTypes([]);
+      return;
+    }
+
+    const allowed = new Set<ElementType>();
+    for (const layer of archimateLayers) {
+      for (const t of ELEMENT_TYPES_BY_LAYER[layer] ?? []) allowed.add(t);
+    }
+
+    // Prune selected types that no longer belong to the chosen layers.
+    const pruned = elementTypes.filter((t) => allowed.has(t));
+    if (pruned.length !== elementTypes.length) setElementTypes(pruned);
+  }, [archimateLayers, elementTypes]);
+
   const elementsForPicker = useMemo(() => (model ? sortElementsForPicker(model) : []), [model]);
 
   const relatedOpts = useMemo(
@@ -100,9 +120,10 @@ export function AnalysisWorkspace({
       maxDepth,
       includeStart,
       relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
-      archimateLayers: archimateLayers.length ? archimateLayers : undefined
+      archimateLayers: archimateLayers.length ? archimateLayers : undefined,
+      elementTypes: elementTypes.length ? elementTypes : undefined
     }),
-    [direction, maxDepth, includeStart, relationshipTypes, archimateLayers]
+    [direction, maxDepth, includeStart, relationshipTypes, archimateLayers, elementTypes]
   );
 
   const pathsOpts = useMemo(
@@ -111,9 +132,10 @@ export function AnalysisWorkspace({
       maxPaths,
       maxPathLength: maxPathLength === null ? undefined : maxPathLength,
       relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
-      archimateLayers: archimateLayers.length ? archimateLayers : undefined
+      archimateLayers: archimateLayers.length ? archimateLayers : undefined,
+      elementTypes: elementTypes.length ? elementTypes : undefined
     }),
-    [direction, maxPaths, maxPathLength, relationshipTypes, archimateLayers]
+    [direction, maxPaths, maxPathLength, relationshipTypes, archimateLayers, elementTypes]
   );
 
   // Results are driven by active element selection + *draft* filters (QoL).
@@ -140,6 +162,7 @@ export function AnalysisWorkspace({
       setDirection('both');
       setRelationshipTypes([]);
       setArchimateLayers([]);
+      setElementTypes([]);
       setMaxDepth(4);
       setIncludeStart(false);
       setMaxPaths(10);
@@ -167,6 +190,7 @@ export function AnalysisWorkspace({
     setDirection('both');
     setMaxDepth(4);
     setArchimateLayers(['Business', 'Application', 'Technology']);
+    setElementTypes([]);
     setRelationshipTypes(['Realization', 'Serving', 'Assignment', 'Access', 'Flow', 'Association']);
     setMaxPaths(10);
     setMaxPathLength(null);
@@ -228,6 +252,8 @@ export function AnalysisWorkspace({
             onChangeRelationshipTypes={setRelationshipTypes}
             archimateLayers={archimateLayers}
             onChangeArchimateLayers={setArchimateLayers}
+            elementTypes={elementTypes}
+            onChangeElementTypes={setElementTypes}
             maxDepth={maxDepth}
             onChangeMaxDepth={setMaxDepth}
             includeStart={includeStart}

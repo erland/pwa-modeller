@@ -1,7 +1,9 @@
-import type { ArchimateLayer, Model } from '../../types';
+import type { ArchimateLayer, ElementType, Model } from '../../types';
 import { buildAnalysisGraph } from '../graph';
 import {
   elementPassesLayerFilter,
+  elementPassesTypeFilter,
+  normalizeElementTypeFilter,
   normalizeLayerFilter,
   normalizeRelationshipTypeFilter
 } from '../filters';
@@ -29,13 +31,16 @@ function nodeAllowedForTraversal(
   model: Model,
   nodeId: string,
   layerSet: ReadonlySet<ArchimateLayer> | undefined,
+  elementTypeSet: ReadonlySet<ElementType> | undefined,
   endpoints: { sourceId: string; targetId: string }
 ): boolean {
-  if (!layerSet) return true;
+  if (!layerSet && !elementTypeSet) return true;
   if (nodeId === endpoints.sourceId || nodeId === endpoints.targetId) return true;
   const el = model.elements[nodeId];
   if (!el) return false;
-  return elementPassesLayerFilter(el, layerSet);
+  if (!elementPassesLayerFilter(el, layerSet)) return false;
+  if (!elementPassesTypeFilter(el, elementTypeSet)) return false;
+  return true;
 }
 
 function predSortKey(p: Pred): string {
@@ -65,6 +70,7 @@ export function queryPathsBetween(
   const maxPaths = opts.maxPaths ?? 10;
   const typeSet = normalizeRelationshipTypeFilter(opts);
   const layerSet = normalizeLayerFilter(opts);
+  const elementTypeSet = normalizeElementTypeFilter(opts);
 
   const endpoints = { sourceId: sourceElementId, targetId: targetElementId };
 
@@ -93,7 +99,7 @@ export function queryPathsBetween(
       const nd = d + 1;
 
       if (opts.maxPathLength !== undefined && nd > opts.maxPathLength) continue;
-      if (!nodeAllowedForTraversal(model, nextId, layerSet, endpoints)) continue;
+      if (!nodeAllowedForTraversal(model, nextId, layerSet, elementTypeSet, endpoints)) continue;
 
       const prevDist = dist.get(nextId);
       if (prevDist === undefined) {

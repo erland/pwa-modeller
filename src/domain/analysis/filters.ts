@@ -1,4 +1,4 @@
-import type { ArchimateLayer, Element, Relationship, RelationshipType } from '../types';
+import type { ArchimateLayer, Element, ElementType, Relationship, RelationshipType } from '../types';
 
 export type AnalysisDirection = 'outgoing' | 'incoming' | 'both';
 
@@ -13,6 +13,12 @@ export interface AnalysisNodeFilterOptions {
    * "included" for result sets. (Traversal may still walk through excluded nodes depending on query.)
    */
   archimateLayers?: ArchimateLayer[];
+
+  /**
+   * Allowed element types. If provided, only elements whose `type` is in this list are considered
+   * "included" for result sets. Semantics follow the layer filter (query-specific).
+   */
+  elementTypes?: ElementType[];
 }
 
 export interface AnalysisCommonOptions extends AnalysisEdgeFilterOptions, AnalysisNodeFilterOptions {
@@ -46,6 +52,12 @@ export function normalizeLayerFilter(opts?: AnalysisNodeFilterOptions): Readonly
   return new Set(layers);
 }
 
+export function normalizeElementTypeFilter(opts?: AnalysisNodeFilterOptions): ReadonlySet<ElementType> | undefined {
+  const types = opts?.elementTypes?.filter(Boolean);
+  if (!types || types.length === 0) return undefined;
+  return new Set(types);
+}
+
 export function relationshipPassesTypeFilter(relationship: Relationship, typeSet?: ReadonlySet<RelationshipType>): boolean {
   if (!typeSet) return true;
   return typeSet.has(relationship.type);
@@ -56,4 +68,10 @@ export function elementPassesLayerFilter(element: Element, layerSet?: ReadonlySe
   // If filtering by ArchiMate layers, non-archimate elements (no layer) are excluded.
   if (!element.layer) return false;
   return layerSet.has(element.layer);
+}
+
+export function elementPassesTypeFilter(element: Element, typeSet?: ReadonlySet<ElementType>): boolean {
+  if (!typeSet) return true;
+  if (!element.type) return false;
+  return typeSet.has(element.type);
 }

@@ -64,6 +64,19 @@ describe('domain analysis engine', () => {
     expect(res.hits[0]?.distance).toBe(2);
   });
 
+  test('element type filter applies to returned hits (can refine within layers)', () => {
+    const model = buildSmallModel();
+
+    const res = queryRelatedElements(model, 'A', {
+      direction: 'outgoing',
+      maxDepth: 1,
+      elementTypes: ['BusinessRole']
+    });
+
+    // At depth 1 from A we can reach B and D, but only D is a BusinessRole.
+    expect(res.hits.map(h => h.elementId)).toEqual(['D']);
+  });
+
   test('undirected association is traversable from both ends', () => {
     const model = buildSmallModel();
 

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import type {
   ArchimateLayer,
+  ElementType,
   Model,
   PathsBetweenOptions,
   PathsBetweenResult,
@@ -29,6 +30,7 @@ function stableAnalysisKey(opts: RelatedElementsOptions | PathsBetweenOptions | 
     maxPathLength?: number;
     relationshipTypes?: string[];
     archimateLayers?: string[];
+    elementTypes?: string[];
   } = {
     direction: opts.direction,
     maxDepth: opts.maxDepth,
@@ -36,7 +38,8 @@ function stableAnalysisKey(opts: RelatedElementsOptions | PathsBetweenOptions | 
     maxPaths: (opts as PathsBetweenOptions).maxPaths,
     maxPathLength: (opts as PathsBetweenOptions).maxPathLength,
     relationshipTypes: normalizeStringArray<RelationshipType>(opts.relationshipTypes),
-    archimateLayers: normalizeStringArray<ArchimateLayer>(opts.archimateLayers)
+    archimateLayers: normalizeStringArray<ArchimateLayer>(opts.archimateLayers),
+    elementTypes: normalizeStringArray<ElementType>(opts.elementTypes)
   };
   return JSON.stringify(o);
 }
@@ -49,6 +52,7 @@ function relatedOptsFromKey(key: string): RelatedElementsOptions {
     includeStart?: boolean;
     relationshipTypes?: RelationshipType[];
     archimateLayers?: ArchimateLayer[];
+    elementTypes?: ElementType[];
   };
 
   const out: RelatedElementsOptions = {};
@@ -60,6 +64,9 @@ function relatedOptsFromKey(key: string): RelatedElementsOptions {
   }
   if (parsed.archimateLayers && parsed.archimateLayers.length > 0) {
     out.archimateLayers = parsed.archimateLayers;
+  }
+  if (parsed.elementTypes && parsed.elementTypes.length > 0) {
+    out.elementTypes = parsed.elementTypes;
   }
   return out;
 }
@@ -73,6 +80,7 @@ function pathsOptsFromKey(key: string): PathsBetweenOptions {
     maxPathLength?: number;
     relationshipTypes?: RelationshipType[];
     archimateLayers?: ArchimateLayer[];
+    elementTypes?: ElementType[];
   };
 
   const out: PathsBetweenOptions = {};
@@ -85,6 +93,9 @@ function pathsOptsFromKey(key: string): PathsBetweenOptions {
   }
   if (parsed.archimateLayers && parsed.archimateLayers.length > 0) {
     out.archimateLayers = parsed.archimateLayers;
+  }
+  if (parsed.elementTypes && parsed.elementTypes.length > 0) {
+    out.elementTypes = parsed.elementTypes;
   }
   return out;
 }
@@ -169,6 +180,7 @@ export function analysisOpts(
     maxPaths: partial.maxPaths,
     maxPathLength: partial.maxPathLength,
     relationshipTypes: partial.relationshipTypes as RelationshipType[] | undefined,
-    archimateLayers: partial.archimateLayers as ArchimateLayer[] | undefined
+    archimateLayers: partial.archimateLayers as ArchimateLayer[] | undefined,
+    elementTypes: partial.elementTypes as ElementType[] | undefined
   };
 }

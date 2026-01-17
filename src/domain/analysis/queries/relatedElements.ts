@@ -2,6 +2,8 @@ import type { Model } from '../../types';
 import { buildAnalysisGraph } from '../graph';
 import {
   elementPassesLayerFilter,
+  elementPassesTypeFilter,
+  normalizeElementTypeFilter,
   normalizeLayerFilter,
   normalizeRelationshipTypeFilter
 } from '../filters';
@@ -42,6 +44,7 @@ export function queryRelatedElements(model: Model, startElementId: string, opts:
 
   const typeSet = normalizeRelationshipTypeFilter(opts);
   const layerSet = normalizeLayerFilter(opts);
+  const elementTypeSet = normalizeElementTypeFilter(opts);
 
   const distance = new Map<string, number>();
   const via = new Map<string, TraversalStep>();
@@ -78,6 +81,8 @@ export function queryRelatedElements(model: Model, startElementId: string, opts:
     const el = graph.nodes.get(id);
     if (!el) continue;
     if (!elementPassesLayerFilter(el, layerSet)) continue;
+    if (!elementPassesTypeFilter(el, elementTypeSet)) continue;
+    if (!elementPassesTypeFilter(el, elementTypeSet)) continue;
 
     hits.push({ elementId: id, distance: d, via: via.get(id) });
   }

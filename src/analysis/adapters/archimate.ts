@@ -26,7 +26,11 @@ function resolveElement(node: Element, model: Model): Element {
 }
 
 const facetDefinitions: AnalysisFacetDefinition[] = [
-  { id: 'type', label: 'Type', kind: 'single' }
+  // Keep generic "type" around for future UI, but provide stable IDs for
+  // the Analysis workspace's current filter sections.
+  { id: 'type', label: 'Type', kind: 'single' },
+  { id: 'archimateLayer', label: 'Layer', kind: 'multi' },
+  { id: 'elementType', label: 'Element type', kind: 'multi' }
 ];
 
 export const archimateAnalysisAdapter: AnalysisAdapter = {
@@ -61,7 +65,11 @@ export const archimateAnalysisAdapter: AnalysisAdapter = {
   getNodeFacetValues(node: Element, model: Model): AnalysisFacetValues {
     const el = resolveElement(node, model);
     return {
-      type: elementTypeLabel(el)
+      // Display-oriented type label.
+      type: elementTypeLabel(el),
+      // Raw values used by filter UI.
+      archimateLayer: el.layer ?? null,
+      elementType: el.type
     };
   }
 };

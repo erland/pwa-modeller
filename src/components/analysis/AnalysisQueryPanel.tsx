@@ -6,15 +6,18 @@ import type {
   ElementType,
   Element,
   Model,
+  ModelKind,
   RelationshipType
 } from '../../domain';
 import { getElementTypeLabel } from '../../domain';
+import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { ElementChooserDialog } from '../model/pickers/ElementChooserDialog';
 
 export type AnalysisMode = 'related' | 'paths';
 
 type Props = {
   model: Model;
+  modelKind: ModelKind;
   mode: AnalysisMode;
   onChangeMode: (mode: AnalysisMode) => void;
 
@@ -74,30 +77,62 @@ function getAvailableRelationshipTypes(model: Model): RelationshipType[] {
   return Array.from(seen).sort((a, b) => String(a).localeCompare(String(b)));
 }
 
-function getAvailableLayers(model: Model): ArchimateLayer[] {
-  const seen = new Set<ArchimateLayer>();
+function collectFacetValues<T extends string>(model: Model, modelKind: ModelKind, facetId: string): T[] {
+  const adapter = getAnalysisAdapter(modelKind);
+  const seen = new Set<string>();
   for (const el of Object.values(model.elements)) {
-    if (!el?.layer) continue;
-    // In ArchiMate models, element.layer is expected to be an ArchimateLayer.
-    // We still guard the cast because other notations may omit this.
-    seen.add(el.layer as ArchimateLayer);
+    if (!el) continue;
+    const v = adapter.getNodeFacetValues(el, model)[facetId];
+    if (typeof v === 'string') {
+      if (v) seen.add(v);
+      continue;
+    }
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === 'string' && item) seen.add(item);
+      }
+    }
   }
-  return Array.from(seen).sort((a, b) => String(a).localeCompare(String(b)));
+  return Array.from(seen).sort((a, b) => a.localeCompare(b)) as T[];
 }
 
-function getAvailableElementTypesForLayers(model: Model, layers: readonly ArchimateLayer[]): ElementType[] {
-  if (!layers.length) return [];
-  const allowedLayers = new Set<ArchimateLayer>(layers);
-  const seen = new Set<ElementType>();
+function collectFacetValuesConstrained<T extends string>(
+  model: Model,
+  modelKind: ModelKind,
+  valueFacetId: string,
+  constraintFacetId: string,
+  allowedConstraints: readonly string[]
+): T[] {
+  if (!allowedConstraints.length) return [] as T[];
+  const adapter = getAnalysisAdapter(modelKind);
+  const allowed = new Set<string>(allowedConstraints);
+  const seen = new Set<string>();
+
   for (const el of Object.values(model.elements)) {
-    if (!el?.type) continue;
-    const layer = el.layer as ArchimateLayer | undefined;
-    if (!layer || !allowedLayers.has(layer)) continue;
-    seen.add(el.type);
+    if (!el) continue;
+    const facets = adapter.getNodeFacetValues(el, model);
+    const constraintV = facets[constraintFacetId];
+    let constraintMatch = false;
+    if (typeof constraintV === 'string') {
+      constraintMatch = allowed.has(constraintV);
+    } else if (Array.isArray(constraintV)) {
+      constraintMatch = constraintV.some((x) => typeof x === 'string' && allowed.has(x));
+    }
+    if (!constraintMatch) continue;
+
+    const v = facets[valueFacetId];
+    if (typeof v === 'string') {
+      if (v) seen.add(v);
+      continue;
+    }
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === 'string' && item) seen.add(item);
+      }
+    }
   }
-  const out = Array.from(seen);
-  out.sort((a, b) => getElementTypeLabel(a).localeCompare(getElementTypeLabel(b), undefined, { sensitivity: 'base' }));
-  return out;
+
+  return Array.from(seen).sort((a, b) => a.localeCompare(b)) as T[];
 }
 
 function toggle<T extends string>(arr: readonly T[], v: T): T[] {
@@ -123,6 +158,7 @@ function labelForElement(e: Element): string {
 
 export function AnalysisQueryPanel({
   model,
+  modelKind,
   mode,
   onChangeMode,
   direction,
@@ -157,8 +193,16 @@ export function AnalysisQueryPanel({
 
   const modelName = model.metadata?.name || 'Model';
 
+  const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
+  const facetDefinitions = useMemo(() => adapter.getFacetDefinitions(model), [adapter, model]);
+  const hasLayerFacet = facetDefinitions.some((f) => f.id === 'archimateLayer');
+  const hasElementTypeFacet = facetDefinitions.some((f) => f.id === 'elementType');
+
   const availableRelationshipTypes = useMemo(() => getAvailableRelationshipTypes(model), [model]);
-  const availableLayers = useMemo(() => getAvailableLayers(model), [model]);
+  const availableLayers = useMemo(() => {
+    if (!hasLayerFacet) return [] as ArchimateLayer[];
+    return collectFacetValues<ArchimateLayer>(model, modelKind, 'archimateLayer');
+  }, [hasLayerFacet, model, modelKind]);
 
   const relationshipTypeSetSize = availableRelationshipTypes.length;
   const layerSetSize = availableLayers.length;
@@ -174,9 +218,20 @@ export function AnalysisQueryPanel({
   );
 
   const allowedElementTypes = useMemo(() => {
+    if (!hasElementTypeFacet) return [] as ElementType[];
     if (archimateLayersSorted.length === 0) return [] as ElementType[];
-    return getAvailableElementTypesForLayers(model, archimateLayersSorted);
-  }, [model, archimateLayersSorted]);
+    const types = collectFacetValuesConstrained<ElementType>(
+      model,
+      modelKind,
+      'elementType',
+      'archimateLayer',
+      archimateLayersSorted
+    );
+    types.sort((a, b) =>
+      getElementTypeLabel(a).localeCompare(getElementTypeLabel(b), undefined, { sensitivity: 'base' })
+    );
+    return types;
+  }, [hasElementTypeFacet, model, modelKind, archimateLayersSorted]);
 
   const elementTypesSorted = useMemo(
     () => dedupeSort(elementTypes) as ElementType[],
@@ -474,58 +529,60 @@ export function AnalysisQueryPanel({
             </div>
           </div>
 
-          <div className="toolbarGroup" style={{ minWidth: 260 }}>
-            <label>Layers ({archimateLayersSorted.length}/{layerSetSize})</label>
-            <div
-              style={{
-                maxHeight: 140,
-                overflow: 'auto',
-                border: '1px solid var(--border-1)',
-                borderRadius: 10,
-                padding: '8px 10px',
-                background: 'rgba(255,255,255,0.02)'
-              }}
-            >
-              {availableLayers.length === 0 ? (
-                <p className="crudHint" style={{ margin: 0 }}>
-                  No ArchiMate layers found in the model.
-                </p>
-              ) : (
-                availableLayers.map((l) => (
-                  <label
-                    key={l}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={archimateLayersSorted.includes(l)}
-                      onChange={() =>
-                        onChangeArchimateLayers(
-                          dedupeSort(toggle(archimateLayersSorted, l)) as ArchimateLayer[]
-                        )
-                      }
-                    />
-                    {String(l)}
-                  </label>
-                ))
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="miniLinkButton"
-                onClick={() => onChangeArchimateLayers(availableLayers)}
-                disabled={availableLayers.length === 0}
+          {hasLayerFacet ? (
+            <div className="toolbarGroup" style={{ minWidth: 260 }}>
+              <label>Layers ({archimateLayersSorted.length}/{layerSetSize})</label>
+              <div
+                style={{
+                  maxHeight: 140,
+                  overflow: 'auto',
+                  border: '1px solid var(--border-1)',
+                  borderRadius: 10,
+                  padding: '8px 10px',
+                  background: 'rgba(255,255,255,0.02)'
+                }}
               >
-                All
-              </button>
-              <button type="button" className="miniLinkButton" onClick={() => onChangeArchimateLayers([])}>
-                None
-              </button>
+                {availableLayers.length === 0 ? (
+                  <p className="crudHint" style={{ margin: 0 }}>
+                    No ArchiMate layers found in the model.
+                  </p>
+                ) : (
+                  availableLayers.map((l) => (
+                    <label
+                      key={l}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={archimateLayersSorted.includes(l)}
+                        onChange={() =>
+                          onChangeArchimateLayers(
+                            dedupeSort(toggle(archimateLayersSorted, l)) as ArchimateLayer[]
+                          )
+                        }
+                      />
+                      {String(l)}
+                    </label>
+                  ))
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="miniLinkButton"
+                  onClick={() => onChangeArchimateLayers(availableLayers)}
+                  disabled={availableLayers.length === 0}
+                >
+                  All
+                </button>
+                <button type="button" className="miniLinkButton" onClick={() => onChangeArchimateLayers([])}>
+                  None
+                </button>
+              </div>
             </div>
-          </div>
+          ) : null}
 
-          {mode === 'related' && archimateLayersSorted.length > 0 ? (
+          {mode === 'related' && hasElementTypeFacet && archimateLayersSorted.length > 0 ? (
             <div className="toolbarGroup" style={{ minWidth: 260 }}>
               <label>
                 Element types ({elementTypesSorted.length}/{allowedElementTypes.length})

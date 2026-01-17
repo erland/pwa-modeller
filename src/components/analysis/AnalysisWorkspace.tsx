@@ -38,8 +38,6 @@ export function AnalysisWorkspace({
   selection: Selection;
   onSelect: (sel: Selection) => void;
 }) {
-  // Reserved for future multi-notation analysis UI; keep explicit at entry points already now.
-  void modelKind;
   const model = useModelStore((s) => s.model);
 
   const [mode, setMode] = useState<AnalysisMode>('related');
@@ -214,6 +212,7 @@ export function AnalysisWorkspace({
         <>
           <AnalysisQueryPanel
             model={model}
+            modelKind={modelKind}
             mode={mode}
             onChangeMode={setMode}
             direction={direction}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import type { AnalysisPath, Model, PathsBetweenResult, RelatedElementsResult, TraversalStep } from '../../domain';
 import type { AnalysisMode } from './AnalysisQueryPanel';
+import type { Selection } from '../model/selection';
 
 import { AnalysisMiniGraph } from './AnalysisMiniGraph';
 
@@ -12,6 +13,8 @@ type Props = {
   mode: AnalysisMode;
   relatedResult: RelatedElementsResult | null;
   pathsResult: PathsBetweenResult | null;
+  selection: Selection;
+  onSelectRelationship: (relationshipId: string) => void;
   onSelectElement: (elementId: string) => void;
 };
 
@@ -50,6 +53,8 @@ export function AnalysisResultTable({
   mode,
   relatedResult,
   pathsResult,
+  selection,
+  onSelectRelationship,
   onSelectElement
 }: Props) {
   const [showGraph, setShowGraph] = useState(false);
@@ -137,6 +142,8 @@ export function AnalysisResultTable({
             mode={mode}
             relatedResult={relatedResult}
             pathsResult={null}
+            selection={selection}
+            onSelectRelationship={onSelectRelationship}
             onSelectElement={onSelectElement}
           />
         ) : null}
@@ -247,6 +254,8 @@ export function AnalysisResultTable({
           mode={mode}
           relatedResult={null}
           pathsResult={pathsResult}
+          selection={selection}
+          onSelectRelationship={onSelectRelationship}
           onSelectElement={onSelectElement}
         />
       ) : null}

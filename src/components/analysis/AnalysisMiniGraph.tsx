@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import type { Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
+import type { Selection } from '../model/selection';
 import type { AnalysisMode } from './AnalysisQueryPanel';
 
 type GraphNode = {
@@ -11,6 +12,7 @@ type GraphNode = {
 };
 
 type GraphEdge = {
+  relationshipId: string;
   fromId: string;
   toId: string;
   relationshipType: string;
@@ -43,7 +45,7 @@ function uniqEdges(edges: GraphEdge[]): GraphEdge[] {
   const seen = new Set<string>();
   const out: GraphEdge[] = [];
   for (const e of edges) {
-    const key = `${e.fromId}->${e.toId}:${e.relationshipType}:${e.reversed ? 1 : 0}`;
+    const key = `${e.relationshipId}:${e.fromId}->${e.toId}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(e);
@@ -74,6 +76,7 @@ function graphFromRelated(model: Model, related: RelatedElementsResult): GraphDa
     if (!via) continue;
     if (!nodeSet.has(via.fromId) || !nodeSet.has(via.toId)) continue;
     edges.push({
+      relationshipId: via.relationshipId,
       fromId: via.fromId,
       toId: via.toId,
       relationshipType: String(via.relationshipType),
@@ -130,6 +133,7 @@ function graphFromPaths(model: Model, res: PathsBetweenResult): GraphData {
     for (const id of p.elementIds) nodeSet.add(id);
     for (const s of p.steps) {
       edges.push({
+        relationshipId: s.relationshipId,
         fromId: s.fromId,
         toId: s.toId,
         relationshipType: String(s.relationshipType),
@@ -224,25 +228,31 @@ function edgePath(from: { x: number; y: number; w: number; h: number }, to: { x:
   return `M ${x1} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${x2} ${y2}`;
 }
 
+function selectionToRelationshipId(sel: Selection | null | undefined): string | null {
+  if (!sel) return null;
+  return sel.kind === 'relationship' ? sel.relationshipId : null;
+}
+
 export function AnalysisMiniGraph({
   model,
   mode,
   relatedResult,
   pathsResult,
-  onSelectElement
+  selection,
+  onSelectElement,
+  onSelectRelationship
 }: {
   model: Model;
   mode: AnalysisMode;
   relatedResult: RelatedElementsResult | null;
   pathsResult: PathsBetweenResult | null;
+  selection?: Selection;
   onSelectElement: (elementId: string) => void;
+  onSelectRelationship?: (relationshipId: string) => void;
 }) {
-  const data = useMemo(() => buildGraphData(model, mode, relatedResult, pathsResult), [
-    model,
-    mode,
-    relatedResult,
-    pathsResult
-  ]);
+  const data = useMemo(() => buildGraphData(model, mode, relatedResult, pathsResult), [model, mode, relatedResult, pathsResult]);
+
+  const selectedRelationshipId = selectionToRelationshipId(selection);
 
   const yCountByLevel = useMemo(() => {
     const map = new Map<number, number>();
@@ -301,15 +311,7 @@ export function AnalysisMiniGraph({
           aria-label={title}
         >
           <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="10"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
+            <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
             </marker>
           </defs>
@@ -321,20 +323,43 @@ export function AnalysisMiniGraph({
               const to = positioned.rects.get(e.toId);
               if (!from || !to) return null;
               const d = edgePath(from, to);
+              const isSelected = selectedRelationshipId === e.relationshipId;
+              const key = `${e.relationshipId}:${e.fromId}->${e.toId}`;
+
+              const label = `${labelFor(model, e.fromId)} —[${e.relationshipType}]→ ${labelFor(model, e.toId)}${e.reversed ? ' (reversed)' : ''}`;
+
               return (
-                <path
-                  key={`${e.fromId}->${e.toId}:${e.relationshipType}:${e.reversed ? 1 : 0}`}
-                  d={d}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  markerEnd="url(#arrow)"
-                  strokeDasharray={e.reversed ? '4 3' : undefined}
-                >
-                  <title>{`${labelFor(model, e.fromId)} —[${e.relationshipType}]→ ${labelFor(model, e.toId)}${
-                    e.reversed ? ' (reversed)' : ''
-                  }`}</title>
-                </path>
+                <g key={key}>
+                  {/* Click target */}
+                  {onSelectRelationship ? (
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={10}
+                      style={{ cursor: 'pointer' }}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => onSelectRelationship(e.relationshipId)}
+                      onKeyDown={(ev) => {
+                        if (ev.key === 'Enter' || ev.key === ' ') onSelectRelationship(e.relationshipId);
+                      }}
+                    />
+                  ) : null}
+
+                  {/* Visible edge */}
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={isSelected ? 3 : 1.5}
+                    markerEnd="url(#arrow)"
+                    strokeDasharray={e.reversed ? '4 3' : undefined}
+                    opacity={isSelected ? 1 : 0.9}
+                  >
+                    <title>{label}</title>
+                  </path>
+                </g>
               );
             })}
           </g>
@@ -357,16 +382,7 @@ export function AnalysisMiniGraph({
                   }}
                   style={{ cursor: 'pointer' }}
                 >
-                  <rect
-                    x={r.x}
-                    y={r.y}
-                    width={r.w}
-                    height={r.h}
-                    rx={8}
-                    ry={8}
-                    fill="rgba(255,255,255,0.9)"
-                    stroke="rgba(0,0,0,0.25)"
-                  />
+                  <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={8} ry={8} fill="rgba(255,255,255,0.9)" stroke="rgba(0,0,0,0.25)" />
                   <text x={r.x + 10} y={r.y + 22} fontSize={12} style={{ userSelect: 'none' }}>
                     {text}
                     <title>{label}</title>
@@ -380,8 +396,13 @@ export function AnalysisMiniGraph({
 
       {data.trimmed.nodes || data.trimmed.edges ? (
         <p className="crudHint" style={{ marginTop: 8 }}>
-          Showing a bounded projection for readability (max {MAX_NODES} nodes, {MAX_EDGES} edges). Use tighter filters to
-          reduce the result set.
+          Showing a bounded projection for readability (max {MAX_NODES} nodes, {MAX_EDGES} edges). Use tighter filters to reduce the result set.
+        </p>
+      ) : null}
+
+      {onSelectRelationship ? (
+        <p className="crudHint" style={{ marginTop: 8 }}>
+          Tip: click an edge to select the relationship and view its properties.
         </p>
       ) : null}
     </div>

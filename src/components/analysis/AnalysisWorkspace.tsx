@@ -245,6 +245,8 @@ export function AnalysisWorkspace({
             mode={mode}
             relatedResult={relatedResult}
             pathsResult={pathsResult}
+            selection={selection}
+            onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
             onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
           />
         </>

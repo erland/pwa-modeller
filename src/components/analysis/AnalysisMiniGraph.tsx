@@ -4,7 +4,9 @@ import type {
   Model,
   PathsBetweenResult,
   RelatedElementsResult,
-  TraversalStep
+  TraversalStep,
+  ArchimateLayer,
+  ElementType
 } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { ModelKind } from '../../domain/types';
@@ -12,6 +14,17 @@ import type { Selection } from '../model/selection';
 import type { AnalysisMode } from './AnalysisQueryPanel';
 
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
+import { useElementBgVar } from '../diagram/hooks/useElementBgVar';
+
+const ARCHIMATE_LAYER_BG_VAR: Record<ArchimateLayer, string> = {
+  Strategy: 'var(--arch-layer-strategy)',
+  Motivation: 'var(--arch-layer-motivation)',
+  Business: 'var(--arch-layer-business)',
+  Application: 'var(--arch-layer-application)',
+  Technology: 'var(--arch-layer-technology)',
+  Physical: 'var(--arch-layer-physical)',
+  ImplementationMigration: 'var(--arch-layer-implementation)'
+};
 
 type GraphNode = {
   id: string;
@@ -262,6 +275,7 @@ export function AnalysisMiniGraph({
   onSelectRelationship?: (relationshipId: string) => void;
 }) {
   const adapter = getAnalysisAdapter(modelKind);
+  const { getElementBgVar } = useElementBgVar();
 
   const labelForId = useMemo(() => {
     return (id: string): string => {
@@ -399,6 +413,14 @@ export function AnalysisMiniGraph({
               if (!r) return null;
               const label = n.label;
               const text = label.length > 26 ? `${label.slice(0, 25)}…` : label;
+              const el = model.elements[n.id];
+
+              let fill = 'rgba(255,255,255,0.9)';
+              if (modelKind === 'archimate' && el) {
+                const layer = (el as unknown as { layer?: string }).layer;
+                const layerFill = layer ? (ARCHIMATE_LAYER_BG_VAR as unknown as Record<string, string>)[layer] : undefined;
+                fill = layerFill ?? getElementBgVar(el.type as ElementType);
+              }
               return (
                 <g
                   key={n.id}
@@ -410,7 +432,7 @@ export function AnalysisMiniGraph({
                   }}
                   style={{ cursor: 'pointer' }}
                 >
-                  <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={8} ry={8} fill="rgba(255,255,255,0.9)" stroke="rgba(0,0,0,0.25)" />
+                  <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={8} ry={8} fill={fill} stroke="rgba(0,0,0,0.25)" />
                   <text x={r.x + 10} y={r.y + 22} fontSize={12} style={{ userSelect: 'none' }}>
                     {text}
                     <title>{label}</title>

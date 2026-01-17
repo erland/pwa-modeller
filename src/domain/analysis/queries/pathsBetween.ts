@@ -1,4 +1,4 @@
-import type { Model } from '../../types';
+import type { ArchimateLayer, Model } from '../../types';
 import { buildAnalysisGraph } from '../graph';
 import {
   elementPassesLayerFilter,
@@ -28,14 +28,14 @@ type Pred = { prevId: string; step: TraversalStep };
 function nodeAllowedForTraversal(
   model: Model,
   nodeId: string,
-  layerSet: ReadonlySet<string> | undefined,
+  layerSet: ReadonlySet<ArchimateLayer> | undefined,
   endpoints: { sourceId: string; targetId: string }
 ): boolean {
   if (!layerSet) return true;
   if (nodeId === endpoints.sourceId || nodeId === endpoints.targetId) return true;
   const el = model.elements[nodeId];
   if (!el) return false;
-  return elementPassesLayerFilter(el, layerSet as any);
+  return elementPassesLayerFilter(el, layerSet);
 }
 
 function predSortKey(p: Pred): string {
@@ -93,7 +93,7 @@ export function queryPathsBetween(
       const nd = d + 1;
 
       if (opts.maxPathLength !== undefined && nd > opts.maxPathLength) continue;
-      if (!nodeAllowedForTraversal(model, nextId, layerSet as any, endpoints)) continue;
+      if (!nodeAllowedForTraversal(model, nextId, layerSet, endpoints)) continue;
 
       const prevDist = dist.get(nextId);
       if (prevDist === undefined) {

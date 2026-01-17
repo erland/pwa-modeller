@@ -21,16 +21,72 @@ function normalizeStringArray<T extends string>(arr: readonly T[] | undefined): 
 
 function stableAnalysisKey(opts: RelatedElementsOptions | PathsBetweenOptions | undefined): string {
   if (!opts) return '';
-  const o: any = {
+  const o: {
+    direction?: string;
+    maxDepth?: number;
+    includeStart?: boolean;
+    maxPaths?: number;
+    maxPathLength?: number;
+    relationshipTypes?: string[];
+    archimateLayers?: string[];
+  } = {
     direction: opts.direction,
-    maxDepth: (opts as RelatedElementsOptions).maxDepth,
+    maxDepth: opts.maxDepth,
     includeStart: (opts as RelatedElementsOptions).includeStart,
     maxPaths: (opts as PathsBetweenOptions).maxPaths,
     maxPathLength: (opts as PathsBetweenOptions).maxPathLength,
-    relationshipTypes: normalizeStringArray(opts.relationshipTypes as readonly string[] | undefined),
-    archimateLayers: normalizeStringArray((opts as any).archimateLayers as readonly string[] | undefined)
+    relationshipTypes: normalizeStringArray<RelationshipType>(opts.relationshipTypes),
+    archimateLayers: normalizeStringArray<ArchimateLayer>(opts.archimateLayers)
   };
   return JSON.stringify(o);
+}
+
+function relatedOptsFromKey(key: string): RelatedElementsOptions {
+  if (!key) return {};
+  const parsed = JSON.parse(key) as {
+    direction?: RelatedElementsOptions['direction'];
+    maxDepth?: number;
+    includeStart?: boolean;
+    relationshipTypes?: RelationshipType[];
+    archimateLayers?: ArchimateLayer[];
+  };
+
+  const out: RelatedElementsOptions = {};
+  if (parsed.direction) out.direction = parsed.direction;
+  if (typeof parsed.maxDepth === 'number') out.maxDepth = parsed.maxDepth;
+  if (typeof parsed.includeStart === 'boolean') out.includeStart = parsed.includeStart;
+  if (parsed.relationshipTypes && parsed.relationshipTypes.length > 0) {
+    out.relationshipTypes = parsed.relationshipTypes;
+  }
+  if (parsed.archimateLayers && parsed.archimateLayers.length > 0) {
+    out.archimateLayers = parsed.archimateLayers;
+  }
+  return out;
+}
+
+function pathsOptsFromKey(key: string): PathsBetweenOptions {
+  if (!key) return {};
+  const parsed = JSON.parse(key) as {
+    direction?: PathsBetweenOptions['direction'];
+    maxDepth?: number;
+    maxPaths?: number;
+    maxPathLength?: number;
+    relationshipTypes?: RelationshipType[];
+    archimateLayers?: ArchimateLayer[];
+  };
+
+  const out: PathsBetweenOptions = {};
+  if (parsed.direction) out.direction = parsed.direction;
+  if (typeof parsed.maxDepth === 'number') out.maxDepth = parsed.maxDepth;
+  if (typeof parsed.maxPaths === 'number') out.maxPaths = parsed.maxPaths;
+  if (typeof parsed.maxPathLength === 'number') out.maxPathLength = parsed.maxPathLength;
+  if (parsed.relationshipTypes && parsed.relationshipTypes.length > 0) {
+    out.relationshipTypes = parsed.relationshipTypes;
+  }
+  if (parsed.archimateLayers && parsed.archimateLayers.length > 0) {
+    out.archimateLayers = parsed.archimateLayers;
+  }
+  return out;
 }
 
 // -----------------------------
@@ -71,11 +127,12 @@ export function useAnalysisRelatedElements(
 ): RelatedElementsResult | null {
   const model = useModelStore((s) => s.model);
   const key = stableAnalysisKey(opts);
+  const normalizedOpts = useMemo(() => relatedOptsFromKey(key), [key]);
 
   return useMemo(() => {
     if (!model || !startElementId) return null;
-    return queryRelatedElements(model, startElementId, opts);
-  }, [model, startElementId, key]);
+    return queryRelatedElements(model, startElementId, normalizedOpts);
+  }, [model, startElementId, normalizedOpts]);
 }
 
 /**
@@ -90,11 +147,12 @@ export function useAnalysisPathsBetween(
 ): PathsBetweenResult | null {
   const model = useModelStore((s) => s.model);
   const key = stableAnalysisKey(opts);
+  const normalizedOpts = useMemo(() => pathsOptsFromKey(key), [key]);
 
   return useMemo(() => {
     if (!model || !sourceElementId || !targetElementId) return null;
-    return queryPathsBetween(model, sourceElementId, targetElementId, opts);
-  }, [model, sourceElementId, targetElementId, key]);
+    return queryPathsBetween(model, sourceElementId, targetElementId, normalizedOpts);
+  }, [model, sourceElementId, targetElementId, normalizedOpts]);
 }
 
 // -----------------------------

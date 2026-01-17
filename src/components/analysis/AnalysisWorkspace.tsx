@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { Model, Element } from '../../domain';
+import type {
+  AnalysisDirection,
+  ArchimateLayer,
+  Element,
+  Model,
+  RelationshipType
+} from '../../domain';
 import type { Selection } from '../model/selection';
 import { useModelStore, useAnalysisPathsBetween, useAnalysisRelatedElements } from '../../store';
 
@@ -46,6 +52,21 @@ export function AnalysisWorkspace({
 
   const [mode, setMode] = useState<AnalysisMode>('related');
 
+  // -----------------------------
+  // Filters (draft)
+  // -----------------------------
+  const [direction, setDirection] = useState<AnalysisDirection>('both');
+  const [relationshipTypes, setRelationshipTypes] = useState<RelationshipType[]>([]);
+  const [archimateLayers, setArchimateLayers] = useState<ArchimateLayer[]>([]);
+
+  // Related-only
+  const [maxDepth, setMaxDepth] = useState<number>(4);
+  const [includeStart, setIncludeStart] = useState<boolean>(false);
+
+  // Paths-only
+  const [maxPaths, setMaxPaths] = useState<number>(10);
+  const [maxPathLength, setMaxPathLength] = useState<number | null>(null);
+
   // Draft inputs (user edits these).
   const [draftStartId, setDraftStartId] = useState<string>('');
   const [draftSourceId, setDraftSourceId] = useState<string>('');
@@ -73,9 +94,31 @@ export function AnalysisWorkspace({
 
   const elementsForPicker = useMemo(() => (model ? sortElementsForPicker(model) : []), [model]);
 
-  // Table-first v1: start with default options. Filters come in Step 4.
-  const relatedResult = useAnalysisRelatedElements(activeStartId || null, {});
-  const pathsResult = useAnalysisPathsBetween(activeSourceId || null, activeTargetId || null, {});
+  const relatedOpts = useMemo(
+    () => ({
+      direction,
+      maxDepth,
+      includeStart,
+      relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
+      archimateLayers: archimateLayers.length ? archimateLayers : undefined
+    }),
+    [direction, maxDepth, includeStart, relationshipTypes, archimateLayers]
+  );
+
+  const pathsOpts = useMemo(
+    () => ({
+      direction,
+      maxPaths,
+      maxPathLength: maxPathLength === null ? undefined : maxPathLength,
+      relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
+      archimateLayers: archimateLayers.length ? archimateLayers : undefined
+    }),
+    [direction, maxPaths, maxPathLength, relationshipTypes, archimateLayers]
+  );
+
+  // Results are driven by active element selection + *draft* filters (QoL).
+  const relatedResult = useAnalysisRelatedElements(activeStartId || null, relatedOpts);
+  const pathsResult = useAnalysisPathsBetween(activeSourceId || null, activeTargetId || null, pathsOpts);
 
   const canRun = Boolean(
     model &&
@@ -90,6 +133,43 @@ export function AnalysisWorkspace({
     }
     setActiveSourceId(draftSourceId);
     setActiveTargetId(draftTargetId);
+  }
+
+  function applyPreset(presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') {
+    if (presetId === 'clear') {
+      setDirection('both');
+      setRelationshipTypes([]);
+      setArchimateLayers([]);
+      setMaxDepth(4);
+      setIncludeStart(false);
+      setMaxPaths(10);
+      setMaxPathLength(null);
+      return;
+    }
+
+    if (presetId === 'upstream') {
+      setDirection('incoming');
+      setMaxDepth(3);
+      setMaxPaths(10);
+      setMaxPathLength(null);
+      return;
+    }
+
+    if (presetId === 'downstream') {
+      setDirection('outgoing');
+      setMaxDepth(3);
+      setMaxPaths(10);
+      setMaxPathLength(null);
+      return;
+    }
+
+    // crossLayerTrace: Business → Application → Technology
+    setDirection('both');
+    setMaxDepth(4);
+    setArchimateLayers(['Business', 'Application', 'Technology']);
+    setRelationshipTypes(['Realization', 'Serving', 'Assignment', 'Access', 'Flow', 'Association']);
+    setMaxPaths(10);
+    setMaxPathLength(null);
   }
 
   function useSelectionAs(which: 'start' | 'source' | 'target') {
@@ -142,6 +222,21 @@ export function AnalysisWorkspace({
             elements={elementsForPicker}
             mode={mode}
             onChangeMode={setMode}
+            direction={direction}
+            onChangeDirection={setDirection}
+            relationshipTypes={relationshipTypes}
+            onChangeRelationshipTypes={setRelationshipTypes}
+            archimateLayers={archimateLayers}
+            onChangeArchimateLayers={setArchimateLayers}
+            maxDepth={maxDepth}
+            onChangeMaxDepth={setMaxDepth}
+            includeStart={includeStart}
+            onChangeIncludeStart={setIncludeStart}
+            maxPaths={maxPaths}
+            onChangeMaxPaths={setMaxPaths}
+            maxPathLength={maxPathLength}
+            onChangeMaxPathLength={setMaxPathLength}
+            onApplyPreset={applyPreset}
             draftStartId={draftStartId}
             onChangeDraftStartId={setDraftStartId}
             draftSourceId={draftSourceId}

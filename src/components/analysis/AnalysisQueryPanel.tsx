@@ -1,6 +1,12 @@
 import { useMemo } from 'react';
 
-import type { Element, Model } from '../../domain';
+import type {
+  AnalysisDirection,
+  ArchimateLayer,
+  Element,
+  Model,
+  RelationshipType
+} from '../../domain';
 
 export type AnalysisMode = 'related' | 'paths';
 
@@ -9,6 +15,30 @@ type Props = {
   elements: Element[];
   mode: AnalysisMode;
   onChangeMode: (mode: AnalysisMode) => void;
+
+  // -----------------------------
+  // Filters (draft)
+  // -----------------------------
+  direction: AnalysisDirection;
+  onChangeDirection: (dir: AnalysisDirection) => void;
+  relationshipTypes: RelationshipType[];
+  onChangeRelationshipTypes: (types: RelationshipType[]) => void;
+  archimateLayers: ArchimateLayer[];
+  onChangeArchimateLayers: (layers: ArchimateLayer[]) => void;
+
+  // Related-only
+  maxDepth: number;
+  onChangeMaxDepth: (n: number) => void;
+  includeStart: boolean;
+  onChangeIncludeStart: (v: boolean) => void;
+
+  // Paths-only
+  maxPaths: number;
+  onChangeMaxPaths: (n: number) => void;
+  maxPathLength: number | null;
+  onChangeMaxPathLength: (n: number | null) => void;
+
+  onApplyPreset: (presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') => void;
 
   draftStartId: string;
   onChangeDraftStartId: (id: string) => void;
@@ -26,6 +56,39 @@ type Props = {
   onRun: () => void;
 };
 
+const ARCHIMATE_LAYER_OPTIONS: ArchimateLayer[] = [
+  'Strategy',
+  'Business',
+  'Application',
+  'Technology',
+  'Physical',
+  'ImplementationMigration',
+  'Motivation'
+];
+
+const RELATIONSHIP_TYPE_OPTIONS: RelationshipType[] = [
+  'Association',
+  'Realization',
+  'Serving',
+  'Flow',
+  'Composition',
+  'Aggregation',
+  'Assignment',
+  'Access',
+  'Influence',
+  'Triggering',
+  'Specialization',
+  'Unknown'
+];
+
+function toggle<T extends string>(arr: readonly T[], v: T): T[] {
+  return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
+}
+
+function dedupeSort(arr: readonly string[]): string[] {
+  return Array.from(new Set(arr)).sort((a, b) => a.localeCompare(b));
+}
+
 function labelForElement(e: Element): string {
   const type = e.type ? String(e.type) : 'Unknown';
   const layer = e.layer ? String(e.layer) : '';
@@ -38,6 +101,21 @@ export function AnalysisQueryPanel({
   elements,
   mode,
   onChangeMode,
+  direction,
+  onChangeDirection,
+  relationshipTypes,
+  onChangeRelationshipTypes,
+  archimateLayers,
+  onChangeArchimateLayers,
+  maxDepth,
+  onChangeMaxDepth,
+  includeStart,
+  onChangeIncludeStart,
+  maxPaths,
+  onChangeMaxPaths,
+  maxPathLength,
+  onChangeMaxPathLength,
+  onApplyPreset,
   draftStartId,
   onChangeDraftStartId,
   draftSourceId,
@@ -55,6 +133,25 @@ export function AnalysisQueryPanel({
   }, [elements]);
 
   const modelName = model.metadata?.name || 'Model';
+
+  const relationshipTypeSetSize = RELATIONSHIP_TYPE_OPTIONS.length;
+  const layerSetSize = ARCHIMATE_LAYER_OPTIONS.length;
+
+  const relationshipTypesSorted = useMemo(
+    () => dedupeSort(relationshipTypes) as RelationshipType[],
+    [relationshipTypes]
+  );
+
+  const archimateLayersSorted = useMemo(
+    () => dedupeSort(archimateLayers) as ArchimateLayer[],
+    [archimateLayers]
+  );
+
+  const hasAnyFilters =
+    relationshipTypesSorted.length > 0 ||
+    archimateLayersSorted.length > 0 ||
+    direction !== 'both' ||
+    (mode === 'related' ? (maxDepth !== 4 || includeStart) : (maxPaths !== 10 || maxPathLength !== null));
 
   return (
     <section className="crudSection" aria-label="Analysis query">
@@ -173,6 +270,191 @@ export function AnalysisQueryPanel({
           </div>
         </div>
       </div>
+
+      <details style={{ marginTop: 10 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 12, opacity: 0.9 }}>
+          Filters & presets{hasAnyFilters ? ' (active)' : ''}
+        </summary>
+
+        <div className="toolbar" style={{ marginTop: 10 }} aria-label="Analysis filters">
+          <div className="toolbarGroup">
+            <label htmlFor="analysis-direction">Direction</label>
+            <select
+              id="analysis-direction"
+              className="selectInput"
+              value={direction}
+              onChange={(e) => onChangeDirection(e.currentTarget.value as AnalysisDirection)}
+            >
+              <option value="both">Both</option>
+              <option value="outgoing">Downstream (outgoing)</option>
+              <option value="incoming">Upstream (incoming)</option>
+            </select>
+          </div>
+
+          {mode === 'related' ? (
+            <>
+              <div className="toolbarGroup">
+                <label htmlFor="analysis-maxDepth">Max depth</label>
+                <select
+                  id="analysis-maxDepth"
+                  className="selectInput"
+                  value={String(maxDepth)}
+                  onChange={(e) => onChangeMaxDepth(Number(e.currentTarget.value))}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
+                  <input
+                    type="checkbox"
+                    checked={includeStart}
+                    onChange={(e) => onChangeIncludeStart(e.currentTarget.checked)}
+                  />
+                  Include start element
+                </label>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="toolbarGroup">
+                <label htmlFor="analysis-maxPaths">Max paths</label>
+                <select
+                  id="analysis-maxPaths"
+                  className="selectInput"
+                  value={String(maxPaths)}
+                  onChange={(e) => onChangeMaxPaths(Number(e.currentTarget.value))}
+                >
+                  {[1, 2, 3, 5, 10, 15, 20, 30, 50].map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="toolbarGroup">
+                <label htmlFor="analysis-maxPathLength">Max path length</label>
+                <select
+                  id="analysis-maxPathLength"
+                  className="selectInput"
+                  value={maxPathLength === null ? '' : String(maxPathLength)}
+                  onChange={(e) => {
+                    const v = e.currentTarget.value;
+                    onChangeMaxPathLength(v ? Number(v) : null);
+                  }}
+                >
+                  <option value="">Auto (shortest only)</option>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15].map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          <div className="toolbarGroup" style={{ minWidth: 260 }}>
+            <label>Relationship types ({relationshipTypesSorted.length}/{relationshipTypeSetSize})</label>
+            <div
+              style={{
+                maxHeight: 140,
+                overflow: 'auto',
+                border: '1px solid var(--border-1)',
+                borderRadius: 10,
+                padding: '8px 10px',
+                background: 'rgba(255,255,255,0.02)'
+              }}
+            >
+              {RELATIONSHIP_TYPE_OPTIONS.map((t) => (
+                <label
+                  key={t}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={relationshipTypesSorted.includes(t)}
+                    onChange={() => onChangeRelationshipTypes(dedupeSort(toggle(relationshipTypesSorted, t)) as RelationshipType[])}
+                  />
+                  <span className="mono">{String(t)}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="miniLinkButton"
+                onClick={() => onChangeRelationshipTypes(RELATIONSHIP_TYPE_OPTIONS.filter((t) => t !== 'Unknown'))}
+              >
+                All
+              </button>
+              <button type="button" className="miniLinkButton" onClick={() => onChangeRelationshipTypes([])}>
+                None
+              </button>
+            </div>
+          </div>
+
+          <div className="toolbarGroup" style={{ minWidth: 260 }}>
+            <label>Layers ({archimateLayersSorted.length}/{layerSetSize})</label>
+            <div
+              style={{
+                maxHeight: 140,
+                overflow: 'auto',
+                border: '1px solid var(--border-1)',
+                borderRadius: 10,
+                padding: '8px 10px',
+                background: 'rgba(255,255,255,0.02)'
+              }}
+            >
+              {ARCHIMATE_LAYER_OPTIONS.map((l) => (
+                <label
+                  key={l}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={archimateLayersSorted.includes(l)}
+                    onChange={() => onChangeArchimateLayers(dedupeSort(toggle(archimateLayersSorted, l)) as ArchimateLayer[])}
+                  />
+                  {String(l)}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              <button type="button" className="miniLinkButton" onClick={() => onChangeArchimateLayers(ARCHIMATE_LAYER_OPTIONS)}>
+                All
+              </button>
+              <button type="button" className="miniLinkButton" onClick={() => onChangeArchimateLayers([])}>
+                None
+              </button>
+            </div>
+          </div>
+
+          <div className="toolbarGroup" style={{ minWidth: 220 }}>
+            <label>Presets</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="miniLinkButton" onClick={() => onApplyPreset('upstream')}>
+                Upstream
+              </button>
+              <button type="button" className="miniLinkButton" onClick={() => onApplyPreset('downstream')}>
+                Downstream
+              </button>
+              <button type="button" className="miniLinkButton" onClick={() => onApplyPreset('crossLayerTrace')}>
+                Business→App→Tech
+              </button>
+              <button type="button" className="miniLinkButton" onClick={() => onApplyPreset('clear')}>
+                Clear
+              </button>
+            </div>
+            <p className="crudHint" style={{ marginTop: 8 }}>
+              Presets set filters; use “Run analysis” to refresh element selection if needed.
+            </p>
+          </div>
+        </div>
+      </details>
     </section>
   );
 }

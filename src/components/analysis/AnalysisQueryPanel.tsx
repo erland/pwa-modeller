@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type {
   AnalysisDirection,
@@ -8,7 +8,7 @@ import type {
   Model,
   RelationshipType
 } from '../../domain';
-import { ELEMENT_TYPES_BY_LAYER, getElementTypeLabel } from '../../domain';
+import { getElementTypeLabel } from '../../domain';
 import { ElementChooserDialog } from '../model/pickers/ElementChooserDialog';
 
 export type AnalysisMode = 'related' | 'paths';
@@ -62,41 +62,40 @@ type Props = {
   onRun: () => void;
 };
 
-const ARCHIMATE_LAYER_OPTIONS: ArchimateLayer[] = [
-  'Strategy',
-  'Business',
-  'Application',
-  'Technology',
-  'Physical',
-  'ImplementationMigration',
-  'Motivation'
-];
+// We keep filter option lists dynamic (derived from the loaded model) so that
+// users working with a tailored meta-model don't see irrelevant ArchiMate options.
 
-const RELATIONSHIP_TYPE_OPTIONS: RelationshipType[] = [
-  'Association',
-  'Realization',
-  'Serving',
-  'Flow',
-  'Composition',
-  'Aggregation',
-  'Assignment',
-  'Access',
-  'Influence',
-  'Triggering',
-  'Specialization',
-  'Unknown'
-];
-
-function elementTypesForLayers(layers: readonly ArchimateLayer[]): ElementType[] {
-  const out: ElementType[] = [];
-  const seen = new Set<ElementType>();
-  for (const layer of layers) {
-    for (const t of ELEMENT_TYPES_BY_LAYER[layer] ?? []) {
-      if (seen.has(t)) continue;
-      seen.add(t);
-      out.push(t);
-    }
+function getAvailableRelationshipTypes(model: Model): RelationshipType[] {
+  const seen = new Set<RelationshipType>();
+  for (const rel of Object.values(model.relationships)) {
+    if (!rel?.type) continue;
+    seen.add(rel.type);
   }
+  return Array.from(seen).sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+function getAvailableLayers(model: Model): ArchimateLayer[] {
+  const seen = new Set<ArchimateLayer>();
+  for (const el of Object.values(model.elements)) {
+    if (!el?.layer) continue;
+    // In ArchiMate models, element.layer is expected to be an ArchimateLayer.
+    // We still guard the cast because other notations may omit this.
+    seen.add(el.layer as ArchimateLayer);
+  }
+  return Array.from(seen).sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+function getAvailableElementTypesForLayers(model: Model, layers: readonly ArchimateLayer[]): ElementType[] {
+  if (!layers.length) return [];
+  const allowedLayers = new Set<ArchimateLayer>(layers);
+  const seen = new Set<ElementType>();
+  for (const el of Object.values(model.elements)) {
+    if (!el?.type) continue;
+    const layer = el.layer as ArchimateLayer | undefined;
+    if (!layer || !allowedLayers.has(layer)) continue;
+    seen.add(el.type);
+  }
+  const out = Array.from(seen);
   out.sort((a, b) => getElementTypeLabel(a).localeCompare(getElementTypeLabel(b), undefined, { sensitivity: 'base' }));
   return out;
 }
@@ -107,6 +106,12 @@ function toggle<T extends string>(arr: readonly T[], v: T): T[] {
 
 function dedupeSort(arr: readonly string[]): string[] {
   return Array.from(new Set(arr)).sort((a, b) => a.localeCompare(b));
+}
+
+function pruneToAllowed<T extends string>(selected: readonly T[], allowed: readonly T[]): T[] {
+  const s = new Set<T>(allowed);
+  const pruned = selected.filter((x) => s.has(x));
+  return pruned.length === selected.length ? (selected as T[]) : pruned;
 }
 
 function labelForElement(e: Element): string {
@@ -152,8 +157,11 @@ export function AnalysisQueryPanel({
 
   const modelName = model.metadata?.name || 'Model';
 
-  const relationshipTypeSetSize = RELATIONSHIP_TYPE_OPTIONS.length;
-  const layerSetSize = ARCHIMATE_LAYER_OPTIONS.length;
+  const availableRelationshipTypes = useMemo(() => getAvailableRelationshipTypes(model), [model]);
+  const availableLayers = useMemo(() => getAvailableLayers(model), [model]);
+
+  const relationshipTypeSetSize = availableRelationshipTypes.length;
+  const layerSetSize = availableLayers.length;
 
   const relationshipTypesSorted = useMemo(
     () => dedupeSort(relationshipTypes) as RelationshipType[],
@@ -167,13 +175,30 @@ export function AnalysisQueryPanel({
 
   const allowedElementTypes = useMemo(() => {
     if (archimateLayersSorted.length === 0) return [] as ElementType[];
-    return elementTypesForLayers(archimateLayersSorted);
-  }, [archimateLayersSorted]);
+    return getAvailableElementTypesForLayers(model, archimateLayersSorted);
+  }, [model, archimateLayersSorted]);
 
   const elementTypesSorted = useMemo(
     () => dedupeSort(elementTypes) as ElementType[],
     [elementTypes]
   );
+
+  // Prune selected filters when the loaded model changes.
+  useEffect(() => {
+    const pruned = pruneToAllowed(relationshipTypesSorted, availableRelationshipTypes);
+    if (pruned !== relationshipTypesSorted) onChangeRelationshipTypes(pruned);
+  }, [availableRelationshipTypes, onChangeRelationshipTypes, relationshipTypesSorted]);
+
+  useEffect(() => {
+    const pruned = pruneToAllowed(archimateLayersSorted, availableLayers);
+    if (pruned !== archimateLayersSorted) onChangeArchimateLayers(pruned);
+  }, [archimateLayersSorted, availableLayers, onChangeArchimateLayers]);
+
+  useEffect(() => {
+    if (mode !== 'related') return;
+    const pruned = pruneToAllowed(elementTypesSorted, allowedElementTypes);
+    if (pruned !== elementTypesSorted) onChangeElementTypes(pruned);
+  }, [allowedElementTypes, elementTypesSorted, mode, onChangeElementTypes]);
 
   const hasAnyFilters =
     relationshipTypesSorted.length > 0 ||
@@ -408,25 +433,38 @@ export function AnalysisQueryPanel({
                 background: 'rgba(255,255,255,0.02)'
               }}
             >
-              {RELATIONSHIP_TYPE_OPTIONS.map((t) => (
-                <label
-                  key={t}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={relationshipTypesSorted.includes(t)}
-                    onChange={() => onChangeRelationshipTypes(dedupeSort(toggle(relationshipTypesSorted, t)) as RelationshipType[])}
-                  />
-                  <span className="mono">{String(t)}</span>
-                </label>
-              ))}
+              {availableRelationshipTypes.length === 0 ? (
+                <p className="crudHint" style={{ margin: 0 }}>
+                  No relationships in the model.
+                </p>
+              ) : (
+                availableRelationshipTypes.map((t) => (
+                  <label
+                    key={t}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={relationshipTypesSorted.includes(t)}
+                      onChange={() =>
+                        onChangeRelationshipTypes(
+                          dedupeSort(toggle(relationshipTypesSorted, t)) as RelationshipType[]
+                        )
+                      }
+                    />
+                    <span className="mono">{String(t)}</span>
+                  </label>
+                ))
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 className="miniLinkButton"
-                onClick={() => onChangeRelationshipTypes(RELATIONSHIP_TYPE_OPTIONS.filter((t) => t !== 'Unknown'))}
+                onClick={() =>
+                  onChangeRelationshipTypes(availableRelationshipTypes.filter((t) => t !== 'Unknown'))
+                }
+                disabled={availableRelationshipTypes.length === 0}
               >
                 All
               </button>
@@ -448,22 +486,37 @@ export function AnalysisQueryPanel({
                 background: 'rgba(255,255,255,0.02)'
               }}
             >
-              {ARCHIMATE_LAYER_OPTIONS.map((l) => (
-                <label
-                  key={l}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={archimateLayersSorted.includes(l)}
-                    onChange={() => onChangeArchimateLayers(dedupeSort(toggle(archimateLayersSorted, l)) as ArchimateLayer[])}
-                  />
-                  {String(l)}
-                </label>
-              ))}
+              {availableLayers.length === 0 ? (
+                <p className="crudHint" style={{ margin: 0 }}>
+                  No ArchiMate layers found in the model.
+                </p>
+              ) : (
+                availableLayers.map((l) => (
+                  <label
+                    key={l}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={archimateLayersSorted.includes(l)}
+                      onChange={() =>
+                        onChangeArchimateLayers(
+                          dedupeSort(toggle(archimateLayersSorted, l)) as ArchimateLayer[]
+                        )
+                      }
+                    />
+                    {String(l)}
+                  </label>
+                ))
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-              <button type="button" className="miniLinkButton" onClick={() => onChangeArchimateLayers(ARCHIMATE_LAYER_OPTIONS)}>
+              <button
+                type="button"
+                className="miniLinkButton"
+                onClick={() => onChangeArchimateLayers(availableLayers)}
+                disabled={availableLayers.length === 0}
+              >
                 All
               </button>
               <button type="button" className="miniLinkButton" onClick={() => onChangeArchimateLayers([])}>
@@ -487,36 +540,43 @@ export function AnalysisQueryPanel({
                   background: 'rgba(255,255,255,0.02)'
                 }}
               >
-                {allowedElementTypes.map((t) => (
-                  <label
-                    key={t}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      fontSize: 12,
-                      opacity: 0.9,
-                      marginBottom: 6
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={elementTypesSorted.includes(t)}
-                      onChange={() =>
-                        onChangeElementTypes(
-                          dedupeSort(toggle(elementTypesSorted, t)) as ElementType[]
-                        )
-                      }
-                    />
-                    <span className="mono">{getElementTypeLabel(t)}</span>
-                  </label>
-                ))}
+                {allowedElementTypes.length === 0 ? (
+                  <p className="crudHint" style={{ margin: 0 }}>
+                    No element types found in the selected layer(s).
+                  </p>
+                ) : (
+                  allowedElementTypes.map((t) => (
+                    <label
+                      key={t}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 12,
+                        opacity: 0.9,
+                        marginBottom: 6
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={elementTypesSorted.includes(t)}
+                        onChange={() =>
+                          onChangeElementTypes(
+                            dedupeSort(toggle(elementTypesSorted, t)) as ElementType[]
+                          )
+                        }
+                      />
+                      <span className="mono">{getElementTypeLabel(t)}</span>
+                    </label>
+                  ))
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="miniLinkButton"
                   onClick={() => onChangeElementTypes(allowedElementTypes)}
+                  disabled={allowedElementTypes.length === 0}
                 >
                   All
                 </button>
@@ -525,7 +585,7 @@ export function AnalysisQueryPanel({
                 </button>
               </div>
               <p className="crudHint" style={{ marginTop: 8 }}>
-                Options are limited to the selected layer(s).
+                Options are limited to the selected layer(s) and what exists in the model.
               </p>
             </div>
           ) : null}

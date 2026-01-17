@@ -6,7 +6,6 @@ import type {
   ElementType,
   RelationshipType
 } from '../../domain';
-import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
 import type { Selection } from '../model/selection';
 import { useModelStore, useAnalysisPathsBetween, useAnalysisRelatedElements } from '../../store';
 
@@ -80,24 +79,6 @@ export function AnalysisWorkspace({
       else if (!draftTargetId && draftSourceId !== picked) setDraftTargetId(picked);
     }
   }, [selection, mode, draftStartId, draftSourceId, draftTargetId]);
-
-  // Keep element type filter compatible with selected layers.
-  useEffect(() => {
-    if (archimateLayers.length === 0) {
-      if (elementTypes.length) setElementTypes([]);
-      return;
-    }
-
-    const allowed = new Set<ElementType>();
-    for (const layer of archimateLayers) {
-      for (const t of ELEMENT_TYPES_BY_LAYER[layer] ?? []) allowed.add(t);
-    }
-
-    // Prune selected types that no longer belong to the chosen layers.
-    const pruned = elementTypes.filter((t) => allowed.has(t));
-    if (pruned.length !== elementTypes.length) setElementTypes(pruned);
-  }, [archimateLayers, elementTypes]);
-
 
   const relatedOpts = useMemo(
     () => ({

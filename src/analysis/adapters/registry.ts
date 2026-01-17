@@ -1,64 +1,35 @@
 import type { ModelKind } from '../../domain/types';
 import type { AnalysisAdapter } from './AnalysisAdapter';
 import { archimateAnalysisAdapter } from './archimate';
+import { bpmnAnalysisAdapter } from './bpmn';
+import { createGenericAnalysisAdapter } from './generic';
+import { umlAnalysisAdapter } from './uml';
 
-function createBasicAdapter(kind: ModelKind): AnalysisAdapter {
-  return {
-    id: kind,
-    getNodeLabel(node, model) {
-      const el = model.elements[node.id] ?? node;
-      const typeLabel =
-        el.type === 'Unknown'
-          ? el.unknownType?.name
-            ? `Unknown: ${el.unknownType.name}`
-            : 'Unknown'
-          : el.type;
-      return `${el.name} (${typeLabel})`;
-    },
-    getEdgeLabel(edge, model) {
-      const r = model.relationships[edge.relationshipId] ?? edge.relationship;
-      if (r.type !== 'Unknown') return r.type;
-      return r.unknownType?.name ? `Unknown: ${r.unknownType.name}` : 'Unknown';
-    },
-    isEdgeDirected(edge, model) {
-      // Default: use the graph's computed semantics.
-      void model;
-      return !edge.undirected;
-    },
-    getFacetDefinitions(model) {
-      // No facets by default.
-      void model;
-      return [];
-    },
-    getNodeFacetValues(node, model) {
-      // No facet values by default.
-      void node;
-      void model;
-      return {};
-    }
-  };
-}
-
-const basicUmlAdapter = createBasicAdapter('uml');
-const basicBpmnAdapter = createBasicAdapter('bpmn');
+const registry: Record<ModelKind, AnalysisAdapter> = {
+  archimate: archimateAnalysisAdapter,
+  uml: umlAnalysisAdapter,
+  bpmn: bpmnAnalysisAdapter
+};
 
 /**
  * Get the notation-specific Analysis adapter.
  *
- * Step 1: ArchiMate has a real adapter, others use a minimal generic fallback.
+ * Step 6: ArchiMate has a real adapter, others use thin stubs that currently
+ * delegate to a generic, notation-agnostic adapter.
  */
 export function getAnalysisAdapter(kind: ModelKind): AnalysisAdapter {
-  switch (kind) {
-    case 'archimate':
-      return archimateAnalysisAdapter;
-    case 'uml':
-      return basicUmlAdapter;
-    case 'bpmn':
-      return basicBpmnAdapter;
-    default: {
-      // Exhaustive check for future kinds.
-      const _never: never = kind;
-      return createBasicAdapter(_never);
-    }
-  }
+  return registry[kind];
+}
+
+/**
+ * Runtime-safe variant for situations where persisted data may contain an
+ * unexpected modelKind. Prefer `getAnalysisAdapter` when types guarantee it.
+ */
+export function getAnalysisAdapterOrGeneric(kind: unknown): AnalysisAdapter {
+  if (kind === 'archimate') return registry.archimate;
+  if (kind === 'uml') return registry.uml;
+  if (kind === 'bpmn') return registry.bpmn;
+  // Default generic adapter with a stable id (we pick 'archimate' purely as a
+  // ModelKind-compatible id; semantics remain generic).
+  return createGenericAnalysisAdapter('archimate');
 }

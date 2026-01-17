@@ -4,8 +4,6 @@ import type {
   AnalysisDirection,
   ArchimateLayer,
   ElementType,
-  Element,
-  Model,
   RelationshipType
 } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER } from '../../domain';
@@ -16,18 +14,6 @@ import '../../styles/crud.css';
 
 import { AnalysisQueryPanel, type AnalysisMode } from './AnalysisQueryPanel';
 import { AnalysisResultTable } from './AnalysisResultTable';
-
-function sortElementsForPicker(model: Model): Element[] {
-  return Object.values(model.elements)
-    .slice()
-    .sort((a, b) => {
-      const an = a.name ?? '';
-      const bn = b.name ?? '';
-      const c = an.localeCompare(bn, undefined, { sensitivity: 'base', numeric: true });
-      if (c !== 0) return c;
-      return (a.id ?? '').localeCompare(b.id ?? '');
-    });
-}
 
 function selectionToElementId(sel: Selection): string | null {
   switch (sel.kind) {
@@ -112,7 +98,6 @@ export function AnalysisWorkspace({
     if (pruned.length !== elementTypes.length) setElementTypes(pruned);
   }, [archimateLayers, elementTypes]);
 
-  const elementsForPicker = useMemo(() => (model ? sortElementsForPicker(model) : []), [model]);
 
   const relatedOpts = useMemo(
     () => ({
@@ -243,7 +228,6 @@ export function AnalysisWorkspace({
         <>
           <AnalysisQueryPanel
             model={model}
-            elements={elementsForPicker}
             mode={mode}
             onChangeMode={setMode}
             direction={direction}

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import type {
   AnalysisDirection,
@@ -9,12 +9,12 @@ import type {
   RelationshipType
 } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER, getElementTypeLabel } from '../../domain';
+import { ElementChooserDialog } from '../model/pickers/ElementChooserDialog';
 
 export type AnalysisMode = 'related' | 'paths';
 
 type Props = {
   model: Model;
-  elements: Element[];
   mode: AnalysisMode;
   onChangeMode: (mode: AnalysisMode) => void;
 
@@ -118,7 +118,6 @@ function labelForElement(e: Element): string {
 
 export function AnalysisQueryPanel({
   model,
-  elements,
   mode,
   onChangeMode,
   direction,
@@ -149,10 +148,7 @@ export function AnalysisQueryPanel({
   canRun,
   onRun
 }: Props) {
-  const options = useMemo(() => {
-    // Keep deterministic order, but build labels once.
-    return elements.map((e) => ({ id: e.id, label: labelForElement(e) }));
-  }, [elements]);
+  const [chooser, setChooser] = useState<null | { which: 'start' | 'source' | 'target' }>(null);
 
   const modelName = model.metadata?.name || 'Model';
 
@@ -211,19 +207,21 @@ export function AnalysisQueryPanel({
           {mode === 'related' ? (
             <div className="toolbarGroup">
               <label htmlFor="analysis-start">Start element</label>
-              <select
-                id="analysis-start"
-                className="selectInput"
-                value={draftStartId}
-                onChange={(e) => onChangeDraftStartId(e.currentTarget.value)}
-              >
-                <option value="">Select…</option>
-                {options.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  id="analysis-start"
+                  className="textInput"
+                  readOnly
+                  value={draftStartId && model.elements[draftStartId] ? labelForElement(model.elements[draftStartId]) : ''}
+                  placeholder="Select…"
+                />
+                <button type="button" className="shellButton secondary" onClick={() => setChooser({ which: 'start' })}>
+                  Choose…
+                </button>
+                <button type="button" className="shellButton secondary" disabled={!draftStartId} onClick={() => onChangeDraftStartId('')}>
+                  Clear
+                </button>
+              </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                 <button
                   type="button"
@@ -239,19 +237,23 @@ export function AnalysisQueryPanel({
             <>
               <div className="toolbarGroup">
                 <label htmlFor="analysis-source">Source</label>
-                <select
-                  id="analysis-source"
-                  className="selectInput"
-                  value={draftSourceId}
-                  onChange={(e) => onChangeDraftSourceId(e.currentTarget.value)}
-                >
-                  <option value="">Select…</option>
-                  {options.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    id="analysis-source"
+                    className="textInput"
+                    readOnly
+                    value={
+                      draftSourceId && model.elements[draftSourceId] ? labelForElement(model.elements[draftSourceId]) : ''
+                    }
+                    placeholder="Select…"
+                  />
+                  <button type="button" className="shellButton secondary" onClick={() => setChooser({ which: 'source' })}>
+                    Choose…
+                  </button>
+                  <button type="button" className="shellButton secondary" disabled={!draftSourceId} onClick={() => onChangeDraftSourceId('')}>
+                    Clear
+                  </button>
+                </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                   <button
                     type="button"
@@ -266,19 +268,23 @@ export function AnalysisQueryPanel({
 
               <div className="toolbarGroup">
                 <label htmlFor="analysis-target">Target</label>
-                <select
-                  id="analysis-target"
-                  className="selectInput"
-                  value={draftTargetId}
-                  onChange={(e) => onChangeDraftTargetId(e.currentTarget.value)}
-                >
-                  <option value="">Select…</option>
-                  {options.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    id="analysis-target"
+                    className="textInput"
+                    readOnly
+                    value={
+                      draftTargetId && model.elements[draftTargetId] ? labelForElement(model.elements[draftTargetId]) : ''
+                    }
+                    placeholder="Select…"
+                  />
+                  <button type="button" className="shellButton secondary" onClick={() => setChooser({ which: 'target' })}>
+                    Choose…
+                  </button>
+                  <button type="button" className="shellButton secondary" disabled={!draftTargetId} onClick={() => onChangeDraftTargetId('')}>
+                    Clear
+                  </button>
+                </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                   <button
                     type="button"
@@ -546,6 +552,36 @@ export function AnalysisQueryPanel({
           </div>
         </div>
       </details>
+
+      <ElementChooserDialog
+        title={
+          chooser?.which === 'start'
+            ? 'Choose start element'
+            : chooser?.which === 'source'
+              ? 'Choose source element'
+              : chooser?.which === 'target'
+                ? 'Choose target element'
+                : 'Choose element'
+        }
+        isOpen={!!chooser}
+        model={model}
+        value={
+          chooser?.which === 'start'
+            ? draftStartId
+            : chooser?.which === 'source'
+              ? draftSourceId
+              : chooser?.which === 'target'
+                ? draftTargetId
+                : ''
+        }
+        onClose={() => setChooser(null)}
+        onChoose={(id) => {
+          if (chooser?.which === 'start') onChangeDraftStartId(id);
+          else if (chooser?.which === 'source') onChangeDraftSourceId(id);
+          else if (chooser?.which === 'target') onChangeDraftTargetId(id);
+          setChooser(null);
+        }}
+      />
     </section>
   );
 }

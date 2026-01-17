@@ -19,6 +19,8 @@ export * from './selectors/folders';
 
 export * from './graph/trace';
 
+export * from './analysis';
+
 export * from './unknownExportPolicy';
 export * from './relationshipValidationMode';
 export * from './viewConnections';

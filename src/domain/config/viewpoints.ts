@@ -56,8 +56,37 @@ export const VIEWPOINTS: Viewpoint[] = [
     id: 'bpmn-process',
     name: 'BPMN Process',
     description: 'BPMN process/collaboration diagram (v2: pools/lanes + message flow).',
-    allowedElementTypes: ['bpmn.pool', 'bpmn.lane', 'bpmn.task', 'bpmn.startEvent', 'bpmn.endEvent', 'bpmn.gatewayExclusive'],
-    allowedRelationshipTypes: ['bpmn.sequenceFlow', 'bpmn.messageFlow']
+    allowedElementTypes: [
+      // Containers
+      'bpmn.pool',
+      'bpmn.lane',
+
+      // Activities
+      'bpmn.task',
+      'bpmn.userTask',
+      'bpmn.serviceTask',
+      'bpmn.scriptTask',
+      'bpmn.manualTask',
+      'bpmn.callActivity',
+      'bpmn.subProcess',
+
+      // Events
+      'bpmn.startEvent',
+      'bpmn.endEvent',
+      'bpmn.intermediateCatchEvent',
+      'bpmn.intermediateThrowEvent',
+      'bpmn.boundaryEvent',
+
+      // Gateways
+      'bpmn.gatewayExclusive',
+      'bpmn.gatewayParallel',
+      'bpmn.gatewayInclusive',
+      'bpmn.gatewayEventBased',
+
+      // Artifacts
+      'bpmn.textAnnotation'
+    ],
+    allowedRelationshipTypes: ['bpmn.sequenceFlow', 'bpmn.messageFlow', 'bpmn.association']
   }
 ];
 

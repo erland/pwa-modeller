@@ -3,7 +3,7 @@ import * as React from 'react';
 /**
  * Small, consistent symbols used in list UIs (and as a fallback if node content isn't overridden).
  *
- * v1+v2 goal: recognizable BPMN shapes without pulling in an external icon set.
+ * Goal: recognizable BPMN shapes without pulling in an external icon set.
  */
 export function renderBpmnNodeSymbol(nodeType: string): React.ReactNode {
   const frame: React.CSSProperties = {
@@ -17,106 +17,207 @@ export function renderBpmnNodeSymbol(nodeType: string): React.ReactNode {
     color: 'rgba(0,0,0,0.78)',
   };
 
-  switch (nodeType) {
-    case 'bpmn.pool':
-      return (
+  // ------------------------------
+  // Containers
+  // ------------------------------
+  if (nodeType === 'bpmn.pool') {
+    return (
+      <div
+        style={{
+          ...frame,
+          border: '1px solid currentColor',
+          borderRadius: 2,
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+        title={nodeType}
+      >
         <div
           style={{
-            ...frame,
-            border: '1px solid currentColor',
-            borderRadius: 2,
-            position: 'relative',
-            overflow: 'hidden',
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 5,
+            background: 'currentColor',
+            opacity: 0.25,
           }}
-          title={nodeType}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: 5,
-              background: 'currentColor',
-              opacity: 0.25,
-            }}
-          />
-        </div>
-      );
-
-    case 'bpmn.lane':
-      return (
-        <div
-          style={{
-            ...frame,
-            border: '1px solid currentColor',
-            borderRadius: 2,
-            position: 'relative',
-          }}
-          title={nodeType}
-        >
-          <div style={{ width: 16, height: 1, background: 'currentColor', opacity: 0.55 }} />
-        </div>
-      );
-
-    case 'bpmn.task':
-      return (
-        <div
-          style={{
-            ...frame,
-            border: '1px solid currentColor',
-            borderRadius: 6,
-            fontSize: 11,
-            fontWeight: 800,
-            lineHeight: 1,
-          }}
-          title={nodeType}
-        >
-          T
-        </div>
-      );
-
-    case 'bpmn.startEvent':
-      return <div style={{ ...frame, border: '2px solid currentColor', borderRadius: 999 }} title={nodeType} />;
-
-    case 'bpmn.endEvent':
-      return <div style={{ ...frame, border: '4px solid currentColor', borderRadius: 999 }} title={nodeType} />;
-
-    case 'bpmn.gatewayExclusive':
-      return (
-        <div style={frame} title={nodeType}>
-          <div
-            style={{
-              width: 14,
-              height: 14,
-              border: '2px solid currentColor',
-              transform: 'rotate(45deg)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxSizing: 'border-box',
-            }}
-          >
-            <div style={{ transform: 'rotate(-45deg)', fontWeight: 900, fontSize: 10, lineHeight: 1 }}>X</div>
-          </div>
-        </div>
-      );
-
-    default:
-      return (
-        <div
-          style={{
-            ...frame,
-            border: '1px solid currentColor',
-            borderRadius: 4,
-            fontSize: 10,
-            fontWeight: 800,
-            lineHeight: 1,
-          }}
-          title={nodeType}
-        >
-          B
-        </div>
-      );
+        />
+      </div>
+    );
   }
+
+  if (nodeType === 'bpmn.lane') {
+    return (
+      <div
+        style={{
+          ...frame,
+          border: '1px solid currentColor',
+          borderRadius: 2,
+          position: 'relative',
+        }}
+        title={nodeType}
+      >
+        <div style={{ width: 16, height: 1, background: 'currentColor', opacity: 0.55 }} />
+      </div>
+    );
+  }
+
+  // ------------------------------
+  // Activities
+  // ------------------------------
+  const isTaskLike =
+    nodeType === 'bpmn.task' ||
+    nodeType === 'bpmn.userTask' ||
+    nodeType === 'bpmn.serviceTask' ||
+    nodeType === 'bpmn.scriptTask' ||
+    nodeType === 'bpmn.manualTask' ||
+    nodeType === 'bpmn.callActivity' ||
+    nodeType === 'bpmn.subProcess';
+
+  if (isTaskLike) {
+    const glyph =
+      nodeType === 'bpmn.userTask'
+        ? 'U'
+        : nodeType === 'bpmn.serviceTask'
+          ? 'S'
+          : nodeType === 'bpmn.scriptTask'
+            ? 'Sc'
+            : nodeType === 'bpmn.manualTask'
+              ? 'M'
+              : nodeType === 'bpmn.callActivity'
+                ? 'C'
+                : nodeType === 'bpmn.subProcess'
+                  ? '+'
+                  : 'T';
+
+    return (
+      <div
+        style={{
+          ...frame,
+          border: '1px solid currentColor',
+          borderRadius: 6,
+          fontSize: glyph.length > 1 ? 8 : 11,
+          fontWeight: 900,
+          lineHeight: 1,
+        }}
+        title={nodeType}
+      >
+        {glyph}
+      </div>
+    );
+  }
+
+  // ------------------------------
+  // Events
+  // ------------------------------
+  if (nodeType === 'bpmn.startEvent') {
+    return <div style={{ ...frame, border: '2px solid currentColor', borderRadius: 999 }} title={nodeType} />;
+  }
+
+  if (nodeType === 'bpmn.endEvent') {
+    return <div style={{ ...frame, border: '4px solid currentColor', borderRadius: 999 }} title={nodeType} />;
+  }
+
+  if (nodeType === 'bpmn.intermediateCatchEvent' || nodeType === 'bpmn.intermediateThrowEvent') {
+    return (
+      <div style={{ ...frame, position: 'relative' }} title={nodeType}>
+        <div style={{ width: 18, height: 18, borderRadius: 999, border: '2px solid currentColor', boxSizing: 'border-box' }} />
+        <div
+          style={{
+            position: 'absolute',
+            width: 14,
+            height: 14,
+            borderRadius: 999,
+            border: '1px solid currentColor',
+            boxSizing: 'border-box',
+            opacity: 0.9,
+          }}
+        />
+        {nodeType === 'bpmn.intermediateThrowEvent' ? (
+          <div style={{ position: 'absolute', fontSize: 10, fontWeight: 900, lineHeight: 1 }}>↑</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (nodeType === 'bpmn.boundaryEvent') {
+    return <div style={{ ...frame, border: '2px dashed currentColor', borderRadius: 999 }} title={nodeType} />;
+  }
+
+  // ------------------------------
+  // Gateways
+  // ------------------------------
+  const isGateway =
+    nodeType === 'bpmn.gatewayExclusive' ||
+    nodeType === 'bpmn.gatewayParallel' ||
+    nodeType === 'bpmn.gatewayInclusive' ||
+    nodeType === 'bpmn.gatewayEventBased';
+
+  if (isGateway) {
+    const glyph =
+      nodeType === 'bpmn.gatewayParallel'
+        ? '+'
+        : nodeType === 'bpmn.gatewayInclusive'
+          ? 'O'
+          : nodeType === 'bpmn.gatewayEventBased'
+            ? 'E'
+            : 'X';
+
+    return (
+      <div style={frame} title={nodeType}>
+        <div
+          style={{
+            width: 14,
+            height: 14,
+            border: '2px solid currentColor',
+            transform: 'rotate(45deg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div style={{ transform: 'rotate(-45deg)', fontWeight: 900, fontSize: 10, lineHeight: 1 }}>{glyph}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // ------------------------------
+  // Artifacts
+  // ------------------------------
+  if (nodeType === 'bpmn.textAnnotation') {
+    return (
+      <div
+        style={{
+          ...frame,
+          border: '1px solid currentColor',
+          borderRight: 'none',
+          borderRadius: 2,
+          position: 'relative',
+        }}
+        title={nodeType}
+      >
+        <div style={{ position: 'absolute', right: 3, top: 3, bottom: 3, width: 1, background: 'currentColor', opacity: 0.6 }} />
+      </div>
+    );
+  }
+
+  // Fallback
+  return (
+    <div
+      style={{
+        ...frame,
+        border: '1px solid currentColor',
+        borderRadius: 4,
+        fontSize: 10,
+        fontWeight: 800,
+        lineHeight: 1,
+      }}
+      title={nodeType}
+    >
+      B
+    </div>
+  );
 }

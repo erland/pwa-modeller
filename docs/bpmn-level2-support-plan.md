@@ -60,7 +60,7 @@ Each step below is intentionally sized so it can be implemented in **one LLM pro
     - `isDefault?: boolean`
   - `BpmnMessageFlowAttrs` (optional fields)
 - Add light runtime validation helpers (no heavy libs required):
-  - `isBpmnEventAttrs(x): x is ...` etc., used by validation + importers later.
+  - `isBpmnEventAttrs(x): x is …` etc., used by validation + importers later.
 
 **Done when**
 - You can set these attrs on elements/relationships and persist/restore them with no TypeScript holes.

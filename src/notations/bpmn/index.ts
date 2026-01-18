@@ -19,11 +19,46 @@ import { BpmnRelationshipProperties } from '../../components/model/properties/bp
  * BPMN notation implementation.
  */
 function isBpmnFlowNodeType(t: string): boolean {
-  return t === 'bpmn.task' || t === 'bpmn.startEvent' || t === 'bpmn.endEvent' || t === 'bpmn.gatewayExclusive';
+  // Activities
+  if (
+    t === 'bpmn.task' ||
+    t === 'bpmn.userTask' ||
+    t === 'bpmn.serviceTask' ||
+    t === 'bpmn.scriptTask' ||
+    t === 'bpmn.manualTask' ||
+    t === 'bpmn.callActivity' ||
+    t === 'bpmn.subProcess'
+  )
+    return true;
+
+  // Events
+  if (
+    t === 'bpmn.startEvent' ||
+    t === 'bpmn.endEvent' ||
+    t === 'bpmn.intermediateCatchEvent' ||
+    t === 'bpmn.intermediateThrowEvent' ||
+    t === 'bpmn.boundaryEvent'
+  )
+    return true;
+
+  // Gateways
+  if (
+    t === 'bpmn.gatewayExclusive' ||
+    t === 'bpmn.gatewayParallel' ||
+    t === 'bpmn.gatewayInclusive' ||
+    t === 'bpmn.gatewayEventBased'
+  )
+    return true;
+
+  return false;
 }
 
 function isBpmnContainerType(t: string): boolean {
   return t === 'bpmn.pool' || t === 'bpmn.lane';
+}
+
+function isBpmnTextAnnotationType(t: string): boolean {
+  return t === 'bpmn.textAnnotation';
 }
 
 export const bpmnNotation: Notation = {
@@ -56,6 +91,13 @@ export const bpmnNotation: Notation = {
       };
     }
 
+    if (rel.type === 'bpmn.association') {
+      return {
+        markerEnd: 'none',
+        line: { pattern: 'dashed' },
+      };
+    }
+
     // Fallback: keep it readable.
     return { markerEnd: 'arrowFilled', line: { pattern: 'solid' } };
   },
@@ -66,7 +108,7 @@ export const bpmnNotation: Notation = {
   },
 
   canCreateRelationship: ({ relationshipType, sourceType, targetType }) => {
-    // v2: Disallow connecting to containers (pools/lanes). Relationships are between flow nodes.
+    // Disallow connecting to containers (pools/lanes). Relationships are between flow nodes/artifacts.
     if (sourceType && isBpmnContainerType(sourceType)) return { allowed: false, reason: 'Cannot connect from Pool/Lane' };
     if (targetType && isBpmnContainerType(targetType)) return { allowed: false, reason: 'Cannot connect to Pool/Lane' };
 
@@ -82,7 +124,25 @@ export const bpmnNotation: Notation = {
       return { allowed: true };
     }
 
-    return { allowed: false, reason: 'Only Sequence Flow and Message Flow are supported in BPMN v2' };
+    if (relationshipType === 'bpmn.association') {
+      // Keep it permissive for Level-2 Step 1:
+      // - allow any non-container BPMN node to connect to a Text Annotation
+      // - disallow annotation-to-annotation to avoid noise
+      const s = sourceType ?? '';
+      const t = targetType ?? '';
+      const sIsAnn = s ? isBpmnTextAnnotationType(s) : false;
+      const tIsAnn = t ? isBpmnTextAnnotationType(t) : false;
+
+      if (s && t && sIsAnn && tIsAnn) return { allowed: false, reason: 'Association should connect a Text Annotation to another element' };
+
+      if (s && t && !(sIsAnn || tIsAnn)) {
+        return { allowed: false, reason: 'Association should connect to a Text Annotation' };
+      }
+
+      return { allowed: true };
+    }
+
+    return { allowed: false, reason: 'Only Sequence Flow, Message Flow and Association are supported in BPMN v2' };
   },
 
   // ------------------------------

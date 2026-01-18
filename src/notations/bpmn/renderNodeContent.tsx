@@ -62,19 +62,233 @@ function ContainerLabel({ text, vertical }: { text: string; vertical?: boolean }
   );
 }
 
+function TaskBadge({ text }: { text: string }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 6,
+        top: 6,
+        padding: '1px 5px',
+        border: '1px solid rgba(0,0,0,0.25)',
+        borderRadius: 999,
+        fontSize: 10,
+        fontWeight: 900,
+        lineHeight: 1.1,
+        opacity: 0.85,
+        background: 'rgba(0,0,0,0.02)',
+        userSelect: 'none',
+      }}
+    >
+      {text}
+    </div>
+  );
+}
+
+function TaskNode({ name, badge, isCallActivity, isSubProcess }: { name: string; badge?: string; isCallActivity?: boolean; isSubProcess?: boolean }) {
+  const border = isCallActivity ? '3px solid rgba(0,0,0,0.34)' : '2px solid rgba(0,0,0,0.32)';
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        border,
+        borderRadius: 12,
+        background: 'rgba(255,255,255,0.92)',
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '10px 10px 8px',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
+      {badge ? <TaskBadge text={badge} /> : null}
+      {isSubProcess ? (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 6,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 16,
+            height: 16,
+            border: '1px solid rgba(0,0,0,0.3)',
+            borderRadius: 3,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 12,
+            fontWeight: 900,
+            opacity: 0.75,
+            userSelect: 'none',
+          }}
+        >
+          +
+        </div>
+      ) : null}
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 800,
+          lineHeight: 1.1,
+          textAlign: 'center',
+          wordBreak: 'break-word',
+        }}
+      >
+        {name}
+      </div>
+    </div>
+  );
+}
+
+function EventNode({ name, variant }: { name: string; variant: 'start' | 'end' | 'intermediateCatch' | 'intermediateThrow' | 'boundary' }) {
+  const borderWidth = variant === 'end' ? 4 : 2;
+  const borderStyle = variant === 'boundary' ? 'dashed' : 'solid';
+
+  const showDoubleRing = variant === 'intermediateCatch' || variant === 'intermediateThrow';
+  const showThrowArrow = variant === 'intermediateThrow';
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        padding: '4px 4px 6px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          width: 42,
+          height: 42,
+          borderRadius: 999,
+          border: `${borderWidth}px ${borderStyle} rgba(0,0,0,0.40)`,
+          background: 'rgba(255,255,255,0.92)',
+          boxSizing: 'border-box',
+          position: 'relative',
+        }}
+      >
+        {showDoubleRing ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: 6,
+              top: 6,
+              right: 6,
+              bottom: 6,
+              borderRadius: 999,
+              border: '1px solid rgba(0,0,0,0.36)',
+              boxSizing: 'border-box',
+            }}
+          />
+        ) : null}
+        {showThrowArrow ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%,-55%)',
+              fontSize: 16,
+              fontWeight: 900,
+              lineHeight: 1,
+              opacity: 0.75,
+              userSelect: 'none',
+            }}
+          >
+            ↑
+          </div>
+        ) : null}
+      </div>
+      <NodeLabel text={name} />
+    </div>
+  );
+}
+
+function GatewayNode({ name, kind }: { name: string; kind: 'exclusive' | 'parallel' | 'inclusive' | 'eventBased' }) {
+  const glyph = kind === 'parallel' ? '+' : kind === 'inclusive' ? 'O' : kind === 'eventBased' ? 'E' : 'X';
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        padding: '4px 4px 6px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          transform: 'rotate(45deg) scale(0.66)',
+          border: '2px solid rgba(0,0,0,0.40)',
+          background: 'rgba(255,255,255,0.92)',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <div style={{ transform: 'rotate(-45deg)', fontWeight: 900, fontSize: 18, lineHeight: 1 }}>{glyph}</div>
+      </div>
+      <NodeLabel text={name} />
+    </div>
+  );
+}
+
+function TextAnnotationNode({ name }: { name: string }) {
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        border: '2px solid rgba(0,0,0,0.22)',
+        borderRight: 'none',
+        borderRadius: 4,
+        background: 'rgba(255,255,255,0.92)',
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '6px 10px',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    >
+      <div style={{ position: 'absolute', right: 6, top: 6, bottom: 6, width: 2, background: 'rgba(0,0,0,0.18)' }} />
+      <div style={{ fontSize: 13, fontWeight: 800, textAlign: 'center', wordBreak: 'break-word' }}>{name}</div>
+    </div>
+  );
+}
+
 /**
  * BPMN node content rendering.
  *
  * v1: tasks/events/gateways
  * v2: pools/lanes as lightweight containers (geometry-based containment)
+ * Step-1 expansion: richer set of activities/events/gateways + text annotation
  */
 export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLayout }): React.ReactNode {
   const { element, node } = args;
-  const type = element.type;
+  const type = String(element.type);
   const name = labelFor(element);
 
   const w = node.width ?? 120;
-  const h = node.height ?? 60;
 
   if (type === 'bpmn.pool') {
     // Participant / Pool: container with a vertical label band on the left.
@@ -134,134 +348,50 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
     );
   }
 
-  if (type === 'bpmn.task') {
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          border: '2px solid rgba(0,0,0,0.32)',
-          borderRadius: 12,
-          background: 'rgba(255,255,255,0.92)',
-          boxSizing: 'border-box',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '6px 8px',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 800,
-            lineHeight: 1.1,
-            textAlign: 'center',
-            wordBreak: 'break-word',
-          }}
-        >
-          {name}
-        </div>
-      </div>
-    );
+  // Activities
+  if (
+    type === 'bpmn.task' ||
+    type === 'bpmn.userTask' ||
+    type === 'bpmn.serviceTask' ||
+    type === 'bpmn.scriptTask' ||
+    type === 'bpmn.manualTask' ||
+    type === 'bpmn.callActivity' ||
+    type === 'bpmn.subProcess'
+  ) {
+    const badge =
+      type === 'bpmn.userTask'
+        ? 'User'
+        : type === 'bpmn.serviceTask'
+          ? 'Service'
+          : type === 'bpmn.scriptTask'
+            ? 'Script'
+            : type === 'bpmn.manualTask'
+              ? 'Manual'
+              : type === 'bpmn.callActivity'
+                ? 'Call'
+                : type === 'bpmn.subProcess'
+                  ? 'Sub'
+                  : undefined;
+
+    return <TaskNode name={name} badge={badge} isCallActivity={type === 'bpmn.callActivity'} isSubProcess={type === 'bpmn.subProcess'} />;
   }
 
-  if (type === 'bpmn.startEvent' || type === 'bpmn.endEvent') {
-    const borderWidth = type === 'bpmn.endEvent' ? 4 : 2;
+  // Events
+  if (type === 'bpmn.startEvent') return <EventNode name={name} variant="start" />;
+  if (type === 'bpmn.endEvent') return <EventNode name={name} variant="end" />;
+  if (type === 'bpmn.intermediateCatchEvent') return <EventNode name={name} variant="intermediateCatch" />;
+  if (type === 'bpmn.intermediateThrowEvent') return <EventNode name={name} variant="intermediateThrow" />;
+  if (type === 'bpmn.boundaryEvent') return <EventNode name={name} variant="boundary" />;
 
-    // Leave room for the label under the symbol. The previous sizing used
-    // nearly the full node height which caused clipping on smaller nodes.
-    const eventSymbolSize = Math.max(22, Math.min(w, Math.round(h * 0.55)));
+  // Gateways
+  if (type === 'bpmn.gatewayExclusive') return <GatewayNode name={name} kind="exclusive" />;
+  if (type === 'bpmn.gatewayParallel') return <GatewayNode name={name} kind="parallel" />;
+  if (type === 'bpmn.gatewayInclusive') return <GatewayNode name={name} kind="inclusive" />;
+  if (type === 'bpmn.gatewayEventBased') return <GatewayNode name={name} kind="eventBased" />;
 
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 4,
-          padding: '4px 4px 6px',
-          boxSizing: 'border-box',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            width: eventSymbolSize,
-            height: eventSymbolSize,
-            borderRadius: 999,
-            border: `${borderWidth}px solid rgba(0,0,0,0.40)`,
-            background: 'rgba(255,255,255,0.92)',
-            boxSizing: 'border-box',
-          }}
-        />
-        <NodeLabel text={name} />
-      </div>
-    );
-  }
-
-  if (type === 'bpmn.gatewayExclusive') {
-    // Diamond with X.
-
-    // Leave room for the label under the symbol.
-    const gatewaySymbolSize = Math.max(22, Math.min(w, Math.round(h * 0.55)));
-
-    return (
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 4,
-          padding: '4px 4px 6px',
-          boxSizing: 'border-box',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            width: gatewaySymbolSize,
-            height: gatewaySymbolSize,
-            transform: 'rotate(45deg) scale(0.66)',
-            border: '2px solid rgba(0,0,0,0.40)',
-            background: 'rgba(255,255,255,0.92)',
-            boxSizing: 'border-box',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div style={{ transform: 'rotate(-45deg)', fontWeight: 900, fontSize: 18, lineHeight: 1 }}>X</div>
-        </div>
-        <NodeLabel text={name} />
-      </div>
-    );
-  }
+  // Artifacts
+  if (type === 'bpmn.textAnnotation') return <TextAnnotationNode name={name} />;
 
   // Fallback: treat unknown BPMN types as a task-like rounded box.
-  return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        border: '2px solid rgba(0,0,0,0.22)',
-        borderRadius: 12,
-        background: 'rgba(255,255,255,0.92)',
-        boxSizing: 'border-box',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '6px 8px',
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ fontSize: 13, fontWeight: 800, textAlign: 'center', wordBreak: 'break-word' }}>{name}</div>
-    </div>
-  );
+  return <TaskNode name={name} />;
 }

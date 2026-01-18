@@ -172,15 +172,41 @@ export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
 // -------------------------
 
 export const BPMN_ELEMENT_TYPES: ElementType[] = [
+  // Containers
   'bpmn.pool',
   'bpmn.lane',
+
+  // Activities
   'bpmn.task',
+  'bpmn.userTask',
+  'bpmn.serviceTask',
+  'bpmn.scriptTask',
+  'bpmn.manualTask',
+  'bpmn.callActivity',
+  'bpmn.subProcess',
+
+  // Events
   'bpmn.startEvent',
   'bpmn.endEvent',
-  'bpmn.gatewayExclusive'
+  'bpmn.intermediateCatchEvent',
+  'bpmn.intermediateThrowEvent',
+  'bpmn.boundaryEvent',
+
+  // Gateways
+  'bpmn.gatewayExclusive',
+  'bpmn.gatewayParallel',
+  'bpmn.gatewayInclusive',
+  'bpmn.gatewayEventBased',
+
+  // Artifacts
+  'bpmn.textAnnotation'
 ];
 
-export const BPMN_RELATIONSHIP_TYPES: RelationshipType[] = ['bpmn.sequenceFlow', 'bpmn.messageFlow'];
+export const BPMN_RELATIONSHIP_TYPES: RelationshipType[] = [
+  'bpmn.sequenceFlow',
+  'bpmn.messageFlow',
+  'bpmn.association'
+];
 
 export type TypeOption<TId extends string = string> = { id: TId; label: string };
 
@@ -195,12 +221,34 @@ const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
 };
 
 const BPMN_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
+  // Containers
   'bpmn.pool': 'Pool (Participant)',
   'bpmn.lane': 'Lane',
+
+  // Activities
   'bpmn.task': 'Task',
+  'bpmn.userTask': 'User Task',
+  'bpmn.serviceTask': 'Service Task',
+  'bpmn.scriptTask': 'Script Task',
+  'bpmn.manualTask': 'Manual Task',
+  'bpmn.callActivity': 'Call Activity',
+  'bpmn.subProcess': 'Sub-Process',
+
+  // Events
   'bpmn.startEvent': 'Start Event',
   'bpmn.endEvent': 'End Event',
-  'bpmn.gatewayExclusive': 'Exclusive Gateway'
+  'bpmn.intermediateCatchEvent': 'Intermediate Catch Event',
+  'bpmn.intermediateThrowEvent': 'Intermediate Throw Event',
+  'bpmn.boundaryEvent': 'Boundary Event',
+
+  // Gateways
+  'bpmn.gatewayExclusive': 'Exclusive Gateway',
+  'bpmn.gatewayParallel': 'Parallel Gateway',
+  'bpmn.gatewayInclusive': 'Inclusive Gateway',
+  'bpmn.gatewayEventBased': 'Event-Based Gateway',
+
+  // Artifacts
+  'bpmn.textAnnotation': 'Text Annotation'
 };
 
 const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {
@@ -214,7 +262,8 @@ const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = 
 
 const BPMN_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {
   'bpmn.sequenceFlow': 'Sequence Flow',
-  'bpmn.messageFlow': 'Message Flow'
+  'bpmn.messageFlow': 'Message Flow',
+  'bpmn.association': 'Association'
 };
 
 export function getElementTypeLabel(typeId: ElementType | string): string {

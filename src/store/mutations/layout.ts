@@ -21,6 +21,38 @@ function defaultUmlNodePresentationAttrs(elementType: string): Record<string, un
 }
 
 
+function defaultBpmnNodeSize(elementType: string): { width: number; height: number } {
+  // Containers
+  if (elementType === 'bpmn.pool') return { width: 680, height: 300 };
+  if (elementType === 'bpmn.lane') return { width: 680, height: 140 };
+
+  // Events + gateways benefit from more vertical space because we render a symbol + label.
+  if (
+    elementType === 'bpmn.startEvent' ||
+    elementType === 'bpmn.endEvent' ||
+    elementType === 'bpmn.intermediateCatchEvent' ||
+    elementType === 'bpmn.intermediateThrowEvent' ||
+    elementType === 'bpmn.boundaryEvent' ||
+    elementType === 'bpmn.gatewayExclusive' ||
+    elementType === 'bpmn.gatewayParallel' ||
+    elementType === 'bpmn.gatewayInclusive' ||
+    elementType === 'bpmn.gatewayEventBased'
+  ) {
+    return { width: 120, height: 90 };
+  }
+
+  // Artifacts
+  if (elementType === 'bpmn.textAnnotation') return { width: 200, height: 100 };
+
+  // Activities
+  if (elementType === 'bpmn.subProcess') return { width: 200, height: 120 };
+  if (elementType === 'bpmn.callActivity') return { width: 160, height: 80 };
+
+  // Default activity/task
+  return { width: 140, height: 70 };
+}
+
+
 export function updateViewNodeLayout(
   model: Model,
   viewId: string,
@@ -56,24 +88,24 @@ export function addElementToView(model: Model, viewId: string, elementId: string
 
   const i = layout.nodes.length;
   const cols = 4;
-  const x = 24 + (i % cols) * 160;
-  const y = 24 + Math.floor(i / cols) * 110;
+  // Default placement grid for "add to view" (not cursor-based).
+  const nx = 24 + (i % cols) * 160;
+  const ny = 24 + Math.floor(i / cols) * 110;
 
   const isBpmn = viewWithLayout.kind === 'bpmn';
-  const isPool = isBpmn && element.type === 'bpmn.pool';
-  const isLane = isBpmn && element.type === 'bpmn.lane';
+  const bpmnSize = isBpmn ? defaultBpmnNodeSize(String(element.type)) : null;
 
-  const nodeW = isPool ? 680 : isLane ? 680 : 140;
-  const nodeH = isPool ? 300 : isLane ? 140 : 70;
+  const nodeW = isBpmn && bpmnSize ? bpmnSize.width : 140;
+  const nodeH = isBpmn && bpmnSize ? bpmnSize.height : 70;
 
   const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
   const minZ = layout.nodes.reduce((m, n, idx) => Math.min(m, typeof n.zIndex === 'number' ? n.zIndex : idx), 0);
+  const t = String(element.type);
+  const isPool = isBpmn && t === 'bpmn.pool';
+  const isLane = isBpmn && t === 'bpmn.lane';
   const z = isPool ? minZ - 2 : isLane ? minZ - 1 : maxZ + 1;
-
   const attrs = viewWithLayout.kind === 'uml' ? defaultUmlNodePresentationAttrs(String(element.type)) : undefined;
-
-  const node: ViewNodeLayout = { elementId, x, y, width: nodeW, height: nodeH, zIndex: z, attrs };
-
+  const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: z, attrs };
   model.views[viewId] = {
     ...viewWithLayout,
     layout: { nodes: [...layout.nodes, node], relationships: layout.relationships }
@@ -82,6 +114,7 @@ export function addElementToView(model: Model, viewId: string, elementId: string
 
   return elementId;
 }
+
 
 /**
  * Adds an element to a view at a specific position (idempotent).
@@ -100,11 +133,11 @@ export function addElementToViewAt(model: Model, viewId: string, elementId: stri
   const grid = viewWithLayout.formatting?.gridSize ?? 20;
 
   const isBpmn = viewWithLayout.kind === 'bpmn';
-  const isPool = isBpmn && element.type === 'bpmn.pool';
-  const isLane = isBpmn && element.type === 'bpmn.lane';
+  const bpmnSize = isBpmn ? defaultBpmnNodeSize(String(element.type)) : null;
 
-  const nodeW = isPool ? 680 : isLane ? 680 : 140;
-  const nodeH = isPool ? 300 : isLane ? 140 : 70;
+  const nodeW = isBpmn && bpmnSize ? bpmnSize.width : 140;
+  const nodeH = isBpmn && bpmnSize ? bpmnSize.height : 70;
+
   // Drop position is interpreted as the cursor position; center the node under it.
   let nx = Math.max(0, x - nodeW / 2);
   let ny = Math.max(0, y - nodeH / 2);
@@ -123,7 +156,11 @@ export function addElementToViewAt(model: Model, viewId: string, elementId: stri
 
   const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
   const minZ = layout.nodes.reduce((m, n, idx) => Math.min(m, typeof n.zIndex === 'number' ? n.zIndex : idx), 0);
+  const t = String(element.type);
+  const isPool = isBpmn && t === 'bpmn.pool';
+  const isLane = isBpmn && t === 'bpmn.lane';
   const z = isPool ? minZ - 2 : isLane ? minZ - 1 : maxZ + 1;
+
   const attrs = viewWithLayout.kind === 'uml' ? defaultUmlNodePresentationAttrs(String(element.type)) : undefined;
   const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: z, attrs };
   model.views[viewId] = {

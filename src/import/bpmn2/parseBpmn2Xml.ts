@@ -323,6 +323,52 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
   // If missing, fall back to a simple auto layout view.
   const diagrams = qa(defs, 'BPMNDiagram');
 
+  /**
+   * Compute a stable zIndex ordering for view nodes.
+   *
+   * BPMN-friendly behavior:
+   * - Background containers (pool/lane) should render behind both connections and nested nodes.
+   * - Other semantic nodes should render above connections.
+   *
+   * Implementation:
+   * - Pools/lanes get large negative zIndex values (keeps them behind the relationship SVG layer).
+   * - Other nodes get non-negative zIndex values.
+   * - We use bounds area as a heuristic so larger containers go further back.
+   */
+  const applyBpmnZOrder = (nodes: IRViewNode[]) => {
+    type Info = { node: IRViewNode; area: number; isContainer: boolean; key: string };
+    const infos: Info[] = nodes.map((n) => {
+      const b = n.bounds;
+      const area = b ? Math.max(0, b.width) * Math.max(0, b.height) : 0;
+      const elType = n.elementId ? elementById.get(n.elementId)?.type : undefined;
+      const isContainer = elType === 'bpmn.pool' || elType === 'bpmn.lane';
+      const key = (n.elementId ?? n.id) as string;
+      return { node: n, area, isContainer, key };
+    });
+
+    const byAreaDescThenKey = (a: Info, b: Info) => {
+      if (a.area !== b.area) return b.area - a.area;
+      return a.key.localeCompare(b.key);
+    };
+
+    // Containers: push behind everything (and behind the relationship layer).
+    const containers = infos.filter((x) => x.isContainer).sort(byAreaDescThenKey);
+    for (let i = 0; i < containers.length; i += 1) {
+      const n = containers[i].node;
+      n.meta = { ...(n.meta ?? {}), zIndex: -20000 + i };
+    }
+
+    // Non-containers: keep above connections.
+    const others = infos.filter((x) => !x.isContainer).sort(byAreaDescThenKey);
+    for (let i = 0; i < others.length; i += 1) {
+      const n = others[i].node;
+      // If already set by importer, keep it.
+      const existing = (n.meta as Record<string, unknown> | undefined)?.zIndex;
+      if (typeof existing === 'number') continue;
+      n.meta = { ...(n.meta ?? {}), zIndex: i };
+    }
+  };
+
   const parseBounds = (boundsEl: Element | null, ctx: string): { x: number; y: number; width: number; height: number } | undefined => {
     if (!boundsEl) return undefined;
     const x = numberAttr(boundsEl, 'x', warnings, ctx);
@@ -423,6 +469,10 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         });
       }
 
+      // Assign stable z-order so background containers (pool/lane) do not hide
+      // connections or nested nodes in the interactive canvas.
+      applyBpmnZOrder(nodes);
+
       views.push({
         id: viewId,
         name: inferredName,
@@ -458,6 +508,10 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         height: nodeH
       }
     }));
+
+    applyBpmnZOrder(nodes);
+
+    applyBpmnZOrder(nodes);
 
     const connections: IRViewConnection[] = relationships.map((r) => ({
       id: `auto:${r.id}`,

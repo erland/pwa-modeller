@@ -25,6 +25,30 @@ export function renderUmlNodeSymbol(nodeType: string): React.ReactNode {
     case 'uml.actor':
       label = 'A';
       break;
+    case 'uml.datatype':
+      label = 'DT';
+      break;
+    case 'uml.primitiveType':
+      label = 'PT';
+      break;
+    case 'uml.component':
+      label = 'CMP';
+      break;
+    case 'uml.artifact':
+      label = 'AR';
+      break;
+    case 'uml.node':
+      label = 'N';
+      break;
+    case 'uml.device':
+      label = 'DEV';
+      break;
+    case 'uml.executionEnvironment':
+      label = 'EE';
+      break;
+    case 'uml.subject':
+      label = 'SB';
+      break;
   }
 
   return (

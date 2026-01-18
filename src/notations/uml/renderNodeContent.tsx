@@ -184,6 +184,16 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
   const isNote = nodeType === "uml.note";
   const isClass = nodeType === "uml.class";
 
+  // Step 2: minimal rendering targets (import readiness)
+  const isDataType = nodeType === 'uml.datatype';
+  const isPrimitiveType = nodeType === 'uml.primitiveType';
+  const isComponent = nodeType === 'uml.component';
+  const isArtifact = nodeType === 'uml.artifact';
+  const isNode = nodeType === 'uml.node';
+  const isDevice = nodeType === 'uml.device';
+  const isExecutionEnvironment = nodeType === 'uml.executionEnvironment';
+  const isSubject = nodeType === 'uml.subject';
+
   // Presentation flags are view-local; default to "show" to keep old diagrams usable.
   const collapsed = attrs.collapsed ?? false;
   const showAttributes = attrs.showAttributes ?? true;
@@ -191,7 +201,30 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
 
   // Default stereotype hints if not explicitly set on the element.
   const defaultStereo =
-    elementStereo ?? (isInterface ? "interface" : isEnum ? "enumeration" : isPackage ? "package" : undefined);
+    elementStereo ??
+    (isInterface
+      ? 'interface'
+      : isEnum
+        ? 'enumeration'
+        : isPackage
+          ? 'package'
+          : isComponent
+            ? 'component'
+            : isArtifact
+              ? 'artifact'
+              : isDataType
+                ? 'datatype'
+                : isPrimitiveType
+                  ? 'primitive'
+                  : isNode
+                    ? 'node'
+                    : isDevice
+                      ? 'device'
+                      : isExecutionEnvironment
+                        ? 'execution environment'
+                        : isSubject
+                          ? 'subject'
+                          : undefined);
 
 
   if (isNote) {
@@ -231,6 +264,47 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Header stereotype={defaultStereo} name={name} />
         {attrLines.length ? <Section>{attrLines.join('\n')}</Section> : null}
+      </div>
+    );
+  }
+
+  if (isSubject) {
+    // System boundary / subject: keep it minimal for import readiness.
+    // Render a left-aligned header to feel more "container label"-like.
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '6px 8px', textAlign: 'left' }}>
+          {defaultStereo ? (
+            <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 2 }}>{`«${defaultStereo}»`}</div>
+          ) : null}
+          <div style={{ fontWeight: 800, fontSize: 13 }}>{name}</div>
+        </div>
+        {collapsed ? null : attrLines.length ? <Section>{attrLines.join('\n')}</Section> : null}
+      </div>
+    );
+  }
+
+  if (
+    isDataType ||
+    isPrimitiveType ||
+    isComponent ||
+    isArtifact ||
+    isNode ||
+    isDevice ||
+    isExecutionEnvironment
+  ) {
+    // Minimal compartment-like rendering for common EA import targets.
+    // For now we use the legacy view-local text fields (attrs.attributesText/operationsText)
+    // because these node types don't have semantic members yet.
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Header stereotype={defaultStereo} name={name} />
+        {collapsed ? null : (
+          <>
+            {showAttributes ? (attrLines.length ? <Section>{attrLines.join('\n')}</Section> : <Section>{' '}</Section>) : null}
+            {showOperations ? (opLines.length ? <Section>{opLines.join('\n')}</Section> : <Section>{' '}</Section>) : null}
+          </>
+        )}
       </div>
     );
   }

@@ -1,5 +1,6 @@
 import type { Element, ElementType, Model, Relationship } from '../../../../domain';
 import { isBpmnGatewayAttrs } from '../../../../domain/bpmnAttrs';
+import type { BpmnGatewayAttrs } from '../../../../domain/bpmnAttrs';
 
 import type { ModelActions } from '../actions';
 import { PropertyRow } from '../editors/PropertyRow';
@@ -67,9 +68,8 @@ export function BpmnGatewayPropertiesSection({ model, element: el, actions }: Pr
   const base: Record<string, unknown> = isRecord(raw) ? { ...raw } : {};
   const derivedKind = gatewayKindFromType(String(el.type));
 
-  const parsed = isBpmnGatewayAttrs(base) ? base : { gatewayKind: derivedKind };
-  const defaultFlowRef = typeof (parsed as any).defaultFlowRef === 'string' ? ((parsed as any).defaultFlowRef as string) : undefined;
-
+  const parsed: BpmnGatewayAttrs = isBpmnGatewayAttrs(base) ? base : { gatewayKind: derivedKind };
+  const defaultFlowRef = parsed.defaultFlowRef;
   const outgoingSequenceFlows: Relationship[] = Object.values(model.relationships)
     .filter(Boolean)
     .filter((r) => r.type === 'bpmn.sequenceFlow' && r.sourceElementId === el.id);

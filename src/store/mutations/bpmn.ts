@@ -1,4 +1,4 @@
-import type { Model } from '../../domain';
+import type { ElementType, Model } from '../../domain';
 
 import * as elementMutations from './elements';
 import * as relationshipMutations from './relationships';
@@ -125,7 +125,7 @@ export function attachBoundaryEvent(model: Model, boundaryId: string, hostActivi
   }
 
   elementMutations.updateElement(model, boundaryId, {
-    type: isBpmnBoundaryEventType(boundary.type) ? boundary.type : ('bpmn.boundaryEvent' as any),
+    type: isBpmnBoundaryEventType(boundary.type) ? boundary.type : ('bpmn.boundaryEvent' as ElementType),
     attrs: pruneAttrs({ ...baseAttrs, ...boundaryPatch })
   });
 
@@ -142,7 +142,7 @@ export function attachBoundaryEvent(model: Model, boundaryId: string, hostActivi
 
     if (!hostId) {
       // Detach: drop the attachment metadata but keep position.
-      const nextAttrs = { ...nodeAttrs } as any;
+      const nextAttrs = { ...nodeAttrs } as Record<string, unknown>;
       delete nextAttrs.bpmnAttachment;
       const nextNode = { ...bNode, attrs: Object.keys(nextAttrs).length ? nextAttrs : undefined };
       const nextNodes = layout.nodes.slice();

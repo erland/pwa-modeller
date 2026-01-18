@@ -411,6 +411,16 @@ export function updateViewNodePositionAny(
     return typeof v === "object" && v !== null && !Array.isArray(v);
   }
 
+  type BpmnAttachment = { hostId: string; dx: number; dy: number };
+  const isBpmnAttachment = (v: unknown): v is BpmnAttachment => {
+    if (!isRecord(v)) return false;
+    const hostId = v.hostId;
+    const dx = v.dx;
+    const dy = v.dy;
+    return typeof hostId === "string" && typeof dx === "number" && typeof dy === "number";
+  };
+
+
   let finalNodes = nextNodes;
 
   if (view.kind === "bpmn" && ref.elementId) {
@@ -463,12 +473,12 @@ export function updateViewNodePositionAny(
 
         const original = originalByElementId.get(n.elementId) ?? n;
         const nodeAttrs = isRecord(n.attrs) ? n.attrs : {};
-        const ba = nodeAttrs.bpmnAttachment;
+        const ba = (nodeAttrs as Record<string, unknown>).bpmnAttachment;
         let dx0: number;
         let dy0: number;
-        if (isRecord(ba) && typeof (ba as any).dx === "number" && typeof (ba as any).dy === "number") {
-          dx0 = (ba as any).dx as number;
-          dy0 = (ba as any).dy as number;
+        if (isBpmnAttachment(ba)) {
+          dx0 = ba.dx;
+          dy0 = ba.dy;
         } else {
           dx0 = original.x - hostPrevX;
           dy0 = original.y - hostPrevY;

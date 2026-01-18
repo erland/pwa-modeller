@@ -1,5 +1,6 @@
 import type { Element, ElementType, Model } from '../../../../domain';
 import { BPMN_EVENT_DEFINITION_KINDS, isBpmnEventAttrs } from '../../../../domain/bpmnAttrs';
+import type { BpmnEventAttrs, BpmnEventDefinition } from '../../../../domain/bpmnAttrs';
 
 import type { ModelActions } from '../actions';
 import { PropertyRow } from '../editors/PropertyRow';
@@ -80,7 +81,7 @@ export function BpmnEventPropertiesSection({ model, element: el, actions }: Prop
 
   const derivedKind = eventKindFromType(String(el.type));
 
-  const parsed = isBpmnEventAttrs(base)
+  const parsed: BpmnEventAttrs = isBpmnEventAttrs(base)
     ? base
     : {
         eventKind: derivedKind,
@@ -88,11 +89,10 @@ export function BpmnEventPropertiesSection({ model, element: el, actions }: Prop
         cancelActivity: derivedKind === 'boundary' ? true : undefined,
       };
 
-  const eventDefinition = (parsed as any).eventDefinition as { kind: string } & Record<string, unknown>;
-  const eventDefKind = typeof eventDefinition?.kind === 'string' ? eventDefinition.kind : 'none';
-  const cancelActivity = typeof (parsed as any).cancelActivity === 'boolean' ? ((parsed as any).cancelActivity as boolean) : true;
-  const attachedToRef = typeof (parsed as any).attachedToRef === 'string' ? ((parsed as any).attachedToRef as string) : undefined;
-
+  const eventDefinition: BpmnEventDefinition = parsed.eventDefinition;
+  const eventDefKind = eventDefinition.kind;
+  const cancelActivity = typeof parsed.cancelActivity === 'boolean' ? parsed.cancelActivity : true;
+  const attachedToRef = typeof parsed.attachedToRef === 'string' ? parsed.attachedToRef : undefined;
   const commit = (patch: Record<string, unknown>) => {
     // Ensure the required fields exist and match the element type.
     const next = pruneAttrs({

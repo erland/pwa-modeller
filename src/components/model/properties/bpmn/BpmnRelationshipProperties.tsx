@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { Element, Model, RelationshipType } from '../../../../domain';
 import { getRelationshipTypesForKind, kindFromTypeId } from '../../../../domain';
 import { isBpmnMessageFlowAttrs, isBpmnSequenceFlowAttrs } from '../../../../domain/bpmnAttrs';
+import type { BpmnSequenceFlowAttrs, BpmnMessageFlowAttrs } from '../../../../domain/bpmnAttrs';
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
@@ -100,13 +101,12 @@ export function BpmnRelationshipProperties({ model, relationshipId, viewId, acti
     actions.updateRelationship(rel.id, { attrs: pruneAttrs({ ...attrsObj, ...patch }) });
   };
 
-  const sequenceAttrs = isBpmnSequenceFlowAttrs(attrsObj) ? attrsObj : {};
-  const messageAttrs = isBpmnMessageFlowAttrs(attrsObj) ? attrsObj : {};
+  const sequenceAttrs: BpmnSequenceFlowAttrs | undefined = isBpmnSequenceFlowAttrs(attrsObj) ? attrsObj : undefined;
+  const messageAttrs: BpmnMessageFlowAttrs | undefined = isBpmnMessageFlowAttrs(attrsObj) ? attrsObj : undefined;
 
-  const conditionExpression =
-    typeof (sequenceAttrs as any).conditionExpression === 'string' ? ((sequenceAttrs as any).conditionExpression as string) : '';
-  const isDefault = typeof (sequenceAttrs as any).isDefault === 'boolean' ? ((sequenceAttrs as any).isDefault as boolean) : false;
-  const messageRef = typeof (messageAttrs as any).messageRef === 'string' ? ((messageAttrs as any).messageRef as string) : '';
+  const conditionExpression = sequenceAttrs?.conditionExpression ?? '';
+  const isDefault = sequenceAttrs?.isDefault ?? false;
+  const messageRef = messageAttrs?.messageRef ?? '';
 
   const notationRows = (
     <>

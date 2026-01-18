@@ -43,6 +43,12 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
     updateViewNodeLayout: (viewId, elementId, patch) => modelStore.updateViewNodeLayout(viewId, elementId, patch),
 
     updateElement: (elementId, patch) => modelStore.updateElement(elementId, patch),
+
+    // BPMN semantics (Level 2)
+    setBpmnElementAttrs: (elementId, patch) => modelStore.setBpmnElementAttrs(elementId, patch),
+    setBpmnRelationshipAttrs: (relationshipId, patch) => modelStore.setBpmnRelationshipAttrs(relationshipId, patch),
+    setBpmnGatewayDefaultFlow: (gatewayId, relationshipId) => modelStore.setBpmnGatewayDefaultFlow(gatewayId, relationshipId),
+    attachBoundaryEvent: (boundaryId, hostActivityId) => modelStore.attachBoundaryEvent(boundaryId, hostActivityId),
     moveElementToFolder: (elementId, folderId) => modelStore.moveElementToFolder(elementId, folderId),
     deleteElement: (elementId) => modelStore.deleteElement(elementId),
 

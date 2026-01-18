@@ -74,11 +74,6 @@ export function BpmnGatewayPropertiesSection({ model, element: el, actions }: Pr
     .filter(Boolean)
     .filter((r) => r.type === 'bpmn.sequenceFlow' && r.sourceElementId === el.id);
 
-  const commit = (patch: Record<string, unknown>) => {
-    const next = pruneAttrs({ ...base, ...patch, gatewayKind: derivedKind });
-    actions.updateElement(el.id, { attrs: next });
-  };
-
   const setGatewayKind = (kind: string) => {
     const nextType = gatewayTypeFromKind(kind);
     actions.updateElement(el.id, { type: nextType as ElementType, attrs: pruneAttrs({ ...base, gatewayKind: kind }) });
@@ -113,7 +108,7 @@ export function BpmnGatewayPropertiesSection({ model, element: el, actions }: Pr
             className="selectInput"
             aria-label="BPMN gateway default flow"
             value={defaultFlowRef ?? ''}
-            onChange={(e) => commit({ defaultFlowRef: e.target.value ? e.target.value : undefined })}
+            onChange={(e) => actions.setBpmnGatewayDefaultFlow(el.id, e.target.value ? e.target.value : null)}
             disabled={!outgoingSequenceFlows.length}
           >
             <option value="">(none)</option>

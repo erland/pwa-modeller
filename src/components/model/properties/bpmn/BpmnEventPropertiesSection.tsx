@@ -42,6 +42,24 @@ function eventKindFromType(t: string): 'start' | 'end' | 'intermediateCatch' | '
   }
 }
 
+function isBpmnActivityType(t: unknown): boolean {
+  const s = String(t);
+  if (!s.startsWith('bpmn.')) return false;
+  if (s === 'bpmn.pool' || s === 'bpmn.lane') return false;
+  if (s === 'bpmn.textAnnotation') return false;
+  if (
+    s === 'bpmn.startEvent' ||
+    s === 'bpmn.endEvent' ||
+    s === 'bpmn.intermediateCatchEvent' ||
+    s === 'bpmn.intermediateThrowEvent' ||
+    s === 'bpmn.boundaryEvent'
+  )
+    return false;
+  if (s === 'bpmn.gatewayExclusive' || s === 'bpmn.gatewayParallel' || s === 'bpmn.gatewayInclusive' || s === 'bpmn.gatewayEventBased')
+    return false;
+  return true;
+}
+
 type Props = {
   model: Model;
   element: Element;
@@ -51,7 +69,7 @@ type Props = {
 /**
  * BPMN event semantics: event definition kind + a few optional definition fields.
  *
- * Boundary attachment editing is handled in Step 5; here we show a read-only summary.
+ * Boundary attachment supports host selection; boundary nodes follow their host in a view.
  */
 export function BpmnEventPropertiesSection({ model, element: el, actions }: Props) {
   if (typeof el.type !== 'string' || !String(el.type).startsWith('bpmn.')) return null;
@@ -101,6 +119,11 @@ export function BpmnEventPropertiesSection({ model, element: el, actions }: Prop
 
   const isBoundary = String(el.type) === 'bpmn.boundaryEvent';
   const hostName = attachedToRef ? model.elements[attachedToRef]?.name ?? attachedToRef : undefined;
+
+  const activityOptions = Object.values(model.elements)
+    .filter(Boolean)
+    .filter((e) => isBpmnActivityType(e.type))
+    .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }));
 
   // A tiny selection of optional fields to make definitions actually useful.
   const timer = isRecord(eventDefinition) && eventDefKind === 'timer' ? eventDefinition : null;
@@ -253,15 +276,29 @@ export function BpmnEventPropertiesSection({ model, element: el, actions }: Prop
         ) : null}
 
         {isBoundary ? (
-          <div className="propertiesRow">
-            <div className="propertiesKey">Attached to</div>
-            <div className="propertiesValue" style={{ fontWeight: 400 }}>
-              <div style={{ opacity: 0.9 }}>{hostName ?? '—'}</div>
-              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                Attachment editing is added in Step 5 (boundary attach behavior).
-              </div>
+          <PropertyRow label="Attached to">
+            <select
+              className="selectInput"
+              aria-label="BPMN boundary attached to"
+              value={attachedToRef ?? ''}
+              onChange={(e) => actions.attachBoundaryEvent(el.id, e.target.value ? e.target.value : null)}
+              disabled={!activityOptions.length}
+            >
+              <option value="">(none)</option>
+              {activityOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name?.trim() ? a.name.trim() : a.id}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+              {activityOptions.length
+                ? hostName
+                  ? 'Boundary follows the selected activity when it moves in a view.'
+                  : 'Pick an activity to attach this boundary event.'
+                : 'No BPMN activities found in the model.'}
             </div>
-          </div>
+          </PropertyRow>
         ) : null}
 
         {!isBpmnEventAttrs(base) && raw ? (

@@ -6,5 +6,6 @@ export * as viewMutations from './views';
 export * as viewObjectMutations from './viewObjects';
 export * as layoutMutations from './layout';
 export * as folderMutations from './folders';
+export * as bpmnMutations from './bpmn';
 
 export type { TaggedValueInput, ViewWithLayout } from './helpers';

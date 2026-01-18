@@ -19,6 +19,12 @@ export type ModelActions = {
   updateViewNodeLayout: (viewId: string, elementId: string, patch: Partial<ViewNodeLayout>) => void;
 
   updateElement: (elementId: string, patch: Partial<Element>) => void;
+
+  // --- BPMN (Level 2 semantics) ---
+  setBpmnElementAttrs: (elementId: string, patch: Record<string, unknown>) => void;
+  setBpmnRelationshipAttrs: (relationshipId: string, patch: Record<string, unknown>) => void;
+  setBpmnGatewayDefaultFlow: (gatewayId: string, relationshipId: string | null) => void;
+  attachBoundaryEvent: (boundaryId: string, hostActivityId: string | null) => void;
   moveElementToFolder: (elementId: string, folderId: string) => void;
   deleteElement: (elementId: string) => void;
 

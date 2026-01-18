@@ -20,6 +20,7 @@ import {
   folderMutations,
   layoutMutations,
   modelMutations,
+  bpmnMutations,
   relationshipMutations,
   viewMutations,
   viewObjectMutations
@@ -171,6 +172,30 @@ export class ModelStore {
 
   deleteElement = (elementId: string): void => {
     this.updateModel((model) => elementMutations.deleteElement(model, elementId));
+  };
+
+  // -------------------------
+  // BPMN helpers (Level 2 semantics)
+  // -------------------------
+
+  /** Merge semantic attrs into an element (preserves unknown keys). */
+  setBpmnElementAttrs = (elementId: string, patch: Record<string, unknown>): void => {
+    this.updateModel((model) => bpmnMutations.setBpmnElementAttrs(model, elementId, patch));
+  };
+
+  /** Merge semantic attrs into a relationship (preserves unknown keys). */
+  setBpmnRelationshipAttrs = (relationshipId: string, patch: Record<string, unknown>): void => {
+    this.updateModel((model) => bpmnMutations.setBpmnRelationshipAttrs(model, relationshipId, patch));
+  };
+
+  /** Set a gateway default flow (null clears); also maintains outgoing sequenceFlow isDefault flags. */
+  setBpmnGatewayDefaultFlow = (gatewayId: string, relationshipId: string | null): void => {
+    this.updateModel((model) => bpmnMutations.setGatewayDefaultFlow(model, gatewayId, relationshipId));
+  };
+
+  /** Attach/detach a boundary event to a host activity (null detaches). */
+  attachBoundaryEvent = (boundaryId: string, hostActivityId: string | null): void => {
+    this.updateModel((model) => bpmnMutations.attachBoundaryEvent(model, boundaryId, hostActivityId));
   };
 
   // -------------------------

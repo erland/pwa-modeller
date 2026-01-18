@@ -153,6 +153,14 @@ export const UML_ELEMENT_TYPES: ElementType[] = [
   'uml.interface',
   'uml.enum',
   'uml.package',
+  'uml.datatype',
+  'uml.primitiveType',
+  'uml.component',
+  'uml.artifact',
+  'uml.node',
+  'uml.device',
+  'uml.executionEnvironment',
+  'uml.subject',
   'uml.usecase',
   'uml.actor',
   'uml.note',
@@ -164,7 +172,11 @@ export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
   'uml.composition',
   'uml.generalization',
   'uml.realization',
-  'uml.dependency'
+  'uml.dependency',
+  'uml.include',
+  'uml.extend',
+  'uml.communicationPath',
+  'uml.deployment'
 ];
 
 // -------------------------
@@ -218,6 +230,14 @@ const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   'uml.interface': 'Interface',
   'uml.enum': 'Enum',
   'uml.package': 'Package',
+  'uml.datatype': 'Data Type',
+  'uml.primitiveType': 'Primitive Type',
+  'uml.component': 'Component',
+  'uml.artifact': 'Artifact',
+  'uml.node': 'Node',
+  'uml.device': 'Device',
+  'uml.executionEnvironment': 'Execution Environment',
+  'uml.subject': 'Subject (Boundary)',
   'uml.usecase': 'Use Case',
   'uml.actor': 'Actor',
   'uml.note': 'Note'
@@ -263,7 +283,11 @@ const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = 
   'uml.composition': 'Composition',
   'uml.generalization': 'Generalization',
   'uml.realization': 'Realization',
-  'uml.dependency': 'Dependency'
+  'uml.dependency': 'Dependency',
+  'uml.include': 'Include',
+  'uml.extend': 'Extend',
+  'uml.communicationPath': 'Communication Path',
+  'uml.deployment': 'Deployment'
 };
 
 const BPMN_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {

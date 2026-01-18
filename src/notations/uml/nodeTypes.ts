@@ -3,6 +3,14 @@ export const UML_NODE_TYPES = [
   'uml.interface',
   'uml.enum',
   'uml.package',
+  'uml.datatype',
+  'uml.primitiveType',
+  'uml.component',
+  'uml.artifact',
+  'uml.node',
+  'uml.device',
+  'uml.executionEnvironment',
+  'uml.subject',
   'uml.usecase',
   'uml.actor',
   'uml.note',
@@ -16,6 +24,10 @@ export const UML_RELATIONSHIP_TYPES = [
   'uml.generalization',
   'uml.realization',
   'uml.dependency',
+  'uml.include',
+  'uml.extend',
+  'uml.communicationPath',
+  'uml.deployment',
 ] as const;
 export type UmlRelationshipType = (typeof UML_RELATIONSHIP_TYPES)[number];
 

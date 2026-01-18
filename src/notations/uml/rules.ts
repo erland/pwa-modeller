@@ -2,7 +2,10 @@ import type { RelationshipValidationMode } from '../../domain';
 
 import {
   isUmlActorType,
+  isUmlArtifactType,
   isUmlClassifierType,
+  isUmlComponentType,
+  isUmlDeploymentTargetType,
   isUmlNodeType,
   isUmlNoteType,
   isUmlPackageType,
@@ -58,9 +61,9 @@ export function canCreateUmlRelationship(args: {
       };
 
     case 'uml.realization':
-      // Class realizes an interface (keep v1 strict).
-      if (sourceType !== 'uml.class' || targetType !== 'uml.interface') {
-        return { allowed: false, reason: 'Realization is allowed from Class to Interface.' };
+      // Realization: commonly Class->Interface or Component->Interface.
+      if (!( (sourceType === 'uml.class' || isUmlComponentType(sourceType)) && targetType === 'uml.interface')) {
+        return { allowed: false, reason: 'Realization is allowed from Class/Component to Interface.' };
       }
       return { allowed: true };
 
@@ -74,6 +77,25 @@ export function canCreateUmlRelationship(args: {
         return { allowed: false, reason: 'Aggregation/Composition target should be a Class or Enum.' };
       }
       return { allowed: true };
+
+    case 'uml.include':
+    case 'uml.extend':
+      // Use case diagram: include/extend between use cases.
+      if (isUmlUseCaseType(sourceType) && isUmlUseCaseType(targetType)) return { allowed: true };
+      return { allowed: false, reason: 'Include/Extend is allowed only between Use Cases.' };
+
+    case 'uml.deployment':
+      // Deployment: Artifact -> Node/Device/ExecutionEnvironment.
+      if (!isUmlArtifactType(sourceType)) return { allowed: false, reason: 'Deployment source should be an Artifact.' };
+      if (!isUmlDeploymentTargetType(targetType)) {
+        return { allowed: false, reason: 'Deployment target should be a Node, Device, or Execution Environment.' };
+      }
+      return { allowed: true };
+
+    case 'uml.communicationPath':
+      // Deployment diagram: communication path between nodes/devices/execution environments.
+      if (isUmlDeploymentTargetType(sourceType) && isUmlDeploymentTargetType(targetType)) return { allowed: true };
+      return { allowed: false, reason: 'Communication Path is allowed between Nodes/Devices/Execution Environments.' };
 
     case 'uml.dependency':
       // Allow dependency between packages, and between any non-note UML nodes.

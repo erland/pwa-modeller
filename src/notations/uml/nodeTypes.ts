@@ -38,8 +38,43 @@ export function isUmlNodeType(t: string): t is UmlNodeType {
   return UML_NODE_TYPES_SET.has(t);
 }
 
-export function isUmlClassifierType(t: string): t is 'uml.class' | 'uml.interface' | 'uml.enum' {
-  return t === 'uml.class' || t === 'uml.interface' || t === 'uml.enum';
+export function isUmlClassifierType(
+  t: string
+): t is
+  | 'uml.class'
+  | 'uml.interface'
+  | 'uml.enum'
+  | 'uml.datatype'
+  | 'uml.primitiveType'
+  | 'uml.component'
+  | 'uml.node'
+  | 'uml.device'
+  | 'uml.executionEnvironment' {
+  return (
+    t === 'uml.class' ||
+    t === 'uml.interface' ||
+    t === 'uml.enum' ||
+    t === 'uml.datatype' ||
+    t === 'uml.primitiveType' ||
+    t === 'uml.component' ||
+    t === 'uml.node' ||
+    t === 'uml.device' ||
+    t === 'uml.executionEnvironment'
+  );
+}
+
+export function isUmlComponentType(t: string): t is 'uml.component' {
+  return t === 'uml.component';
+}
+
+export function isUmlArtifactType(t: string): t is 'uml.artifact' {
+  return t === 'uml.artifact';
+}
+
+export function isUmlDeploymentTargetType(
+  t: string
+): t is 'uml.node' | 'uml.device' | 'uml.executionEnvironment' {
+  return t === 'uml.node' || t === 'uml.device' || t === 'uml.executionEnvironment';
 }
 
 export function isUmlUseCaseType(t: string): t is 'uml.usecase' {

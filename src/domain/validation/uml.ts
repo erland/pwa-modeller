@@ -4,7 +4,19 @@ import { kindFromTypeId } from '../kindFromTypeId';
 import { makeIssue } from './issues';
 import type { ValidationIssue } from './types';
 
-const UML_GENERALIZABLE_TYPES = new Set(['uml.class', 'uml.interface', 'uml.enum', 'uml.actor', 'uml.usecase']);
+const UML_GENERALIZABLE_TYPES = new Set([
+  'uml.class',
+  'uml.interface',
+  'uml.enum',
+  'uml.datatype',
+  'uml.primitiveType',
+  'uml.component',
+  'uml.node',
+  'uml.device',
+  'uml.executionEnvironment',
+  'uml.actor',
+  'uml.usecase',
+]);
 
 export function validateUmlBasics(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -42,6 +54,77 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
           `uml-rel-unknown-type:${rel.id}`
         )
       );
+    }
+  }
+
+
+
+  // ------------------------------
+  // Relationship endpoint sanity (selected UML relationships)
+  // ------------------------------
+  const UML_DEPLOYMENT_TARGET_TYPES = new Set(['uml.node', 'uml.device', 'uml.executionEnvironment']);
+
+  for (const rel of Object.values(model.relationships)) {
+    const kind = rel.kind ?? kindFromTypeId(rel.type);
+    if (kind !== 'uml') continue;
+    if (rel.type === 'Unknown') continue;
+    if (!rel.sourceElementId || !rel.targetElementId) continue;
+    const sEl = model.elements[rel.sourceElementId];
+    const tEl = model.elements[rel.targetElementId];
+    if (!sEl || !tEl) continue;
+    const sType = sEl.type;
+    const tType = tEl.type;
+
+    if (rel.type === 'uml.include' || rel.type === 'uml.extend') {
+      if (!(sType === 'uml.usecase' && tType === 'uml.usecase')) {
+        issues.push(
+          makeIssue(
+            'warning',
+            `UML ${rel.type} should connect UseCase -> UseCase (got ${sType} -> ${tType}).`,
+            { kind: 'relationship', relationshipId: rel.id },
+            `uml-rel-endpoints:${rel.id}`
+          )
+        );
+      }
+    }
+
+    if (rel.type === 'uml.realization') {
+      if (!((sType === 'uml.class' || sType === 'uml.component') && tType === 'uml.interface')) {
+        issues.push(
+          makeIssue(
+            'warning',
+            `UML realization should connect Class/Component -> Interface (got ${sType} -> ${tType}).`,
+            { kind: 'relationship', relationshipId: rel.id },
+            `uml-rel-endpoints:${rel.id}`
+          )
+        );
+      }
+    }
+
+    if (rel.type === 'uml.deployment') {
+      if (!(sType === 'uml.artifact' && UML_DEPLOYMENT_TARGET_TYPES.has(tType))) {
+        issues.push(
+          makeIssue(
+            'warning',
+            `UML deployment should connect Artifact -> Node/Device/ExecutionEnvironment (got ${sType} -> ${tType}).`,
+            { kind: 'relationship', relationshipId: rel.id },
+            `uml-rel-endpoints:${rel.id}`
+          )
+        );
+      }
+    }
+
+    if (rel.type === 'uml.communicationPath') {
+      if (!(UML_DEPLOYMENT_TARGET_TYPES.has(sType) && UML_DEPLOYMENT_TARGET_TYPES.has(tType))) {
+        issues.push(
+          makeIssue(
+            'warning',
+            `UML communicationPath should connect Node/Device/ExecutionEnvironment <-> Node/Device/ExecutionEnvironment (got ${sType} -> ${tType}).`,
+            { kind: 'relationship', relationshipId: rel.id },
+            `uml-rel-endpoints:${rel.id}`
+          )
+        );
+      }
     }
   }
 

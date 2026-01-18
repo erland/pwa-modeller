@@ -64,13 +64,56 @@ describe('umlNotation relationship guard rules', () => {
     ).toEqual({ allowed: false, reason: 'UML relationships require UML nodes.' });
   });
 
-  test('realization is only allowed from class to interface', () => {
+  test('realization is allowed from class/component to interface', () => {
     expect(
       umlNotation.canCreateRelationship({ relationshipType: 'uml.realization', sourceType: 'uml.class', targetType: 'uml.interface' })
     ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.realization', sourceType: 'uml.component', targetType: 'uml.interface' })
+    ).toEqual({ allowed: true });
+
     expect(
       umlNotation.canCreateRelationship({ relationshipType: 'uml.realization', sourceType: 'uml.interface', targetType: 'uml.class' })
-    ).toEqual({ allowed: false, reason: 'Realization is allowed from Class to Interface.' });
+    ).toEqual({ allowed: false, reason: 'Realization is allowed from Class/Component to Interface.' });
+  });
+
+  test('include/extend are allowed only between use cases', () => {
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.include', sourceType: 'uml.usecase', targetType: 'uml.usecase' })
+    ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.extend', sourceType: 'uml.actor', targetType: 'uml.usecase' })
+    ).toEqual({ allowed: false, reason: 'Include/Extend is allowed only between Use Cases.' });
+  });
+
+  test('deployment is allowed from artifact to node/device/executionEnvironment', () => {
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.deployment', sourceType: 'uml.artifact', targetType: 'uml.node' })
+    ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.deployment', sourceType: 'uml.artifact', targetType: 'uml.device' })
+    ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.deployment', sourceType: 'uml.artifact', targetType: 'uml.executionEnvironment' })
+    ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.deployment', sourceType: 'uml.node', targetType: 'uml.artifact' })
+    ).toEqual({ allowed: false, reason: 'Deployment source should be an Artifact.' });
+  });
+
+  test('communicationPath is allowed only between node/device/executionEnvironment', () => {
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.communicationPath', sourceType: 'uml.node', targetType: 'uml.device' })
+    ).toEqual({ allowed: true });
+
+    expect(
+      umlNotation.canCreateRelationship({ relationshipType: 'uml.communicationPath', sourceType: 'uml.class', targetType: 'uml.node' })
+    ).toEqual({ allowed: false, reason: 'Communication Path is allowed between Nodes/Devices/Execution Environments.' });
   });
 
   test('association is allowed in use case diagrams (actor/usecase and usecase/usecase)', () => {

@@ -5,3 +5,4 @@ export * from './apply';
 export * from './meff';
 export * from './bpmn2';
 export * from './mapping';
+export * from './eaXmi';

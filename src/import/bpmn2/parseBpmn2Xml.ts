@@ -1,7 +1,7 @@
 import type { ImportIR } from '../framework/importer';
-import type { IRElement, IRRelationship } from '../framework/ir';
+import type { IRElement, IRPoint, IRRelationship, IRView, IRViewConnection, IRViewNode } from '../framework/ir';
 
-import { attr, childByLocalName, localName, parseXml, q, qa, text } from './xml';
+import { attr, childByLocalName, childrenByLocalName, localName, numberAttr, parseXml, q, qa, text } from './xml';
 
 export type ParseBpmn2Result = {
   importIR: ImportIR;
@@ -105,8 +105,11 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
 
   const elements: IRElement[] = [];
   const relationships: IRRelationship[] = [];
+  const views: IRView[] = [];
 
   const idIndex = new Set<string>();
+  const elementById = new Map<string, IRElement>();
+  const relById = new Map<string, IRRelationship>();
   const unsupportedNodeTypes = new Set<string>();
 
   // ------------------------------
@@ -183,6 +186,8 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
           sourceLocalName: localName(el)
         }
       });
+
+      elementById.set(id, elements[elements.length - 1]);
     }
   }
 
@@ -252,14 +257,174 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
           sourceLocalName: localName(relEl)
         }
       });
+
+      relById.set(id, relationships[relationships.length - 1]);
     }
+  }
+
+  // ------------------------------
+  // Views (BPMNDI)
+  // ------------------------------
+  // If BPMNDI is present, recreate diagram layout using BPMNShape bounds and BPMNEdge waypoints.
+  // If missing, fall back to a simple auto layout view.
+  const diagrams = qa(defs, 'BPMNDiagram');
+
+  const parseBounds = (boundsEl: Element | null, ctx: string): { x: number; y: number; width: number; height: number } | undefined => {
+    if (!boundsEl) return undefined;
+    const x = numberAttr(boundsEl, 'x', warnings, ctx);
+    const y = numberAttr(boundsEl, 'y', warnings, ctx);
+    const width = numberAttr(boundsEl, 'width', warnings, ctx);
+    const height = numberAttr(boundsEl, 'height', warnings, ctx);
+    if (x == null || y == null || width == null || height == null) return undefined;
+    return { x, y, width, height };
+  };
+
+  const parseWaypoints = (edgeEl: Element, ctx: string): IRPoint[] | undefined => {
+    const wps = childrenByLocalName(edgeEl, 'waypoint');
+    const points: IRPoint[] = [];
+    for (let i = 0; i < wps.length; i++) {
+      const wp = wps[i];
+      const x = numberAttr(wp, 'x', warnings, `${ctx} waypoint[${i}]`);
+      const y = numberAttr(wp, 'y', warnings, `${ctx} waypoint[${i}]`);
+      if (x == null || y == null) continue;
+      points.push({ x, y });
+    }
+    return points.length >= 2 ? points : undefined;
+  };
+
+  if (diagrams.length > 0) {
+    let diIndex = 0;
+    for (const diagramEl of diagrams) {
+      diIndex++;
+      const diagramIdRaw = (attr(diagramEl, 'id') ?? '').trim();
+      const diagramNameRaw = (attr(diagramEl, 'name') ?? '').trim();
+
+      const plane = childByLocalName(diagramEl, 'BPMNPlane');
+      if (!plane) {
+        warnings.push(`BPMNDiagram ${diagramIdRaw || diIndex} is missing BPMNPlane (skipped).`);
+        continue;
+      }
+
+      const planeRef = (attr(plane, 'bpmnElement') ?? '').trim();
+      const viewId = diagramIdRaw || (planeRef ? `bpmndi:${planeRef}` : `bpmndi:diagram:${diIndex}`);
+
+      const inferredName =
+        diagramNameRaw ||
+        (planeRef && elementById.get(planeRef)?.name ? `${elementById.get(planeRef)!.name}` : '') ||
+        (planeRef ? `Diagram (${planeRef})` : `Diagram ${diIndex}`);
+
+      const nodes: IRViewNode[] = [];
+      const connections: IRViewConnection[] = [];
+
+      // Shapes
+      const shapes = qa(plane, 'BPMNShape');
+      for (const shape of shapes) {
+        const shapeId = (attr(shape, 'id') ?? '').trim();
+        const bpmnElementId = (attr(shape, 'bpmnElement') ?? '').trim();
+        const boundsEl = q(shape, 'Bounds');
+        const bounds = parseBounds(boundsEl, `BPMNShape ${shapeId || bpmnElementId || '(no-id)'}`);
+
+        if (!bpmnElementId) {
+          // No referenced BPMN element. Keep as a view-local note/label if bounds exist.
+          if (bounds) {
+            nodes.push({
+              id: shapeId || `shape:${diIndex}:${nodes.length + 1}`,
+              kind: 'note',
+              bounds
+            });
+          }
+          continue;
+        }
+
+        if (!elementById.has(bpmnElementId)) {
+          warnings.push(`BPMNShape references unknown element '${bpmnElementId}' (skipped).`);
+          continue;
+        }
+
+        nodes.push({
+          id: shapeId || `shape:${bpmnElementId}`,
+          kind: 'element',
+          elementId: bpmnElementId,
+          bounds
+        });
+      }
+
+      // Edges
+      const edges = qa(plane, 'BPMNEdge');
+      for (const edge of edges) {
+        const edgeId = (attr(edge, 'id') ?? '').trim();
+        const bpmnRelId = (attr(edge, 'bpmnElement') ?? '').trim();
+        if (!bpmnRelId) continue;
+        if (!relById.has(bpmnRelId)) {
+          warnings.push(`BPMNEdge references unknown relationship '${bpmnRelId}' (skipped).`);
+          continue;
+        }
+
+        const points = parseWaypoints(edge, `BPMNEdge ${edgeId || bpmnRelId}`);
+
+        connections.push({
+          id: edgeId || `edge:${bpmnRelId}`,
+          relationshipId: bpmnRelId,
+          points
+        });
+      }
+
+      views.push({
+        id: viewId,
+        name: inferredName,
+        // Use a built-in viewpoint id to keep the app happy; BPMN-specific
+        // viewpoint taxonomy can be introduced later if desired.
+        viewpoint: 'layered',
+        nodes,
+        connections,
+        externalIds: [{ system: 'bpmn2', id: viewId, kind: 'diagram' }],
+        meta: {
+          sourceLocalName: 'BPMNDiagram',
+          planeRef: planeRef || undefined
+        }
+      });
+    }
+  }
+
+  if (views.length === 0) {
+    // Fallback: create a single auto-layout view.
+    const gridW = 220;
+    const gridH = 140;
+    const nodeW = 140;
+    const nodeH = 80;
+
+    const nodes: IRViewNode[] = elements.map((e, i) => ({
+      id: `auto:${e.id}`,
+      kind: 'element',
+      elementId: e.id,
+      bounds: {
+        x: (i % 8) * gridW,
+        y: Math.floor(i / 8) * gridH,
+        width: nodeW,
+        height: nodeH
+      }
+    }));
+
+    const connections: IRViewConnection[] = relationships.map((r) => ({
+      id: `auto:${r.id}`,
+      relationshipId: r.id
+    }));
+
+    views.push({
+      id: 'bpmn2:auto',
+      name: 'BPMN (auto layout)',
+      viewpoint: 'layered',
+      nodes,
+      connections,
+      externalIds: [{ system: 'bpmn2', id: 'bpmn2:auto', kind: 'diagram' }]
+    });
   }
 
   const ir: ImportIR = {
     folders: [],
     elements,
     relationships,
-    views: [],
+    views,
     meta: {
       format: 'bpmn2'
     }

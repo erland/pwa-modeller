@@ -35,10 +35,22 @@ function umlRelationshipStyle(type: string): RelationshipStyle {
       return { markerEnd: 'triangleOpen', line: { pattern: 'dashed' } };
     case 'uml.dependency':
       return { markerEnd: 'arrowOpen', line: { pattern: 'dashed' } };
+    case 'uml.include':
+      // Use Case: <<include>> is usually rendered as a dashed dependency.
+      return { markerEnd: 'arrowOpen', line: { pattern: 'dashed' }, midLabel: '«include»' };
+    case 'uml.extend':
+      // Use Case: <<extend>> is usually rendered as a dashed dependency.
+      return { markerEnd: 'arrowOpen', line: { pattern: 'dashed' }, midLabel: '«extend»' };
+    case 'uml.deployment':
+      // Deployment: dashed dependency-like arrow with stereotype label.
+      return { markerEnd: 'arrowOpen', line: { pattern: 'dashed' }, midLabel: '«deployment»' };
     case 'uml.aggregation':
       return { markerStart: 'diamondOpen' };
     case 'uml.composition':
       return { markerStart: 'diamondFilled' };
+    case 'uml.communicationPath':
+      // Deployment diagram: communication path is typically an undirected solid line.
+      return {};
     case 'uml.association':
     default:
       // Default association is an undirected solid line.

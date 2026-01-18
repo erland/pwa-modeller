@@ -19,6 +19,32 @@ describe('umlNotation relationship styles', () => {
     });
   });
 
+  test('include/extend use dashed open arrow + stereotype label', () => {
+    expect(umlNotation.getRelationshipStyle({ type: 'uml.include' })).toEqual({
+      markerEnd: 'arrowOpen',
+      line: { pattern: 'dashed' },
+      midLabel: '«include»',
+    });
+
+    expect(umlNotation.getRelationshipStyle({ type: 'uml.extend' })).toEqual({
+      markerEnd: 'arrowOpen',
+      line: { pattern: 'dashed' },
+      midLabel: '«extend»',
+    });
+  });
+
+  test('deployment uses dashed open arrow + stereotype label', () => {
+    expect(umlNotation.getRelationshipStyle({ type: 'uml.deployment' })).toEqual({
+      markerEnd: 'arrowOpen',
+      line: { pattern: 'dashed' },
+      midLabel: '«deployment»',
+    });
+  });
+
+  test('communicationPath is an undirected solid line', () => {
+    expect(umlNotation.getRelationshipStyle({ type: 'uml.communicationPath' })).toEqual({});
+  });
+
   test('composition uses filled diamond at source', () => {
     expect(umlNotation.getRelationshipStyle({ type: 'uml.composition' })).toEqual({ markerStart: 'diamondFilled' });
   });

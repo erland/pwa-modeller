@@ -3,6 +3,7 @@ import { registerImporter } from './registry';
 // Built-in importers.
 // Keep these imports pointed at concrete modules (avoid importing ../framework/index to prevent cycles).
 import { meffImporter } from '../meff';
+import { bpmn2Importer } from '../bpmn2';
 
 let registered = false;
 
@@ -15,4 +16,5 @@ export function registerBuiltInImporters(): void {
   registered = true;
 
   registerImporter(meffImporter);
+  registerImporter(bpmn2Importer);
 }

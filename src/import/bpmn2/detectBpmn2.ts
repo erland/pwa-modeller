@@ -23,6 +23,25 @@ export function detectBpmn2FromText(sniffText: string): boolean {
   return false;
 }
 
+/**
+ * Best-effort sniffing from raw bytes.
+ *
+ * This exists mainly for test/runtime environments where TextDecoder may be
+ * unavailable, causing ctx.sniffText to be empty.
+ */
+export function detectBpmn2FromBytes(sniffBytes: Uint8Array): boolean {
+  if (!sniffBytes || sniffBytes.length === 0) return false;
+
+  // Convert a prefix to a latin1-ish string. This is cheap and good enough for sniffing.
+  // Keep this small: sniffing doesn't need more than the header area.
+  const cap = Math.min(sniffBytes.length, 64 * 1024);
+  let s = '';
+  for (let i = 0; i < cap; i++) {
+    s += String.fromCharCode(sniffBytes[i]);
+  }
+  return detectBpmn2FromText(s);
+}
+
 export function detectBpmn2FromXml(xmlText: string): boolean {
   try {
     const doc = parseXml(xmlText);

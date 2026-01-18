@@ -76,7 +76,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       <input
         ref={ctrl.importInputRef}
         type="file"
-        accept=".xml,.xmi,application/xml,text/xml"
+        accept=".bpmn,.xml,.xmi,application/xml,text/xml"
         style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
         onChange={(e) => {
           const f = e.currentTarget.files?.[0] ?? null;

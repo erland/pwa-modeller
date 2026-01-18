@@ -11,6 +11,7 @@ import {
   sanitizeModelViewConnections,
   sanitizeModelViewKinds,
   sanitizeModelUmlNodeLegacyViewAttrs,
+  sanitizeModelUmlClassifierMembers,
   sanitizeModelViewOwnerRefs,
   sanitizeModelViewOwnerRefsFromCentered,
 } from './sanitize';
@@ -35,7 +36,7 @@ export function deserializeModel(json: string): Model {
 
   const migrated = runMigrations(parsed as unknown as Model);
 
-  const sanitized = ensureModelFolderExtensions(
+  const sanitized = sanitizeModelUmlClassifierMembers(ensureModelFolderExtensions(
     sanitizeModelUmlNodeLegacyViewAttrs(
       sanitizeModelViewKinds(
         sanitizeModelViewOwnerRefs(
@@ -53,7 +54,7 @@ export function deserializeModel(json: string): Model {
         )
       )
     )
-  );
+  ));
 
   return applyModelInvariants(sanitized);
 }

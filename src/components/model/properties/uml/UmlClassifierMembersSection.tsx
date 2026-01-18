@@ -1,105 +1,10 @@
-import type { Element } from '../../../../domain';
+import type { Element, UmlAttribute, UmlOperation, UmlParameter, UmlVisibility } from '../../../../domain';
+import { applyUmlClassifierMembersToAttrs, asUmlVisibility, coerceUmlClassifierMembersFromAttrs } from '../../../../domain';
 
 import type { ModelActions } from '../actions';
 import { PropertyRow } from '../editors/PropertyRow';
 
-type UmlVisibility = 'public' | 'private' | 'protected' | 'package';
 
-type UmlAttribute = {
-  name: string;
-  type?: string;
-  visibility?: UmlVisibility;
-  isStatic?: boolean;
-  defaultValue?: string;
-};
-
-type UmlParam = {
-  name: string;
-  type?: string;
-};
-
-type UmlOperation = {
-  name: string;
-  returnType?: string;
-  visibility?: UmlVisibility;
-  params?: UmlParam[];
-  isStatic?: boolean;
-  isAbstract?: boolean;
-};
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-function asVisibility(v: unknown): UmlVisibility | undefined {
-  switch (v) {
-    case 'public':
-    case 'private':
-    case 'protected':
-    case 'package':
-      return v;
-  }
-  return undefined;
-}
-
-function readClassifierMembers(el: Element): {
-  attributes: UmlAttribute[];
-  operations: UmlOperation[];
-  base: Record<string, unknown>;
-} {
-  const raw = el.attrs;
-  const base: Record<string, unknown> = isRecord(raw) ? { ...raw } : {};
-
-  const attributes: UmlAttribute[] = [];
-  const operations: UmlOperation[] = [];
-
-  const rawAttrs = base.attributes;
-  if (Array.isArray(rawAttrs)) {
-    for (const a of rawAttrs) {
-      if (!isRecord(a)) continue;
-      const name = typeof a.name === 'string' ? a.name : '';
-      attributes.push({
-        name,
-        type: typeof a.type === 'string' ? a.type : undefined,
-        visibility: asVisibility(a.visibility),
-        isStatic: typeof a.isStatic === 'boolean' ? a.isStatic : undefined,
-        defaultValue: typeof a.defaultValue === 'string' ? a.defaultValue : undefined,
-      });
-    }
-  }
-
-  const rawOps = base.operations;
-  if (Array.isArray(rawOps)) {
-    for (const o of rawOps) {
-      if (!isRecord(o)) continue;
-      const name = typeof o.name === 'string' ? o.name : '';
-
-      const params: UmlParam[] = [];
-      if (Array.isArray(o.params)) {
-        for (const p of o.params) {
-          if (!isRecord(p)) continue;
-          const pName = typeof p.name === 'string' ? p.name : '';
-          if (!pName.trim()) continue;
-          params.push({
-            name: pName,
-            type: typeof p.type === 'string' ? p.type : undefined,
-          });
-        }
-      }
-
-      operations.push({
-        name,
-        returnType: typeof o.returnType === 'string' ? o.returnType : undefined,
-        visibility: asVisibility(o.visibility),
-        params,
-        isStatic: typeof o.isStatic === 'boolean' ? o.isStatic : undefined,
-        isAbstract: typeof o.isAbstract === 'boolean' ? o.isAbstract : undefined,
-      });
-    }
-  }
-
-  return { attributes, operations, base };
-}
 
 function nextName(prefix: string, used: Set<string>): string {
   if (!used.has(prefix)) return prefix;
@@ -121,7 +26,7 @@ function visibilityLabel(v: UmlVisibility): string {
   }
 }
 
-function formatParams(params?: UmlParam[]): string {
+function formatParams(params?: UmlParameter[]): string {
   const list = (params ?? [])
     .map((p) => {
       const name = (p.name || '').trim();
@@ -133,13 +38,13 @@ function formatParams(params?: UmlParam[]): string {
   return list.join(', ');
 }
 
-function parseParams(text: string): UmlParam[] {
+function parseParams(text: string): UmlParameter[] {
   const raw = text
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const out: UmlParam[] = [];
+  const out: UmlParameter[] = [];
   for (const part of raw) {
     const idx = part.indexOf(':');
     if (idx === -1) {
@@ -163,12 +68,14 @@ export function UmlClassifierMembersSection({ element: el, actions }: Props) {
   const isClassifier = el.type === 'uml.class' || el.type === 'uml.interface' || el.type === 'uml.datatype';
   if (!isClassifier) return null;
 
-  const { attributes, operations, base } = readClassifierMembers(el);
+  const rawAttrs = el.attrs as unknown;
+  const base: Record<string, unknown> =
+    rawAttrs && typeof rawAttrs === "object" && !Array.isArray(rawAttrs) ? { ...(rawAttrs as Record<string, unknown>) } : {};
+
+  const { attributes, operations } = coerceUmlClassifierMembersFromAttrs(base, { includeEmptyNames: true });
 
   const commit = (nextAttrs: UmlAttribute[], nextOps: UmlOperation[]) => {
-    const next = { ...base };
-    next.attributes = nextAttrs;
-    next.operations = nextOps;
+    const next = applyUmlClassifierMembersToAttrs(base, { attributes: nextAttrs, operations: nextOps });
     actions.updateElement(el.id, { attrs: next });
   };
 
@@ -188,7 +95,7 @@ export function UmlClassifierMembersSection({ element: el, actions }: Props) {
                   value={a.visibility ?? ''}
                   onChange={(e) => {
                     const v = e.target.value || undefined;
-                    const nextVis = v ? asVisibility(v) : undefined;
+                    const nextVis = v ? asUmlVisibility(v) : undefined;
                     const next = attributes.map((x, i) => (i === idx ? { ...x, visibility: nextVis } : x));
                     commit(next, operations);
                   }}
@@ -299,7 +206,7 @@ export function UmlClassifierMembersSection({ element: el, actions }: Props) {
                   value={o.visibility ?? ''}
                   onChange={(e) => {
                     const v = e.target.value || undefined;
-                    const nextVis = v ? asVisibility(v) : undefined;
+                    const nextVis = v ? asUmlVisibility(v) : undefined;
                     const next = operations.map((x, i) => (i === idx ? { ...x, visibility: nextVis } : x));
                     commit(attributes, next);
                   }}

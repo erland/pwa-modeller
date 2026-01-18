@@ -28,3 +28,5 @@ export * from './viewConnections';
 
 export * from './invariants/applyModelInvariants';
 export * from './sanitize/persistedTaggedValues';
+
+export * from './uml/members';

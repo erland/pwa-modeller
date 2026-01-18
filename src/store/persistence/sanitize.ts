@@ -2,6 +2,7 @@ import type { Model } from '../../domain';
 import {
   sanitizeRelationshipAttrs,
   sanitizeTaggedValuesList,
+  sanitizeUmlClassifierAttrs,
   sanitizeUnknownTypeForElement,
   sanitizeUnknownTypeForRelationship,
   tidyExternalIds,
@@ -355,3 +356,18 @@ export function ensureModelFolderExtensions(model: Model): Model {
   }
   return model;
 }
+
+export function sanitizeModelUmlClassifierMembers(model: Model): Model {
+  // Ensure UML classifier members have a stable, trimmed shape.
+  for (const id of Object.keys(model.elements)) {
+    const el = model.elements[id] as any;
+    const t = typeof el?.type === 'string' ? el.type : '';
+    if (t !== 'uml.class' && t !== 'uml.interface' && t !== 'uml.datatype') continue;
+    if (!Object.prototype.hasOwnProperty.call(el, 'attrs')) continue;
+
+    const s = sanitizeUmlClassifierAttrs(el.attrs);
+    if (s !== undefined) el.attrs = s;
+  }
+  return model;
+}
+

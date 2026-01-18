@@ -12,6 +12,74 @@ import type { DiagramLinkDrag } from '../DiagramNode';
 import type { ConnectableRef } from '../connectable';
 import { sameRef } from '../connectable';
 
+type Rect = { x: number; y: number; w: number; h: number; elementId: string };
+
+function rectForNode(node: ViewNodeLayout): Rect {
+  return { x: node.x, y: node.y, w: node.width ?? 120, h: node.height ?? 60, elementId: node.elementId! };
+}
+
+function centerOf(r: Rect): { cx: number; cy: number } {
+  return { cx: r.x + r.w / 2, cy: r.y + r.h / 2 };
+}
+
+function contains(r: Rect, cx: number, cy: number): boolean {
+  return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h;
+}
+
+function pickSmallestContaining(rs: Rect[], cx: number, cy: number): Rect | null {
+  let best: Rect | null = null;
+  let bestArea = Number.POSITIVE_INFINITY;
+  for (const r of rs) {
+    if (!contains(r, cx, cy)) continue;
+    const area = r.w * r.h;
+    if (area < bestArea) {
+      best = r;
+      bestArea = area;
+    }
+  }
+  return best;
+}
+
+function poolIdForElementInBpmnView(model: Model, viewId: string, elementId: string): string | null {
+  const view = model.views[viewId];
+  if (!view || view.kind !== 'bpmn') return null;
+  const nodes = view.layout?.nodes;
+  if (!nodes?.length) return null;
+
+  const el = model.elements[elementId];
+  if (!el) return null;
+  if (String(el.type) === 'bpmn.pool') return elementId;
+
+  const node = nodes.find((n) => n.elementId === elementId);
+  if (!node?.elementId) return null;
+
+  const poolRects: Rect[] = [];
+  for (const n of nodes) {
+    if (!n.elementId) continue;
+    const t = model.elements[n.elementId]?.type;
+    if (String(t) === 'bpmn.pool') poolRects.push(rectForNode(n));
+  }
+  if (!poolRects.length) return null;
+
+  const r = rectForNode(node);
+  const { cx, cy } = centerOf(r);
+  const pool = pickSmallestContaining(poolRects, cx, cy);
+  return pool?.elementId ?? null;
+}
+
+function prioritizeRelationshipTypes(all: RelationshipType[], preferred: RelationshipType[]): RelationshipType[] {
+  const preferredSet = new Set(preferred);
+  const first: RelationshipType[] = [];
+  const rest: RelationshipType[] = [];
+  for (const t of all) {
+    if (preferredSet.has(t)) first.push(t);
+    else rest.push(t);
+  }
+  // Ensure stable preferred order
+  first.sort((a, b) => preferred.indexOf(a) - preferred.indexOf(b));
+  return [...first, ...rest];
+}
+
 type PendingCreateRel = {
   viewId: string;
   sourceRef: ConnectableRef;
@@ -164,6 +232,28 @@ const pendingRelTypeOptions = useMemo(() => {
     allowed = (vp?.allowedRelationshipTypes?.length ? vp.allowedRelationshipTypes : allTypes) as RelationshipType[];
   }
 
+
+
+  // Connection assists for BPMN:
+  // - If endpoints appear in different Pools, prefer Message Flow.
+  // - If dragging from a boundary event, prefer Sequence Flow.
+  if (viewKind === 'bpmn' && sourceRef.kind === 'element' && targetRef.kind === 'element') {
+    const sourceType = model.elements[sourceRef.id]?.type;
+    const isBoundarySource = String(sourceType) === 'bpmn.boundaryEvent';
+
+    const sp = poolIdForElementInBpmnView(model, pendingCreateRel.viewId, sourceRef.id);
+    const tp = poolIdForElementInBpmnView(model, pendingCreateRel.viewId, targetRef.id);
+    const crossPool = Boolean(sp && tp && sp !== tp);
+
+    const preferred: RelationshipType[] = isBoundarySource
+      ? ['bpmn.sequenceFlow', 'bpmn.messageFlow', 'bpmn.association']
+      : crossPool
+        ? ['bpmn.messageFlow', 'bpmn.sequenceFlow', 'bpmn.association']
+        : ['bpmn.sequenceFlow', 'bpmn.messageFlow', 'bpmn.association'];
+
+    allowed = prioritizeRelationshipTypes(allowed, preferred);
+  }
+
   if (!showAllPendingRelTypes) return allowed;
 
   // "Show all" mode: keep the allowed ones first, then append the rest (unique).
@@ -191,10 +281,26 @@ const pendingRelTypeOptions = useMemo(() => {
     const view = model?.views[pendingCreateRel.viewId];
     const viewKind = view?.kind;
 
-    const preferred =
-      isRelTypeForViewKind(viewKind, lastRelType) && opts.includes(lastRelType)
-        ? lastRelType
-        : defaultRelTypeForViewKind(viewKind);
+    const isBpmn = viewKind === 'bpmn';
+
+    let preferred: RelationshipType;
+
+    if (isBpmn && pendingCreateRel.sourceRef.kind === 'element' && pendingCreateRel.targetRef.kind === 'element') {
+      const sourceType = model?.elements[pendingCreateRel.sourceRef.id]?.type;
+      const isBoundarySource = String(sourceType) === 'bpmn.boundaryEvent';
+
+      const sp = model ? poolIdForElementInBpmnView(model, pendingCreateRel.viewId, pendingCreateRel.sourceRef.id) : null;
+      const tp = model ? poolIdForElementInBpmnView(model, pendingCreateRel.viewId, pendingCreateRel.targetRef.id) : null;
+      const crossPool = Boolean(sp && tp && sp !== tp);
+
+      // Boundary events generally connect via Sequence Flow; cross-pool suggests Message Flow.
+      preferred = isBoundarySource ? 'bpmn.sequenceFlow' : crossPool ? 'bpmn.messageFlow' : 'bpmn.sequenceFlow';
+    } else {
+      preferred =
+        isRelTypeForViewKind(viewKind, lastRelType) && opts.includes(lastRelType)
+          ? lastRelType
+          : defaultRelTypeForViewKind(viewKind);
+    }
 
     const next = opts.includes(preferred) ? preferred : (opts[0] ?? defaultRelTypeForViewKind(viewKind));
     setPendingRelType(next);

@@ -193,4 +193,48 @@ describe('store mutations: layout invariants', () => {
     expect(node.width).toBe(222);
     expect(node.height).toBe(111);
   });
+
+
+  test('updateViewNodePositionAny moves BPMN boundary events attached to moved host', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const host = createElement({ name: 'Host', type: 'bpmn.task' as any });
+    const boundary = createElement({
+      name: 'Boundary',
+      type: 'bpmn.boundaryEvent' as any,
+      attrs: { eventKind: 'boundary', eventDefinition: { kind: 'none' }, cancelActivity: true, attachedToRef: host.id } as any,
+    });
+    model.elements[host.id] = host;
+    model.elements[boundary.id] = boundary;
+
+    const view = createView({
+      name: 'BPMN',
+      viewpointId: 'layered',
+      kind: 'bpmn',
+      layout: {
+        nodes: [
+          { elementId: host.id, x: 100, y: 100, width: 140, height: 70, zIndex: 0 },
+          // Place boundary near the edge, not fully inside the host.
+          { elementId: boundary.id, x: 240, y: 110, width: 36, height: 36, zIndex: 1 },
+        ],
+        relationships: [],
+      },
+    });
+    putView(model, view);
+
+    // Move host by dx=100, dy=20
+    updateViewNodePositionAny(model, view.id, { elementId: host.id }, 200, 120);
+
+    const nodes = model.views[view.id].layout!.nodes;
+    const nHost = nodes.find((n) => n.elementId === host.id)!;
+    const nBoundary = nodes.find((n) => n.elementId === boundary.id)!;
+
+    expect(nHost.x).toBe(200);
+    expect(nHost.y).toBe(120);
+
+    expect(nBoundary.x).toBe(340);
+    expect(nBoundary.y).toBe(130);
+
+    // Attachment offsets should be stored on the boundary node.
+    expect((nBoundary.attrs as any).bpmnAttachment).toEqual({ hostId: host.id, dx: 140, dy: 10 });
+  });
 });

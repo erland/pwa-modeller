@@ -407,7 +407,84 @@ export function updateViewNodePositionAny(
     return { ...n, x: n.x + dx, y: n.y + dy };
   });
 
-  model.views[viewId] = { ...view, layout: { nodes: nextNodes, relationships: layout.relationships } };
+  function isRecord(v: unknown): v is Record<string, unknown> {
+    return typeof v === "object" && v !== null && !Array.isArray(v);
+  }
+
+  let finalNodes = nextNodes;
+
+  if (view.kind === "bpmn" && ref.elementId) {
+    const movedEl = model.elements[ref.elementId];
+    const movedType = movedEl?.type ? String(movedEl.type) : "";
+    const isBoundary = movedType === "bpmn.boundaryEvent";
+
+    const originalByElementId = new Map<string, ViewNodeLayout>();
+    for (const n of layout.nodes) {
+      if (n.elementId) originalByElementId.set(n.elementId, n);
+    }
+
+    const getAttachedToRef = (elementId: string): string | null => {
+      const el = model.elements[elementId];
+      if (!el) return null;
+      const a = el.attrs;
+      if (!isRecord(a)) return null;
+      const r = a.attachedToRef;
+      return typeof r === "string" ? r : null;
+    };
+
+    if (isBoundary) {
+      const hostId = getAttachedToRef(ref.elementId);
+      if (hostId) {
+        const hostNode = finalNodes.find((n) => n.elementId === hostId);
+        const boundaryNode = finalNodes.find((n) => n.elementId === ref.elementId);
+        if (hostNode && boundaryNode) {
+          const dx2 = boundaryNode.x - hostNode.x;
+          const dy2 = boundaryNode.y - hostNode.y;
+          const currentAttrs = isRecord(boundaryNode.attrs) ? boundaryNode.attrs : {};
+          finalNodes = finalNodes.map((n) =>
+            n.elementId === ref.elementId
+              ? { ...n, attrs: { ...currentAttrs, bpmnAttachment: { hostId, dx: dx2, dy: dy2 } } }
+              : n
+          );
+        }
+      }
+    } else if (dx !== 0 || dy !== 0) {
+      const hostPrevX = movedNode.x;
+      const hostPrevY = movedNode.y;
+      const hostNextX = x;
+      const hostNextY = y;
+
+      finalNodes = finalNodes.map((n) => {
+        if (!n.elementId) return n;
+        const bEl = model.elements[n.elementId];
+        if (!bEl || String(bEl.type) !== "bpmn.boundaryEvent") return n;
+        const attachedToRef = getAttachedToRef(n.elementId);
+        if (attachedToRef !== ref.elementId) return n;
+
+        const original = originalByElementId.get(n.elementId) ?? n;
+        const nodeAttrs = isRecord(n.attrs) ? n.attrs : {};
+        const ba = nodeAttrs.bpmnAttachment;
+        let dx0: number;
+        let dy0: number;
+        if (isRecord(ba) && typeof (ba as any).dx === "number" && typeof (ba as any).dy === "number") {
+          dx0 = (ba as any).dx as number;
+          dy0 = (ba as any).dy as number;
+        } else {
+          dx0 = original.x - hostPrevX;
+          dy0 = original.y - hostPrevY;
+        }
+
+        return {
+          ...n,
+          x: hostNextX + dx0,
+          y: hostNextY + dy0,
+          attrs: { ...nodeAttrs, bpmnAttachment: { hostId: ref.elementId, dx: dx0, dy: dy0 } }
+        };
+      });
+    }
+  }
+
+  model.views[viewId] = { ...view, layout: { nodes: finalNodes, relationships: layout.relationships } };
 }
 
 /** Updates layout properties on an element-node, connector-node, or view-object node in a view. */

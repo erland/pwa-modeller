@@ -30,6 +30,22 @@ describe('domain factories', () => {
   });
 
 
+
+
+  test('createElement defaults BPMN semantic attrs for common types', () => {
+    const g = createElement({ name: 'G', type: 'bpmn.gatewayExclusive' as any });
+    expect(g.kind).toBe('bpmn');
+    expect(g.attrs).toEqual({ gatewayKind: 'exclusive' });
+
+    const t = createElement({ name: 'T', type: 'bpmn.task' as any });
+    expect(t.attrs).toEqual({ loopType: 'none' });
+
+    const b = createElement({ name: 'B', type: 'bpmn.boundaryEvent' as any });
+    expect(b.attrs).toEqual({ eventKind: 'boundary', eventDefinition: { kind: 'none' }, cancelActivity: true });
+
+    const c = createElement({ name: 'Call', type: 'bpmn.callActivity' as any });
+    expect(c.attrs).toEqual({ loopType: 'none', isCall: true });
+  });
   test('createElement enforces non-empty name', () => {
     expect(() =>
       createElement({

@@ -21,6 +21,52 @@ function requireNonBlank(value: string, field: string): void {
   }
 }
 
+
+function defaultBpmnAttrs(type: string): unknown | undefined {
+  // Keep defaults minimal and future-proof; UI can extend later.
+  // We intentionally avoid heavy schema logic here.
+  switch (type) {
+    // Gateways
+    case 'bpmn.gatewayExclusive':
+      return { gatewayKind: 'exclusive' };
+    case 'bpmn.gatewayParallel':
+      return { gatewayKind: 'parallel' };
+    case 'bpmn.gatewayInclusive':
+      return { gatewayKind: 'inclusive' };
+    case 'bpmn.gatewayEventBased':
+      return { gatewayKind: 'eventBased' };
+
+    // Events
+    case 'bpmn.startEvent':
+      return { eventKind: 'start', eventDefinition: { kind: 'none' } };
+    case 'bpmn.endEvent':
+      return { eventKind: 'end', eventDefinition: { kind: 'none' } };
+    case 'bpmn.intermediateCatchEvent':
+      return { eventKind: 'intermediateCatch', eventDefinition: { kind: 'none' } };
+    case 'bpmn.intermediateThrowEvent':
+      return { eventKind: 'intermediateThrow', eventDefinition: { kind: 'none' } };
+    case 'bpmn.boundaryEvent':
+      // Default to interrupting boundary with no definition; user can pick in properties.
+      return { eventKind: 'boundary', eventDefinition: { kind: 'none' }, cancelActivity: true };
+
+    // Activities
+    case 'bpmn.callActivity':
+      return { loopType: 'none', isCall: true };
+    case 'bpmn.subProcess':
+      return { loopType: 'none', subProcessType: 'embedded', isExpanded: true };
+
+    default:
+      // Default for tasks/activities: no loop.
+      if (type.startsWith('bpmn.') && type !== 'bpmn.pool' && type !== 'bpmn.lane' && type !== 'bpmn.textAnnotation') {
+        if (type.startsWith('bpmn.gateway')) return undefined;
+        if (type.endsWith('Event')) return undefined;
+        // Treat the rest as activities.
+        return { loopType: 'none' };
+      }
+      return undefined;
+  }
+}
+
 export type CreateElementInput = Omit<Element, 'id'> & { id?: string; description?: string };
 export function createElement(input: CreateElementInput): Element {
   requireNonBlank(input.name, 'Element.name');
@@ -37,7 +83,9 @@ export function createElement(input: CreateElementInput): Element {
       ? input.attrs
       : kind === 'uml' && (input.type === 'uml.class' || input.type === 'uml.interface')
         ? { attributes: [], operations: [] }
-        : undefined;
+        : kind === 'bpmn'
+          ? defaultBpmnAttrs(String(input.type))
+          : undefined;
 
   return {
     id: input.id ?? createId('el'),

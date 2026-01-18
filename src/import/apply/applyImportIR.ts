@@ -18,7 +18,7 @@ import type {
   ViewObject,
   ViewObjectType
 } from '../../domain';
-import { createElement, createId, createRelationship, createView, createViewObject } from '../../domain';
+import { createElement, createId, createRelationship, createView, createViewObject, kindFromTypeId } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER, RELATIONSHIP_TYPES } from '../../domain/config/archimatePalette';
 import { VIEWPOINTS } from '../../domain/config/viewpoints';
 import { modelStore } from '../../store';
@@ -256,7 +256,13 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
     // - infer the layer from the source type more accurately
     // - preserve unknown type names for later repair
     const sourceType = (typeof el.meta?.sourceType === 'string' ? (el.meta.sourceType as string) : el.type) ?? '';
-    const resolved = resolveElementType(sourceType);
+    const inferredKind = kindFromTypeId(sourceType || el.type);
+
+    // For UML/BPMN (qualified) types, preserve the type string directly.
+    // They are valid ElementType values in our domain and should not be collapsed to 'Unknown'.
+    const isNonArchimate = inferredKind !== 'archimate';
+
+    const resolved = isNonArchimate ? { kind: 'known' as const, type: (sourceType || el.type) as ElementType, layer: undefined as unknown as ArchimateLayer } : resolveElementType(sourceType);
     if (resolved.kind === 'unknown' && unknownTypePolicy === 'skip') {
       pushWarning(report, `Skipped element with unknown type "${sourceType || el.type}": ${el.name ?? el.id}`);
       continue;
@@ -268,14 +274,20 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
     const externalIds = toExternalIds(el.externalIds, sourceSystem, el.id);
     const taggedValues = toTaggedValues(el.taggedValues, sourceSystem);
 
-    const layer = resolved.kind === 'known' ? resolved.layer : guessLayerFromTypeString(sourceType || el.type);
-    const type: ElementType = resolved.kind === 'known' ? resolved.type : ('Unknown' as ElementType);
+    const layer = isNonArchimate
+      ? undefined
+      : resolved.kind === 'known'
+        ? resolved.layer
+        : guessLayerFromTypeString(sourceType || el.type);
+
+    const type: ElementType =
+      isNonArchimate ? ((sourceType || el.type) as ElementType) : resolved.kind === 'known' ? resolved.type : ('Unknown' as ElementType);
 
     const domainEl: Element = {
       ...createElement({
         id: internalId,
         name: el.name ?? '',
-        layer,
+        ...(layer ? { layer } : {}),
         type,
         documentation: el.documentation
       }),
@@ -307,6 +319,8 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
     if (!rel?.id) continue;
 
     const sourceType = (typeof rel.meta?.sourceType === 'string' ? (rel.meta.sourceType as string) : rel.type) ?? '';
+    const inferredKind = kindFromTypeId(sourceType || rel.type);
+    const isNonArchimate = inferredKind !== 'archimate';
 
     const src = mappings.elements[rel.sourceId];
     const tgt = mappings.elements[rel.targetId];
@@ -319,8 +333,8 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
       continue;
     }
 
-    const resolved = resolveRelationshipType(sourceType || rel.type);
-    if (resolved.kind === 'unknown' && unknownTypePolicy === 'skip') {
+    const resolved = isNonArchimate ? { kind: 'known' as const, type: (sourceType || rel.type) as RelationshipType } : resolveRelationshipType(sourceType || rel.type);
+    if (!isNonArchimate && resolved.kind === 'unknown' && unknownTypePolicy === 'skip') {
       pushWarning(report, `Skipped relationship with unknown type "${sourceType || rel.type}": ${rel.id}`);
       continue;
     }
@@ -331,7 +345,12 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
     const externalIds = toExternalIds(rel.externalIds, sourceSystem, rel.id);
     const taggedValues = toTaggedValues(rel.taggedValues, sourceSystem);
 
-    const type: RelationshipType = resolved.kind === 'known' ? resolved.type : ('Unknown' as RelationshipType);
+    const type: RelationshipType =
+      isNonArchimate
+        ? ((sourceType || rel.type) as RelationshipType)
+        : resolved.kind === 'known'
+          ? resolved.type
+          : ('Unknown' as RelationshipType);
 
     const domainRel: Relationship = {
       ...createRelationship({

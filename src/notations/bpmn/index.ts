@@ -11,6 +11,9 @@ import { renderBpmnNodeSymbol } from './renderNodeSymbol';
 import type { Notation } from '../types';
 
 import { BpmnRelationshipProperties } from '../../components/model/properties/bpmn/BpmnRelationshipProperties';
+import { BpmnTaskPropertiesSection } from '../../components/model/properties/bpmn/BpmnTaskPropertiesSection';
+import { BpmnEventPropertiesSection } from '../../components/model/properties/bpmn/BpmnEventPropertiesSection';
+import { BpmnGatewayPropertiesSection } from '../../components/model/properties/bpmn/BpmnGatewayPropertiesSection';
 
 
 
@@ -140,9 +143,39 @@ export const bpmnNotation: Notation = {
 
   getRelationshipTypeOptions: () => getRelationshipTypeOptionsForKind('bpmn'),
 
-  getElementPropertySections: () => {
-    // v2: BPMN element properties still use the common panel.
-    return [];
+  getElementPropertySections: ({ model, element, actions }) => {
+    if (typeof element.type !== 'string' || !element.type.startsWith('bpmn.')) return [];
+
+    const t = String(element.type);
+    const sections: { key: string; content: React.ReactNode }[] = [];
+
+    const isActivity =
+      t === 'bpmn.task' ||
+      t === 'bpmn.userTask' ||
+      t === 'bpmn.serviceTask' ||
+      t === 'bpmn.scriptTask' ||
+      t === 'bpmn.manualTask' ||
+      t === 'bpmn.callActivity' ||
+      t === 'bpmn.subProcess';
+
+    const isEvent =
+      t === 'bpmn.startEvent' ||
+      t === 'bpmn.endEvent' ||
+      t === 'bpmn.intermediateCatchEvent' ||
+      t === 'bpmn.intermediateThrowEvent' ||
+      t === 'bpmn.boundaryEvent';
+
+    const isGateway =
+      t === 'bpmn.gatewayExclusive' ||
+      t === 'bpmn.gatewayParallel' ||
+      t === 'bpmn.gatewayInclusive' ||
+      t === 'bpmn.gatewayEventBased';
+
+    if (isActivity) sections.push({ key: 'bpmn.activity', content: React.createElement(BpmnTaskPropertiesSection, { model, element, actions }) });
+    if (isEvent) sections.push({ key: 'bpmn.event', content: React.createElement(BpmnEventPropertiesSection, { model, element, actions }) });
+    if (isGateway) sections.push({ key: 'bpmn.gateway', content: React.createElement(BpmnGatewayPropertiesSection, { model, element, actions }) });
+
+    return sections;
   },
 
   renderRelationshipProperties: ({ model, relationshipId, viewId, actions, onSelect }) => {

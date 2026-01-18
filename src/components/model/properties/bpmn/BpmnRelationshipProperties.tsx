@@ -2,10 +2,26 @@ import { useMemo } from 'react';
 
 import type { Element, Model, RelationshipType } from '../../../../domain';
 import { getRelationshipTypesForKind, kindFromTypeId } from '../../../../domain';
+import { isBpmnMessageFlowAttrs, isBpmnSequenceFlowAttrs } from '../../../../domain/bpmnAttrs';
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
 import { CommonRelationshipProperties } from '../common/CommonRelationshipProperties';
+import { TextAreaRow } from '../editors/TextAreaRow';
+import { TextInputRow } from '../editors/TextInputRow';
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function pruneAttrs(obj: Record<string, unknown>): Record<string, unknown> | undefined {
+  const next: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) continue;
+    next[k] = v;
+  }
+  return Object.keys(next).length ? next : undefined;
+}
 
 type Props = {
   model: Model;
@@ -17,10 +33,11 @@ type Props = {
 };
 
 /**
- * Minimal BPMN relationship properties (v1).
+ * BPMN relationship properties (Level 2).
  *
- * We intentionally reuse the shared relationship panel for name/type/docs/endpoints,
- * and keep BPMN-specific fields for later versions.
+ * We reuse the shared relationship panel and inject lightweight BPMN semantics:
+ * - Sequence Flow: condition expression + "default" flag
+ * - Message Flow: messageRef
  */
 export function BpmnRelationshipProperties({ model, relationshipId, viewId, actions, onSelect }: Props) {
   const rel = model.relationships[relationshipId];
@@ -77,6 +94,69 @@ export function BpmnRelationshipProperties({ model, relationshipId, viewId, acti
 
   if (!rel) return <p className="panelHint">Relationship not found.</p>;
 
+  const attrsObj: Record<string, unknown> = rel.attrs && isRecord(rel.attrs) ? (rel.attrs as Record<string, unknown>) : {};
+
+  const updateAttrs = (patch: Record<string, unknown>): void => {
+    actions.updateRelationship(rel.id, { attrs: pruneAttrs({ ...attrsObj, ...patch }) });
+  };
+
+  const sequenceAttrs = isBpmnSequenceFlowAttrs(attrsObj) ? attrsObj : {};
+  const messageAttrs = isBpmnMessageFlowAttrs(attrsObj) ? attrsObj : {};
+
+  const conditionExpression =
+    typeof (sequenceAttrs as any).conditionExpression === 'string' ? ((sequenceAttrs as any).conditionExpression as string) : '';
+  const isDefault = typeof (sequenceAttrs as any).isDefault === 'boolean' ? ((sequenceAttrs as any).isDefault as boolean) : false;
+  const messageRef = typeof (messageAttrs as any).messageRef === 'string' ? ((messageAttrs as any).messageRef as string) : '';
+
+  const notationRows = (
+    <>
+      {rel.type === 'bpmn.sequenceFlow' ? (
+        <>
+          <TextAreaRow
+            label="Condition"
+            ariaLabel="BPMN sequence flow condition"
+            value={conditionExpression}
+            onChange={(v) => updateAttrs({ conditionExpression: v.trim().length ? v : undefined })}
+            placeholder="(optional)"
+          />
+          <div className="propertiesRow">
+            <div className="propertiesKey">Default</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
+                <input
+                  type="checkbox"
+                  aria-label="BPMN sequence flow default"
+                  checked={!!isDefault}
+                  onChange={(e) => updateAttrs({ isDefault: e.target.checked ? true : undefined })}
+                />
+                Mark as default
+              </label>
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                Gateways can also point to a default flow via their own properties.
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {rel.type === 'bpmn.messageFlow' ? (
+        <TextInputRow
+          label="Message ref"
+          ariaLabel="BPMN message flow ref"
+          value={messageRef}
+          onChange={(v) => updateAttrs({ messageRef: v.trim().length ? v : undefined })}
+          placeholder="(optional)"
+        />
+      ) : null}
+
+      {rel.attrs && rel.type === 'bpmn.association' ? (
+        <div style={{ fontSize: 12, opacity: 0.75 }}>
+          Association currently has no semantic fields; it is mainly used to link annotations.
+        </div>
+      ) : null}
+    </>
+  );
+
   const typeExtra = relationshipRuleWarning ? (
     <div className="panelHint" style={{ color: '#ffb3b3', opacity: 0.95 }}>
       {relationshipRuleWarning}
@@ -93,6 +173,7 @@ export function BpmnRelationshipProperties({ model, relationshipId, viewId, acti
       actions={actions}
       onSelect={onSelect}
       typeExtra={typeExtra}
+      notationRows={notationRows}
     />
   );
 }

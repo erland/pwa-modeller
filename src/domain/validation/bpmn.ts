@@ -6,6 +6,10 @@ import type { ValidationIssue } from './types';
 
 type Rect = { x: number; y: number; w: number; h: number; elementId: string };
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
 function rectForNode(node: ViewNodeLayout): Rect {
   return {
     x: node.x,
@@ -76,13 +80,83 @@ function firstBpmnViewWithBothEndpoints(model: Model, a: string, b: string): str
   return null;
 }
 
+function isBpmnContainerType(type: string): boolean {
+  return type === 'bpmn.pool' || type === 'bpmn.lane';
+}
+
+function isBpmnTextAnnotationType(type: string): boolean {
+  return type === 'bpmn.textAnnotation';
+}
+
 /**
- * Minimal BPMN validation (v1 + v2).
+ * "Flow nodes" (connectable endpoints) for BPMN in this app.
+ *
+ * This is intentionally permissive and aligns with the notation rules:
+ * - allow all BPMN types except containers and text annotations.
+ */
+function isBpmnFlowNodeType(type: string): boolean {
+  if (!type.startsWith('bpmn.')) return false;
+  if (isBpmnContainerType(type)) return false;
+  if (isBpmnTextAnnotationType(type)) return false;
+  return true;
+}
+
+function isBpmnGatewayType(type: string): boolean {
+  return (
+    type === 'bpmn.gatewayExclusive' ||
+    type === 'bpmn.gatewayParallel' ||
+    type === 'bpmn.gatewayInclusive' ||
+    type === 'bpmn.gatewayEventBased'
+  );
+}
+
+function isBpmnActivityType(type: string): boolean {
+  if (!type.startsWith('bpmn.')) return false;
+  if (isBpmnContainerType(type) || isBpmnTextAnnotationType(type) || isBpmnGatewayType(type)) return false;
+  // Events are flow nodes but not activities.
+  if (
+    type === 'bpmn.startEvent' ||
+    type === 'bpmn.endEvent' ||
+    type === 'bpmn.intermediateCatchEvent' ||
+    type === 'bpmn.intermediateThrowEvent' ||
+    type === 'bpmn.boundaryEvent'
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isExclusiveOrInclusiveGateway(type: string): boolean {
+  return type === 'bpmn.gatewayExclusive' || type === 'bpmn.gatewayInclusive';
+}
+
+function getStringAttr(attrs: unknown, key: string): string | undefined {
+  if (!isRecord(attrs)) return undefined;
+  const v = attrs[key];
+  return typeof v === 'string' ? v : undefined;
+}
+
+function getBooleanAttr(attrs: unknown, key: string): boolean | undefined {
+  if (!isRecord(attrs)) return undefined;
+  const v = attrs[key];
+  return typeof v === 'boolean' ? v : undefined;
+}
+
+function getNonEmptyString(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const t = v.trim();
+  return t ? t : undefined;
+}
+
+/**
+ * BPMN correctness-lite validation (editor-friendly).
  *
  * - Detect unknown BPMN element/relationship types
- * - Ensure Sequence Flow connects BPMN flow nodes (not pools/lanes)
- * - v2: best-effort pools/lanes containment checks (per BPMN view)
- * - v2: best-effort cross-pool rules for Sequence Flow / Message Flow (when endpoints exist in same BPMN view)
+ * - Pools/Lanes containment checks (per BPMN view)
+ * - Boundary event attachment checks
+ * - Relationship endpoint checks (sequence/message)
+ * - Gateway default flow correctness
+ * - Gateway condition-expression suggestions (warn-only)
  */
 export function validateBpmnBasics(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -124,7 +198,7 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
   }
 
   // ------------------------------
-  // v2: Pools/Lanes as containers (per BPMN view)
+  // Pools/Lanes as containers (per BPMN view)
   // ------------------------------
   for (const view of Object.values(model.views)) {
     if (view.kind !== 'bpmn') continue;
@@ -160,7 +234,7 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
       }
     }
 
-    // BPMN elements should be inside a Pool (and inside a Lane if lanes exist in that pool).
+    // BPMN elements should be inside a Pool (and inside a Lane if lanes exist in that view).
     for (const n of nodes) {
       if (!n.elementId) continue;
       const el = model.elements[n.elementId];
@@ -202,7 +276,53 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
   }
 
   // ------------------------------
-  // Relationship rules
+  // Boundary event attachment
+  // ------------------------------
+  for (const el of Object.values(model.elements)) {
+    const kind = el.kind ?? kindFromTypeId(el.type);
+    if (kind !== 'bpmn') continue;
+    if (el.type !== 'bpmn.boundaryEvent') continue;
+
+    const attachedToRef = getStringAttr(el.attrs, 'attachedToRef');
+    if (!attachedToRef) {
+      issues.push(
+        makeIssue(
+          'warning',
+          `Boundary Event ${el.id} should be attached to an activity.`,
+          { kind: 'element', elementId: el.id },
+          `bpmn-boundary-missing-host:${el.id}`
+        )
+      );
+      continue;
+    }
+
+    const host = model.elements[attachedToRef];
+    if (!host) {
+      issues.push(
+        makeIssue(
+          'warning',
+          `Boundary Event ${el.id} is attached to a missing element: ${attachedToRef}.`,
+          { kind: 'element', elementId: el.id },
+          `bpmn-boundary-host-missing:${el.id}`
+        )
+      );
+      continue;
+    }
+
+    if (!isBpmnActivityType(host.type)) {
+      issues.push(
+        makeIssue(
+          'warning',
+          `Boundary Event ${el.id} should be attached to a BPMN activity (found: ${host.type}).`,
+          { kind: 'element', elementId: el.id },
+          `bpmn-boundary-host-not-activity:${el.id}`
+        )
+      );
+    }
+  }
+
+  // ------------------------------
+  // Relationship endpoint checks + pool rules (best-effort)
   // ------------------------------
   for (const rel of Object.values(model.relationships)) {
     if (rel.type !== 'bpmn.sequenceFlow' && rel.type !== 'bpmn.messageFlow') continue;
@@ -214,7 +334,7 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
       issues.push(
         makeIssue(
           'warning',
-          `BPMN relationship ${rel.id} must have both source and target set.`,
+          `BPMN relationship ${rel.id} should have both source and target set.`,
           { kind: 'relationship', relationshipId: rel.id },
           `bpmn-rel-missing-endpoints:${rel.id}`
         )
@@ -228,8 +348,8 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
     if (srcKind !== 'bpmn' || tgtKind !== 'bpmn') {
       issues.push(
         makeIssue(
-          'error',
-          `BPMN relationship ${rel.id} must connect two BPMN elements.`,
+          'warning',
+          `BPMN relationship ${rel.id} should connect two BPMN elements.`,
           { kind: 'relationship', relationshipId: rel.id },
           `bpmn-rel-nonbpmn-endpoint:${rel.id}`
         )
@@ -238,13 +358,13 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
     }
 
     if (rel.type === 'bpmn.sequenceFlow') {
-      if (src.type === 'bpmn.pool' || src.type === 'bpmn.lane' || tgt.type === 'bpmn.pool' || tgt.type === 'bpmn.lane') {
+      if (!isBpmnFlowNodeType(src.type) || !isBpmnFlowNodeType(tgt.type)) {
         issues.push(
           makeIssue(
-            'error',
-            `Sequence Flow ${rel.id} cannot connect to Pools/Lanes.`,
+            'warning',
+            `Sequence Flow ${rel.id} should connect BPMN flow nodes (not Pools/Lanes/Annotations).`,
             { kind: 'relationship', relationshipId: rel.id },
-            `bpmn-seqflow-container-endpoint:${rel.id}`
+            `bpmn-seqflow-nonflownode-endpoint:${rel.id}`
           )
         );
       }
@@ -265,8 +385,8 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
           if (sp && tp && sp !== tp) {
             issues.push(
               makeIssue(
-                'error',
-                `Sequence Flow ${rel.id} cannot cross Pool boundaries in view "${view.name}".`,
+                'warning',
+                `Sequence Flow ${rel.id} should not cross Pool boundaries in view "${view.name}".`,
                 { kind: 'relationship', relationshipId: rel.id },
                 `bpmn-seqflow-cross-pool:${viewId}:${rel.id}`
               )
@@ -277,13 +397,13 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
     }
 
     if (rel.type === 'bpmn.messageFlow') {
-      if (src.type === 'bpmn.lane' || tgt.type === 'bpmn.lane') {
+      if (!isBpmnFlowNodeType(src.type) || !isBpmnFlowNodeType(tgt.type)) {
         issues.push(
           makeIssue(
-            'error',
-            `Message Flow ${rel.id} cannot connect to a Lane directly.`,
+            'warning',
+            `Message Flow ${rel.id} should connect BPMN flow nodes (not Pools/Lanes/Annotations).`,
             { kind: 'relationship', relationshipId: rel.id },
-            `bpmn-msgflow-lane-endpoint:${rel.id}`
+            `bpmn-msgflow-nonflownode-endpoint:${rel.id}`
           )
         );
       }
@@ -305,8 +425,8 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
             if (sp === tp) {
               issues.push(
                 makeIssue(
-                  'error',
-                  `Message Flow ${rel.id} should connect different Pools/Participants (view "${view.name}").`,
+                  'warning',
+                  `Message Flow ${rel.id} is usually used between different Pools/Participants (view "${view.name}").`,
                   { kind: 'relationship', relationshipId: rel.id },
                   `bpmn-msgflow-same-pool:${viewId}:${rel.id}`
                 )
@@ -316,7 +436,7 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
             issues.push(
               makeIssue(
                 'warning',
-                `Message Flow ${rel.id} should be used between Pools; place endpoints inside Pools in view "${view.name}".`,
+                `Message Flow ${rel.id} is usually used between Pools; place endpoints inside Pools in view "${view.name}".`,
                 { kind: 'relationship', relationshipId: rel.id },
                 `bpmn-msgflow-missing-pool:${viewId}:${rel.id}`
               )
@@ -326,9 +446,99 @@ export function validateBpmnBasics(model: Model): ValidationIssue[] {
           issues.push(
             makeIssue(
               'warning',
-              `Message Flow ${rel.id} is best used between Pools; no Pools found in view "${view.name}".`,
+              `Message Flow ${rel.id} is usually used between Pools; no Pools found in view "${view.name}".`,
               { kind: 'relationship', relationshipId: rel.id },
               `bpmn-msgflow-no-pools:${viewId}:${rel.id}`
+            )
+          );
+        }
+      }
+    }
+
+    // Best-effort pool crossing rule for sequence flows (warning-first).
+    if (rel.type === 'bpmn.sequenceFlow') {
+      const viewId = firstBpmnViewWithBothEndpoints(model, src.id, tgt.id);
+      if (!viewId) continue;
+      const view = model.views[viewId];
+      const poolRects: Rect[] = [];
+      for (const n of view.layout?.nodes ?? []) {
+        if (!n.elementId) continue;
+        const el = model.elements[n.elementId];
+        if (el?.type === 'bpmn.pool') poolRects.push(rectForNode(n));
+      }
+      if (!poolRects.length) continue;
+      const sp = poolOfElementInView({ model, viewId, elementId: src.id, poolRects });
+      const tp = poolOfElementInView({ model, viewId, elementId: tgt.id, poolRects });
+      if (sp && tp && sp !== tp) {
+        issues.push(
+          makeIssue(
+            'warning',
+            `Sequence Flow ${rel.id} should not cross Pool boundaries in view "${view.name}".`,
+            { kind: 'relationship', relationshipId: rel.id },
+            `bpmn-seqflow-cross-pool:${viewId}:${rel.id}`
+          )
+        );
+      }
+    }
+  }
+
+  // ------------------------------
+  // Gateway default flow correctness + condition expression suggestions
+  // ------------------------------
+  for (const gateway of Object.values(model.elements)) {
+    const kind = gateway.kind ?? kindFromTypeId(gateway.type);
+    if (kind !== 'bpmn') continue;
+    if (!isBpmnGatewayType(gateway.type)) continue;
+
+    const defaultFlowRef = getStringAttr(gateway.attrs, 'defaultFlowRef');
+    if (defaultFlowRef) {
+      const rel = model.relationships[defaultFlowRef];
+      if (!rel) {
+        issues.push(
+          makeIssue(
+            'warning',
+            `Gateway ${gateway.id} has a default flow that does not exist: ${defaultFlowRef}.`,
+            { kind: 'element', elementId: gateway.id },
+            `bpmn-gw-default-missing:${gateway.id}`
+          )
+        );
+      } else if (rel.type !== 'bpmn.sequenceFlow' || rel.sourceElementId !== gateway.id) {
+        issues.push(
+          makeIssue(
+            'warning',
+            `Gateway ${gateway.id} default flow should reference an outgoing Sequence Flow.`,
+            { kind: 'element', elementId: gateway.id },
+            `bpmn-gw-default-not-outgoing:${gateway.id}`
+          )
+        );
+      }
+    }
+
+    // Condition expression suggestions for Exclusive/Inclusive gateways.
+    if (isExclusiveOrInclusiveGateway(gateway.type)) {
+      const outgoing = Object.values(model.relationships).filter(
+        (r) => r && r.type === 'bpmn.sequenceFlow' && r.sourceElementId === gateway.id
+      );
+
+      if (!outgoing.length) continue;
+
+      // Determine default flow by gateway attr or legacy per-relationship flag.
+      let resolvedDefault = defaultFlowRef;
+      if (!resolvedDefault) {
+        const flagged = outgoing.find((r) => getBooleanAttr(r.attrs, 'isDefault') === true);
+        if (flagged) resolvedDefault = flagged.id;
+      }
+
+      for (const r of outgoing) {
+        if (resolvedDefault && r.id === resolvedDefault) continue;
+        const conditionExpression = isRecord(r.attrs) ? getNonEmptyString(r.attrs['conditionExpression']) : undefined;
+        if (!conditionExpression) {
+          issues.push(
+            makeIssue(
+              'warning',
+              `Outgoing Sequence Flow ${r.id} from ${gateway.type} ${gateway.id} should usually have a condition expression (or be the default flow).`,
+              { kind: 'relationship', relationshipId: r.id },
+              `bpmn-gw-missing-condition:${gateway.id}:${r.id}`
             )
           );
         }

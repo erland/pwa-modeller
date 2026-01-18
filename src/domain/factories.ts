@@ -67,6 +67,27 @@ function defaultBpmnAttrs(type: string): unknown | undefined {
   }
 }
 
+function defaultUmlRelationshipAttrs(type: string): unknown | undefined {
+  // Keep defaults minimal. We only provide a predictable object shape for association-like
+  // relationships so import/UI code can attach end metadata without special-casing `undefined`.
+  switch (type) {
+    case 'uml.association':
+    case 'uml.aggregation':
+    case 'uml.composition':
+      return {
+        sourceRole: undefined,
+        targetRole: undefined,
+        sourceMultiplicity: undefined,
+        targetMultiplicity: undefined,
+        sourceNavigable: undefined,
+        targetNavigable: undefined,
+        stereotype: undefined,
+      };
+    default:
+      return undefined;
+  }
+}
+
 export type CreateElementInput = Omit<Element, 'id'> & { id?: string; description?: string };
 export function createElement(input: CreateElementInput): Element {
   requireNonBlank(input.name, 'Element.name');
@@ -111,6 +132,15 @@ export function createRelationship(input: CreateRelationshipInput): Relationship
 
   const kind = input.kind ?? kindFromTypeId(input.type as unknown as string);
 
+  // Notation-specific semantic attributes.
+  // For UML association-like relationships we default to a stable "end metadata" object shape.
+  const attrs =
+    input.attrs !== undefined
+      ? input.attrs
+      : kind === 'uml'
+        ? defaultUmlRelationshipAttrs(String(input.type))
+        : undefined;
+
   return {
     id: input.id ?? createId('rel'),
     kind,
@@ -122,7 +152,7 @@ export function createRelationship(input: CreateRelationshipInput): Relationship
     unknownType: input.unknownType,
     name: input.name?.trim() || undefined,
     documentation: (input.documentation ?? input.description)?.trim() || undefined,
-    attrs: input.attrs,
+    attrs,
     externalIds: input.externalIds ?? [],
     taggedValues: input.taggedValues ?? []
   };

@@ -40,4 +40,35 @@ describe('domain relationshipAttrs helpers', () => {
       sanitizeRelationshipAttrs('Serving', { accessType: 'ReadWrite', isDirected: true, influenceStrength: '++' })
     ).toBeUndefined();
   });
+
+  test('UML keeps attrs but normalizes well-known end metadata fields', () => {
+    // null/undefined handling
+    expect(sanitizeRelationshipAttrs('uml.association' as any, null as any)).toBeUndefined();
+
+    // trims strings, keeps unknown keys, drops invalid booleans and empty strings
+    expect(
+      sanitizeRelationshipAttrs('uml.association' as any, {
+        sourceRole: '  src  ',
+        targetRole: '   ',
+        sourceMultiplicity: ' 1..* ',
+        targetMultiplicity: 2,
+        sourceNavigable: true,
+        targetNavigable: 'true',
+        stereotype: '  <<x>>  ',
+        vendorFoo: 123,
+      } as any)
+    ).toEqual({
+      sourceRole: 'src',
+      sourceMultiplicity: '1..*',
+      targetMultiplicity: '2',
+      sourceNavigable: true,
+      stereotype: '<<x>>',
+      vendorFoo: 123,
+    });
+
+    // if all fields are empty/invalid and no other keys remain, return undefined
+    expect(
+      sanitizeRelationshipAttrs('uml.association' as any, { sourceRole: '  ', targetRole: '' } as any)
+    ).toBeUndefined();
+  });
 });

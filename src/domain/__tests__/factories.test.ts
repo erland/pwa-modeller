@@ -68,6 +68,25 @@ describe('domain factories', () => {
     expect(rel.name).toBe('relates');
   });
 
+  test('createRelationship defaults UML association-like attrs to a stable end-metadata shape', () => {
+    const rel = createRelationship({
+      sourceElementId: 'el_1',
+      targetElementId: 'el_2',
+      type: 'uml.association' as any,
+    });
+
+    expect(rel.kind).toBe('uml');
+    expect(rel.attrs).toEqual({
+      sourceRole: undefined,
+      targetRole: undefined,
+      sourceMultiplicity: undefined,
+      targetMultiplicity: undefined,
+      sourceNavigable: undefined,
+      targetNavigable: undefined,
+      stereotype: undefined,
+    });
+  });
+
   test('createRelationship uses documentation (and falls back to legacy description)', () => {
     const rel = createRelationship({
       sourceElementId: 'el_1',

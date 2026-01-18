@@ -7,6 +7,7 @@ export * from './modelValidation';
 export * from './reports';
 export * from './taggedValues';
 export * from './relationshipAttrs';
+export * from './bpmnAttrs';
 export * from './unknownTypes';
 export * from './unknownTypeReport';
 export * from './externalIds';

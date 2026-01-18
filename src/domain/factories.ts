@@ -98,11 +98,11 @@ export function createElement(input: CreateElementInput): Element {
   if (kind === 'archimate' && !input.layer) throw new Error('Element.layer is required for archimate elements');
 
   // Notation-specific semantic attributes.
-  // For UML Class/Interface we default to empty member lists so the UI never has to handle undefined.
+  // For UML Class/Interface/DataType we default to empty member lists so the UI never has to handle undefined.
   const attrs =
     input.attrs !== undefined
       ? input.attrs
-      : kind === 'uml' && (input.type === 'uml.class' || input.type === 'uml.interface')
+      : kind === 'uml' && (input.type === 'uml.class' || input.type === 'uml.interface' || input.type === 'uml.datatype')
         ? { attributes: [], operations: [] }
         : kind === 'bpmn'
           ? defaultBpmnAttrs(String(input.type))

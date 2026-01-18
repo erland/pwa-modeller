@@ -160,7 +160,7 @@ type Props = {
 };
 
 export function UmlClassifierMembersSection({ element: el, actions }: Props) {
-  const isClassifier = el.type === 'uml.class' || el.type === 'uml.interface';
+  const isClassifier = el.type === 'uml.class' || el.type === 'uml.interface' || el.type === 'uml.datatype';
   if (!isClassifier) return null;
 
   const { attributes, operations, base } = readClassifierMembers(el);

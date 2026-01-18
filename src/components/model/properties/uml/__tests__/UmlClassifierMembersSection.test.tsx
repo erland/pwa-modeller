@@ -68,4 +68,30 @@ describe('UmlClassifierMembersSection', () => {
       },
     });
   });
+
+  it('treats uml.datatype as a classifier and allows editing members', () => {
+    const updateElement = jest.fn();
+    const el: Element = {
+      id: 'd1',
+      name: 'Money',
+      type: 'uml.datatype',
+      attrs: { attributes: [], operations: [] },
+    } as Element;
+
+    const actions = makeActions({ updateElement });
+
+    render(<UmlClassifierMembersSection element={el} actions={actions} />);
+
+    fireEvent.click(screen.getByText('Add attribute'));
+
+    expect(updateElement).toHaveBeenCalled();
+    const lastCall = updateElement.mock.calls[updateElement.mock.calls.length - 1];
+    expect(lastCall[0]).toBe('d1');
+    expect(lastCall[1]).toMatchObject({
+      attrs: {
+        attributes: [{ name: expect.any(String) }],
+        operations: [],
+      },
+    });
+  });
 });

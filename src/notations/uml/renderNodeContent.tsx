@@ -285,7 +285,6 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
   }
 
   if (
-    isDataType ||
     isPrimitiveType ||
     isComponent ||
     isArtifact ||
@@ -294,8 +293,7 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
     isExecutionEnvironment
   ) {
     // Minimal compartment-like rendering for common EA import targets.
-    // For now we use the legacy view-local text fields (attrs.attributesText/operationsText)
-    // because these node types don't have semantic members yet.
+    // These node types currently use legacy view-local text fields (attrs.attributesText/operationsText).
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Header stereotype={defaultStereo} name={name} />
@@ -351,11 +349,19 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
     );
   }
 
-  // Class / Interface compartments render semantic members from the element.
-  if (isClass || isInterface) {
+  // Class / Interface / DataType compartments render semantic members from the element.
+  // DataType previously used view-local text fields; we keep a small compatibility fallback
+  // so older diagrams don't lose text if semantic members are empty.
+  if (isClass || isInterface || isDataType) {
     const members = readUmlClassifierMembers(element);
-    const attributeLines = members.attributes.map(formatAttribute);
-    const operationLines = members.operations.map(formatOperation);
+    const useLegacyText =
+      isDataType &&
+      members.attributes.length === 0 &&
+      members.operations.length === 0 &&
+      (attrLines.length > 0 || opLines.length > 0);
+
+    const attributeLines = useLegacyText ? attrLines : members.attributes.map(formatAttribute);
+    const operationLines = useLegacyText ? opLines : members.operations.map(formatOperation);
 
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

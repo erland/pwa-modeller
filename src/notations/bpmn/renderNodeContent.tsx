@@ -276,6 +276,89 @@ function TextAnnotationNode({ name }: { name: string }) {
   );
 }
 
+function DataObjectNode({ name }: { name: string }) {
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        border: '2px solid rgba(0,0,0,0.24)',
+        borderRadius: 4,
+        background: 'rgba(255,255,255,0.92)',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '8px 10px',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: 0,
+          width: 22,
+          height: 22,
+          borderLeft: '2px solid rgba(0,0,0,0.20)',
+          borderBottom: '2px solid rgba(0,0,0,0.20)',
+          background: 'rgba(0,0,0,0.03)',
+          transform: 'translate(8px,-8px) rotate(45deg)',
+          transformOrigin: 'top right',
+        }}
+      />
+      <div style={{ fontSize: 13, fontWeight: 800, textAlign: 'center', wordBreak: 'break-word' }}>{name}</div>
+    </div>
+  );
+}
+
+function DataStoreNode({ name }: { name: string }) {
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        border: '2px solid rgba(0,0,0,0.24)',
+        borderRadius: 999,
+        background: 'rgba(255,255,255,0.92)',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '8px 10px',
+      }}
+    >
+      <div style={{ position: 'absolute', left: 10, right: 10, top: 12, height: 1, background: 'rgba(0,0,0,0.18)' }} />
+      <div style={{ position: 'absolute', left: 10, right: 10, bottom: 12, height: 1, background: 'rgba(0,0,0,0.18)' }} />
+      <div style={{ fontSize: 13, fontWeight: 800, textAlign: 'center', wordBreak: 'break-word' }}>{name}</div>
+    </div>
+  );
+}
+
+function GroupNode({ name }: { name: string }) {
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        border: '2px dashed rgba(0,0,0,0.24)',
+        borderRadius: 8,
+        background: 'rgba(0,0,0,0.01)',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        position: 'relative',
+        padding: '6px 8px',
+      }}
+    >
+      <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.85, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+    </div>
+  );
+}
+
+
 /**
  * BPMN node content rendering.
  *
@@ -391,6 +474,9 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
 
   // Artifacts
   if (type === 'bpmn.textAnnotation') return <TextAnnotationNode name={name} />;
+  if (type === 'bpmn.dataObjectReference') return <DataObjectNode name={name} />;
+  if (type === 'bpmn.dataStoreReference') return <DataStoreNode name={name} />;
+  if (type === 'bpmn.group') return <GroupNode name={name} />;
 
   // Fallback: treat unknown BPMN types as a task-like rounded box.
   return <TaskNode name={name} />;

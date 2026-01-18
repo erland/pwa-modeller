@@ -84,7 +84,10 @@ export const VIEWPOINTS: Viewpoint[] = [
       'bpmn.gatewayEventBased',
 
       // Artifacts
-      'bpmn.textAnnotation'
+      'bpmn.textAnnotation',
+      'bpmn.dataObjectReference',
+      'bpmn.dataStoreReference',
+      'bpmn.group'
     ],
     allowedRelationshipTypes: ['bpmn.sequenceFlow', 'bpmn.messageFlow', 'bpmn.association']
   }

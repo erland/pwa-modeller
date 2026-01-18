@@ -199,7 +199,10 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
   'bpmn.gatewayEventBased',
 
   // Artifacts
-  'bpmn.textAnnotation'
+  'bpmn.textAnnotation',
+  'bpmn.dataObjectReference',
+  'bpmn.dataStoreReference',
+  'bpmn.group'
 ];
 
 export const BPMN_RELATIONSHIP_TYPES: RelationshipType[] = [
@@ -248,7 +251,10 @@ const BPMN_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   'bpmn.gatewayEventBased': 'Event-Based Gateway',
 
   // Artifacts
-  'bpmn.textAnnotation': 'Text Annotation'
+  'bpmn.textAnnotation': 'Text Annotation',
+  'bpmn.dataObjectReference': 'Data Object',
+  'bpmn.dataStoreReference': 'Data Store',
+  'bpmn.group': 'Group'
 };
 
 const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {

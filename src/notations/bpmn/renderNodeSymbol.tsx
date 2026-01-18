@@ -204,6 +204,71 @@ export function renderBpmnNodeSymbol(nodeType: string): React.ReactNode {
     );
   }
 
+
+
+  if (nodeType === 'bpmn.dataObjectReference') {
+    return (
+      <div
+        style={{
+          ...frame,
+          border: '1px solid currentColor',
+          borderRadius: 2,
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+        title={nodeType}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            width: 8,
+            height: 8,
+            borderLeft: '1px solid currentColor',
+            borderBottom: '1px solid currentColor',
+            background: 'rgba(0,0,0,0.04)',
+            transform: 'translate(2px,-2px) rotate(45deg)',
+            transformOrigin: 'top right',
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (nodeType === 'bpmn.dataStoreReference') {
+    return (
+      <div style={{ ...frame, position: 'relative' }} title={nodeType}>
+        <div
+          style={{
+            width: 14,
+            height: 18,
+            border: '1px solid currentColor',
+            borderRadius: 999,
+            boxSizing: 'border-box',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 4, height: 1, background: 'currentColor', opacity: 0.35 }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 4, height: 1, background: 'currentColor', opacity: 0.35 }} />
+        </div>
+      </div>
+    );
+  }
+
+  if (nodeType === 'bpmn.group') {
+    return (
+      <div
+        style={{
+          ...frame,
+          border: '1px dashed currentColor',
+          borderRadius: 4,
+        }}
+        title={nodeType}
+      />
+    );
+  }
   // Fallback
   return (
     <div

@@ -25,8 +25,13 @@ function isBpmnContainerType(t: string): boolean {
   return t === 'bpmn.pool' || t === 'bpmn.lane';
 }
 
-function isBpmnTextAnnotationType(t: string): boolean {
-  return t === 'bpmn.textAnnotation';
+function isBpmnArtifactType(t: string): boolean {
+  return (
+    t === 'bpmn.textAnnotation' ||
+    t === 'bpmn.dataObjectReference' ||
+    t === 'bpmn.dataStoreReference' ||
+    t === 'bpmn.group'
+  );
 }
 
 /**
@@ -38,7 +43,7 @@ function isBpmnTextAnnotationType(t: string): boolean {
 function isBpmnConnectableNodeType(t: string): boolean {
   if (!t.startsWith('bpmn.')) return false;
   if (isBpmnContainerType(t)) return false;
-  if (isBpmnTextAnnotationType(t)) return false;
+  if (isBpmnArtifactType(t)) return false;
   return true;
 }
 
@@ -67,6 +72,7 @@ export const bpmnNotation: Notation = {
 
     if (rel.type === 'bpmn.messageFlow') {
       return {
+        markerStart: 'circleOpen',
         markerEnd: 'arrowOpen',
         line: { pattern: 'dashed' },
       };
@@ -114,18 +120,18 @@ export const bpmnNotation: Notation = {
       // (Annotation-to-annotation and connectable-to-connectable are not allowed.)
       const s = sourceType ?? '';
       const t = targetType ?? '';
-      const sIsAnn = s ? isBpmnTextAnnotationType(s) : false;
-      const tIsAnn = t ? isBpmnTextAnnotationType(t) : false;
+      const sIsArtifact = s ? isBpmnArtifactType(s) : false;
+      const tIsArtifact = t ? isBpmnArtifactType(t) : false;
 
-      if (s && t && sIsAnn && tIsAnn) return { allowed: false, reason: 'Association should connect a Text Annotation to another element' };
+      if (s && t && sIsArtifact && tIsArtifact) return { allowed: false, reason: 'Association should connect an Artifact to another element' };
 
       // If both sides are known, enforce the "one side is annotation" rule.
       if (s && t) {
-        if (!(sIsAnn || tIsAnn)) return { allowed: false, reason: 'Association should connect to a Text Annotation' };
+        if (!(sIsArtifact || tIsArtifact)) return { allowed: false, reason: 'Association should connect to a BPMN artifact (annotation/data/group)' };
 
-        const other = sIsAnn ? t : s;
+        const other = sIsArtifact ? t : s;
         if (!isBpmnConnectableNodeType(other))
-          return { allowed: false, reason: 'Association should connect to a BPMN node (not pool/lane/annotation)' };
+          return { allowed: false, reason: 'Association should connect to a BPMN element (not pool/lane)' };
       }
 
       // If a side is unknown (e.g. connector endpoint), stay permissive.

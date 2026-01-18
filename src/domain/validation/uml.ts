@@ -1,22 +1,12 @@
 import type { Model } from '../types';
 import { UML_ELEMENT_TYPES, UML_RELATIONSHIP_TYPES } from '../config/catalog';
 import { kindFromTypeId } from '../kindFromTypeId';
+import {
+  UML_DEPLOYMENT_TARGET_TYPE_IDS_SET,
+  UML_GENERALIZABLE_TYPE_IDS_SET,
+} from '../uml/typeGroups';
 import { makeIssue } from './issues';
 import type { ValidationIssue } from './types';
-
-const UML_GENERALIZABLE_TYPES = new Set([
-  'uml.class',
-  'uml.interface',
-  'uml.enum',
-  'uml.datatype',
-  'uml.primitiveType',
-  'uml.component',
-  'uml.node',
-  'uml.device',
-  'uml.executionEnvironment',
-  'uml.actor',
-  'uml.usecase',
-]);
 
 export function validateUmlBasics(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -62,7 +52,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
   // ------------------------------
   // Relationship endpoint sanity (selected UML relationships)
   // ------------------------------
-  const UML_DEPLOYMENT_TARGET_TYPES = new Set(['uml.node', 'uml.device', 'uml.executionEnvironment']);
+  const UML_DEPLOYMENT_TARGET_TYPES = UML_DEPLOYMENT_TARGET_TYPE_IDS_SET;
 
   for (const rel of Object.values(model.relationships)) {
     const kind = rel.kind ?? kindFromTypeId(rel.type);
@@ -160,7 +150,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
   const umlGeneralizables = new Set<string>();
   for (const el of Object.values(model.elements)) {
     const kind = el.kind ?? kindFromTypeId(el.type);
-    if (kind === 'uml' && UML_GENERALIZABLE_TYPES.has(el.type)) umlGeneralizables.add(el.id);
+    if (kind === 'uml' && UML_GENERALIZABLE_TYPE_IDS_SET.has(el.type)) umlGeneralizables.add(el.id);
   }
 
   for (const rel of Object.values(model.relationships)) {

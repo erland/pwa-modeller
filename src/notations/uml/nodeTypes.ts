@@ -1,3 +1,12 @@
+import type {
+  UmlClassifierTypeId,
+  UmlDeploymentTargetTypeId,
+} from '../../domain/uml/typeGroups';
+import {
+  isUmlClassifierTypeId,
+  isUmlDeploymentTargetTypeId,
+} from '../../domain/uml/typeGroups';
+
 export const UML_NODE_TYPES = [
   'uml.class',
   'uml.interface',
@@ -40,27 +49,8 @@ export function isUmlNodeType(t: string): t is UmlNodeType {
 
 export function isUmlClassifierType(
   t: string
-): t is
-  | 'uml.class'
-  | 'uml.interface'
-  | 'uml.enum'
-  | 'uml.datatype'
-  | 'uml.primitiveType'
-  | 'uml.component'
-  | 'uml.node'
-  | 'uml.device'
-  | 'uml.executionEnvironment' {
-  return (
-    t === 'uml.class' ||
-    t === 'uml.interface' ||
-    t === 'uml.enum' ||
-    t === 'uml.datatype' ||
-    t === 'uml.primitiveType' ||
-    t === 'uml.component' ||
-    t === 'uml.node' ||
-    t === 'uml.device' ||
-    t === 'uml.executionEnvironment'
-  );
+): t is UmlClassifierTypeId {
+  return isUmlClassifierTypeId(t);
 }
 
 export function isUmlComponentType(t: string): t is 'uml.component' {
@@ -73,8 +63,8 @@ export function isUmlArtifactType(t: string): t is 'uml.artifact' {
 
 export function isUmlDeploymentTargetType(
   t: string
-): t is 'uml.node' | 'uml.device' | 'uml.executionEnvironment' {
-  return t === 'uml.node' || t === 'uml.device' || t === 'uml.executionEnvironment';
+): t is UmlDeploymentTargetTypeId {
+  return isUmlDeploymentTargetTypeId(t);
 }
 
 export function isUmlUseCaseType(t: string): t is 'uml.usecase' {

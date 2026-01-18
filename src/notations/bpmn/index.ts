@@ -18,47 +18,25 @@ import { BpmnRelationshipProperties } from '../../components/model/properties/bp
 /**
  * BPMN notation implementation.
  */
-function isBpmnFlowNodeType(t: string): boolean {
-  // Activities
-  if (
-    t === 'bpmn.task' ||
-    t === 'bpmn.userTask' ||
-    t === 'bpmn.serviceTask' ||
-    t === 'bpmn.scriptTask' ||
-    t === 'bpmn.manualTask' ||
-    t === 'bpmn.callActivity' ||
-    t === 'bpmn.subProcess'
-  )
-    return true;
-
-  // Events
-  if (
-    t === 'bpmn.startEvent' ||
-    t === 'bpmn.endEvent' ||
-    t === 'bpmn.intermediateCatchEvent' ||
-    t === 'bpmn.intermediateThrowEvent' ||
-    t === 'bpmn.boundaryEvent'
-  )
-    return true;
-
-  // Gateways
-  if (
-    t === 'bpmn.gatewayExclusive' ||
-    t === 'bpmn.gatewayParallel' ||
-    t === 'bpmn.gatewayInclusive' ||
-    t === 'bpmn.gatewayEventBased'
-  )
-    return true;
-
-  return false;
-}
-
 function isBpmnContainerType(t: string): boolean {
   return t === 'bpmn.pool' || t === 'bpmn.lane';
 }
 
 function isBpmnTextAnnotationType(t: string): boolean {
   return t === 'bpmn.textAnnotation';
+}
+
+/**
+ * "Connectable" BPMN node types are those that can act as endpoints for flows.
+ *
+ * We intentionally exclude containers (pool/lane) and annotations.
+ * Later steps can refine rules using model context (participants, containment).
+ */
+function isBpmnConnectableNodeType(t: string): boolean {
+  if (!t.startsWith('bpmn.')) return false;
+  if (isBpmnContainerType(t)) return false;
+  if (isBpmnTextAnnotationType(t)) return false;
+  return true;
 }
 
 export const bpmnNotation: Notation = {
@@ -113,21 +91,24 @@ export const bpmnNotation: Notation = {
     if (targetType && isBpmnContainerType(targetType)) return { allowed: false, reason: 'Cannot connect to Pool/Lane' };
 
     if (relationshipType === 'bpmn.sequenceFlow') {
-      if (sourceType && !isBpmnFlowNodeType(sourceType)) return { allowed: false, reason: 'Sequence Flow must start from a BPMN flow node' };
-      if (targetType && !isBpmnFlowNodeType(targetType)) return { allowed: false, reason: 'Sequence Flow must end at a BPMN flow node' };
+      if (sourceType && !isBpmnConnectableNodeType(sourceType))
+        return { allowed: false, reason: 'Sequence Flow must start from a BPMN connectable node' };
+      if (targetType && !isBpmnConnectableNodeType(targetType))
+        return { allowed: false, reason: 'Sequence Flow must end at a BPMN connectable node' };
       return { allowed: true };
     }
 
     if (relationshipType === 'bpmn.messageFlow') {
-      if (sourceType && !isBpmnFlowNodeType(sourceType)) return { allowed: false, reason: 'Message Flow must start from a BPMN flow node' };
-      if (targetType && !isBpmnFlowNodeType(targetType)) return { allowed: false, reason: 'Message Flow must end at a BPMN flow node' };
+      if (sourceType && !isBpmnConnectableNodeType(sourceType))
+        return { allowed: false, reason: 'Message Flow must start from a BPMN connectable node' };
+      if (targetType && !isBpmnConnectableNodeType(targetType))
+        return { allowed: false, reason: 'Message Flow must end at a BPMN connectable node' };
       return { allowed: true };
     }
 
     if (relationshipType === 'bpmn.association') {
-      // Keep it permissive for Level-2 Step 1:
-      // - allow any non-container BPMN node to connect to a Text Annotation
-      // - disallow annotation-to-annotation to avoid noise
+      // Allow a Text Annotation to associate with any connectable BPMN node.
+      // (Annotation-to-annotation and connectable-to-connectable are not allowed.)
       const s = sourceType ?? '';
       const t = targetType ?? '';
       const sIsAnn = s ? isBpmnTextAnnotationType(s) : false;
@@ -135,10 +116,16 @@ export const bpmnNotation: Notation = {
 
       if (s && t && sIsAnn && tIsAnn) return { allowed: false, reason: 'Association should connect a Text Annotation to another element' };
 
-      if (s && t && !(sIsAnn || tIsAnn)) {
-        return { allowed: false, reason: 'Association should connect to a Text Annotation' };
+      // If both sides are known, enforce the "one side is annotation" rule.
+      if (s && t) {
+        if (!(sIsAnn || tIsAnn)) return { allowed: false, reason: 'Association should connect to a Text Annotation' };
+
+        const other = sIsAnn ? t : s;
+        if (!isBpmnConnectableNodeType(other))
+          return { allowed: false, reason: 'Association should connect to a BPMN node (not pool/lane/annotation)' };
       }
 
+      // If a side is unknown (e.g. connector endpoint), stay permissive.
       return { allowed: true };
     }
 

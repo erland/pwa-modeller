@@ -9,6 +9,7 @@ import type {
   ExternalIdRef,
   Model,
   ModelMetadata,
+  ModelKind,
   Relationship,
   RelationshipType,
   TaggedValue,
@@ -146,6 +147,25 @@ function resolveViewpointId(viewpoint: string | undefined): string {
   return 'layered';
 }
 
+function inferModelKind(ir: IRModel, sourceSystem: string): ModelKind {
+  const fmt = (ir.meta?.format ?? ir.meta?.sourceSystem ?? '').toString().toLowerCase();
+  const src = (sourceSystem ?? '').toString().toLowerCase();
+
+  const looksBpmn = fmt.includes('bpmn') || src.includes('bpmn');
+  const looksUml = fmt.includes('uml') || src.includes('uml');
+
+  if (looksBpmn) return 'bpmn';
+  if (looksUml) return 'uml';
+
+  // Heuristic fallback: inspect type prefixes.
+  const anyBpmn = (ir.elements ?? []).some((e) => (e?.type ?? '').toString().startsWith('bpmn.'));
+  if (anyBpmn) return 'bpmn';
+  const anyUml = (ir.elements ?? []).some((e) => (e?.type ?? '').toString().startsWith('uml.'));
+  if (anyUml) return 'uml';
+
+  return 'archimate';
+}
+
 
 function getRootFolderId(model: Model): string {
   const roots = Object.values(model.folders).filter((f) => f.kind === 'root');
@@ -183,6 +203,10 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
     version: options?.metadata?.version,
     owner: options?.metadata?.owner
   };
+
+  // Use importer-provided format hints to create views with the correct notation.
+  // (E.g. BPMN imports should create BPMN views so rendering uses the BPMN notation.)
+  const inferredViewKind: ModelKind = inferModelKind(ir, sourceSystem);
 
   // 1) Create a new model
   modelStore.newModel(metadata);
@@ -391,6 +415,7 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
       ...createView({
         id: internalId,
         name: v.name ?? 'View',
+        kind: inferredViewKind,
         viewpointId,
         documentation: v.documentation
       }),

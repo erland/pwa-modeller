@@ -476,9 +476,8 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
       views.push({
         id: viewId,
         name: inferredName,
-        // Use a built-in viewpoint id to keep the app happy; BPMN-specific
-        // viewpoint taxonomy can be introduced later if desired.
-        viewpoint: 'layered',
+        // Use a built-in BPMN viewpoint id so the view is treated as a BPMN diagram.
+        viewpoint: 'bpmn-process',
         nodes,
         connections,
         externalIds: [{ system: 'bpmn2', id: viewId, kind: 'diagram' }],
@@ -511,8 +510,6 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
 
     applyBpmnZOrder(nodes);
 
-    applyBpmnZOrder(nodes);
-
     const connections: IRViewConnection[] = relationships.map((r) => ({
       id: `auto:${r.id}`,
       relationshipId: r.id
@@ -521,7 +518,7 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
     views.push({
       id: 'bpmn2:auto',
       name: 'BPMN (auto layout)',
-      viewpoint: 'layered',
+      viewpoint: 'bpmn-process',
       nodes,
       connections,
       externalIds: [{ system: 'bpmn2', id: 'bpmn2:auto', kind: 'diagram' }]

@@ -90,6 +90,8 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
     typeof attrsObj.sourceMultiplicity === 'string' ? (attrsObj.sourceMultiplicity as string) : undefined;
   const umlTargetMultiplicity =
     typeof attrsObj.targetMultiplicity === 'string' ? (attrsObj.targetMultiplicity as string) : undefined;
+  const umlSourceNavigable = typeof attrsObj.sourceNavigable === 'boolean' ? (attrsObj.sourceNavigable as boolean) : false;
+  const umlTargetNavigable = typeof attrsObj.targetNavigable === 'boolean' ? (attrsObj.targetNavigable as boolean) : false;
   const isDirected = typeof attrsObj.isDirected === 'boolean' ? (attrsObj.isDirected as boolean) : false;
 
   const updateAttrs = (patch: Record<string, unknown>): void => {
@@ -120,7 +122,7 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
         </div>
       </div>
 
-      {rel.type === 'uml.association' ? (
+      {rel.type === 'uml.association' || rel.type === 'uml.aggregation' || rel.type === 'uml.composition' ? (
         <>
           <div className="propertiesRow">
             <div className="propertiesKey">Directed</div>
@@ -134,6 +136,36 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
                 />
                 Show arrow direction
               </label>
+            </div>
+          </div>
+
+          <div className="propertiesRow">
+            <div className="propertiesKey">Navigability</div>
+            <div className="propertiesValue" style={{ fontWeight: 400 }}>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="UML source navigable"
+                    checked={!!umlSourceNavigable}
+                    onChange={(e) => updateAttrs({ sourceNavigable: e.target.checked ? true : undefined })}
+                  />
+                  Source end navigable
+                </label>
+
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="UML target navigable"
+                    checked={!!umlTargetNavigable}
+                    onChange={(e) => updateAttrs({ targetNavigable: e.target.checked ? true : undefined })}
+                  />
+                  Target end navigable
+                </label>
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                Stored for import fidelity (rendering support can be added later).
+              </div>
             </div>
           </div>
 

@@ -3,6 +3,8 @@ import * as path from 'node:path';
 
 import { detectBpmn2FromText } from '../../../import/bpmn2/detectBpmn2';
 import { parseBpmn2Xml } from '../../../import/bpmn2/parseBpmn2Xml';
+import { normalizeBpmn2ImportIR } from '../../../import/bpmn2/normalizeBpmn2ImportIR';
+import { createImportReport } from '../../../import/importReport';
 
 function readFixture(name: string): string {
   const p = path.resolve(__dirname, '../../fixtures/bpmn2/ea', name);
@@ -75,5 +77,36 @@ describe('BPMN2 XML parsing', () => {
     expect(c1!.points?.length).toBe(2);
     expect(c1!.points![0]).toEqual({ x: 136, y: 118 });
     expect(c1!.points![1]).toEqual({ x: 180, y: 130 });
+  });
+
+  it('normalizes EA-focused hygiene (docs, stable ordering, and dangling refs)', () => {
+    const xml = readFixture('core-subset-di.bpmn');
+    const res = parseBpmn2Xml(xml);
+
+    // Force a documentation string with CRLF and CR.
+    res.importIR.elements[0].documentation = 'Line1\r\nLine2\rLine3';
+
+    // Add a dangling relationship (common in partial exports)
+    res.importIR.relationships.push({
+      id: 'Dangling_1',
+      type: 'bpmn.sequenceFlow',
+      sourceId: 'MissingSource',
+      targetId: 'MissingTarget'
+    });
+
+    // Add an out-of-order element to verify stable sorting.
+    res.importIR.elements.push({
+      id: 'AAA',
+      type: 'bpmn.task',
+      name: 'A task'
+    });
+
+    const report = createImportReport('bpmn2');
+    const normalized = normalizeBpmn2ImportIR(res.importIR, { report, source: 'bpmn2' });
+
+    expect(normalized.elements[0].id).toBe('AAA');
+    expect(normalized.elements.find((e) => e.id === res.importIR.elements[0].id)?.documentation).toBe('Line1\nLine2\nLine3');
+    expect(normalized.relationships.find((r) => r.id === 'Dangling_1')).toBeUndefined();
+    expect(report.warnings.length).toBeGreaterThan(0);
   });
 });

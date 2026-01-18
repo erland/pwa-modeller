@@ -88,6 +88,54 @@ function defaultName(typeId: string, id: string): string {
   return `${short} (${id})`;
 }
 
+function extractExtensionSummary(el: Element): Record<string, string> | undefined {
+  const ext = childByLocalName(el, 'extensionElements');
+  if (!ext) return undefined;
+
+  const out: Record<string, string> = {};
+  let count = 0;
+  const max = 50;
+
+  const add = (key: string, value: string) => {
+    if (count >= max) return;
+    const k = key.trim();
+    const v = value.trim();
+    if (!k || !v) return;
+    if (k.length > 80) return;
+    if (v.length > 500) return;
+    if (out[k] != null) return;
+    out[k] = v;
+    count += 1;
+  };
+
+  const captureFrom = (prefix: string, node: Element) => {
+    // Attributes
+    for (const a of Array.from(node.attributes)) {
+      const name = a.name;
+      if (!name) continue;
+      add(`${prefix}@${name}`, a.value);
+    }
+    // Text content
+    const t = (node.textContent ?? '').trim();
+    if (t) add(`${prefix}#text`, t);
+  };
+
+  for (const c of Array.from(ext.children)) {
+    const ln = localName(c);
+    captureFrom(ln, c);
+
+    // Shallow grandchildren (EA often nests a level).
+    for (const gc of Array.from(c.children)) {
+      const ln2 = `${ln}.${localName(gc)}`;
+      captureFrom(ln2, gc);
+      if (count >= max) break;
+    }
+    if (count >= max) break;
+  }
+
+  return Object.keys(out).length ? out : undefined;
+}
+
 /**
  * Parse BPMN 2.0 XML into the app's ImportIR.
  *
@@ -176,6 +224,8 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
       const docEl = childByLocalName(el, 'documentation');
       const documentation = text(docEl) || undefined;
 
+      const extTags = extractExtensionSummary(el);
+
       elements.push({
         id,
         type: typeId,
@@ -183,7 +233,8 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         documentation,
         externalIds: [{ system: 'bpmn2', id, kind: 'element' }],
         meta: {
-          sourceLocalName: localName(el)
+          sourceLocalName: localName(el),
+          ...(extTags ? { extensionElements: { tags: extTags } } : {})
         }
       });
 
@@ -245,6 +296,8 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
       const docEl = childByLocalName(relEl, 'documentation');
       const documentation = text(docEl) || undefined;
 
+      const extTags = extractExtensionSummary(relEl);
+
       relationships.push({
         id,
         type: typeId,
@@ -254,7 +307,8 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         targetId: targetRef,
         externalIds: [{ system: 'bpmn2', id, kind: 'relationship' }],
         meta: {
-          sourceLocalName: localName(relEl)
+          sourceLocalName: localName(relEl),
+          ...(extTags ? { extensionElements: { tags: extTags } } : {})
         }
       });
 

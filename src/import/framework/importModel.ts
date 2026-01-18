@@ -5,6 +5,7 @@ import { UnsupportedImportFormatError } from './importer';
 import { pickImporter } from './registry';
 import { readBlobAsArrayBuffer } from './blobReaders';
 import { normalizeImportIR } from '../normalize/normalizeImportIR';
+import { normalizeBpmn2ImportIR } from '../bpmn2/normalizeBpmn2ImportIR';
 
 const DEFAULT_SNIFF_BYTES = 256 * 1024; // 256 KiB
 
@@ -78,7 +79,16 @@ export async function importModel(file: File): Promise<ImportResult> {
   }
 
   // Step 2: format-agnostic normalization (keeps parse vs apply responsibilities clean).
-  const normalizedIr = normalizeImportIR(result.ir, {
+  // Optional format-specific normalization before the generic pass.
+  const preNormalizedIr =
+    result.ir?.meta?.format === 'bpmn2'
+      ? normalizeBpmn2ImportIR(result.ir, {
+          report: result.report,
+          source: result.format || pick.importer.format || pick.importer.id
+        })
+      : result.ir;
+
+  const normalizedIr = normalizeImportIR(preNormalizedIr, {
     report: result.report,
     source: result.format || pick.importer.format || pick.importer.id
   });

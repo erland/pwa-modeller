@@ -5,6 +5,29 @@ import { mapElementType, mapRelationshipType } from '../mapping/archimateTypeMap
 import { attrAny, childText, getType, isElementNode, localName, parseXmlLenient } from '../framework/xml';
 
 
+function findFirstByLocalName(doc: Document, names: string[]): Element | undefined {
+  const want = new Set(names.map((n) => n.toLowerCase()));
+
+  const root = doc.documentElement;
+  if (root && want.has(localName(root))) return root;
+
+  const all = Array.from(doc.getElementsByTagName('*')) as Element[];
+  for (const el of all) {
+    if (want.has(localName(el))) return el;
+  }
+
+  return undefined;
+}
+
+function hasDescendantWithLocalName(root: Element, names: string[]): boolean {
+  const want = new Set(names.map((n) => n.toLowerCase()));
+  for (const el of Array.from(root.getElementsByTagName('*')) as Element[]) {
+    if (want.has(localName(el))) return true;
+  }
+  return false;
+}
+
+
 function parsePropertiesToRecord(el: Element): Record<string, string> | undefined {
   // Common patterns:
   // - <properties><property key="k" value="v"/></properties>
@@ -74,11 +97,8 @@ function parseOrganizations(doc: Document, report: ImportReport): OrgParseResult
   const folders: IRFolder[] = [];
   const refToFolder = new Map<IRId, IRId>();
 
-  const orgRoot =
-    doc.getElementsByTagName('organizations')[0] ??
-    doc.getElementsByTagName('organization')[0] ??
-    doc.getElementsByTagName('Organizations')[0] ??
-    doc.getElementsByTagName('Organization')[0];
+  // Some exporters namespace/prefix the tags (e.g. <ns0:organizations>), so we must match localName.
+  const orgRoot = findFirstByLocalName(doc, ['organizations', 'organization']);
 
   if (!orgRoot) return { folders, refToFolder };
 
@@ -233,11 +253,8 @@ function meffNodeKindFromType(rawType: string | null): { kind: IRViewNode['kind'
 }
 
 function parseViews(doc: Document, report: ImportReport, refToFolder: Map<IRId, IRId>): IRView[] {
-  const viewsRoot =
-    doc.getElementsByTagName('views')[0] ??
-    doc.getElementsByTagName('Views')[0] ??
-    doc.getElementsByTagName('diagrams')[0] ??
-    doc.getElementsByTagName('Diagrams')[0];
+  // Some exporters namespace/prefix the tags (e.g. <ns0:views>), so we must match localName.
+  const viewsRoot = findFirstByLocalName(doc, ['views', 'diagrams']);
 
   if (!viewsRoot || !isElementNode(viewsRoot)) return [];
 
@@ -249,8 +266,9 @@ function parseViews(doc: Document, report: ImportReport, refToFolder: Map<IRId, 
     const id = attrAny(el, ['identifier', 'id']);
     if (!id) return false;
     // Ensure it actually contains view content.
-    const hasNodes = el.getElementsByTagName('node').length > 0;
-    const hasConnections = el.getElementsByTagName('connection').length > 0 || el.getElementsByTagName('edge').length > 0;
+    // NOTE: do NOT use getElementsByTagName('node') because <ns0:node> won't match.
+    const hasNodes = hasDescendantWithLocalName(el, ['node']);
+    const hasConnections = hasDescendantWithLocalName(el, ['connection', 'edge']);
     return hasNodes || hasConnections;
   };
 
@@ -446,7 +464,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
   const relationships: IRRelationship[] = [];
 
   // Elements
-  const elementsRoot = doc.getElementsByTagName('elements')[0];
+  const elementsRoot = findFirstByLocalName(doc, ['elements']);
   if (elementsRoot) {
     for (const el of Array.from(elementsRoot.children)) {
       if (!isElementNode(el) || localName(el) !== 'element') continue;
@@ -492,7 +510,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
   }
 
   // Relationships
-  const relRoot = doc.getElementsByTagName('relationships')[0];
+  const relRoot = findFirstByLocalName(doc, ['relationships']);
   if (relRoot) {
     for (const el of Array.from(relRoot.children)) {
       if (!isElementNode(el) || localName(el) !== 'relationship') continue;

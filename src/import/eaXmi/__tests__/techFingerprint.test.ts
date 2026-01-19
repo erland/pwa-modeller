@@ -23,6 +23,10 @@ Namespaces:
 
 EA extension tags:
 - diagram: 1 ids=[D1]
+- diagramLink: 1 ids=[DL1]
+- diagramLinks: 1
+- diagramObject: 2 ids=[DO1, DO2]
+- diagramObjects: 1
 - diagrams: 1
 - element: 1
 - elements: 1

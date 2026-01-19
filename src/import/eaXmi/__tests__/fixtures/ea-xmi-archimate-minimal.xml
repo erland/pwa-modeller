@@ -5,7 +5,15 @@
   xmlns:ArchiMate3="http://www.sparxsystems.com/profiles/ArchiMate3/1.0">
   <xmi:Extension extender="Enterprise Architect">
     <diagrams>
-      <diagram xmi:id="D1" name="Business view" type="ArchiMate" />
+      <diagram xmi:id="D1" name="Business view" type="ArchiMate">
+        <diagramObjects>
+          <diagramObject xmi:id="DO1" subject="A1" l="10" t="20" r="160" b="80" />
+          <diagramObject xmi:id="DO2" subject="A2" l="220" t="20" r="360" b="80" />
+        </diagramObjects>
+        <diagramLinks>
+          <diagramLink xmi:id="DL1" connector="R1" source="DO2" target="DO1" points="220,50;160,50" />
+        </diagramLinks>
+      </diagram>
     </diagrams>
     <elements>
       <element xmi:idref="A1" />

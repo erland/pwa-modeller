@@ -156,12 +156,21 @@ function inferModelKind(ir: IRModel, sourceSystem: string): ModelKind {
   const looksBpmn = fmt.includes('bpmn') || src.includes('bpmn');
   const looksUml = fmt.includes('uml') || src.includes('uml');
 
+  // BPMN should win: BPMN views need BPMN rendering.
   if (looksBpmn) return 'bpmn';
-  if (looksUml) return 'uml';
 
   // Heuristic fallback: inspect type prefixes.
   const anyBpmn = (ir.elements ?? []).some((e) => (e?.type ?? '').toString().startsWith('bpmn.'));
   if (anyBpmn) return 'bpmn';
+
+  // If we have any *known* ArchiMate types, prefer ArchiMate rendering even if the export container is UML XMI.
+  // (Sparx EA commonly exports ArchiMate as UML + profile tags in the same XMI.)
+  const anyKnownArchiMateEl = (ir.elements ?? []).some((e) => typeof e?.type === 'string' && KNOWN_ELEMENT_TO_LAYER.has(e.type));
+  const anyKnownArchiMateRel = (ir.relationships ?? []).some((r) => typeof r?.type === 'string' && KNOWN_REL_TYPES.has(r.type));
+  if (anyKnownArchiMateEl || anyKnownArchiMateRel) return 'archimate';
+
+  // Next: UML
+  if (looksUml) return 'uml';
   const anyUml = (ir.elements ?? []).some((e) => (e?.type ?? '').toString().startsWith('uml.'));
   if (anyUml) return 'uml';
 

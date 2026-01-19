@@ -28,5 +28,10 @@
   <!-- Minimal UML content so the file still looks like an EA UML XMI export -->
   <uml:Model xmi:id="m1" name="FixtureModel">
     <packagedElement xmi:type="uml:Package" xmi:id="pkg1" name="PkgA" />
+
+    <!-- Elements referenced by diagram objects (for Step B2 resolution tests) -->
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_ELEM1" name="ActorA" ea_guid="{ELEM1-GUID}" />
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_ELEM2" name="UseCaseB" ea_guid="{ELEM2-GUID}" />
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_123" name="ClassC" ea_guid="{CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC}" />
   </uml:Model>
 </xmi:XMI>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="16.1" />
+
+  <!-- EA extension containing a diagram catalog with embedded diagram objects (Milestone B, Step B1b fixture) -->
+  <xmi:Extension extender="Enterprise Architect">
+    <diagrams>
+      <diagram xmi:id="D1" name="Use Case Overview" diagramType="UseCase" package="pkg1" ea_guid="{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}">
+        <diagramObjects>
+          <!-- LTRB attributes -->
+          <diagramObject xmi:id="DO1" subject="{ELEM1-GUID}" l="10" t="20" r="110" b="70" />
+          <!-- Geometry string -->
+          <diagramObject xmi:id="DO2" subject="{ELEM2-GUID}" geometry="l=150;r=250;t=40;b=90" />
+          <!-- Note-like object using x/y/w/h -->
+          <diagramObject xmi:id="DO3" type="note" x="300" y="100" width="80" height="40" notes="Hello" />
+        </diagramObjects>
+      </diagram>
+
+      <diagram xmi:id="D2" name="Core Classes" diagramType="Class" package="pkg1" ea_guid="{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}">
+        <diagramObjects>
+          <!-- Comma-list bounds; interpreted as l,t,r,b -->
+          <diagramObject xmi:id="DO4" subject="EAID_123" bounds="20,30,120,130" />
+        </diagramObjects>
+      </diagram>
+    </diagrams>
+  </xmi:Extension>
+
+  <!-- Minimal UML content so the file still looks like an EA UML XMI export -->
+  <uml:Model xmi:id="m1" name="FixtureModel">
+    <packagedElement xmi:type="uml:Package" xmi:id="pkg1" name="PkgA" />
+  </uml:Model>
+</xmi:XMI>

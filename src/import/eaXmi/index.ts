@@ -9,4 +9,5 @@ export * from './parseMembers';
 export * from './parseRelationships';
 export * from './parseAssociations';
 export * from './parseEaDiagramCatalog';
+export * from './parseEaDiagramObjects';
 export * from './normalizeEaXmiImportIR';

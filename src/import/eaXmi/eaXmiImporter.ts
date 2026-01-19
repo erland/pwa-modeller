@@ -9,6 +9,7 @@ import { parseEaXmiClassifiersToElements } from './parseElements';
 import { parseEaXmiRelationships } from './parseRelationships';
 import { parseEaXmiAssociations } from './parseAssociations';
 import { parseEaDiagramCatalog } from './parseEaDiagramCatalog';
+import { parseEaDiagramObjects } from './parseEaDiagramObjects';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -126,7 +127,10 @@ export const eaXmiImporter: Importer<IRModel> = {
     const relationships = Array.from(relById.values());
 
     // Step B1a: discover diagrams (views) from EA's XMI extension.
-    const { views } = parseEaDiagramCatalog(doc, report);
+    const { views: viewsB1a } = parseEaDiagramCatalog(doc, report);
+
+    // Step B1b: attach diagram objects + geometry as unresolved view nodes.
+    const { views } = parseEaDiagramObjects(doc, viewsB1a, report);
 
     if (folders.length === 0) {
       report.warnings.push(

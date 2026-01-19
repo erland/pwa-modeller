@@ -30,7 +30,11 @@ describe('UmlClassifierMembersSection', () => {
 
     render(<UmlClassifierMembersSection element={el} actions={actions} />);
 
+    // Open attributes dialog
+    fireEvent.click(screen.getByLabelText('Edit UML attributes'));
+
     fireEvent.click(screen.getByText('Add attribute'));
+    fireEvent.click(screen.getByText('Apply'));
 
     expect(updateElement).toHaveBeenCalled();
     const lastCall = updateElement.mock.calls[updateElement.mock.calls.length - 1];
@@ -56,8 +60,12 @@ describe('UmlClassifierMembersSection', () => {
 
     render(<UmlClassifierMembersSection element={el} actions={actions} />);
 
+    // Open operations dialog
+    fireEvent.click(screen.getByLabelText('Edit UML operations'));
+
     const input = screen.getByLabelText('UML operation return type 1');
     fireEvent.change(input, { target: { value: 'string' } });
+    fireEvent.click(screen.getByText('Apply'));
 
     expect(updateElement).toHaveBeenCalled();
     const lastCall = updateElement.mock.calls[updateElement.mock.calls.length - 1];
@@ -82,7 +90,9 @@ describe('UmlClassifierMembersSection', () => {
 
     render(<UmlClassifierMembersSection element={el} actions={actions} />);
 
+    fireEvent.click(screen.getByLabelText('Edit UML attributes'));
     fireEvent.click(screen.getByText('Add attribute'));
+    fireEvent.click(screen.getByText('Apply'));
 
     expect(updateElement).toHaveBeenCalled();
     const lastCall = updateElement.mock.calls[updateElement.mock.calls.length - 1];

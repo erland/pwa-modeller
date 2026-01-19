@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI
+  xmlns:xmi="http://schema.omg.org/spec/XMI/2.1"
+  xmlns:uml="http://www.omg.org/spec/UML/20131001"
+  xmlns:ArchiMate3="http://www.sparxsystems.com/profiles/ArchiMate3/1.0">
+  <xmi:Extension extender="Enterprise Architect">
+    <diagrams>
+      <diagram xmi:id="D1" name="Business view" type="ArchiMate" />
+    </diagrams>
+    <elements>
+      <element xmi:idref="A1" />
+    </elements>
+  </xmi:Extension>
+  <uml:Model xmi:id="M1" name="Model">
+    <packagedElement xmi:type="uml:Class" xmi:id="U1" name="PlainClass" />
+    <ArchiMate3:ArchiMate_BusinessProcess xmi:id="A1" name="Order process" />
+    <ArchiMate3:ArchiMate_BusinessActor xmi:id="A2" name="Customer" />
+    <ArchiMate3:ArchiMate_Flow xmi:id="R1" name="Flow" source="A2" target="A1" />
+  </uml:Model>
+</xmi:XMI>

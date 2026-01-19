@@ -4,6 +4,7 @@ import { decodeXmlBytes } from '../framework/xmlDecoding';
 import type { ImportContext, ImportResult, Importer } from '../framework/importer';
 import type { IRModel } from '../framework/ir';
 import { parseXmlLenient } from '../framework/xml';
+import { parseEaXmiPackageHierarchyToFolders } from './parsePackages';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -94,10 +95,35 @@ export const eaXmiImporter: Importer<IRModel> = {
       );
     }
 
-    // Skeleton only: parsing is implemented in Step 4+.
-    throw new Error(
-      `EA XMI importer is registered, but semantic parsing isn't implemented yet. ` +
-        `Next: implement Step 4 (packages → folders), then Step 5+ (elements/relationships/members).`
-    );
+    // Step 4: packages -> folders (policy compliant)
+    const { folders, modelEl } = parseEaXmiPackageHierarchyToFolders(doc, report);
+
+    if (folders.length === 0) {
+      report.warnings.push(
+        'EA XMI: Parsed 0 UML packages into folders. The file may not be a UML XMI export, or it may use an uncommon structure.'
+      );
+    }
+
+    const modelName = modelEl?.getAttribute('name')?.trim();
+
+    const ir: IRModel = {
+      folders,
+      elements: [],
+      relationships: [],
+      meta: {
+        format: 'ea-xmi-uml',
+        tool: 'Sparx Enterprise Architect',
+        ...(modelName ? { modelName } : {}),
+        importedAtIso: new Date().toISOString(),
+        sourceSystem: 'sparx-ea'
+      }
+    };
+
+    return {
+      format: 'ea-xmi-uml',
+      importerId: 'ea-xmi-uml',
+      ir,
+      report
+    };
   }
 };

@@ -18,6 +18,9 @@
   backdrop-filter: blur(8px);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
   overflow: hidden;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
 }
 
 .dialogHeader {
@@ -35,6 +38,8 @@
 
 .dialogBody {
   padding: 14px;
+  overflow: auto;
+  flex: 1 1 auto;
 }
 
 .dialogFooter {

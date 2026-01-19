@@ -118,14 +118,31 @@ function normalizeFolder(folder: IRFolder, folderIds: Set<string>, opts?: Normal
 function normalizeRelationship(
   rel: IRRelationship,
   elementIds: Set<string>,
+  allRelationshipIds: Set<string> | undefined,
   opts?: NormalizeImportIROptions
 ): IRRelationship | null {
   const id = asTrimmedString(rel.id);
   const sourceId = asTrimmedString(rel.sourceId);
   const targetId = asTrimmedString(rel.targetId);
 
-  const dangling = !elementIds.has(sourceId) || !elementIds.has(targetId);
+  const missingSource = !elementIds.has(sourceId);
+  const missingTarget = !elementIds.has(targetId);
+
+  const dangling = missingSource || missingTarget;
   if (dangling && (opts?.dropDanglingRelationships ?? true)) {
+    const sourceIsRelationship = !!(allRelationshipIds && allRelationshipIds.has(sourceId));
+    const targetIsRelationship = !!(allRelationshipIds && allRelationshipIds.has(targetId));
+
+    // ArchiMate does not allow relationship-to-relationship endpoints (connector-to-connector).
+    if ((sourceIsRelationship || targetIsRelationship) && (opts?.source ?? '').includes('archimate-meff')) {
+      const what = sourceIsRelationship && targetIsRelationship ? 'relationships' : 'a relationship';
+      warn(
+        opts,
+        `${opts?.source ? `${opts.source}: ` : ''}Normalize: Dropped relationship "${id}" because it references ${what} (connector-to-connector is not supported) (source: "${sourceId}", target: "${targetId}").`
+      );
+      return null;
+    }
+
     warn(
       opts,
       `${opts?.source ? `${opts.source}: ` : ''}Normalize: Dropped relationship "${id}" because it references missing element(s) (source: "${sourceId}", target: "${targetId}").`
@@ -189,6 +206,7 @@ function normalizeViewNode(node: IRViewNode, elementIds: Set<string>, nodeIds: S
 function normalizeViewConnection(
   conn: IRViewConnection,
   relIds: Set<string>,
+  allRelationshipIds: Set<string> | undefined,
   nodeIds: Set<string>,
   elementIds: Set<string>,
   opts?: NormalizeImportIROptions
@@ -197,7 +215,11 @@ function normalizeViewConnection(
 
   let relationshipId = conn.relationshipId ? asTrimmedString(conn.relationshipId) : undefined;
   if (relationshipId && !relIds.has(relationshipId)) {
-    warn(opts, `${opts?.source ? `${opts.source}: ` : ''}Normalize: ViewConnection "${id}" referenced missing relationshipId "${relationshipId}"; cleared.`);
+    const wasDropped = !!(allRelationshipIds && allRelationshipIds.has(relationshipId));
+    warn(
+      opts,
+      `${opts?.source ? `${opts.source}: ` : ''}Normalize: ViewConnection "${id}" referenced relationshipId "${relationshipId}" which ${wasDropped ? 'was dropped during normalization' : 'was missing'}; cleared.`
+    );
     relationshipId = undefined;
   }
 
@@ -246,7 +268,14 @@ function normalizeViewConnection(
   };
 }
 
-function normalizeView(view: IRView, folderIds: Set<string>, elementIds: Set<string>, relIds: Set<string>, opts?: NormalizeImportIROptions): IRView {
+function normalizeView(
+  view: IRView,
+  folderIds: Set<string>,
+  elementIds: Set<string>,
+  relIds: Set<string>,
+  allRelationshipIds: Set<string> | undefined,
+  opts?: NormalizeImportIROptions
+): IRView {
   const id = asTrimmedString(view.id);
   const folderIdRaw = view.folderId == null ? null : asTrimmedString(view.folderId);
   const folderId = folderIdRaw && folderIds.has(folderIdRaw) ? folderIdRaw : folderIdRaw ? null : folderIdRaw;
@@ -262,7 +291,7 @@ function normalizeView(view: IRView, folderIds: Set<string>, elementIds: Set<str
   const nodes = dedupedNodes.map((n) => normalizeViewNode(n, elementIds, nodeIds, opts));
 
   const dedupedConns = dedupeById(rawConnections as IRViewConnection[], `view connection in view "${id}"`, opts);
-  const connections = dedupedConns.map((c) => normalizeViewConnection(c, relIds, nodeIds, elementIds, opts));
+  const connections = dedupedConns.map((c) => normalizeViewConnection(c, relIds, allRelationshipIds, nodeIds, elementIds, opts));
 
   return {
     ...view,
@@ -311,15 +340,16 @@ export function normalizeImportIR(ir: IRModel, opts?: NormalizeImportIROptions):
   const elementIds = new Set<string>(elements.map((e) => asTrimmedString(e.id)));
 
   const relationshipsRaw = dedupeById(Array.isArray(ir.relationships) ? ir.relationships : [], 'relationship', opts);
+  const allRelationshipIds = new Set<string>(relationshipsRaw.map((r) => asTrimmedString(r.id)));
   const relationships: IRRelationship[] = [];
   for (const r of relationshipsRaw) {
-    const nr = normalizeRelationship(r, elementIds, opts);
+    const nr = normalizeRelationship(r, elementIds, allRelationshipIds, opts);
     if (nr) relationships.push(nr);
   }
   const relationshipIds = new Set<string>(relationships.map((r) => asTrimmedString(r.id)));
 
   const viewsRaw = ir.views ? dedupeById(Array.isArray(ir.views) ? ir.views : [], 'view', opts) : undefined;
-  const views = viewsRaw ? viewsRaw.map((v) => normalizeView(v, folderIds, elementIds, relationshipIds, opts)) : undefined;
+  const views = viewsRaw ? viewsRaw.map((v) => normalizeView(v, folderIds, elementIds, relationshipIds, allRelationshipIds, opts)) : undefined;
 
   // Ensure importedAtIso is set (helpful for UI / telemetry).
   const meta = {

@@ -6,6 +6,8 @@ import { pickImporter } from './registry';
 import { readBlobAsArrayBuffer } from './blobReaders';
 import { normalizeImportIR } from '../normalize/normalizeImportIR';
 import { normalizeBpmn2ImportIR } from '../bpmn2/normalizeBpmn2ImportIR';
+import { normalizeEaXmiImportIR } from '../eaXmi/normalizeEaXmiImportIR';
+import type { IRModel } from './ir';
 
 const DEFAULT_SNIFF_BYTES = 256 * 1024; // 256 KiB
 
@@ -78,15 +80,33 @@ export async function importModel(file: File): Promise<ImportResult> {
     result.report = createImportReport(result.format || pick.importer.format || pick.importer.id);
   }
 
+  // Importers are expected to always return an IR, but keep this function
+  // type-safe (and resilient) in case an importer returns a partial result.
+  const baseIr =
+    result.ir ??
+    ({
+      folders: [],
+      elements: [],
+      relationships: [],
+      meta: {
+        format: result.format || pick.importer.format || pick.importer.id
+      }
+    } satisfies IRModel);
+
   // Step 2: format-agnostic normalization (keeps parse vs apply responsibilities clean).
   // Optional format-specific normalization before the generic pass.
   const preNormalizedIr =
-    result.ir?.meta?.format === 'bpmn2'
-      ? normalizeBpmn2ImportIR(result.ir, {
+    baseIr.meta?.format === 'bpmn2'
+      ? normalizeBpmn2ImportIR(baseIr, {
           report: result.report,
           source: result.format || pick.importer.format || pick.importer.id
         })
-      : result.ir;
+      : baseIr.meta?.format === 'ea-xmi-uml'
+        ? (normalizeEaXmiImportIR(baseIr, {
+            report: result.report,
+            source: result.format || pick.importer.format || pick.importer.id
+          }) ?? baseIr)
+      : baseIr;
 
   const normalizedIr = normalizeImportIR(preNormalizedIr, {
     report: result.report,

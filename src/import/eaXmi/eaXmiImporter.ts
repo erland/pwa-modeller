@@ -6,7 +6,7 @@ import type { IRModel } from '../framework/ir';
 import { parseXmlLenient } from '../framework/xml';
 import { parseEaXmiPackageHierarchyToFolders } from './parsePackages';
 import { parseEaXmiArchiMateProfileElementsToElements, parseEaXmiClassifiersToElements } from './parseElements';
-import { parseEaXmiRelationships } from './parseRelationships';
+import { parseEaXmiArchiMateProfileRelationships, parseEaXmiRelationships } from './parseRelationships';
 import { parseEaXmiAssociations } from './parseAssociations';
 import { parseEaDiagramCatalog } from './parseEaDiagramCatalog';
 import { parseEaDiagramObjects } from './parseEaDiagramObjects';
@@ -136,18 +136,40 @@ export const eaXmiImporter: Importer<IRModel> = {
 
     const elements = Array.from(elById.values());
 
-    // Step 7: relationships (generalization/realization/dependency/include/extend)
+    // Step 3 (ArchiMate): profile relationship tags -> relationships
+    const { relationships: relsArchimate } = parseEaXmiArchiMateProfileRelationships(doc, report);
+
+    // Step 7: UML relationships (generalization/realization/dependency/include/extend)
     const { relationships: relsStep7 } = parseEaXmiRelationships(doc, report);
 
     // Step 8: associations + end metadata (roles, multiplicity, navigability)
     const { relationships: relsStep8 } = parseEaXmiAssociations(doc, report);
 
-    // Merge (prefer first occurrence of a given id)
+    // Merge (prefer ArchiMate over UML when ids collide, otherwise keep first occurrence)
     const relById = new Map<string, (typeof relsStep7)[number]>();
     for (const r of relsStep7) relById.set(r.id, r);
+    for (const r of relsArchimate) {
+      const existing = relById.get(r.id);
+      if (existing) {
+        const existingLooksUml = (existing.type ?? '').toString().startsWith('uml.');
+        const incomingLooksUml = (r.type ?? '').toString().startsWith('uml.');
+        if (existingLooksUml && !incomingLooksUml) {
+          report.warnings.push(`EA XMI: Relationship id collision "${r.id}" between UML and ArchiMate; keeping ArchiMate.`);
+          relById.set(r.id, r);
+        } else {
+          report.warnings.push(
+            `EA XMI: Duplicate relationship id "${r.id}" encountered during merge; keeping first occurrence (type="${existing.type}").`
+          );
+        }
+        continue;
+      }
+      relById.set(r.id, r);
+    }
     for (const r of relsStep8) {
       if (relById.has(r.id)) {
-        report.warnings.push(`EA XMI: Duplicate relationship id "${r.id}" between association and other relationship kinds; keeping first occurrence.`);
+        report.warnings.push(
+          `EA XMI: Duplicate relationship id "${r.id}" between association and other relationship kinds; keeping first occurrence.`
+        );
         continue;
       }
       relById.set(r.id, r);

@@ -22,6 +22,7 @@ import type {
 import { createElement, createId, createRelationship, createView, createViewObject, kindFromTypeId } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER, RELATIONSHIP_TYPES } from '../../domain/config/archimatePalette';
 import { VIEWPOINTS } from '../../domain/config/viewpoints';
+import { sanitizeRelationshipAttrs } from '../../domain/relationshipAttrs';
 import { sanitizeUmlClassifierAttrs } from '../../domain/uml/members';
 import { modelStore } from '../../store';
 
@@ -386,6 +387,12 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
           ? resolved.type
           : ('Unknown' as RelationshipType);
 
+    const umlAttrs =
+      rel.meta && typeof rel.meta === 'object' && 'umlAttrs' in (rel.meta as Record<string, unknown>)
+        ? (rel.meta as Record<string, unknown>).umlAttrs
+        : undefined;
+    const attrs = umlAttrs !== undefined ? sanitizeRelationshipAttrs(type, umlAttrs) : undefined;
+
     const domainRel: Relationship = {
       ...createRelationship({
         id: internalId,
@@ -393,7 +400,8 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
         targetElementId: tgt,
         type,
         name: rel.name,
-        documentation: rel.documentation
+        documentation: rel.documentation,
+        ...(attrs !== undefined ? { attrs } : {})
       }),
       externalIds,
       taggedValues,

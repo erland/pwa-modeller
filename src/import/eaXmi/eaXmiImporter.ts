@@ -7,6 +7,7 @@ import { parseXmlLenient } from '../framework/xml';
 import { parseEaXmiPackageHierarchyToFolders } from './parsePackages';
 import { parseEaXmiClassifiersToElements } from './parseElements';
 import { parseEaXmiRelationships } from './parseRelationships';
+import { parseEaXmiAssociations } from './parseAssociations';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -77,6 +78,7 @@ export const eaXmiImporter: Importer<IRModel> = {
     return detectEaXmiUmlFromBytes(ctx.sniffBytes);
   },
   async import(file, ctx): Promise<ImportResult<IRModel>> {
+    void ctx;
     const buf = await readBlobAsArrayBuffer(file);
     const { text } = decodeXmlBytes(new Uint8Array(buf));
 
@@ -104,7 +106,23 @@ export const eaXmiImporter: Importer<IRModel> = {
     const { elements } = parseEaXmiClassifiersToElements(doc, report);
 
     // Step 7: relationships (generalization/realization/dependency/include/extend)
-    const { relationships } = parseEaXmiRelationships(doc, report);
+    const { relationships: relsStep7 } = parseEaXmiRelationships(doc, report);
+
+    // Step 8: associations + end metadata (roles, multiplicity, navigability)
+    const { relationships: relsStep8 } = parseEaXmiAssociations(doc, report);
+
+    // Merge (prefer first occurrence of a given id)
+    const relById = new Map<string, (typeof relsStep7)[number]>();
+    for (const r of relsStep7) relById.set(r.id, r);
+    for (const r of relsStep8) {
+      if (relById.has(r.id)) {
+        report.warnings.push(`EA XMI: Duplicate relationship id "${r.id}" between association and other relationship kinds; keeping first occurrence.`);
+        continue;
+      }
+      relById.set(r.id, r);
+    }
+
+    const relationships = Array.from(relById.values());
 
     if (folders.length === 0) {
       report.warnings.push(

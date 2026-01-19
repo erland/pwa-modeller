@@ -4,7 +4,8 @@ import { eaXmiImporter } from '../eaXmiImporter';
 function ctxFromText(sniffText: string, extension: string | null = 'xml'): ImportContext {
   return {
     sniffText,
-    sniffBytes: new TextEncoder().encode(sniffText),
+    // Jest (Node) doesn't always provide TextEncoder, so avoid relying on it in tests.
+    sniffBytes: new Uint8Array(Buffer.from(sniffText, 'utf8')),
     fileName: `test.${extension ?? 'txt'}`,
     extension,
     mimeType: ''

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="16.1" />
+
+  <!-- Minimal EA extension containing a diagram catalog (Milestone B, Step B1a fixture) -->
+  <xmi:Extension extender="Enterprise Architect">
+    <diagrams>
+      <diagram xmi:id="D1" name="Use Case Overview" diagramType="UseCase" package="pkg1" ea_guid="{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}" />
+      <diagram xmi:id="D2" name="Core Classes" diagramType="Class" package="pkg1" ea_guid="{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}" />
+    </diagrams>
+  </xmi:Extension>
+
+  <!-- Minimal UML content so the file still looks like an EA UML XMI export -->
+  <uml:Model xmi:id="m1" name="FixtureModel">
+    <packagedElement xmi:type="uml:Package" xmi:id="pkg1" name="PkgA" />
+  </uml:Model>
+</xmi:XMI>

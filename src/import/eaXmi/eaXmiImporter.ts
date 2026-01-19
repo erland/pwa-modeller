@@ -8,6 +8,7 @@ import { parseEaXmiPackageHierarchyToFolders } from './parsePackages';
 import { parseEaXmiClassifiersToElements } from './parseElements';
 import { parseEaXmiRelationships } from './parseRelationships';
 import { parseEaXmiAssociations } from './parseAssociations';
+import { parseEaDiagramCatalog } from './parseEaDiagramCatalog';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -124,6 +125,9 @@ export const eaXmiImporter: Importer<IRModel> = {
 
     const relationships = Array.from(relById.values());
 
+    // Step B1a: discover diagrams (views) from EA's XMI extension.
+    const { views } = parseEaDiagramCatalog(doc, report);
+
     if (folders.length === 0) {
       report.warnings.push(
         'EA XMI: Parsed 0 UML packages into folders. The file may not be a UML XMI export, or it may use an uncommon structure.'
@@ -136,6 +140,7 @@ export const eaXmiImporter: Importer<IRModel> = {
       folders,
       elements,
       relationships,
+      ...(views.length ? { views } : {}),
       meta: {
         format: 'ea-xmi-uml',
         tool: 'Sparx Enterprise Architect',

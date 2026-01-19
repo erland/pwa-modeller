@@ -1,4 +1,5 @@
 import type { QualifiedElementType, QualifiedRelationshipType } from '../../domain/types';
+import { ELEMENT_TYPES, RELATIONSHIP_TYPES } from '../../domain/config/catalog';
 
 /**
  * Central mapping notes for an EA XMI UML importer.
@@ -102,3 +103,95 @@ export function inferUmlQualifiedRelationshipTypeFromEaClassifier(
 
   return undefined;
 }
+
+// -------------------------
+// ArchiMate (EA profile tags)
+// -------------------------
+
+/**
+ * The XML helper `localName()` in this repo lowercases tag local names.
+ * EA profile tags may appear as e.g:
+ *  - ArchiMate3:ArchiMate_BusinessActor  (-> localName "archimate_businessactor")
+ *  - ArchiMate3:archimate_businessactor  (-> localName "archimate_businessactor")
+ *  - ArchiMate_BusinessActor             (-> localName "archimate_businessactor")
+ *
+ * To map these robustly, we normalize both incoming tokens and our catalog values
+ * to a comparable key form.
+ */
+function keyify(s: string): string {
+  return (s ?? '')
+    .trim()
+    .toLowerCase()
+    // remove anything that isn't a letter/number to tolerate "_" and other separators
+    .replace(/[^a-z0-9]/g, '');
+}
+
+const ARCHIMATE_ELEMENT_BY_KEY: Readonly<Record<string, string>> = (() => {
+  const out: Record<string, string> = {};
+  for (const t of ELEMENT_TYPES as unknown as string[]) {
+    out[keyify(t)] = t;
+  }
+  return out;
+})();
+
+const ARCHIMATE_REL_BY_KEY: Readonly<Record<string, string>> = (() => {
+  const out: Record<string, string> = {};
+  for (const t of RELATIONSHIP_TYPES as unknown as string[]) {
+    out[keyify(t)] = t;
+  }
+  return out;
+})();
+
+function normalizeArchimateProfileLocalName(localName: string): string {
+  // EA profile tags commonly look like:
+  //  - "ArchiMate_BusinessActor" (or lowercased variants due to our XML helper)
+  //  - "ArchiMate_BusinessProcess"
+  //  - "archimate_businessprocess"
+  // We keep this forgiving and only try to strip the leading "archimate" prefix.
+  const ln = (localName ?? '').trim();
+  if (!ln) return '';
+
+  // Strip common ArchiMate prefixes (case-insensitive), with optional version digit(s).
+  // Examples:
+  //  - archimate_businessactor -> businessactor
+  //  - archimate3_businessactor -> businessactor
+  //  - ArchiMate_BusinessActor -> BusinessActor
+  const stripped = ln.replace(/^archimate\d*(?:[_-])?/i, '').trim();
+  return stripped || ln;
+}
+
+/**
+ * Best-effort mapping from EA ArchiMate profile tag localName (e.g. "ArchiMate_BusinessActor")
+ * to this app's ArchiMate element type id (e.g. "BusinessActor").
+ */
+export function inferArchimateElementTypeFromEaProfileTagLocalName(localName: string): string | undefined {
+  const t = normalizeArchimateProfileLocalName(localName);
+  if (!t) return undefined;
+  return ARCHIMATE_ELEMENT_BY_KEY[keyify(t)] ?? undefined;
+}
+
+/**
+ * Best-effort mapping from EA ArchiMate profile tag localName (e.g. "ArchiMate_Flow")
+ * to this app's ArchiMate relationship type id (e.g. "Flow").
+ */
+export function inferArchimateRelationshipTypeFromEaProfileTagLocalName(localName: string): string | undefined {
+  const t = normalizeArchimateProfileLocalName(localName);
+  if (!t) return undefined;
+  return ARCHIMATE_REL_BY_KEY[keyify(t)] ?? undefined;
+}
+
+/**
+ * When a profile tag doesn't map cleanly, this returns the best "source" token to preserve.
+ * Example: "ArchiMate_BusinessActor" -> "BusinessActor".
+ */
+export function getArchimateSourceTypeTokenFromEaProfileTagLocalName(localName: string): string | undefined {
+  const t = normalizeArchimateProfileLocalName(localName);
+  if (!t) return undefined;
+  // Prefer returning a canonical known token when possible.
+  return (
+    ARCHIMATE_ELEMENT_BY_KEY[keyify(t)] ??
+    ARCHIMATE_REL_BY_KEY[keyify(t)] ??
+    t
+  );
+}
+

@@ -2,7 +2,12 @@ import type { ImportReport } from '../importReport';
 import type { IRElement } from '../framework/ir';
 
 import { attr, attrAny, childText, localName } from '../framework/xml';
-import { inferUmlQualifiedElementTypeFromEaClassifier } from './mapping';
+import {
+  getArchimateSourceTypeTokenFromEaProfileTagLocalName,
+  inferArchimateElementTypeFromEaProfileTagLocalName,
+  inferArchimateRelationshipTypeFromEaProfileTagLocalName,
+  inferUmlQualifiedElementTypeFromEaClassifier,
+} from './mapping';
 import { buildXmiIdIndex } from './resolve';
 import { parseEaXmiClassifierMembers } from './parseMembers';
 import { getXmiId, getXmiType } from './xmi';
@@ -217,6 +222,143 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
         ...(candidate.xmiType ? { xmiType: candidate.xmiType } : {}),
         metaclass: candidate.metaclass,
         ...(members ? { umlMembers: members } : {}),
+      },
+    });
+  }
+
+  return { elements };
+}
+
+function isArchiMateProfileNamespace(el: Element): boolean {
+  const uri = (el.namespaceURI ?? '').toString().toLowerCase();
+  if (!uri) return false;
+  // Typical EA ArchiMate profile URIs look like:
+  //  - http://www.sparxsystems.com/profiles/ArchiMate3/1.0
+  return uri.includes('sparxsystems.com/profiles/archimate');
+}
+
+function getBaseRefId(el: Element): string | undefined {
+  // Stereotype application pattern: base_Class / base_Element / base_Classifier, etc.
+  // Be forgiving and scan all attributes for a base_* key.
+  const direct = attrAny(el, ['base_Class', 'base_Element', 'base_Classifier', 'base', 'base_class', 'base_element', 'base_classifier']);
+  if (direct && direct.trim()) return direct.trim();
+
+  for (const a of Array.from(el.attributes ?? [])) {
+    const n = (a.name ?? '').toLowerCase();
+    if (n === 'base') {
+      const v = (a.value ?? '').trim();
+      if (v) return v;
+    }
+    if (n.startsWith('base_')) {
+      const v = (a.value ?? '').trim();
+      if (v) return v;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Step 2 (EA XMI ArchiMate): Parse EA's ArchiMate profile tags into IR elements.
+ *
+ * This intentionally supports multiple possible encodings:
+ *  - Direct profile-tag instances with `xmi:id` (used in fixtures and some exports)
+ *  - Stereotype-application pattern with `base_*` references (common UML-profile encoding)
+ */
+export function parseEaXmiArchiMateProfileElementsToElements(doc: Document, report: ImportReport): ParseEaXmiElementsResult {
+  const elements: IRElement[] = [];
+  const seen = new Set<string>();
+  let synthCounter = 0;
+
+  const idIndex = buildXmiIdIndex(doc);
+
+  const all = doc.getElementsByTagName('*');
+  for (let i = 0; i < all.length; i++) {
+    const el = all.item(i);
+    if (!el) continue;
+
+    if (isInsideXmiExtension(el)) continue;
+    if (!isArchiMateProfileNamespace(el)) continue;
+
+    const ln = localName(el);
+
+    // Step 2 imports only ArchiMate *elements*. Relationship tags are handled in Step 3.
+    if (inferArchimateRelationshipTypeFromEaProfileTagLocalName(ln)) continue;
+
+    const inferred = inferArchimateElementTypeFromEaProfileTagLocalName(ln);
+    const sourceToken = getArchimateSourceTypeTokenFromEaProfileTagLocalName(ln) ?? ln;
+
+    const xmiId = getXmiId(el);
+    const baseId = getBaseRefId(el);
+
+    // Prefer base_* reference when present, as other records (relationships, diagrams) often refer to the base id.
+    let id = (baseId ?? xmiId)?.trim();
+    if (!id) {
+      synthCounter++;
+      id = `eaArchEl_synth_${synthCounter}`;
+      try {
+        el.setAttribute(SYNTH_ELEMENT_ID_ATTR, id);
+      } catch {
+        // ignore
+      }
+      report.warnings.push(
+        `EA XMI: ArchiMate element missing xmi:id; generated synthetic element id "${id}" (profileTag="${el.tagName}", name="${(attr(el, 'name') ?? '').trim()}").`,
+      );
+    }
+
+    if (seen.has(id)) {
+      report.warnings.push(`EA XMI: Duplicate ArchiMate element id "${id}" encountered; skipping subsequent occurrence.`);
+      continue;
+    }
+    seen.add(id);
+
+    let name = (attr(el, 'name') ?? '').trim();
+    let documentation = extractDocumentation(el);
+    let folderId = findOwningPackageFolderId(el);
+
+    // If this is a stereotype application, pull missing details from the base element.
+    if ((!name || !documentation || !folderId) && baseId) {
+      const base = idIndex.get(baseId);
+      if (base) {
+        if (!name) name = (attr(base, 'name') ?? '').trim();
+        if (!documentation) documentation = extractDocumentation(base);
+        if (!folderId) folderId = findOwningPackageFolderId(base);
+      }
+    }
+
+    if (!name) name = sourceToken || 'Element';
+
+    const baseEl = baseId ? idIndex.get(baseId) : undefined;
+    const eaGuid = getEaGuid(el) ?? (baseEl ? getEaGuid(baseEl) : undefined);
+
+    const externalIds = [
+      ...(xmiId ? [{ system: 'xmi', id: xmiId, kind: 'xmi-id' }] : []),
+      ...(baseId ? [{ system: 'xmi', id: baseId, kind: 'xmi-base-id' }] : []),
+      ...(eaGuid ? [{ system: 'sparx-ea', id: eaGuid, kind: 'element-guid' }] : []),
+    ];
+
+    // Preserve the profile tag and any stereotype as tagged values.
+    const stereotype = getStereotype(el);
+    const taggedValues = [
+      { key: 'profileTag', value: el.tagName },
+      ...(stereotype ? [{ key: 'stereotype', value: stereotype }] : []),
+    ];
+
+    // If the type isn't recognized, import as Unknown but preserve the source token.
+    const type = inferred ?? 'Unknown';
+
+    elements.push({
+      id,
+      type,
+      name,
+      ...(documentation ? { documentation } : {}),
+      ...(folderId ? { folderId } : {}),
+      ...(externalIds.length ? { externalIds } : {}),
+      ...(taggedValues.length ? { taggedValues } : {}),
+      meta: {
+        archimateProfileUri: el.namespaceURI,
+        archimateProfileLocalName: ln,
+        archimateProfileTag: el.tagName,
+        ...(type === 'Unknown' ? { sourceType: sourceToken } : {}),
       },
     });
   }

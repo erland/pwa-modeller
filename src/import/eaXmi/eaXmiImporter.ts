@@ -5,6 +5,7 @@ import type { ImportContext, ImportResult, Importer } from '../framework/importe
 import type { IRModel } from '../framework/ir';
 import { parseXmlLenient } from '../framework/xml';
 import { parseEaXmiPackageHierarchyToFolders } from './parsePackages';
+import { parseEaXmiClassifiersToElements } from './parseElements';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -98,6 +99,9 @@ export const eaXmiImporter: Importer<IRModel> = {
     // Step 4: packages -> folders (policy compliant)
     const { folders, modelEl } = parseEaXmiPackageHierarchyToFolders(doc, report);
 
+    // Step 5: classifiers -> elements (minimal attrs + type mapping)
+    const { elements } = parseEaXmiClassifiersToElements(doc, report);
+
     if (folders.length === 0) {
       report.warnings.push(
         'EA XMI: Parsed 0 UML packages into folders. The file may not be a UML XMI export, or it may use an uncommon structure.'
@@ -108,7 +112,7 @@ export const eaXmiImporter: Importer<IRModel> = {
 
     const ir: IRModel = {
       folders,
-      elements: [],
+      elements,
       relationships: [],
       meta: {
         format: 'ea-xmi-uml',

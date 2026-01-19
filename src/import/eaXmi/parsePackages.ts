@@ -7,6 +7,10 @@ import { getXmiId, getXmiType } from './xmi';
 
 const EA_GUID_ATTRS = ['ea_guid', 'ea:guid', 'guid'] as const;
 
+// Internal marker used during a single import run so later steps (elements/relationships)
+// can resolve folder placement even when a package lacks xmi:id.
+const SYNTH_FOLDER_ID_ATTR = 'data-import-folder-id';
+
 function getEaGuid(el: Element): string | undefined {
   const v = attrAny(el, [...EA_GUID_ATTRS]);
   const s = v?.trim();
@@ -78,6 +82,15 @@ export function parseEaXmiPackageHierarchyToFolders(
     if (xmiId) return xmiId;
     syntheticCounter++;
     const id = `eaPkg_synth_${syntheticCounter}`;
+
+    // Mark the element so subsequent parsing steps can find the generated folder id
+    // by traversing the DOM upward (when xmi:id is missing).
+    try {
+      el.setAttribute(SYNTH_FOLDER_ID_ATTR, id);
+    } catch {
+      // Ignore: DOM implementations should allow this, but keep importer robust.
+    }
+
     report.warnings.push(
       `EA XMI: Package missing xmi:id; generated synthetic folder id "${id}" (name="${defaultPackageName(el)}").`,
     );

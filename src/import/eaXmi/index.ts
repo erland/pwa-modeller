@@ -4,3 +4,4 @@ export * from './eaXmiImporter';
 export * from './xmi';
 export * from './resolve';
 export * from './parsePackages';
+export * from './parseElements';

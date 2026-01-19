@@ -2,52 +2,8 @@ import { createImportReport, recordUnknownElementType, recordUnknownRelationship
 import type { ImportReport } from '../importReport';
 import type { IRBounds, IRFolder, IRElement, IRId, IRModel, IRPoint, IRRelationship, IRTaggedValue, IRView, IRViewConnection, IRViewNode } from '../framework/ir';
 import { mapElementType, mapRelationshipType } from '../mapping/archimateTypeMapping';
+import { attrAny, childText, getType, isElementNode, localName, parseXmlLenient } from '../framework/xml';
 
-function isElementNode(n: Node): n is Element {
-  return n.nodeType === Node.ELEMENT_NODE;
-}
-
-function localName(el: Element): string {
-  // DOMParser in browsers normalizes tagName; keep it case-insensitive.
-  return (el.localName || el.tagName || '').toLowerCase();
-}
-
-function attrAny(el: Element, names: string[]): string | null {
-  for (const name of names) {
-    const v = el.getAttribute(name);
-    if (v != null) return v;
-    // Sometimes attributes are namespaced (e.g. xsi:type) but accessible via raw name.
-    // As a fallback, try to match by suffix.
-    for (const a of Array.from(el.attributes)) {
-      if (a.name.toLowerCase() === name.toLowerCase() || a.name.toLowerCase().endsWith(':' + name.toLowerCase())) {
-        return a.value;
-      }
-    }
-  }
-  return null;
-}
-
-function getType(el: Element): string | null {
-  return attrAny(el, ['xsi:type', 'type']);
-}
-
-function pickTextByLang(nodes: Element[]): string {
-  if (!nodes.length) return '';
-  // Prefer explicit english if present, otherwise first.
-  const en = nodes.find((n) => (n.getAttribute('xml:lang') || n.getAttribute('lang') || '').toLowerCase().startsWith('en'));
-  return (en ?? nodes[0]).textContent?.trim() ?? '';
-}
-
-function childText(el: Element, childTag: string): string | null {
-  const tag = childTag.toLowerCase();
-  const matches: Element[] = [];
-  for (const c of Array.from(el.children)) {
-    if (localName(c) === tag) matches.push(c);
-  }
-  if (!matches.length) return null;
-  const txt = pickTextByLang(matches).trim();
-  return txt.length ? txt : null;
-}
 
 function parsePropertiesToRecord(el: Element): Record<string, string> | undefined {
   // Common patterns:
@@ -477,12 +433,10 @@ export type ParseMeffResult = {
 export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml'): ParseMeffResult {
   const report = createImportReport('archimate-meff');
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlText, 'application/xml');
+  const { doc, parserError } = parseXmlLenient(xmlText);
 
-  const parserErrors = doc.getElementsByTagName('parsererror');
-  if (parserErrors && parserErrors.length) {
-    report.warnings.push(`MEFF: XML parser reported an error while reading "${fileNameForMessages}".`);
+  if (parserError) {
+    report.warnings.push("MEFF: XML parser reported an error while reading \"" + fileNameForMessages + "\": " + parserError);
   }
 
   const { folders, refToFolder } = parseOrganizations(doc, report);

@@ -5,3 +5,4 @@ export * from './xmi';
 export * from './resolve';
 export * from './parsePackages';
 export * from './parseElements';
+export * from './parseMembers';

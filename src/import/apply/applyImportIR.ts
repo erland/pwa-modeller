@@ -22,6 +22,7 @@ import type {
 import { createElement, createId, createRelationship, createView, createViewObject, kindFromTypeId } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER, RELATIONSHIP_TYPES } from '../../domain/config/archimatePalette';
 import { VIEWPOINTS } from '../../domain/config/viewpoints';
+import { sanitizeUmlClassifierAttrs } from '../../domain/uml/members';
 import { modelStore } from '../../store';
 
 export type ApplyImportOptions = {
@@ -307,13 +308,22 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
     const type: ElementType =
       isNonArchimate ? ((sourceType || el.type) as ElementType) : resolved.kind === 'known' ? resolved.type : ('Unknown' as ElementType);
 
+    // Step 6 (EA XMI UML): classifier members land in element.attrs.
+    // Importers attach them in IR meta as `umlMembers`.
+    const umlClassifierAttrs =
+      inferredKind === 'uml' &&
+      (type === 'uml.class' || type === 'uml.interface' || type === 'uml.datatype')
+        ? sanitizeUmlClassifierAttrs((el as any).meta?.umlMembers)
+        : undefined;
+
     const domainEl: Element = {
       ...createElement({
         id: internalId,
         name: el.name ?? '',
         ...(layer ? { layer } : {}),
         type,
-        documentation: el.documentation
+        documentation: el.documentation,
+        ...(umlClassifierAttrs ? { attrs: umlClassifierAttrs } : {})
       }),
       externalIds,
       taggedValues,

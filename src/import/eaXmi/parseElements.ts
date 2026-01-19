@@ -3,6 +3,8 @@ import type { IRElement } from '../framework/ir';
 
 import { attr, attrAny, childText, localName } from '../framework/xml';
 import { inferUmlQualifiedElementTypeFromEaClassifier } from './mapping';
+import { buildXmiIdIndex } from './resolve';
+import { parseEaXmiClassifierMembers } from './parseMembers';
 import { getXmiId, getXmiType } from './xmi';
 
 const EA_GUID_ATTRS = ['ea_guid', 'ea:guid', 'guid'] as const;
@@ -122,6 +124,8 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
   const seen = new Set<string>();
   let synthCounter = 0;
 
+  const idIndex = buildXmiIdIndex(doc);
+
   const all = doc.getElementsByTagName('*');
   for (let i = 0; i < all.length; i++) {
     const el = all.item(i);
@@ -170,6 +174,12 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
     const stereotype = getStereotype(el);
     const folderId = findOwningPackageFolderId(el);
 
+    // Step 6: Classifier members (attributes/operations/params)
+    const members =
+      qualifiedType === 'uml.class' || qualifiedType === 'uml.interface' || qualifiedType === 'uml.datatype'
+        ? parseEaXmiClassifierMembers(el, idIndex, report)
+        : undefined;
+
     const externalIds = [
       // Preserve xmi:id explicitly even though we also use it as IR id.
       ...(getXmiId(el) ? [{ system: 'xmi', id: getXmiId(el)!, kind: 'xmi-id' }] : []),
@@ -191,6 +201,7 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
       meta: {
         ...(candidate.xmiType ? { xmiType: candidate.xmiType } : {}),
         metaclass: candidate.metaclass,
+        ...(members ? { umlMembers: members } : {}),
       },
     });
   }

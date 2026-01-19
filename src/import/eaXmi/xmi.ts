@@ -25,7 +25,18 @@ export function getXmiIdRef(el: Element): string | undefined {
 }
 
 export function getXmiType(el: Element): string | undefined {
-  const v = attrAny(el, [...XMI_TYPE]);
-  const s = v?.trim();
-  return s ? s : undefined;
+  // Prefer the real XMI attribute.
+  const explicit = attrAny(el, ['xmi:type'])?.trim();
+  if (explicit) return explicit;
+
+  // Some exporters omit the "xmi:" prefix. However, other parts of the document (notably
+  // EA's <xmi:Extension> blocks) also use a plain "type" attribute for non-XMI meanings
+  // (e.g. diagram type="Class"), which should NOT be interpreted as an XMI metaclass.
+  //
+  // Heuristic: only accept plain "type" when it *looks* like a qualified XMI type.
+  // Typical form: "uml:Class", "sysml:Block", etc.
+  const loose = attrAny(el, ['type'])?.trim();
+  if (loose && loose.includes(':')) return loose;
+
+  return undefined;
 }

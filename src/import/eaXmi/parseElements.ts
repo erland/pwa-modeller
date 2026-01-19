@@ -109,6 +109,18 @@ function isClassifierCandidate(el: Element): { metaclass: string; xmiType?: stri
   return null;
 }
 
+function isInsideXmiExtension(el: Element): boolean {
+  // EA (and other tools) place non-UML records such as diagrams, geometry, etc.
+  // under <xmi:Extension>. These often carry attributes like type="Class" which are
+  // NOT XMI metaclasses and must not be parsed as UML classifiers.
+  let p: Element | null = el.parentElement;
+  while (p) {
+    if (localName(p) === 'extension') return true;
+    p = p.parentElement;
+  }
+  return false;
+}
+
 export type ParseEaXmiElementsResult = {
   elements: IRElement[];
 };
@@ -130,6 +142,9 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
   for (let i = 0; i < all.length; i++) {
     const el = all.item(i);
     if (!el) continue;
+
+    // Never treat vendor-extension records (like EA diagrams) as UML classifiers.
+    if (isInsideXmiExtension(el)) continue;
 
     const candidate = isClassifierCandidate(el);
     if (!candidate) continue;

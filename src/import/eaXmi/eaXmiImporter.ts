@@ -6,6 +6,7 @@ import type { IRModel } from '../framework/ir';
 import { parseXmlLenient } from '../framework/xml';
 import { parseEaXmiPackageHierarchyToFolders } from './parsePackages';
 import { parseEaXmiClassifiersToElements } from './parseElements';
+import { parseEaXmiRelationships } from './parseRelationships';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -102,6 +103,9 @@ export const eaXmiImporter: Importer<IRModel> = {
     // Step 5: classifiers -> elements (minimal attrs + type mapping)
     const { elements } = parseEaXmiClassifiersToElements(doc, report);
 
+    // Step 7: relationships (generalization/realization/dependency/include/extend)
+    const { relationships } = parseEaXmiRelationships(doc, report);
+
     if (folders.length === 0) {
       report.warnings.push(
         'EA XMI: Parsed 0 UML packages into folders. The file may not be a UML XMI export, or it may use an uncommon structure.'
@@ -113,7 +117,7 @@ export const eaXmiImporter: Importer<IRModel> = {
     const ir: IRModel = {
       folders,
       elements,
-      relationships: [],
+      relationships,
       meta: {
         format: 'ea-xmi-uml',
         tool: 'Sparx Enterprise Architect',

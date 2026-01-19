@@ -6,3 +6,4 @@ export * from './resolve';
 export * from './parsePackages';
 export * from './parseElements';
 export * from './parseMembers';
+export * from './parseRelationships';

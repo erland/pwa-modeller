@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="16.1" />
+  <xmi:Extension extender="Enterprise Architect">
+    <elements />
+  </xmi:Extension>
+
+  <uml:Model xmi:id="m2" name="UseCaseFixture">
+    <packagedElement xmi:type="uml:Package" xmi:id="pkgU" name="UseCases">
+      <packagedElement xmi:type="uml:Actor" xmi:id="act1" name="User" ea_guid="{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}" />
+
+      <packagedElement xmi:type="uml:UseCase" xmi:id="uc1" name="Login" ea_guid="{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}" />
+      <packagedElement xmi:type="uml:UseCase" xmi:id="uc2" name="Authenticate" ea_guid="{CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC}" />
+      <packagedElement xmi:type="uml:UseCase" xmi:id="uc3" name="Reset Password" ea_guid="{DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD}" />
+
+      <!-- Actor participates in Login -->
+      <packagedElement xmi:type="uml:Association" xmi:id="asA" name="participates">
+        <ownedEnd xmi:id="aeA" type="act1" name="actor" isNavigable="true" />
+        <ownedEnd xmi:id="beA" type="uc1" name="usecase" />
+      </packagedElement>
+
+      <!-- Login includes Authenticate -->
+      <packagedElement xmi:type="uml:Include" xmi:id="inc1" includingCase="uc1" addition="uc2" />
+
+      <!-- Reset Password includes Authenticate (second include for coverage) -->
+      <packagedElement xmi:type="uml:Include" xmi:id="inc2" includingCase="uc3" addition="uc2" />
+
+      <!-- Reset Password extends Login -->
+      <packagedElement xmi:type="uml:Extend" xmi:id="ext1" extension="uc3" extendedCase="uc1" />
+
+      <!-- EA-style include encoded as Dependency + stereotype -->
+      <packagedElement xmi:type="uml:Dependency" xmi:id="depInc" client="uc1" supplier="uc2" name="IncludeViaDependency">
+        <stereotype value="include" />
+      </packagedElement>
+    </packagedElement>
+  </uml:Model>
+</xmi:XMI>

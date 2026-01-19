@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="16.1" />
+  <xmi:Extension extender="Enterprise Architect">
+    <elements />
+  </xmi:Extension>
+
+  <uml:Model xmi:id="m1" name="FixtureModel">
+    <packagedElement xmi:type="uml:Package" xmi:id="pkg1" name="PkgA">
+      <packagedElement xmi:type="uml:PrimitiveType" xmi:id="dt1" name="String" />
+
+      <packagedElement xmi:type="uml:Class" xmi:id="cPerson" name="Person" ea_guid="{11111111-1111-1111-1111-111111111111}">
+        <ownedComment xmi:id="com1"><body>Represents a person</body></ownedComment>
+        <ownedAttribute xmi:id="a1" name="name" type="dt1" visibility="private">
+          <defaultValue xmi:type="uml:LiteralString" value="unknown" />
+        </ownedAttribute>
+        <ownedOperation xmi:id="op1" name="greet" visibility="public">
+          <ownedParameter xmi:id="p1" name="msg" type="dt1" />
+          <ownedParameter xmi:id="r1" direction="return" type="dt1" />
+        </ownedOperation>
+      </packagedElement>
+
+      <packagedElement xmi:type="uml:Class" xmi:id="cEmployee" name="Employee" ea_guid="{22222222-2222-2222-2222-222222222222}">
+        <ownedAttribute xmi:id="a2" name="employeeId" type="dt1" visibility="private" />
+      </packagedElement>
+
+      <packagedElement xmi:type="uml:Class" xmi:id="cCompany" name="Company" ea_guid="{33333333-3333-3333-3333-333333333333}" />
+
+      <packagedElement xmi:type="uml:Association" xmi:id="as1" name="Employment">
+        <ownedEnd xmi:id="ae1" type="cPerson" name="employee" isNavigable="true">
+          <lowerValue xmi:type="uml:LiteralInteger" value="0" />
+          <upperValue xmi:type="uml:LiteralUnlimitedNatural" value="*" />
+        </ownedEnd>
+        <ownedEnd xmi:id="be1" type="cCompany" name="employer">
+          <lowerValue xmi:type="uml:LiteralInteger" value="1" />
+          <upperValue xmi:type="uml:LiteralUnlimitedNatural" value="1" />
+        </ownedEnd>
+      </packagedElement>
+
+      <packagedElement xmi:type="uml:Generalization" xmi:id="g1" specific="cEmployee" general="cPerson" />
+
+      <packagedElement xmi:type="uml:Dependency" xmi:id="d1" client="cCompany" supplier="cPerson" />
+
+    </packagedElement>
+  </uml:Model>
+</xmi:XMI>

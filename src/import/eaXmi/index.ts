@@ -10,4 +10,5 @@ export * from './parseRelationships';
 export * from './parseAssociations';
 export * from './parseEaDiagramCatalog';
 export * from './parseEaDiagramObjects';
+export * from './parseEaDiagramConnections';
 export * from './normalizeEaXmiImportIR';

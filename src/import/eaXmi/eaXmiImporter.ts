@@ -10,6 +10,7 @@ import { parseEaXmiRelationships } from './parseRelationships';
 import { parseEaXmiAssociations } from './parseAssociations';
 import { parseEaDiagramCatalog } from './parseEaDiagramCatalog';
 import { parseEaDiagramObjects } from './parseEaDiagramObjects';
+import { parseEaDiagramConnections } from './parseEaDiagramConnections';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -130,7 +131,10 @@ export const eaXmiImporter: Importer<IRModel> = {
     const { views: viewsB1a } = parseEaDiagramCatalog(doc, report);
 
     // Step B1b: attach diagram objects + geometry as unresolved view nodes.
-    const { views } = parseEaDiagramObjects(doc, viewsB1a, report);
+    const { views: viewsWithNodes } = parseEaDiagramObjects(doc, viewsB1a, report);
+
+    // Step B2b (part 1): parse diagram links/connectors (unresolved endpoints and relationship refs).
+    const { views } = parseEaDiagramConnections(doc, viewsWithNodes, report);
 
     if (folders.length === 0) {
       report.warnings.push(

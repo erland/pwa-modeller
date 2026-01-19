@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="16.1" />
+
+  <xmi:Extension extender="Enterprise Architect">
+    <diagrams>
+      <diagram xmi:id="D1" name="Link Diagram" diagramType="Class" package="pkg1" ea_guid="{DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD}">
+        <diagramObjects>
+          <diagramObject xmi:id="DO1" subject="{ELEM1-GUID}" l="10" t="20" r="110" b="70" />
+          <diagramObject xmi:id="DO2" subject="{ELEM2-GUID}" l="200" t="20" r="320" b="70" />
+        </diagramObjects>
+        <diagramLinks>
+          <diagramLink xmi:id="DL1" connector="{REL1-GUID}" source="DO1" target="DO2" points="10,20;60,20;60,40;200,40" />
+        </diagramLinks>
+      </diagram>
+    </diagrams>
+  </xmi:Extension>
+
+  <uml:Model xmi:id="m1" name="FixtureModel">
+    <packagedElement xmi:type="uml:Package" xmi:id="pkg1" name="PkgA" />
+
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_ELEM1" name="ClassA" ea_guid="{ELEM1-GUID}" />
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_ELEM2" name="ClassB" ea_guid="{ELEM2-GUID}" />
+
+    <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_REL1" name="DepAB" client="EAID_ELEM1" supplier="EAID_ELEM2" ea_guid="{REL1-GUID}" />
+  </uml:Model>
+</xmi:XMI>

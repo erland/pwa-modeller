@@ -1,4 +1,4 @@
-import { addWarning } from '../importReport';
+import { addInfo, addWarning } from '../importReport';
 import type { ImportIssueContext, ImportReport } from '../importReport';
 import type { IRExternalId, IRId, IRModel, IRRelationship, IRView, IRViewConnection, IRViewNode } from '../framework/ir';
 
@@ -15,6 +15,16 @@ function warn(
   if (!opts?.report) return;
   const prefix = opts.source ? `${opts.source}: ` : '';
   addWarning(opts.report, `${prefix}${message}`, warnOpts);
+}
+
+function info(
+  opts: NormalizeEaXmiOptions | undefined,
+  message: string,
+  infoOpts?: { code?: string; context?: ImportIssueContext }
+): void {
+  if (!opts?.report) return;
+  const prefix = opts.source ? `${opts.source}: ` : '';
+  addInfo(opts.report, `${prefix}${message}`, infoOpts);
 }
 
 function trimOrUndef(v: unknown): string | undefined {
@@ -325,7 +335,11 @@ function resolveEaXmiViews(
     // Validate folderId (diagram owning package)
     let folderId = v.folderId;
     if (folderId && typeof folderId === 'string' && !folderIds.has(folderId)) {
-      warn(opts, 'EA XMI Normalize: View referenced missing folderId; moved to root.', { code: 'missing-folder', context: { viewId: v.id, folderId } });
+      info(
+        opts,
+        'EA XMI Normalize: View referenced missing folderId; moved to root. (EA export may omit package metadata.)',
+        { code: 'missing-folder', context: { viewId: v.id, folderId } }
+      );
       folderId = null;
     }
 
@@ -612,7 +626,11 @@ export function normalizeEaXmiImportIR(ir: IRModel | undefined, opts?: Normalize
 
     let folderId = e.folderId;
     if (folderId && typeof folderId === 'string' && !folderIds.has(folderId)) {
-      warn(opts, 'EA XMI Normalize: Element referenced missing folderId; moved to root.', { code: 'missing-folder', context: { elementId: e.id, folderId } });
+      info(
+        opts,
+        'EA XMI Normalize: Element referenced missing folderId; moved to root. (EA export may omit package metadata.)',
+        { code: 'missing-folder', context: { elementId: e.id, folderId } }
+      );
       folderId = null;
     }
 

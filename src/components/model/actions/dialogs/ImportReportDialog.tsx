@@ -55,7 +55,30 @@ export function ImportReportDialog({ isOpen, onClose, lastImport, onDownloadRepo
   const [showWarn, setShowWarn] = useState(true);
   const [showError, setShowError] = useState(true);
 
+  const MAX_ISSUES_PER_CODE = 25;
+
   const issues = useMemo(() => (lastImport ? ensureIssuesFromWarnings(lastImport.report) : []), [lastImport]);
+
+  const warningTotals = useMemo(() => {
+    const warnOrErrorOccurrences = issues
+      .filter((i) => i.level === 'warn' || i.level === 'error')
+      .reduce((acc, i) => acc + (i.count ?? 1), 0);
+
+    const unknownElementOccurrences = lastImport
+      ? Object.values(lastImport.report.unknownElementTypes).reduce((acc, n) => acc + (n ?? 0), 0)
+      : 0;
+
+    const unknownRelationshipOccurrences = lastImport
+      ? Object.values(lastImport.report.unknownRelationshipTypes).reduce((acc, n) => acc + (n ?? 0), 0)
+      : 0;
+
+    return {
+      warnOrErrorOccurrences,
+      unknownElementOccurrences,
+      unknownRelationshipOccurrences,
+      total: warnOrErrorOccurrences + unknownElementOccurrences + unknownRelationshipOccurrences
+    };
+  }, [issues, lastImport]);
 
   const filteredIssues = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -69,6 +92,40 @@ export function ImportReportDialog({ isOpen, onClose, lastImport, onDownloadRepo
       return hay.includes(q);
     });
   }, [issues, query, showError, showInfo, showWarn]);
+
+  const cap = useMemo(() => {
+    // Guardrail: if we end up with tons of issue groups, cap the UI rendering per code to keep the dialog responsive.
+    // Counts are still kept per issue, and search disables the cap.
+    const isSearching = !!query.trim();
+    if (isSearching) {
+      return {
+        issues: filteredIssues,
+        truncated: [] as Array<{ code: string; shown: number; total: number }>,
+        totalFiltered: filteredIssues.length
+      };
+    }
+
+    const perCode = new Map<string, { shown: number; total: number }>();
+    const out: typeof filteredIssues = [];
+
+    for (const iss of filteredIssues) {
+      const code = (iss.code ?? 'generic') || 'generic';
+      const e = perCode.get(code) ?? { shown: 0, total: 0 };
+      e.total += 1;
+      if (e.shown < MAX_ISSUES_PER_CODE) {
+        out.push(iss);
+        e.shown += 1;
+      }
+      perCode.set(code, e);
+    }
+
+    const truncated = Array.from(perCode.entries())
+      .filter(([, v]) => v.total > v.shown)
+      .map(([code, v]) => ({ code, shown: v.shown, total: v.total }))
+      .sort((a, b) => (b.total - b.shown) - (a.total - a.shown) || a.code.localeCompare(b.code));
+
+    return { issues: out, truncated, totalFiltered: filteredIssues.length };
+  }, [filteredIssues, query, MAX_ISSUES_PER_CODE]);
 
   const onCopyIssue = useCallback(async (idx: number) => {
     const iss = issues[idx];
@@ -164,6 +221,11 @@ export function ImportReportDialog({ isOpen, onClose, lastImport, onDownloadRepo
             <b>Status</b>: {hasImportWarnings(lastImport.report) ? 'Warnings' : 'OK'}
           </div>
 
+          <div style={{ opacity: 0.9 }}>
+            <b>Summary</b>: Imported {lastImport.counts.elements} elements, {lastImport.counts.relationships} relationships, {lastImport.counts.views} views.{' '}
+            {warningTotals.total ? `${warningTotals.total} warnings/issues.` : 'No warnings.'}
+          </div>
+
           {issues.length ? (
             <div>
               <b>Issues</b>
@@ -186,12 +248,25 @@ export function ImportReportDialog({ isOpen, onClose, lastImport, onDownloadRepo
                   <input type="checkbox" checked={showError} onChange={(e) => setShowError(e.target.checked)} /> error
                 </label>
                 <span style={{ opacity: 0.8 }}>
-                  showing {filteredIssues.length}/{issues.length}
+                  showing {cap.issues.length}/{cap.totalFiltered}
                 </span>
               </div>
 
+              {cap.truncated.length ? (
+                <div style={{ opacity: 0.8, marginTop: 6 }}>
+                  Some codes have many issue groups; showing the first {MAX_ISSUES_PER_CODE} per code. Use search to narrow.
+                  <ul style={{ margin: '6px 0 0 18px' }}>
+                    {cap.truncated.map((t) => (
+                      <li key={t.code}>
+                        {t.code}: showing {t.shown}/{t.total}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               <ul>
-                {filteredIssues.map((iss, i) => (
+                {cap.issues.map((iss, i) => (
                   <li key={`${iss.level}-${iss.code}-${i}`}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       <div style={{ flex: '1 1 auto' }}>

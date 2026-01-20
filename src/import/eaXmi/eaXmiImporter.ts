@@ -2,7 +2,7 @@ import { createImportReport } from '../importReport';
 import { readBlobAsArrayBuffer } from '../framework/blobReaders';
 import { decodeXmlBytes } from '../framework/xmlDecoding';
 import type { ImportContext, ImportResult, Importer } from '../framework/importer';
-import type { IRModel } from '../framework/ir';
+import type { IRModel, IRRelationship } from '../framework/ir';
 import { parseXmlLenient } from '../framework/xml';
 import { parseEaXmiPackageHierarchyToFolders } from './parsePackages';
 import {
@@ -167,8 +167,6 @@ export const eaXmiImporter: Importer<IRModel> = {
     // Step 3 (ArchiMate): profile relationship tags -> relationships
     const { relationships: relsArchimateProfile } = parseEaXmiArchiMateProfileRelationships(doc, report);
 
-    // Prefer connector-derived relationships if duplicates exist.
-    const relsArchimate = [...relsArchimateConnectors, ...relsArchimateProfile];
 
     // Step 5B (BPMN): profile relationship tags -> relationships
     const { relationships: relsBpmn } = parseEaXmiBpmnProfileRelationships(doc, report);
@@ -179,53 +177,100 @@ export const eaXmiImporter: Importer<IRModel> = {
     // Step 8: associations + end metadata (roles, multiplicity, navigability)
     const { relationships: relsStep8 } = parseEaXmiAssociations(doc, report);
 
-    // Merge (prefer ArchiMate over UML when ids collide, otherwise keep first occurrence)
-    const relById = new Map<string, (typeof relsStep7)[number]>();
-    for (const r of relsStep7) relById.set(r.id, r);
-    for (const r of relsArchimate) {
-      const existing = relById.get(r.id);
-      if (existing) {
-        const existingLooksUml = (existing.type ?? '').toString().startsWith('uml.');
-        const incomingLooksUml = (r.type ?? '').toString().startsWith('uml.');
-        if (existingLooksUml && !incomingLooksUml) {
-          report.warnings.push(`EA XMI: Relationship id collision "${r.id}" between UML and ArchiMate; keeping ArchiMate.`);
-          relById.set(r.id, r);
-        } else {
-          report.warnings.push(
-            `EA XMI: Duplicate relationship id "${r.id}" encountered during merge; keeping first occurrence (type="${existing.type}").`
-          );
-        }
-        continue;
-      }
-      relById.set(r.id, r);
-    }
+    // Step 2: Merge/override relationship typing using connector stereotypes (single source of truth)
+    // EA's <xmi:Extension><connectors> is the most reliable place to read ArchiMate relationship stereotypes.
+    // When the file contains ArchiMate/BPMN profile data, we suppress raw UML relationship imports to avoid
+    // producing non-notation relationships alongside the pure notation relationships.
 
-    for (const r of relsBpmn) {
-      const existing = relById.get(r.id);
-      if (existing) {
-        const existingLooksUml = (existing.type ?? '').toString().startsWith('uml.');
-        const incomingLooksUml = (r.type ?? '').toString().startsWith('uml.');
-        if (existingLooksUml && !incomingLooksUml) {
-          report.warnings.push(`EA XMI: Relationship id collision "${r.id}" between UML and BPMN; keeping BPMN.`);
-          relById.set(r.id, r);
-        } else {
-          report.warnings.push(
-            `EA XMI: Duplicate relationship id "${r.id}" encountered during merge; keeping first occurrence (type="${existing.type}").`
-          );
-        }
-        continue;
-      }
-      relById.set(r.id, r);
-    }
+    const looksLikeArchiMate =
+      relsArchimateConnectors.length > 0 ||
+      archimateElements.some((e) => (e.type ?? '').toString().startsWith('archimate.')) ||
+      relsArchimateProfile.some((r) => (r.type ?? '').toString().startsWith('archimate.'));
 
-    for (const r of relsStep8) {
-      if (relById.has(r.id)) {
+    const looksLikeBpmn =
+      relsBpmn.length > 0 ||
+      bpmnElements.some((e) => (e.type ?? '').toString().startsWith('bpmn.')) ||
+      relsBpmn.some((r) => (r.type ?? '').toString().startsWith('bpmn.'));
+
+    const suppressUmlRelationships = looksLikeArchiMate || looksLikeBpmn;
+
+    const relSignature = (r: IRRelationship): string => {
+      const name = (r.name ?? '').toString().trim().toLowerCase();
+      const type = (r.type ?? '').toString();
+      const src = (r.sourceId ?? '').toString();
+      const tgt = (r.targetId ?? '').toString();
+      return `${src}→${tgt}|${type}|${name}`;
+    };
+
+    const connectorIds = new Set<string>(relsArchimateConnectors.map((r) => r.id));
+    const connectorSigs = new Set<string>(relsArchimateConnectors.map((r) => relSignature(r as IRRelationship)));
+
+    const relById = new Map<string, IRRelationship>();
+
+    const addRel = (r: IRRelationship, source: string): void => {
+      const typeStr = (r.type ?? '').toString();
+
+      // In mixed-notation files (ArchiMate/BPMN present), avoid importing raw UML relationships.
+      if (suppressUmlRelationships && typeStr.startsWith('uml.')) {
+        return;
+      }
+
+      // If this relationship has the same semantic signature as a connector-derived ArchiMate relationship,
+      // prefer the connector one even if ids differ.
+      const sig = relSignature(r);
+      if (source !== 'ea-connector' && connectorSigs.has(sig)) {
         report.warnings.push(
-          `EA XMI: Duplicate relationship id "${r.id}" between association and other relationship kinds; keeping first occurrence.`
+          `EA XMI: Dropped relationship "${r.id}" (${typeStr}) because an EA connector relationship provides the same ArchiMate semantics.`
         );
-        continue;
+        return;
       }
-      relById.set(r.id, r);
+
+      // If a connector-derived relationship exists for the same id, always prefer it.
+      if (source !== 'ea-connector' && connectorIds.has(r.id)) {
+        report.warnings.push(
+          `EA XMI: Dropped relationship "${r.id}" (${typeStr}) because EA connector stereotypes are the source of truth for ArchiMate.`
+        );
+        return;
+      }
+
+      const existing = relById.get(r.id);
+      if (!existing) {
+        relById.set(r.id, r);
+        return;
+      }
+
+      const existingType = (existing.type ?? '').toString();
+      const existingLooksUml = existingType.startsWith('uml.');
+      const incomingLooksUml = typeStr.startsWith('uml.');
+
+      // Prefer non-UML over UML on id collisions.
+      if (existingLooksUml && !incomingLooksUml) {
+        report.warnings.push(
+          `EA XMI: Relationship id collision "${r.id}" between UML and ${source}; keeping ${source}.`
+        );
+        relById.set(r.id, r);
+        return;
+      }
+
+      // Otherwise keep first occurrence (order defines precedence).
+      report.warnings.push(
+        `EA XMI: Duplicate relationship id "${r.id}" encountered during merge; keeping first occurrence (type="${existingType}").`
+      );
+    };
+
+    // Precedence order:
+    // 1) EA connector-derived ArchiMate relationships (source of truth)
+    // 2) ArchiMate profile-tag relationships (fallback)
+    // 3) BPMN profile-tag relationships
+    // 4) UML relationships + associations (only if not suppressing)
+
+    for (const r of relsArchimateConnectors) addRel(r as IRRelationship, 'ea-connector');
+    for (const r of relsArchimateProfile) addRel(r as IRRelationship, 'archimate-profile');
+    for (const r of relsBpmn) addRel(r as IRRelationship, 'bpmn-profile');
+
+    if (!suppressUmlRelationships) {
+      for (const r of relsStep7) addRel(r as IRRelationship, 'uml');
+      for (const r of relsStep8) addRel(r as IRRelationship, 'uml-association');
     }
 
     const relationships = Array.from(relById.values());

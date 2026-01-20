@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="16.1" />
+
+  <!-- Fixture: EA sometimes stores placed elements as <diagram><elements><element …/></elements></diagram>.
+       The <element> record carries a "subject" ref and a "style" string that may contain tokens like
+       "LineWidth=…". Our parser must NOT misclassify these as shapes. -->
+  <xmi:Extension extender="Enterprise Architect">
+    <diagrams>
+      <diagram xmi:id="D1" name="Element Records" diagramType="ArchiMate" package="pkg1" ea_guid="{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}">
+        <elements>
+          <element xmi:id="DO5" subject="EAID_123" geometry="Left=10;Top=20;Right=110;Bottom=70" style="DUID=ABC123;LineWidth=1;" />
+        </elements>
+      </diagram>
+    </diagrams>
+  </xmi:Extension>
+
+  <uml:Model xmi:id="m1" name="FixtureModel">
+    <packagedElement xmi:type="uml:Package" xmi:id="pkg1" name="PkgA" />
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_123" name="ClassC" ea_guid="{CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC}" />
+  </uml:Model>
+</xmi:XMI>

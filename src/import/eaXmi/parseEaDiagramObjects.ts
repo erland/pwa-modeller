@@ -185,6 +185,29 @@ function nodeKindFromObject(el: Element): IRViewNodeKind {
   const ln = localName(el);
   const t = (attrAny(el, ['type', 'kind', 'objecttype', 'objectType', 'style', 'stereotype']) ?? '').toLowerCase();
 
+  // If the object looks like it references a model element (most EA diagram-object records do),
+  // force it to be treated as an element placeholder. This prevents style strings like
+  // "LineWidth=…" from misclassifying element nodes as shapes (which later become Label objects).
+  const hasModelRef = !!attrAny(el, [
+    'subject',
+    'subjectid',
+    'subject_id',
+    'element',
+    'elementid',
+    'element_id',
+    'classifier',
+    'classifierid',
+    'classifier_id',
+    'instance',
+    'instanceid',
+    'instance_id'
+  ]);
+
+  // EA often stores diagram objects under <diagram><elements><element …/></elements></diagram>.
+  // Those <element> records nearly always represent placed model elements.
+  if (ln === 'element' && hasModelRef) return 'element';
+  if (hasModelRef) return 'element';
+
   if (ln.includes('note') || t.includes('note')) return 'note';
   if (t.includes('group') || t.includes('boundary') || t.includes('container')) return 'group';
   if (t.includes('image') || t.includes('bitmap') || t.includes('icon')) return 'image';

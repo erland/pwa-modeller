@@ -63,6 +63,15 @@ function pickDiagramName(el: Element, fallback: string): string {
   if (direct) return direct;
   const child = childText(el, 'name')?.trim();
   if (child) return child;
+
+  // EA commonly encodes the diagram name on a <properties name="…" /> child.
+  for (const ch of Array.from(el.children)) {
+    if (localName(ch) === 'properties') {
+      const n = attrAny(ch, ['name', 'diagramname', 'title'])?.trim();
+      if (n) return n;
+    }
+  }
+
   return fallback;
 }
 
@@ -88,6 +97,12 @@ function pickOwningPackageRef(el: Element): string | undefined {
     if (ln === 'package' || ln === 'owner' || ln === 'parent') {
       const ref = attrAny(ch, ['xmi:idref', 'idref', 'ref', 'href', 'xmi:id'])?.trim();
       if (ref) return ref;
+    }
+
+    // EA frequently stores owning package on a <model package="…" owner="…" /> child.
+    if (ln === 'model') {
+      const pkg = attrAny(ch, ['package', 'owner', 'packageid', 'packageId', 'package_id', 'ownerid', 'ownerId'])?.trim();
+      if (pkg) return pkg;
     }
   }
   return undefined;

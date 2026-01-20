@@ -241,6 +241,19 @@ export function parseEaXmiArchiMateProfileRelationships(doc: Document, report: I
   const seen = new Set<string>();
   let synthCounter = 0;
 
+  // DOM getElementById() does NOT work reliably for XMI, because xmi:id is not declared as an XML ID type.
+  // Build a best-effort index from xmi:id -> element for quick base_* lookups.
+  const xmiIdIndex = new Map<string, Element>();
+  {
+    const allForIndex = doc.getElementsByTagName('*');
+    for (let i = 0; i < allForIndex.length; i++) {
+      const e = allForIndex.item(i);
+      if (!e) continue;
+      const id = getXmiId(e);
+      if (id && !xmiIdIndex.has(id)) xmiIdIndex.set(id, e);
+    }
+  }
+
   const all = doc.getElementsByTagName('*');
   for (let i = 0; i < all.length; i++) {
     const el = all.item(i);
@@ -278,7 +291,7 @@ export function parseEaXmiArchiMateProfileRelationships(doc: Document, report: I
 
     // If this is a stereotype application, endpoints may be on the base connector.
     if ((!sourceId || !targetId) && baseId) {
-      const base = doc.getElementById(baseId);
+      const base = doc.getElementById(baseId) ?? xmiIdIndex.get(baseId) ?? null;
       if (base) {
         if (!sourceId) sourceId = resolveEndpointId(base, ['source', 'client', 'from', 'src', 'start']);
         if (!targetId) targetId = resolveEndpointId(base, ['target', 'supplier', 'to', 'tgt', 'end']);
@@ -337,6 +350,18 @@ export function parseEaXmiBpmnProfileRelationships(doc: Document, report: Import
   const seen = new Set<string>();
   let synthCounter = 0;
 
+  // Same XMI id-index rationale as for ArchiMate profile relationships.
+  const xmiIdIndex = new Map<string, Element>();
+  {
+    const allForIndex = doc.getElementsByTagName('*');
+    for (let i = 0; i < allForIndex.length; i++) {
+      const e = allForIndex.item(i);
+      if (!e) continue;
+      const id = getXmiId(e);
+      if (id && !xmiIdIndex.has(id)) xmiIdIndex.set(id, e);
+    }
+  }
+
   const all = doc.getElementsByTagName('*');
   for (let i = 0; i < all.length; i++) {
     const el = all.item(i);
@@ -373,7 +398,7 @@ export function parseEaXmiBpmnProfileRelationships(doc: Document, report: Import
 
     // If this is a stereotype application, endpoints may be on the base connector.
     if ((!sourceId || !targetId) && baseId) {
-      const base = doc.getElementById(baseId);
+      const base = doc.getElementById(baseId) ?? xmiIdIndex.get(baseId) ?? null;
       if (base) {
         if (!sourceId) sourceId = resolveEndpointId(base, ['source', 'client', 'from', 'src', 'start']);
         if (!targetId) targetId = resolveEndpointId(base, ['target', 'supplier', 'to', 'tgt', 'end']);

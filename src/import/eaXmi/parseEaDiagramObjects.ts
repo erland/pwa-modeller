@@ -65,6 +65,16 @@ function isDiagramObjectCandidate(el: Element): boolean {
   // Be liberal: different EA versions / export options use different tag names.
   if (ln === 'diagramobject') return true;
   if (ln.endsWith('diagramobject')) return true;
+
+  // EA sometimes stores diagram objects under <diagram><elements><element …/></elements></diagram>
+  // where each <element> has geometry and a "subject" pointing at the model element.
+  if (ln === 'element') {
+    const hasSubject = !!attrAny(el, ['subject', 'subjectid', 'subject_id']);
+    const geo = (attrAny(el, [...EA_BOUNDS_STR_ATTRS]) ?? '').toLowerCase();
+    // Avoid capturing connector stubs (EDGE/SX/SY/…) which we handle in parseEaDiagramConnections.
+    const looksLikeBounds = geo.includes('left=') || geo.includes('top=') || geo.includes('right=') || geo.includes('bottom=');
+    return hasSubject && looksLikeBounds;
+  }
   if (ln === 'object' || ln.endsWith('object')) {
     // Avoid capturing unrelated UML/XMI "ownedAttribute" etc.
     const hasGeometryHint =
@@ -194,7 +204,13 @@ function pickObjectId(el: Element, synthIdx: number): { id: string; externalIds:
   if (guid) externalIds.push({ system: 'sparx-ea', id: guid, kind: 'diagram-object-guid' });
   if (anyId && anyId !== xmiId && anyId !== guid) externalIds.push({ system: 'sparx-ea', id: anyId, kind: 'diagram-object-id' });
 
-  const picked = guid || xmiId || anyId || `eaDiagramObject_synth_${synthIdx}`;
+  // EA diagram "element" records often only have a DUID in their style string.
+  const style = (attrAny(el, ['style']) ?? '').toString();
+  const duidMatch = /\bDUID=([0-9A-Fa-f]+)\b/.exec(style);
+  const duid = duidMatch?.[1]?.trim();
+
+  const picked = guid || xmiId || anyId || duid || `eaDiagramObject_synth_${synthIdx}`;
+  if (duid) externalIds.push({ system: 'sparx-ea', id: duid, kind: 'diagram-object-duid' });
   return { id: picked, externalIds };
 }
 

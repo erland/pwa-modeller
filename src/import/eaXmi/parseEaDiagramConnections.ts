@@ -55,6 +55,17 @@ function isDiagramLinkCandidate(el: Element): boolean {
   const ln = localName(el);
   if (ln === 'diagramlink' || ln === 'diagramconnector') return true;
   if (ln.endsWith('diagramlink') || ln.endsWith('diagramconnector')) return true;
+
+  // EA can encode connectors inside <diagram><elements> as <element … subject="…" style="…EOID=…;SOID=…"/>
+  // where subject points to the model connector id and EOID/SOID reference DUIDs of the endpoint nodes.
+  if (ln === 'element') {
+    const subject = (attrAny(el, ['subject']) ?? '').toString().trim();
+    const style = (attrAny(el, ['style']) ?? '').toString();
+    const geo = (attrAny(el, ['geometry']) ?? '').toString();
+    const hasEndpoints = /\bEOID=[0-9A-Fa-f]+\b/.test(style) && /\bSOID=[0-9A-Fa-f]+\b/.test(style);
+    const looksLikeEdge = geo.toLowerCase().includes('edge=') || geo.toLowerCase().includes('sx=') || geo.toLowerCase().includes('sy=');
+    if (subject && hasEndpoints && looksLikeEdge) return true;
+  }
   if (ln === 'link' || ln.endsWith('link')) {
     const hasRel = !!attrAny(el, [...EA_LINK_REL_ATTRS]);
     const hasPts = !!attrAny(el, [...EA_LINK_POINTS_ATTRS]);
@@ -98,6 +109,13 @@ function pickLinkId(el: Element, synthIdx: number, report: ImportReport): { id: 
   const picked = guid || xmiId || anyId;
   if (picked) return { id: picked, externalIds };
 
+  // For <element … subject="EAID_…" style="…EOID…;SOID…"/> connectors, use the subject as a stable-ish id.
+  const subject = (attrAny(el, ['subject']) ?? '').toString().trim();
+  if (subject) {
+    externalIds.push({ system: 'sparx-ea', id: subject, kind: 'diagram-link-subject' });
+    return { id: subject, externalIds };
+  }
+
   const id = `eaDiagramLink_synth_${synthIdx}`;
   report.warnings.push(`EA XMI: Diagram link missing id; generated synthetic link id "${id}".`);
   return { id, externalIds };
@@ -118,6 +136,21 @@ function buildRefRaw(el: Element): Record<string, string> {
     ...buildRefRawFromAttrs(el, EA_LINK_SRC_ATTRS),
     ...buildRefRawFromAttrs(el, EA_LINK_TGT_ATTRS)
   };
+
+  // Connector-as-<element> form: subject is the relationship reference; endpoints are in the style string.
+  const ln = localName(el);
+  if (ln === 'element') {
+    const subject = (attrAny(el, ['subject']) ?? '').toString().trim();
+    if (subject) out.connector = subject;
+
+    const style = (attrAny(el, ['style']) ?? '').toString();
+    const soid = /\bSOID=([0-9A-Fa-f]+)\b/.exec(style)?.[1]?.trim();
+    const eoid = /\bEOID=([0-9A-Fa-f]+)\b/.exec(style)?.[1]?.trim();
+
+    // Normalize to the keys expected by the resolver.
+    if (soid) out.source = soid;
+    if (eoid) out.target = eoid;
+  }
 
   // Also accept common child ref patterns: <source xmi:idref="…"/>
   for (const ch of Array.from(el.children)) {

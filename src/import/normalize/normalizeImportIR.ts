@@ -1,4 +1,4 @@
-import type { ImportReport } from '../importReport';
+import type { ImportIssueContext, ImportReport } from '../importReport';
 import { addWarning } from '../importReport';
 import type {
   IRExternalId,
@@ -29,6 +29,15 @@ export type NormalizeImportIROptions = {
 function warn(opts: NormalizeImportIROptions | undefined, message: string): void {
   if (!opts?.report) return;
   addWarning(opts.report, message);
+}
+
+function warnIssue(
+  opts: NormalizeImportIROptions | undefined,
+  input: { message: string; code: string; context?: ImportIssueContext }
+): void {
+  if (!opts?.report) return;
+  const prefix = opts?.source ? `${opts.source}: ` : '';
+  addWarning(opts.report, `${prefix}${input.message}`, { code: input.code, context: input.context });
 }
 
 function asTrimmedString(v: unknown): string {
@@ -136,17 +145,19 @@ function normalizeRelationship(
     // ArchiMate does not allow relationship-to-relationship endpoints (connector-to-connector).
     if ((sourceIsRelationship || targetIsRelationship) && (opts?.source ?? '').includes('archimate-meff')) {
       const what = sourceIsRelationship && targetIsRelationship ? 'relationships' : 'a relationship';
-      warn(
-        opts,
-        `${opts?.source ? `${opts.source}: ` : ''}Normalize: Dropped relationship "${id}" because it references ${what} (connector-to-connector is not supported) (source: "${sourceId}", target: "${targetId}").`
-      );
+      warnIssue(opts, {
+        message: 'Normalize: Dropped relationship because it references relationship endpoints (connector-to-connector is not supported).',
+        code: 'normalize:relationship-dropped-connector-to-connector',
+        context: { relationshipId: id, sourceId, targetId, reason: what }
+      });
       return null;
     }
 
-    warn(
-      opts,
-      `${opts?.source ? `${opts.source}: ` : ''}Normalize: Dropped relationship "${id}" because it references missing element(s) (source: "${sourceId}", target: "${targetId}").`
-    );
+    warnIssue(opts, {
+      message: 'Normalize: Dropped relationship because it references missing element(s).',
+      code: 'normalize:relationship-dropped-missing-elements',
+      context: { relationshipId: id, sourceId, targetId, missingSource, missingTarget }
+    });
     return null;
   }
 
@@ -216,10 +227,11 @@ function normalizeViewConnection(
   let relationshipId = conn.relationshipId ? asTrimmedString(conn.relationshipId) : undefined;
   if (relationshipId && !relIds.has(relationshipId)) {
     const wasDropped = !!(allRelationshipIds && allRelationshipIds.has(relationshipId));
-    warn(
-      opts,
-      `${opts?.source ? `${opts.source}: ` : ''}Normalize: ViewConnection "${id}" referenced relationshipId "${relationshipId}" which ${wasDropped ? 'was dropped during normalization' : 'was missing'}; cleared.`
-    );
+    warnIssue(opts, {
+      message: `Normalize: ViewConnection referenced a relationshipId which ${wasDropped ? 'was dropped during normalization' : 'was missing'}; cleared.`,
+      code: 'normalize:view-connection-cleared-relationship',
+      context: { relationshipId, connectionId: id, wasDropped }
+    });
     relationshipId = undefined;
   }
 

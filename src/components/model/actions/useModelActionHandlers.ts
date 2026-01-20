@@ -12,6 +12,7 @@ import {
 } from '../../../store';
 import {
   applyImportIR,
+  ensureIssuesFromWarnings,
   formatUnknownCounts,
   importModel,
   type ImportReport
@@ -219,6 +220,34 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
   const downloadImportReport = useCallback(() => {
     if (!lastImport) return;
     const r = lastImport.report;
+
+    const issues = ensureIssuesFromWarnings(r);
+    const totals = { info: 0, warn: 0, error: 0 } as Record<'info' | 'warn' | 'error', number>;
+    for (const i of issues) {
+      if (i.level === 'info') totals.info += i.count;
+      if (i.level === 'warn') totals.warn += i.count;
+      if (i.level === 'error') totals.error += i.count;
+    }
+
+    const fmtSample = (s: unknown): string => {
+      if (s == null || typeof s !== 'object') return String(s);
+      const obj = s as Record<string, unknown>;
+      const keys = Object.keys(obj).slice(0, 8);
+      const parts: string[] = [];
+      for (const k of keys) {
+        const v = obj[k];
+        if (v == null) continue;
+        if (Array.isArray(v)) {
+          const arr = v as unknown[];
+          const shown = arr.slice(0, 3).map((x) => String(x)).join(', ');
+          parts.push(`${k}=[${shown}${arr.length > 3 ? ', …' : ''}]`);
+        } else {
+          parts.push(`${k}=${String(v)}`);
+        }
+      }
+      return parts.join(' ');
+    };
+
     const lines: string[] = [];
     lines.push(`# Import report`);
     lines.push('');
@@ -229,12 +258,28 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
     lines.push(
       `- Counts: folders=${lastImport.counts.folders}, elements=${lastImport.counts.elements}, relationships=${lastImport.counts.relationships}, views=${lastImport.counts.views}`
     );
+    lines.push(`- Issue totals: errors=${totals.error}, warnings=${totals.warn}, info=${totals.info}`);
     lines.push('');
-    if (r.warnings.length) {
-      lines.push('## Warnings');
-      for (const w of r.warnings) lines.push(`- ${w}`);
+
+    if (issues.length) {
+      const levelRank = (lvl: string) => (lvl === 'error' ? 0 : lvl === 'warn' ? 1 : 2);
+      const sorted = [...issues].sort(
+        (a, b) => levelRank(a.level) - levelRank(b.level) || b.count - a.count || a.message.localeCompare(b.message)
+      );
+
+      lines.push('## Issues (grouped)');
+      for (const i of sorted) {
+        const tag = i.level.toUpperCase();
+        const code = i.code ? ` (${i.code})` : '';
+        lines.push(`- **${tag}** x${i.count}${code}: ${i.message}`);
+        const samples = (i.samples ?? []).slice(0, 3);
+        for (const s of samples) {
+          lines.push(`  - sample: ${fmtSample(s)}`);
+        }
+      }
       lines.push('');
     }
+
     const elemUnknown = formatUnknownCounts(r.unknownElementTypes);
     if (elemUnknown.length) {
       lines.push('## Unknown element types');
@@ -247,8 +292,8 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
       for (const [k, v] of relUnknown) lines.push(`- ${k}: ${v}`);
       lines.push('');
     }
-    if (!r.warnings.length && elemUnknown.length === 0 && relUnknown.length === 0) {
-      lines.push('No warnings.');
+    if (issues.length === 0 && elemUnknown.length === 0 && relUnknown.length === 0) {
+      lines.push('No issues detected.');
     }
     downloadTextFile(
       sanitizeFileNameWithExtension(`import-report-${lastImport.fileName}`, 'md'),

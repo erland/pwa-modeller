@@ -1,4 +1,4 @@
-import { createImportReport } from '../importReport';
+import { addInfo, addWarning, createImportReport } from '../importReport';
 import { readBlobAsArrayBuffer } from '../framework/blobReaders';
 import { decodeXmlBytes } from '../framework/xmlDecoding';
 import type { ImportContext, ImportResult, Importer } from '../framework/importer';
@@ -128,14 +128,16 @@ export const eaXmiImporter: Importer<IRModel> = {
         const existingLooksUml = (existing.type ?? '').toString().startsWith('uml.');
         const incomingLooksUml = (e.type ?? '').toString().startsWith('uml.');
         if (existingLooksUml && !incomingLooksUml) {
-          report.warnings.push(
-            `EA XMI: Element id collision "${e.id}" between UML and ArchiMate; keeping ArchiMate.`
-          );
+          addInfo(report, 'EA XMI: Element id collision between UML and ArchiMate; keeping ArchiMate.', {
+            code: 'ea-xmi:element-id-collision',
+            context: { elementId: e.id, keptType: e.type, droppedType: existing.type }
+          });
           elById.set(e.id, e);
         } else {
-          report.warnings.push(
-            `EA XMI: Duplicate element id "${e.id}" encountered during merge; keeping first occurrence (type="${existing.type}").`
-          );
+          addInfo(report, 'EA XMI: Duplicate element id encountered during merge; kept first occurrence.', {
+            code: 'ea-xmi:duplicate-element-id',
+            context: { elementId: e.id, keptType: existing.type, droppedType: e.type }
+          });
         }
         continue;
       }
@@ -148,12 +150,16 @@ export const eaXmiImporter: Importer<IRModel> = {
         const existingLooksUml = (existing.type ?? '').toString().startsWith('uml.');
         const incomingLooksUml = (e.type ?? '').toString().startsWith('uml.');
         if (existingLooksUml && !incomingLooksUml) {
-          report.warnings.push(`EA XMI: Element id collision "${e.id}" between UML and BPMN; keeping BPMN.`);
+          addInfo(report, 'EA XMI: Element id collision between UML and BPMN; keeping BPMN.', {
+            code: 'ea-xmi:element-id-collision',
+            context: { elementId: e.id, keptType: e.type, droppedType: existing.type }
+          });
           elById.set(e.id, e);
         } else {
-          report.warnings.push(
-            `EA XMI: Duplicate element id "${e.id}" encountered during merge; keeping first occurrence (type="${existing.type}").`
-          );
+          addInfo(report, 'EA XMI: Duplicate element id encountered during merge; kept first occurrence.', {
+            code: 'ea-xmi:duplicate-element-id',
+            context: { elementId: e.id, keptType: existing.type, droppedType: e.type }
+          });
         }
         continue;
       }
@@ -219,17 +225,19 @@ export const eaXmiImporter: Importer<IRModel> = {
       // prefer the connector one even if ids differ.
       const sig = relSignature(r);
       if (source !== 'ea-connector' && connectorSigs.has(sig)) {
-        report.warnings.push(
-          `EA XMI: Dropped relationship "${r.id}" (${typeStr}) because an EA connector relationship provides the same ArchiMate semantics.`
-        );
+        addInfo(report, 'EA XMI: Dropped relationship because an EA connector relationship provides the same ArchiMate semantics.', {
+          code: 'ea-xmi:relationship-dropped-duplicate',
+          context: { relationshipId: r.id, type: typeStr, source: source }
+        });
         return;
       }
 
       // If a connector-derived relationship exists for the same id, always prefer it.
       if (source !== 'ea-connector' && connectorIds.has(r.id)) {
-        report.warnings.push(
-          `EA XMI: Dropped relationship "${r.id}" (${typeStr}) because EA connector stereotypes are the source of truth for ArchiMate.`
-        );
+        addInfo(report, 'EA XMI: Dropped relationship because EA connector stereotypes are the source of truth for ArchiMate.', {
+          code: 'ea-xmi:relationship-dropped-source-of-truth',
+          context: { relationshipId: r.id, type: typeStr, source: source }
+        });
         return;
       }
 
@@ -245,17 +253,19 @@ export const eaXmiImporter: Importer<IRModel> = {
 
       // Prefer non-UML over UML on id collisions.
       if (existingLooksUml && !incomingLooksUml) {
-        report.warnings.push(
-          `EA XMI: Relationship id collision "${r.id}" between UML and ${source}; keeping ${source}.`
-        );
+        addInfo(report, 'EA XMI: Relationship id collision between UML and another source; kept the non-UML relationship.', {
+          code: 'ea-xmi:relationship-id-collision',
+          context: { relationshipId: r.id, keptType: typeStr, droppedType: existingType, keptSource: source }
+        });
         relById.set(r.id, r);
         return;
       }
 
       // Otherwise keep first occurrence (order defines precedence).
-      report.warnings.push(
-        `EA XMI: Duplicate relationship id "${r.id}" encountered during merge; keeping first occurrence (type="${existingType}").`
-      );
+      addInfo(report, 'EA XMI: Duplicate relationship id encountered during merge; kept first occurrence.', {
+        code: 'ea-xmi:duplicate-relationship-id',
+        context: { relationshipId: r.id, keptType: existingType, droppedType: typeStr, droppedSource: source }
+      });
     };
 
     // Precedence order:
@@ -285,8 +295,10 @@ export const eaXmiImporter: Importer<IRModel> = {
     const { views } = parseEaDiagramConnections(doc, viewsWithNodes, report);
 
     if (folders.length === 0) {
-      report.warnings.push(
-        'EA XMI: Parsed 0 UML packages into folders. The file may not be a UML XMI export, or it may use an uncommon structure.'
+      addWarning(
+        report,
+        'EA XMI: Parsed 0 UML packages into folders. The file may not be a UML XMI export, or it may use an uncommon structure.',
+        { code: 'ea-xmi:no-folders' }
       );
     }
 

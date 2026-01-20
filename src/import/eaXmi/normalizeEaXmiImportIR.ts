@@ -382,14 +382,15 @@ function resolveEaXmiViews(
       if (!resolved) {
         // Safety: avoid importing unresolved element placeholders as Notes/Labels in applyImportIR.
         if (candidates.length) {
-          warn(
-            opts,
-            `EA XMI Normalize: View "${v.name}" node "${n.id}" could not resolve referenced element (${candidates
-              .slice(0, 3)
-              .join(', ')}${candidates.length > 3 ? ', …' : ''}); skipped node.`
-          );
+          warn(opts, 'EA XMI Normalize: Could not resolve referenced element for a view node; skipped node.', {
+            code: 'ea-xmi:view-node-unresolved-element',
+            context: { viewId: v.id, viewName: v.name, nodeId: n.id, refCandidates: candidates.slice(0, 5) }
+          });
         } else {
-          warn(opts, `EA XMI Normalize: View "${v.name}" node "${n.id}" had no resolvable reference; skipped node.`);
+          warn(opts, 'EA XMI Normalize: View node had no resolvable reference; skipped node.', {
+            code: 'ea-xmi:view-node-missing-ref',
+            context: { viewId: v.id, viewName: v.name, nodeId: n.id }
+          });
         }
         continue;
       }
@@ -455,7 +456,10 @@ function resolveEaXmiViews(
       if (!relationshipId && src.elementId && tgt.elementId) {
         const m = matchRelationshipByEndpoints(relationships, src.elementId, tgt.elementId);
         if (m.ambiguous) {
-          warn(opts, `EA XMI Normalize: View "${v.name}" connection "${c.id}" matched multiple relationships; skipped.`);
+          warn(opts, 'EA XMI Normalize: View connection matched multiple relationships; skipped.', {
+            code: 'ea-xmi:view-connection-ambiguous-relationship',
+            context: { viewId: v.id, viewName: v.name, connectionId: c.id, sourceElementId: src.elementId, targetElementId: tgt.elementId }
+          });
           continue;
         }
         if (m.relationshipId) {
@@ -465,8 +469,17 @@ function resolveEaXmiViews(
       }
 
       if (!relationshipId) {
-        const relHint = relCands.slice(0, 2).join(', ');
-        warn(opts, `EA XMI Normalize: View "${v.name}" connection "${c.id}" could not resolve relationship${relHint ? ` (${relHint})` : ''}; skipped.`);
+        warn(opts, 'EA XMI Normalize: Could not resolve relationship for a view connection; skipped.', {
+          code: 'ea-xmi:view-connection-unresolved-relationship',
+          context: {
+            viewId: v.id,
+            viewName: v.name,
+            connectionId: c.id,
+            relCandidates: relCands.slice(0, 5),
+            sourceCandidates: srcCands.slice(0, 5),
+            targetCandidates: tgtCands.slice(0, 5)
+          }
+        });
         continue;
       }
 

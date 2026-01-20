@@ -1,148 +1,32 @@
 import type { ImportIR } from '../framework/importer';
-import type { IRElement, IRPoint, IRRelationship, IRView, IRViewConnection, IRViewNode } from '../framework/ir';
+import type { IRElement, IRPoint, IRRelationship, IRView, IRViewConnection, IRViewNode, IRBounds } from '../framework/ir';
 
 import { attr, childByLocalName, childrenByLocalName, localName, numberAttr, parseXml, q, qa, text } from './xml';
+
+import { bpmnTypeForNodeLocalName } from './bpmnTypeForNodeLocalName';
 
 export type ParseBpmn2Result = {
   importIR: ImportIR;
   warnings: string[];
 };
 
-function bpmnTypeForNodeLocalName(nameLc: string): string | null {
-  switch (nameLc) {
-    // Containers
-    case 'participant':
-      return 'bpmn.pool';
-    case 'lane':
-      return 'bpmn.lane';
+type ParseContext = {
+  doc: Document;
+  defs: Element;
 
-    // Activities
-    case 'task':
-      return 'bpmn.task';
-    case 'usertask':
-      return 'bpmn.userTask';
-    case 'servicetask':
-      return 'bpmn.serviceTask';
-    case 'scripttask':
-      return 'bpmn.scriptTask';
-    case 'manualtask':
-      return 'bpmn.manualTask';
-    case 'callactivity':
-      return 'bpmn.callActivity';
-    case 'subprocess':
-      return 'bpmn.subProcess';
+  warnings: string[];
 
-    // Events
-    case 'startevent':
-      return 'bpmn.startEvent';
-    case 'endevent':
-      return 'bpmn.endEvent';
-    case 'intermediatecatchevent':
-      return 'bpmn.intermediateCatchEvent';
-    case 'intermediatethrowevent':
-      return 'bpmn.intermediateThrowEvent';
-    case 'boundaryevent':
-      return 'bpmn.boundaryEvent';
+  elements: IRElement[];
+  relationships: IRRelationship[];
+  views: IRView[];
 
-    // Gateways
-    case 'exclusivegateway':
-      return 'bpmn.gatewayExclusive';
-    case 'parallelgateway':
-      return 'bpmn.gatewayParallel';
-    case 'inclusivegateway':
-      return 'bpmn.gatewayInclusive';
-    case 'eventbasedgateway':
-      return 'bpmn.gatewayEventBased';
+  idIndex: Set<string>;
+  elementById: Map<string, IRElement>;
+  relById: Map<string, IRRelationship>;
+  unsupportedNodeTypes: Set<string>;
+};
 
-    // Artifacts (minimal support; helpful for association)
-    case 'textannotation':
-      return 'bpmn.textAnnotation';
-    case 'dataobjectreference':
-      return 'bpmn.dataObjectReference';
-    case 'datastorereference':
-      return 'bpmn.dataStoreReference';
-    case 'group':
-      return 'bpmn.group';
-
-    default:
-      return null;
-  }
-}
-
-function bpmnTypeForRelLocalName(nameLc: string): string | null {
-  switch (nameLc) {
-    case 'sequenceflow':
-      return 'bpmn.sequenceFlow';
-    case 'messageflow':
-      return 'bpmn.messageFlow';
-    case 'association':
-      return 'bpmn.association';
-    default:
-      return null;
-  }
-}
-
-function defaultName(typeId: string, id: string): string {
-  // Names are required by the domain factories, so always provide a fallback.
-  const short = typeId.replace(/^bpmn\./, '');
-  return `${short} (${id})`;
-}
-
-function extractExtensionSummary(el: Element): Record<string, string> | undefined {
-  const ext = childByLocalName(el, 'extensionElements');
-  if (!ext) return undefined;
-
-  const out: Record<string, string> = {};
-  let count = 0;
-  const max = 50;
-
-  const add = (key: string, value: string) => {
-    if (count >= max) return;
-    const k = key.trim();
-    const v = value.trim();
-    if (!k || !v) return;
-    if (k.length > 80) return;
-    if (v.length > 500) return;
-    if (out[k] != null) return;
-    out[k] = v;
-    count += 1;
-  };
-
-  const captureFrom = (prefix: string, node: Element) => {
-    // Attributes
-    for (const a of Array.from(node.attributes)) {
-      const name = a.name;
-      if (!name) continue;
-      add(`${prefix}@${name}`, a.value);
-    }
-    // Text content
-    const t = (node.textContent ?? '').trim();
-    if (t) add(`${prefix}#text`, t);
-  };
-
-  for (const c of Array.from(ext.children)) {
-    const ln = localName(c);
-    captureFrom(ln, c);
-
-    // Shallow grandchildren (EA often nests a level).
-    for (const gc of Array.from(c.children)) {
-      const ln2 = `${ln}.${localName(gc)}`;
-      captureFrom(ln2, gc);
-      if (count >= max) break;
-    }
-    if (count >= max) break;
-  }
-
-  return Object.keys(out).length ? out : undefined;
-}
-
-/**
- * Parse BPMN 2.0 XML into the app's ImportIR.
- *
- * Step 1 skeleton: validates that the document contains a <definitions> root.
- * Later steps will populate elements, relationships, views and geometry.
- */
-export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
+function createParseContext(xmlText: string): ParseContext {
   const warnings: string[] = [];
   const doc = parseXml(xmlText);
 
@@ -151,16 +35,23 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
     throw new Error('Not a BPMN 2.0 XML document: missing <definitions> element.');
   }
 
-  const elements: IRElement[] = [];
-  const relationships: IRRelationship[] = [];
-  const views: IRView[] = [];
+  return {
+    doc,
+    defs,
+    warnings,
+    elements: [],
+    relationships: [],
+    views: [],
+    idIndex: new Set<string>(),
+    elementById: new Map<string, IRElement>(),
+    relById: new Map<string, IRRelationship>(),
+    unsupportedNodeTypes: new Set<string>()
+  };
+}
 
-  const idIndex = new Set<string>();
-  const elementById = new Map<string, IRElement>();
-  const relById = new Map<string, IRRelationship>();
-  const unsupportedNodeTypes = new Set<string>();
+function parseElements(ctx: ParseContext) {
+  const { defs, warnings, elements, idIndex, elementById, unsupportedNodeTypes } = ctx;
 
-  // ------------------------------
   // Nodes (elements)
   // ------------------------------
   // We intentionally keep this permissive: collect supported node types anywhere in <definitions>.
@@ -194,7 +85,7 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
     'dataStoreReference',
     'group'
   ];
-
+  
   for (const ln of supportedNodeLocalNames) {
     for (const el of qa(defs, ln)) {
       const id = (attr(el, 'id') ?? '').trim();
@@ -202,7 +93,7 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         warnings.push(`Skipping BPMN element without @id (<${localName(el)}>)`);
         continue;
       }
-
+  
       const typeId = bpmnTypeForNodeLocalName(localName(el));
       if (!typeId) {
         // Shouldn't happen because we only query supported names, but keep defensive.
@@ -213,19 +104,19 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         }
         continue;
       }
-
+  
       if (idIndex.has(id)) {
         // Avoid duplicates across different traversals.
         continue;
       }
       idIndex.add(id);
-
+  
       const name = (attr(el, 'name') ?? '').trim() || defaultName(typeId, id);
       const docEl = childByLocalName(el, 'documentation');
       const documentation = text(docEl) || undefined;
-
+  
       const extTags = extractExtensionSummary(el);
-
+  
       elements.push({
         id,
         type: typeId,
@@ -237,11 +128,11 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
           ...(extTags ? { extensionElements: { tags: extTags } } : {})
         }
       });
-
+  
       elementById.set(id, elements[elements.length - 1]);
     }
   }
-
+  
   // Warn (once per type) for common BPMN nodes we see but don't yet support.
   // We do this by scanning a few high-frequency element names.
   const maybeUnsupported = ['sendTask', 'receiveTask', 'businessRuleTask', 'complexGateway', 'transaction', 'eventSubProcess'];
@@ -256,13 +147,19 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
       }
     }
   }
-
+  
   // ------------------------------
+  
+}
+
+function parseRelationships(ctx: ParseContext) {
+  const { defs, warnings, relationships, idIndex, relById } = ctx;
+
   // Relationships (flows)
   // ------------------------------
   const supportedRelLocalNames = ['sequenceFlow', 'messageFlow', 'association'];
   const missingEndpointsWarnings = new Set<string>();
-
+  
   for (const ln of supportedRelLocalNames) {
     for (const relEl of qa(defs, ln)) {
       const id = (attr(relEl, 'id') ?? '').trim();
@@ -270,17 +167,17 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         warnings.push(`Skipping BPMN relationship without @id (<${localName(relEl)}>)`);
         continue;
       }
-
+  
       const typeId = bpmnTypeForRelLocalName(localName(relEl));
       if (!typeId) continue;
-
+  
       const sourceRef = (attr(relEl, 'sourceRef') ?? '').trim();
       const targetRef = (attr(relEl, 'targetRef') ?? '').trim();
       if (!sourceRef || !targetRef) {
         warnings.push(`Skipping ${typeId} (${id}) because sourceRef/targetRef is missing.`);
         continue;
       }
-
+  
       if (!idIndex.has(sourceRef) || !idIndex.has(targetRef)) {
         const key = `${typeId}:${sourceRef}->${targetRef}`;
         if (!missingEndpointsWarnings.has(key)) {
@@ -291,13 +188,13 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         }
         continue;
       }
-
+  
       const name = (attr(relEl, 'name') ?? '').trim() || undefined;
       const docEl = childByLocalName(relEl, 'documentation');
       const documentation = text(docEl) || undefined;
-
+  
       const extTags = extractExtensionSummary(relEl);
-
+  
       relationships.push({
         id,
         type: typeId,
@@ -311,81 +208,71 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
           ...(extTags ? { extensionElements: { tags: extTags } } : {})
         }
       });
-
+  
       relById.set(id, relationships[relationships.length - 1]);
     }
   }
-
+  
   // ------------------------------
+  
+}
+
+function applyBpmnZOrder(nodes: IRViewNode[], elementById: Map<string, IRElement>) {
+  type Info = { node: IRViewNode; area: number; isContainer: boolean; key: string };
+  const infos: Info[] = nodes.map((n) => {
+    const b = n.bounds;
+    const area = b ? Math.max(0, b.width) * Math.max(0, b.height) : 0;
+    const elType = n.elementId ? elementById.get(n.elementId)?.type : undefined;
+    const isContainer = elType === 'bpmn.pool' || elType === 'bpmn.lane';
+    const key = (n.elementId ?? n.id) as string;
+    return { node: n, area, isContainer, key };
+  });
+
+  infos.sort((a, b) => {
+    // Containers first; within containers sort by area (bigger behind smaller), then stable key.
+    if (a.isContainer !== b.isContainer) return a.isContainer ? -1 : 1;
+    if (a.isContainer && b.isContainer) {
+      if (a.area !== b.area) return b.area - a.area;
+      return a.key.localeCompare(b.key);
+    }
+    // Non-containers: stable by key.
+    return a.key.localeCompare(b.key);
+  });
+
+  // IRViewNode has no zIndex field; instead we order nodes so containers come first (rendered behind).
+  const ordered = infos.map((i) => i.node);
+  nodes.splice(0, nodes.length, ...ordered);
+}
+
+function parseViews(ctx: ParseContext) {
+  const { defs, warnings, views, elementById, relById } = ctx;
+
   // Views (BPMNDI)
   // ------------------------------
   // If BPMNDI is present, recreate diagram layout using BPMNShape bounds and BPMNEdge waypoints.
   // If missing, fall back to a simple auto layout view.
   const diagrams = qa(defs, 'BPMNDiagram');
 
-  /**
-   * Compute a stable zIndex ordering for view nodes.
-   *
-   * BPMN-friendly behavior:
-   * - Background containers (pool/lane) should render behind both connections and nested nodes.
-   * - Other semantic nodes should render above connections.
-   *
-   * Implementation:
-   * - Pools/lanes get large negative zIndex values (keeps them behind the relationship SVG layer).
-   * - Other nodes get non-negative zIndex values.
-   * - We use bounds area as a heuristic so larger containers go further back.
-   */
-  const applyBpmnZOrder = (nodes: IRViewNode[]) => {
-    type Info = { node: IRViewNode; area: number; isContainer: boolean; key: string };
-    const infos: Info[] = nodes.map((n) => {
-      const b = n.bounds;
-      const area = b ? Math.max(0, b.width) * Math.max(0, b.height) : 0;
-      const elType = n.elementId ? elementById.get(n.elementId)?.type : undefined;
-      const isContainer = elType === 'bpmn.pool' || elType === 'bpmn.lane';
-      const key = (n.elementId ?? n.id) as string;
-      return { node: n, area, isContainer, key };
-    });
 
-    const byAreaDescThenKey = (a: Info, b: Info) => {
-      if (a.area !== b.area) return b.area - a.area;
-      return a.key.localeCompare(b.key);
-    };
 
-    // Containers: push behind everything (and behind the relationship layer).
-    const containers = infos.filter((x) => x.isContainer).sort(byAreaDescThenKey);
-    for (let i = 0; i < containers.length; i += 1) {
-      const n = containers[i].node;
-      n.meta = { ...(n.meta ?? {}), zIndex: -20000 + i };
-    }
 
-    // Non-containers: keep above connections.
-    const others = infos.filter((x) => !x.isContainer).sort(byAreaDescThenKey);
-    for (let i = 0; i < others.length; i += 1) {
-      const n = others[i].node;
-      // If already set by importer, keep it.
-      const existing = (n.meta as Record<string, unknown> | undefined)?.zIndex;
-      if (typeof existing === 'number') continue;
-      n.meta = { ...(n.meta ?? {}), zIndex: i };
-    }
-  };
-
-  const parseBounds = (boundsEl: Element | null, ctx: string): { x: number; y: number; width: number; height: number } | undefined => {
+  const parseBounds = (boundsEl: Element | null, context: string): IRBounds | undefined => {
     if (!boundsEl) return undefined;
-    const x = numberAttr(boundsEl, 'x', warnings, ctx);
-    const y = numberAttr(boundsEl, 'y', warnings, ctx);
-    const width = numberAttr(boundsEl, 'width', warnings, ctx);
-    const height = numberAttr(boundsEl, 'height', warnings, ctx);
+    const x = numberAttr(boundsEl, 'x', warnings, context);
+    const y = numberAttr(boundsEl, 'y', warnings, context);
+    const width = numberAttr(boundsEl, 'width', warnings, context);
+    const height = numberAttr(boundsEl, 'height', warnings, context);
     if (x == null || y == null || width == null || height == null) return undefined;
     return { x, y, width, height };
   };
 
-  const parseWaypoints = (edgeEl: Element, ctx: string): IRPoint[] | undefined => {
+  const parseWaypoints = (edgeEl: Element, context: string): IRPoint[] | undefined => {
     const wps = childrenByLocalName(edgeEl, 'waypoint');
     const points: IRPoint[] = [];
     for (let i = 0; i < wps.length; i++) {
       const wp = wps[i];
-      const x = numberAttr(wp, 'x', warnings, `${ctx} waypoint[${i}]`);
-      const y = numberAttr(wp, 'y', warnings, `${ctx} waypoint[${i}]`);
+      const x = numberAttr(wp, 'x', warnings, `${context} waypoint[${i}]`);
+      const y = numberAttr(wp, 'y', warnings, `${context} waypoint[${i}]`);
       if (x == null || y == null) continue;
       points.push({ x, y });
     }
@@ -471,7 +358,7 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
 
       // Assign stable z-order so background containers (pool/lane) do not hide
       // connections or nested nodes in the interactive canvas.
-      applyBpmnZOrder(nodes);
+      applyBpmnZOrder(nodes, elementById);
 
       views.push({
         id: viewId,
@@ -489,13 +376,19 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
     }
   }
 
+
+}
+
+function addFallbackAutoLayoutView(ctx: ParseContext) {
+  const { elements, relationships, views, elementById } = ctx;
+
   if (views.length === 0) {
     // Fallback: create a single auto-layout view.
     const gridW = 220;
     const gridH = 140;
     const nodeW = 140;
     const nodeH = 80;
-
+  
     const nodes: IRViewNode[] = elements.map((e, i) => ({
       id: `auto:${e.id}`,
       kind: 'element',
@@ -507,14 +400,14 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
         height: nodeH
       }
     }));
-
-    applyBpmnZOrder(nodes);
-
+  
+    applyBpmnZOrder(nodes, elementById);
+  
     const connections: IRViewConnection[] = relationships.map((r) => ({
       id: `auto:${r.id}`,
       relationshipId: r.id
     }));
-
+  
     views.push({
       id: 'bpmn2:auto',
       name: 'BPMN (auto layout)',
@@ -524,16 +417,104 @@ export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
       externalIds: [{ system: 'bpmn2', id: 'bpmn2:auto', kind: 'diagram' }]
     });
   }
+  
+  
+}
+
+
+function bpmnTypeForRelLocalName(nameLc: string): string | null {
+  switch (nameLc) {
+    case 'sequenceflow':
+      return 'bpmn.sequenceFlow';
+    case 'messageflow':
+      return 'bpmn.messageFlow';
+    case 'association':
+      return 'bpmn.association';
+    default:
+      return null;
+  }
+}
+
+function defaultName(typeId: string, id: string): string {
+  // Names are required by the domain factories, so always provide a fallback.
+  const short = typeId.replace(/^bpmn\./, '');
+  return `${short} (${id})`;
+}
+
+function extractExtensionSummary(el: Element): Record<string, string> | undefined {
+  const ext = childByLocalName(el, 'extensionElements');
+  if (!ext) return undefined;
+
+  const out: Record<string, string> = {};
+  let count = 0;
+  const max = 50;
+
+  const add = (key: string, value: string) => {
+    if (count >= max) return;
+    const k = key.trim();
+    const v = value.trim();
+    if (!k || !v) return;
+    if (k.length > 80) return;
+    if (v.length > 500) return;
+    if (out[k] != null) return;
+    out[k] = v;
+    count += 1;
+  };
+
+  const captureFrom = (prefix: string, node: Element) => {
+    // Attributes
+    for (const a of Array.from(node.attributes)) {
+      const name = a.name;
+      if (!name) continue;
+      add(`${prefix}@${name}`, a.value);
+    }
+    // Text content
+    const t = (node.textContent ?? '').trim();
+    if (t) add(`${prefix}#text`, t);
+  };
+
+  for (const c of Array.from(ext.children)) {
+    const ln = localName(c);
+    captureFrom(ln, c);
+
+    // Shallow grandchildren (EA often nests a level).
+    for (const gc of Array.from(c.children)) {
+      const ln2 = `${ln}.${localName(gc)}`;
+      captureFrom(ln2, gc);
+      if (count >= max) break;
+    }
+    if (count >= max) break;
+  }
+
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Parse BPMN 2.0 XML into the app's ImportIR.
+ *
+ * Step 1 skeleton: validates that the document contains a <definitions> root.
+ * Later steps will populate elements, relationships, views and geometry.
+ */
+export function parseBpmn2Xml(xmlText: string): ParseBpmn2Result {
+  const ctx = createParseContext(xmlText);
+
+  parseElements(ctx);
+  parseRelationships(ctx);
+  parseViews(ctx);
+
+  if (ctx.views.length === 0) {
+    addFallbackAutoLayoutView(ctx);
+  }
 
   const ir: ImportIR = {
     folders: [],
-    elements,
-    relationships,
-    views,
+    elements: ctx.elements,
+    relationships: ctx.relationships,
+    views: ctx.views,
     meta: {
       format: 'bpmn2'
     }
   };
 
-  return { importIR: ir, warnings };
+  return { importIR: ir, warnings: ctx.warnings };
 }

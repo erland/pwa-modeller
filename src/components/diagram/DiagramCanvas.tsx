@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { Model, View } from '../../domain';
 import { createConnector } from '../../domain';
 import { modelStore } from '../../store';
@@ -50,6 +50,24 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     hasNodes: nodes.length > 0,
     surfacePadding,
   });
+
+  // When a selection jump targets a specific node in the active view, center the viewport on it.
+  useEffect(() => {
+    if (!activeViewId) return;
+    if (selection.kind !== 'viewNode') return;
+    if (selection.viewId !== activeViewId) return;
+    const vp = viewport.viewportRef.current;
+    if (!vp) return;
+    const n = nodes.find((x) => x.elementId === selection.elementId);
+    if (!n) return;
+
+    const cx = (n.x + n.width / 2) * viewport.zoom;
+    const cy = (n.y + n.height / 2) * viewport.zoom;
+    requestAnimationFrame(() => {
+      vp.scrollLeft = Math.max(0, cx - vp.clientWidth / 2);
+      vp.scrollTop = Math.max(0, cy - vp.clientHeight / 2);
+    });
+  }, [activeViewId, nodes, selection, viewport.viewportRef, viewport.zoom]);
 
   const tool = useDiagramToolState({
     model,

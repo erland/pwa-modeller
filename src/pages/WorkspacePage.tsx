@@ -12,6 +12,12 @@ import { AppShell } from '../components/shell/AppShell';
 import { modelStore } from '../store';
 import { useModelStore } from '../store/useModelStore';
 
+type JumpToDetail =
+  | { kind: 'element'; elementId: string }
+  | { kind: 'relationship'; relationshipId: string; viewId?: string }
+  | { kind: 'view'; viewId: string }
+  | { kind: 'viewNode'; viewId: string; elementId: string };
+
 function isEditableTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
@@ -85,6 +91,37 @@ export default function WorkspacePage() {
   const [modelPropsOpen, setModelPropsOpen] = useState(false);
   const [mainTab, setMainTab] = useState<'diagram' | 'reports' | 'validation'>('diagram');
   const model = useModelStore((s) => s.model);
+
+  // Allow dialogs (e.g. import report) to trigger selection jumps without prop-drilling.
+  useEffect(() => {
+    function onJumpTo(ev: Event) {
+      const ce = ev as CustomEvent<JumpToDetail>;
+      const d = ce.detail;
+      if (!d) return;
+      switch (d.kind) {
+        case 'element':
+          setSelection({ kind: 'element', elementId: d.elementId });
+          return;
+        case 'relationship':
+          setSelection({ kind: 'relationship', relationshipId: d.relationshipId, viewId: d.viewId });
+          if (d.viewId) setMainTab('diagram');
+          return;
+        case 'view':
+          setSelection({ kind: 'view', viewId: d.viewId });
+          setMainTab('diagram');
+          return;
+        case 'viewNode':
+          setSelection({ kind: 'viewNode', viewId: d.viewId, elementId: d.elementId });
+          setMainTab('diagram');
+          return;
+        default:
+          return;
+      }
+    }
+
+    window.addEventListener('pwa-modeller:jump-to', onJumpTo as EventListener);
+    return () => window.removeEventListener('pwa-modeller:jump-to', onJumpTo as EventListener);
+  }, []);
 
   // Step 13: basic keyboard shortcuts
   useEffect(() => {

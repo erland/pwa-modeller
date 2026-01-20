@@ -1,5 +1,5 @@
 import { Dialog } from '../../../dialog/Dialog';
-import { formatUnknownCounts, hasImportWarnings } from '../../../../import';
+import { ensureIssuesFromWarnings, formatUnknownCounts, hasImportWarnings } from '../../../../import';
 import type { LastImportInfo } from '../useModelActionHandlers';
 
 type ImportReportDialogProps = {
@@ -51,12 +51,24 @@ export function ImportReportDialog({ isOpen, onClose, lastImport, onDownloadRepo
             <b>Status</b>: {hasImportWarnings(lastImport.report) ? 'Warnings' : 'OK'}
           </div>
 
-          {lastImport.report.warnings.length ? (
+          {ensureIssuesFromWarnings(lastImport.report).length ? (
             <div>
-              <b>Warnings</b>
+              <b>Issues</b>
               <ul>
-                {lastImport.report.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
+                {ensureIssuesFromWarnings(lastImport.report).map((iss, i) => (
+                  <li key={`${iss.level}-${iss.code}-${i}`}>
+                    <div>
+                      <span style={{ textTransform: 'capitalize' }}>{iss.level}</span>
+                      {iss.code ? <span style={{ opacity: 0.8 }}> ({iss.code})</span> : null}: {iss.message}
+                      {iss.count > 1 ? <span style={{ opacity: 0.8 }}> x{iss.count}</span> : null}
+                    </div>
+                    {iss.samples && iss.samples.length ? (
+                      <details>
+                        <summary>Samples</summary>
+                        <pre style={{ whiteSpace: 'pre-wrap' }}>{iss.samples.map((x) => JSON.stringify(x, null, 2)).join('\n\n')}</pre>
+                      </details>
+                    ) : null}
+                  </li>
                 ))}
               </ul>
             </div>

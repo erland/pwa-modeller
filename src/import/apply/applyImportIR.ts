@@ -1,5 +1,5 @@
 import type { ImportReport } from '../importReport';
-import { createImportReport, scanModelForUnknownTypes } from '../importReport';
+import { addWarning, createImportReport, scanModelForUnknownTypes } from '../importReport';
 import type { IRId, IRModel, IRTaggedValue } from '../framework/ir';
 
 import type {
@@ -70,7 +70,7 @@ const KNOWN_REL_TYPES: Set<string> = new Set<string>(RELATIONSHIP_TYPES as unkno
 const KNOWN_VIEWPOINT_IDS: Set<string> = new Set<string>(VIEWPOINTS.map((v) => v.id));
 
 function pushWarning(report: ImportReport, message: string): void {
-  if (!report.warnings.includes(message)) report.warnings.push(message);
+  addWarning(report, message, { code: 'apply-import' });
 }
 
 function toExternalIds(

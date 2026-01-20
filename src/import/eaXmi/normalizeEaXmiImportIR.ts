@@ -1,5 +1,5 @@
 import { addWarning } from '../importReport';
-import type { ImportReport } from '../importReport';
+import type { ImportIssueContext, ImportReport } from '../importReport';
 import type { IRExternalId, IRId, IRModel, IRRelationship, IRView, IRViewConnection, IRViewNode } from '../framework/ir';
 
 export type NormalizeEaXmiOptions = {
@@ -7,9 +7,14 @@ export type NormalizeEaXmiOptions = {
   source?: string;
 };
 
-function warn(opts: NormalizeEaXmiOptions | undefined, message: string): void {
+function warn(
+  opts: NormalizeEaXmiOptions | undefined,
+  message: string,
+  warnOpts?: { code?: string; context?: ImportIssueContext }
+): void {
   if (!opts?.report) return;
-  addWarning(opts.report, `${opts.source ? `${opts.source}: ` : ''}${message}`);
+  const prefix = opts.source ? `${opts.source}: ` : '';
+  addWarning(opts.report, `${prefix}${message}`, warnOpts);
 }
 
 function trimOrUndef(v: unknown): string | undefined {
@@ -320,7 +325,7 @@ function resolveEaXmiViews(
     // Validate folderId (diagram owning package)
     let folderId = v.folderId;
     if (folderId && typeof folderId === 'string' && !folderIds.has(folderId)) {
-      warn(opts, `EA XMI Normalize: View "${v.id}" referenced missing folderId "${folderId}"; moved to root.`);
+      warn(opts, 'EA XMI Normalize: View referenced missing folderId; moved to root.', { code: 'missing-folder', context: { viewId: v.id, folderId } });
       folderId = null;
     }
 
@@ -607,7 +612,7 @@ export function normalizeEaXmiImportIR(ir: IRModel | undefined, opts?: Normalize
 
     let folderId = e.folderId;
     if (folderId && typeof folderId === 'string' && !folderIds.has(folderId)) {
-      warn(opts, `EA XMI Normalize: Element "${e.id}" referenced missing folderId "${folderId}"; moved to root.`);
+      warn(opts, 'EA XMI Normalize: Element referenced missing folderId; moved to root.', { code: 'missing-folder', context: { elementId: e.id, folderId } });
       folderId = null;
     }
 

@@ -1,4 +1,4 @@
-import { createImportReport, recordUnknownElementType, recordUnknownRelationshipType } from '../importReport';
+import { addWarning, createImportReport, recordUnknownElementType, recordUnknownRelationshipType } from '../importReport';
 import type { ImportReport } from '../importReport';
 import type { IRBounds, IRFolder, IRElement, IRId, IRModel, IRPoint, IRRelationship, IRTaggedValue, IRView, IRViewConnection, IRViewNode } from '../framework/ir';
 import { mapElementType, mapRelationshipType } from '../mapping/archimateTypeMapping';
@@ -178,7 +178,7 @@ function parseOrganizations(doc: Document, report: ImportReport): OrgParseResult
     folders.push({ id: pseudoId, name: pseudoName, parentId: null });
     for (const child of Array.from(orgRoot.children)) handleRefChild(child, pseudoId);
   } else {
-    report.warnings.push('MEFF: Found <organizations> section, but could not interpret its structure.');
+    addWarning(report, 'MEFF: Found <organizations> section, but could not interpret its structure.');
   }
 
   return { folders, refToFolder };
@@ -433,7 +433,7 @@ function parseViews(doc: Document, report: ImportReport, refToFolder: Map<IRId, 
 
   if (!views.length) {
     // Presence of <views> but no parseable <view> objects shouldn't be fatal, but it helps troubleshooting.
-    report.warnings.push('MEFF: Found <views> section, but did not recognize any <view> / <diagram> entries.');
+    addWarning(report, 'MEFF: Found <views> section, but did not recognize any <view> / <diagram> entries.');
   }
 
   return views;
@@ -454,7 +454,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
   const { doc, parserError } = parseXmlLenient(xmlText);
 
   if (parserError) {
-    report.warnings.push("MEFF: XML parser reported an error while reading \"" + fileNameForMessages + "\": " + parserError);
+    addWarning(report, "MEFF: XML parser reported an error while reading \"" + fileNameForMessages + "\": " + parserError);
   }
 
   const { folders, refToFolder } = parseOrganizations(doc, report);
@@ -471,7 +471,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
 
       const id = attrAny(el, ['identifier', 'id']);
       if (!id) {
-        report.warnings.push('MEFF: Skipping an <element> without identifier.');
+        addWarning(report, 'MEFF: Skipping an <element> without identifier.');
         continue;
       }
 
@@ -483,7 +483,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
       const name = childText(el, 'name') ?? attrAny(el, ['name']) ?? '';
       const safeName = name.trim().length ? name.trim() : '(unnamed)';
       if (!name.trim().length) {
-        report.warnings.push(`MEFF: Element "${id}" is missing a name; using "(unnamed)".`);
+        addWarning(report, `MEFF: Element "${id}" is missing a name; using "(unnamed)".`);
       }
       const documentation = childText(el, 'documentation') ?? undefined;
 
@@ -506,7 +506,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
       });
     }
   } else {
-    report.warnings.push('MEFF: No <elements> section found.');
+    addWarning(report, 'MEFF: No <elements> section found.');
   }
 
   // Relationships
@@ -517,7 +517,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
 
       const id = attrAny(el, ['identifier', 'id']);
       if (!id) {
-        report.warnings.push('MEFF: Skipping a <relationship> without identifier.');
+        addWarning(report, 'MEFF: Skipping a <relationship> without identifier.');
         continue;
       }
 
@@ -532,7 +532,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
         attrAny(el, ['target', 'targetRef', 'targetref', 'to']) ?? childText(el, 'target') ?? childText(el, 'targetRef');
 
       if (!sourceId || !targetId) {
-        report.warnings.push(`MEFF: Relationship "${id}" is missing source/target; skipped.`);
+        addWarning(report, `MEFF: Relationship "${id}" is missing source/target; skipped.`);
         continue;
       }
 
@@ -557,7 +557,7 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
       });
     }
   } else {
-    report.warnings.push('MEFF: No <relationships> section found.');
+    addWarning(report, 'MEFF: No <relationships> section found.');
   }
 
   const ir: IRModel = {

@@ -1,4 +1,4 @@
-import { createImportReport } from '../importReport';
+import { addWarning, createImportReport } from '../importReport';
 import { readBlobAsArrayBuffer } from '../framework/blobReaders';
 import { decodeXmlBytes } from '../framework/xmlDecoding';
 import type { ImportResult, Importer } from '../framework/importer';
@@ -34,12 +34,14 @@ export const bpmn2Importer: Importer<IRModel> = {
     const report = createImportReport('bpmn2');
     report.source = 'bpmn2';
 
-    for (const w of parsed.warnings) report.warnings.push(w);
+    for (const w of parsed.warnings) addWarning(report, w, { code: 'bpmn2-parse' });
 
     // Helpful hint if semantics parsing produced nothing.
     if (parsed.importIR.elements.length === 0 && parsed.importIR.relationships.length === 0) {
-      report.warnings.push(
-        'BPMN2: Parsed 0 elements and 0 relationships. Verify that the file is a BPMN 2.0 XML export (with <definitions>).'
+      addWarning(
+        report,
+        'BPMN2: Parsed 0 elements and 0 relationships. Verify that the file is a BPMN 2.0 XML export (with <definitions>).',
+        { code: 'bpmn2-empty' }
       );
     }
 

@@ -1,4 +1,4 @@
-import { createImportReport } from '../importReport';
+import { addWarning, createImportReport } from '../importReport';
 import { readBlobAsArrayBuffer } from '../framework/blobReaders';
 import { decodeXmlBytes } from '../framework/xmlDecoding';
 import type { ImportResult, Importer } from '../framework/importer';
@@ -23,9 +23,7 @@ const { ir, report } = parseMeffXml(text, ctx.fileName);
 
     // If parsing produced no elements/relationships at all, add a hint.
     if (ir.elements.length === 0 && ir.relationships.length === 0) {
-      report.warnings.push(
-        'MEFF: Parsed 0 elements and 0 relationships. Verify that the file is an ArchiMate Model Exchange export (not XMI or another XML format).'
-      );
+      addWarning(report, 'MEFF: Parsed 0 elements and 0 relationships. Verify that the file is an ArchiMate Model Exchange export (not XMI or another XML format).', { code: 'meff-empty' });
     }
 
     return {

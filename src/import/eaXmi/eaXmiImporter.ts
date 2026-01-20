@@ -11,6 +11,7 @@ import {
   parseEaXmiClassifiersToElements,
 } from './parseElements';
 import { parseEaXmiArchiMateProfileRelationships, parseEaXmiBpmnProfileRelationships, parseEaXmiRelationships } from './parseRelationships';
+import { parseEaXmiArchiMateConnectorRelationships } from './parseEaConnectorsArchiMateRelationships';
 import { parseEaXmiAssociations } from './parseAssociations';
 import { parseEaDiagramCatalog } from './parseEaDiagramCatalog';
 import { parseEaDiagramObjects } from './parseEaDiagramObjects';
@@ -160,8 +161,14 @@ export const eaXmiImporter: Importer<IRModel> = {
     }
     const elements = Array.from(elById.values());
 
+    // Step 1 (ArchiMate): EA connector stereotypes -> relationships (preferred for ArchiMate)
+    const { relationships: relsArchimateConnectors } = parseEaXmiArchiMateConnectorRelationships(doc, report);
+
     // Step 3 (ArchiMate): profile relationship tags -> relationships
-    const { relationships: relsArchimate } = parseEaXmiArchiMateProfileRelationships(doc, report);
+    const { relationships: relsArchimateProfile } = parseEaXmiArchiMateProfileRelationships(doc, report);
+
+    // Prefer connector-derived relationships if duplicates exist.
+    const relsArchimate = [...relsArchimateConnectors, ...relsArchimateProfile];
 
     // Step 5B (BPMN): profile relationship tags -> relationships
     const { relationships: relsBpmn } = parseEaXmiBpmnProfileRelationships(doc, report);

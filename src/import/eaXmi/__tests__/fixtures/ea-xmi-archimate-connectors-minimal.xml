@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI
+  xmlns:xmi="http://schema.omg.org/spec/XMI/2.1"
+  xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Extension extender="Enterprise Architect">
+    <connectors>
+      <connector xmi:idref="EAID_R1" name="serving">
+        <source xmi:idref="EAID_A1" />
+        <target xmi:idref="EAID_A2" />
+        <properties ea_type="Association" stereotype="ArchiMate_Serving" direction="Source -&gt; Destination" />
+      </connector>
+    </connectors>
+  </xmi:Extension>
+  <uml:Model xmi:id="M1" name="Model">
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_A1" name="App" />
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_A2" name="Service" />
+  </uml:Model>
+</xmi:XMI>

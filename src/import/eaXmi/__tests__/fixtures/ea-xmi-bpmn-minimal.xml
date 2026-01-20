@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI
+  xmi:version="2.1"
+  xmlns:xmi="http://schema.omg.org/spec/XMI/2.1"
+  xmlns:uml="http://www.omg.org/spec/UML/20131001"
+  xmlns:BPMN2="http://www.sparxsystems.com/profiles/BPMN2.0/1.0"
+>
+  <uml:Model xmi:id="M1" name="BPMN Minimal">
+    <!--
+      NOTE: This fixture intentionally avoids nesting BPMN profile elements inside uml:Package
+      blocks because the EA-XMI normalizer treats UML package membership as a folderId.
+      Keeping the BPMN profile elements at the model root makes the fixture self-contained
+      and warning-free.
+    -->
+
+    <!-- Objects (should become IR elements) -->
+    <BPMN2:Participant xmi:id="BP1" name="Sales Pool" />
+    <BPMN2:Lane xmi:id="BL1" name="Sales Lane" />
+    <BPMN2:StartEvent xmi:id="BS1" name="Start" />
+    <BPMN2:Task xmi:id="BT1" name="Do work" />
+    <BPMN2:EndEvent xmi:id="BE1" name="End" />
+
+    <!-- Relationship tags (should be skipped by Step 5A element parsing, parsed in Step 5B) -->
+    <BPMN2:SequenceFlow xmi:id="BF1" name="Flow 1" source="BS1" target="BT1" />
+    <BPMN2:SequenceFlow xmi:id="BF2" name="Flow 2" source="BT1" target="BE1" />
+  </uml:Model>
+
+  <!-- EA diagram extension (Step 5C) -->
+  <xmi:Extension extender="Enterprise Architect">
+    <diagrams>
+      <diagram xmi:id="BD1" name="BPMN view" diagramType="BPMN2.0">
+        <diagramObjects>
+          <diagramObject xmi:id="BDO1" subject="BP1" l="0" t="0" r="600" b="200" />
+          <diagramObject xmi:id="BDO2" subject="BL1" l="50" t="30" r="580" b="180" />
+          <diagramObject xmi:id="BDO3" subject="BS1" l="80" t="60" r="130" b="110" />
+          <diagramObject xmi:id="BDO4" subject="BT1" l="200" t="60" r="280" b="110" />
+          <diagramObject xmi:id="BDO5" subject="BE1" l="360" t="60" r="410" b="110" />
+        </diagramObjects>
+        <diagramLinks>
+          <diagramLink xmi:id="BDL1" connector="BF1" source="BDO3" target="BDO4" />
+          <diagramLink xmi:id="BDL2" connector="BF2" source="BDO4" target="BDO5" />
+        </diagramLinks>
+      </diagram>
+    </diagrams>
+  </xmi:Extension>
+</xmi:XMI>

@@ -3,7 +3,10 @@ import type { IRElement } from '../framework/ir';
 
 import { attr, attrAny, childText, localName } from '../framework/xml';
 import {
+  getBpmnSourceTypeTokenFromEaProfileTagLocalName,
   getArchimateSourceTypeTokenFromEaProfileTagLocalName,
+  inferBpmnElementTypeFromEaProfileTagLocalName,
+  inferBpmnRelationshipTypeFromEaProfileTagLocalName,
   inferArchimateElementTypeFromEaProfileTagLocalName,
   inferArchimateRelationshipTypeFromEaProfileTagLocalName,
   inferUmlQualifiedElementTypeFromEaClassifier,
@@ -237,6 +240,14 @@ function isArchiMateProfileNamespace(el: Element): boolean {
   return uri.includes('sparxsystems.com/profiles/archimate');
 }
 
+function isBpmnProfileNamespace(el: Element): boolean {
+  const uri = (el.namespaceURI ?? '').toString().toLowerCase();
+  if (!uri) return false;
+  // Typical EA BPMN profile URIs look like:
+  //  - http://www.sparxsystems.com/profiles/BPMN2.0/1.0
+  return uri.includes('sparxsystems.com/profiles/bpmn');
+}
+
 function getBaseRefId(el: Element): string | undefined {
   // Stereotype application pattern: base_Class / base_Element / base_Classifier, etc.
   // Be forgiving and scan all attributes for a base_* key.
@@ -358,6 +369,113 @@ export function parseEaXmiArchiMateProfileElementsToElements(doc: Document, repo
         archimateProfileUri: el.namespaceURI,
         archimateProfileLocalName: ln,
         archimateProfileTag: el.tagName,
+        ...(type === 'Unknown' ? { sourceType: sourceToken } : {}),
+      },
+    });
+  }
+
+  return { elements };
+}
+
+/**
+ * Step 5A (EA XMI BPMN): Parse EA's BPMN profile tags into IR elements.
+ *
+ * Supported encodings (best-effort):
+ *  - Direct profile-tag instances with `xmi:id`
+ *  - Stereotype-application pattern with `base_*` references
+ */
+export function parseEaXmiBpmnProfileElementsToElements(doc: Document, report: ImportReport): ParseEaXmiElementsResult {
+  const elements: IRElement[] = [];
+  const seen = new Set<string>();
+  let synthCounter = 0;
+
+  const idIndex = buildXmiIdIndex(doc);
+
+  const all = doc.getElementsByTagName('*');
+  for (let i = 0; i < all.length; i++) {
+    const el = all.item(i);
+    if (!el) continue;
+
+    if (isInsideXmiExtension(el)) continue;
+    if (!isBpmnProfileNamespace(el)) continue;
+
+    const ln = localName(el);
+
+    // Step 5A imports only BPMN *elements*. Relationship tags are handled in Step 5B.
+    if (inferBpmnRelationshipTypeFromEaProfileTagLocalName(ln)) continue;
+
+    const inferred = inferBpmnElementTypeFromEaProfileTagLocalName(ln);
+    const sourceToken = getBpmnSourceTypeTokenFromEaProfileTagLocalName(ln) ?? ln;
+
+    const xmiId = getXmiId(el);
+    const baseId = getBaseRefId(el);
+
+    // Prefer base_* reference when present.
+    let id = (baseId ?? xmiId)?.trim();
+    if (!id) {
+      synthCounter++;
+      id = `eaBpmnEl_synth_${synthCounter}`;
+      try {
+        el.setAttribute(SYNTH_ELEMENT_ID_ATTR, id);
+      } catch {
+        // ignore
+      }
+      report.warnings.push(
+        `EA XMI: BPMN element missing xmi:id; generated synthetic element id "${id}" (profileTag="${el.tagName}", name="${(attr(el, 'name') ?? '').trim()}").`,
+      );
+    }
+
+    if (seen.has(id)) {
+      report.warnings.push(`EA XMI: Duplicate BPMN element id "${id}" encountered; skipping subsequent occurrence.`);
+      continue;
+    }
+    seen.add(id);
+
+    let name = (attr(el, 'name') ?? '').trim();
+    let documentation = extractDocumentation(el);
+    let folderId = findOwningPackageFolderId(el);
+
+    // If this is a stereotype application, pull missing details from the base element.
+    if ((!name || !documentation || !folderId) && baseId) {
+      const base = idIndex.get(baseId);
+      if (base) {
+        if (!name) name = (attr(base, 'name') ?? '').trim();
+        if (!documentation) documentation = extractDocumentation(base);
+        if (!folderId) folderId = findOwningPackageFolderId(base);
+      }
+    }
+
+    if (!name) name = sourceToken || 'Element';
+
+    const baseEl = baseId ? idIndex.get(baseId) : undefined;
+    const eaGuid = getEaGuid(el) ?? (baseEl ? getEaGuid(baseEl) : undefined);
+
+    const externalIds = [
+      ...(xmiId ? [{ system: 'xmi', id: xmiId, kind: 'xmi-id' }] : []),
+      ...(baseId ? [{ system: 'xmi', id: baseId, kind: 'xmi-base-id' }] : []),
+      ...(eaGuid ? [{ system: 'sparx-ea', id: eaGuid, kind: 'element-guid' }] : []),
+    ];
+
+    const stereotype = getStereotype(el);
+    const taggedValues = [
+      { key: 'profileTag', value: el.tagName },
+      ...(stereotype ? [{ key: 'stereotype', value: stereotype }] : []),
+    ];
+
+    const type = inferred ?? 'Unknown';
+
+    elements.push({
+      id,
+      type,
+      name,
+      ...(documentation ? { documentation } : {}),
+      ...(folderId ? { folderId } : {}),
+      ...(externalIds.length ? { externalIds } : {}),
+      ...(taggedValues.length ? { taggedValues } : {}),
+      meta: {
+        bpmnProfileUri: el.namespaceURI,
+        bpmnProfileLocalName: ln,
+        bpmnProfileTag: el.tagName,
         ...(type === 'Unknown' ? { sourceType: sourceToken } : {}),
       },
     });

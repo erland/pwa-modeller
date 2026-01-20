@@ -5,8 +5,12 @@ import type { ImportContext, ImportResult, Importer } from '../framework/importe
 import type { IRModel } from '../framework/ir';
 import { parseXmlLenient } from '../framework/xml';
 import { parseEaXmiPackageHierarchyToFolders } from './parsePackages';
-import { parseEaXmiArchiMateProfileElementsToElements, parseEaXmiClassifiersToElements } from './parseElements';
-import { parseEaXmiArchiMateProfileRelationships, parseEaXmiRelationships } from './parseRelationships';
+import {
+  parseEaXmiArchiMateProfileElementsToElements,
+  parseEaXmiBpmnProfileElementsToElements,
+  parseEaXmiClassifiersToElements,
+} from './parseElements';
+import { parseEaXmiArchiMateProfileRelationships, parseEaXmiBpmnProfileRelationships, parseEaXmiRelationships } from './parseRelationships';
 import { parseEaXmiAssociations } from './parseAssociations';
 import { parseEaDiagramCatalog } from './parseEaDiagramCatalog';
 import { parseEaDiagramObjects } from './parseEaDiagramObjects';
@@ -111,7 +115,10 @@ export const eaXmiImporter: Importer<IRModel> = {
     // Step 2 (ArchiMate): profile elements -> elements
     const { elements: archimateElements } = parseEaXmiArchiMateProfileElementsToElements(doc, report);
 
-    // Merge (prefer ArchiMate over UML when ids collide)
+    // Step 5A (BPMN): profile elements -> elements
+    const { elements: bpmnElements } = parseEaXmiBpmnProfileElementsToElements(doc, report);
+
+    // Merge (prefer non-UML over UML when ids collide; keep first occurrence between non-UML kinds)
     const elById = new Map<string, (typeof umlElements)[number]>();
     for (const e of umlElements) elById.set(e.id, e);
     for (const e of archimateElements) {
@@ -134,10 +141,30 @@ export const eaXmiImporter: Importer<IRModel> = {
       elById.set(e.id, e);
     }
 
+    for (const e of bpmnElements) {
+      const existing = elById.get(e.id);
+      if (existing) {
+        const existingLooksUml = (existing.type ?? '').toString().startsWith('uml.');
+        const incomingLooksUml = (e.type ?? '').toString().startsWith('uml.');
+        if (existingLooksUml && !incomingLooksUml) {
+          report.warnings.push(`EA XMI: Element id collision "${e.id}" between UML and BPMN; keeping BPMN.`);
+          elById.set(e.id, e);
+        } else {
+          report.warnings.push(
+            `EA XMI: Duplicate element id "${e.id}" encountered during merge; keeping first occurrence (type="${existing.type}").`
+          );
+        }
+        continue;
+      }
+      elById.set(e.id, e);
+    }
     const elements = Array.from(elById.values());
 
     // Step 3 (ArchiMate): profile relationship tags -> relationships
     const { relationships: relsArchimate } = parseEaXmiArchiMateProfileRelationships(doc, report);
+
+    // Step 5B (BPMN): profile relationship tags -> relationships
+    const { relationships: relsBpmn } = parseEaXmiBpmnProfileRelationships(doc, report);
 
     // Step 7: UML relationships (generalization/realization/dependency/include/extend)
     const { relationships: relsStep7 } = parseEaXmiRelationships(doc, report);
@@ -165,6 +192,25 @@ export const eaXmiImporter: Importer<IRModel> = {
       }
       relById.set(r.id, r);
     }
+
+    for (const r of relsBpmn) {
+      const existing = relById.get(r.id);
+      if (existing) {
+        const existingLooksUml = (existing.type ?? '').toString().startsWith('uml.');
+        const incomingLooksUml = (r.type ?? '').toString().startsWith('uml.');
+        if (existingLooksUml && !incomingLooksUml) {
+          report.warnings.push(`EA XMI: Relationship id collision "${r.id}" between UML and BPMN; keeping BPMN.`);
+          relById.set(r.id, r);
+        } else {
+          report.warnings.push(
+            `EA XMI: Duplicate relationship id "${r.id}" encountered during merge; keeping first occurrence (type="${existing.type}").`
+          );
+        }
+        continue;
+      }
+      relById.set(r.id, r);
+    }
+
     for (const r of relsStep8) {
       if (relById.has(r.id)) {
         report.warnings.push(

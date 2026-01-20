@@ -1,5 +1,10 @@
 import type { QualifiedElementType, QualifiedRelationshipType } from '../../domain/types';
-import { ELEMENT_TYPES, RELATIONSHIP_TYPES } from '../../domain/config/catalog';
+import {
+  BPMN_ELEMENT_TYPES,
+  BPMN_RELATIONSHIP_TYPES,
+  ELEMENT_TYPES,
+  RELATIONSHIP_TYPES,
+} from '../../domain/config/catalog';
 
 /**
  * Central mapping notes for an EA XMI UML importer.
@@ -193,5 +198,86 @@ export function getArchimateSourceTypeTokenFromEaProfileTagLocalName(localName: 
     ARCHIMATE_REL_BY_KEY[keyify(t)] ??
     t
   );
+}
+
+// -------------------------
+// BPMN (EA profile tags)
+// -------------------------
+
+const BPMN_ELEMENT_BY_KEY: Readonly<Record<string, QualifiedElementType>> = (() => {
+  const out: Record<string, QualifiedElementType> = {};
+  for (const t of BPMN_ELEMENT_TYPES as unknown as QualifiedElementType[]) {
+    const suffix = t.toString().split('.', 2)[1] ?? t;
+    out[keyify(suffix)] = t;
+  }
+
+  // Common EA / BPMN naming aliases
+  out[keyify('participant')] = 'bpmn.pool';
+  out[keyify('pool')] = 'bpmn.pool';
+
+  // Gateways are often exported as ExclusiveGateway rather than GatewayExclusive.
+  out[keyify('exclusivegateway')] = 'bpmn.gatewayExclusive';
+  out[keyify('parallelgateway')] = 'bpmn.gatewayParallel';
+  out[keyify('inclusivegateway')] = 'bpmn.gatewayInclusive';
+  out[keyify('eventbasedgateway')] = 'bpmn.gatewayEventBased';
+
+  return out;
+})();
+
+const BPMN_REL_BY_KEY: Readonly<Record<string, QualifiedRelationshipType>> = (() => {
+  const out: Record<string, QualifiedRelationshipType> = {};
+  for (const t of BPMN_RELATIONSHIP_TYPES as unknown as QualifiedRelationshipType[]) {
+    const suffix = t.toString().split('.', 2)[1] ?? t;
+    out[keyify(suffix)] = t;
+  }
+  return out;
+})();
+
+function normalizeBpmnProfileLocalName(localName: string): string {
+  const ln = (localName ?? '').trim();
+  if (!ln) return '';
+
+  // Strip common BPMN prefixes (case-insensitive), with optional version digits.
+  // Examples:
+  //  - bpmn_task -> task
+  //  - bpmn2_startevent -> startevent
+  //  - BPMN2.0::Task (stereotype string, sometimes ends up in tag local name) -> task
+  const stripped = ln
+    .replace(/^bpmn(?:2|20)?(?:\.|::)?(?:[_-])?/i, '')
+    .replace(/^bpmn\d*(?:\.|::)?(?:[_-])?/i, '')
+    .trim();
+  return stripped || ln;
+}
+
+/**
+ * Best-effort mapping from EA BPMN profile tag localName (e.g. "Task", "StartEvent")
+ * to this app's BPMN element type (e.g. "bpmn.task", "bpmn.startEvent").
+ */
+export function inferBpmnElementTypeFromEaProfileTagLocalName(localName: string): QualifiedElementType | undefined {
+  const t = normalizeBpmnProfileLocalName(localName);
+  if (!t) return undefined;
+  return BPMN_ELEMENT_BY_KEY[keyify(t)] ?? undefined;
+}
+
+/**
+ * Best-effort mapping from EA BPMN profile tag localName (e.g. "SequenceFlow")
+ * to this app's BPMN relationship type (e.g. "bpmn.sequenceFlow").
+ */
+export function inferBpmnRelationshipTypeFromEaProfileTagLocalName(
+  localName: string,
+): QualifiedRelationshipType | undefined {
+  const t = normalizeBpmnProfileLocalName(localName);
+  if (!t) return undefined;
+  return BPMN_REL_BY_KEY[keyify(t)] ?? undefined;
+}
+
+/**
+ * When a BPMN profile tag doesn't map cleanly, this returns the best "source" token to preserve.
+ */
+export function getBpmnSourceTypeTokenFromEaProfileTagLocalName(localName: string): string | undefined {
+  const t = normalizeBpmnProfileLocalName(localName);
+  if (!t) return undefined;
+  const hit = BPMN_ELEMENT_BY_KEY[keyify(t)] ?? BPMN_REL_BY_KEY[keyify(t)];
+  return (hit as unknown as string) ?? t;
 }
 

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="16.1" />
+
+  <xmi:Extension extender="Enterprise Architect">
+    <diagrams>
+      <diagram xmi:id="D1" name="Element Link Diagram" diagramType="Class" package="pkg1">
+        <elements>
+          <!-- Placed nodes (EA uses DUID for diagram object id) -->
+          <element geometry="Left=10;Top=20;Right=110;Bottom=70;" subject="EAID_ELEM1" style="DUID=DO1;" />
+          <element geometry="Left=200;Top=20;Right=320;Bottom=70;" subject="EAID_ELEM2" style="DUID=DO2;" />
+
+          <!-- Connector-as-<element> with explicit Path waypoints -->
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;Path=10:20;60:20;60:40;200:40;" subject="EAID_REL1" style="Mode=3;EOID=DO2;SOID=DO1;" />
+
+          <!-- Connector-as-<element> with empty Path (should NOT produce junk points) -->
+          <element geometry="SX=0;SY=0;EX=0;EY=0;EDGE=4;Path=;" subject="EAID_REL2" style="Mode=3;EOID=DO2;SOID=DO1;" />
+        </elements>
+      </diagram>
+    </diagrams>
+  </xmi:Extension>
+
+  <uml:Model xmi:id="m1" name="FixtureModel">
+    <packagedElement xmi:type="uml:Package" xmi:id="pkg1" name="PkgA" />
+
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_ELEM1" name="ClassA" />
+    <packagedElement xmi:type="uml:Class" xmi:id="EAID_ELEM2" name="ClassB" />
+
+    <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_REL1" name="DepAB" client="EAID_ELEM1" supplier="EAID_ELEM2" />
+    <packagedElement xmi:type="uml:Dependency" xmi:id="EAID_REL2" name="DepAB2" client="EAID_ELEM1" supplier="EAID_ELEM2" />
+  </uml:Model>
+</xmi:XMI>

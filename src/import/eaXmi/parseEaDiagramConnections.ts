@@ -39,6 +39,23 @@ const EA_LINK_TGT_ATTRS = ['target', 'targetid', 'target_id', 'tgt', 'to', 'end'
 // Waypoint-ish attributes
 const EA_LINK_POINTS_ATTRS = ['points', 'waypoints', 'bendpoint', 'bendpoints', 'path', 'route', 'routing', 'geometry'] as const;
 
+function readStyleKV(style: string, key: string): string | undefined {
+  // EA style strings are typically semicolon-separated key=value pairs.
+  // Example: "Mode=3;EOID=DO2;SOID=DO1;" or "DUID=12345;".
+  const parts = style.split(';');
+  for (const p of parts) {
+    const s = p.trim();
+    if (!s) continue;
+    const eq = s.indexOf('=');
+    if (eq <= 0) continue;
+    const k = s.slice(0, eq).trim();
+    if (k.toLowerCase() !== key.toLowerCase()) continue;
+    const v = s.slice(eq + 1).trim();
+    if (v) return v;
+  }
+  return undefined;
+}
+
 function isEaExtension(el: Element): boolean {
   const extender = (attrAny(el, [...EA_EXTENDER_ATTRS]) ?? '').toLowerCase();
   return extender.includes('enterprise architect');
@@ -62,7 +79,7 @@ function isDiagramLinkCandidate(el: Element): boolean {
     const subject = (attrAny(el, ['subject']) ?? '').toString().trim();
     const style = (attrAny(el, ['style']) ?? '').toString();
     const geo = (attrAny(el, ['geometry']) ?? '').toString();
-    const hasEndpoints = /\bEOID=[0-9A-Fa-f]+\b/.test(style) && /\bSOID=[0-9A-Fa-f]+\b/.test(style);
+    const hasEndpoints = !!readStyleKV(style, 'EOID') && !!readStyleKV(style, 'SOID');
     const looksLikeEdge = geo.toLowerCase().includes('edge=') || geo.toLowerCase().includes('sx=') || geo.toLowerCase().includes('sy=');
     if (subject && hasEndpoints && looksLikeEdge) return true;
   }
@@ -74,7 +91,7 @@ function isDiagramLinkCandidate(el: Element): boolean {
   return false;
 }
 
-function parsePoints(raw: string | null | undefined): IRPoint[] | undefined {
+function parseExplicitPointList(raw: string | null | undefined): IRPoint[] | undefined {
   const s = (raw ?? '').trim();
   if (!s) return undefined;
 
@@ -93,6 +110,70 @@ function parsePoints(raw: string | null | undefined): IRPoint[] | undefined {
   }
   // Require at least 2 points to be meaningful.
   if (pts.length < 2) return undefined;
+  return pts;
+}
+
+function parseEaGeometryPathPoints(geometry: string | null | undefined): IRPoint[] | undefined {
+  const s = (geometry ?? '').trim();
+  if (!s) return undefined;
+
+  // EA connector geometry frequently contains a lot of unrelated numeric tokens (label positions, font sizes, etc.).
+  // The only reliable polyline data is typically in the "Path=" segment.
+  //
+  // Important: EA encodes the path as semicolon-separated coordinate tokens after Path=, e.g.
+  //   "…;Path=10:20;60:20;60:40;200:40;…"
+  // which means we cannot simply regex-capture up to the next ';'. Instead, we gather tokens after Path=
+  // until we hit the next key=value token (or end of string).
+  const tokens = s.split(';').map((t) => t.trim()).filter((t) => t.length > 0);
+  let pathRaw = '';
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i]!;
+    if (/^Path\s*=/i.test(t)) {
+      const first = t.replace(/^Path\s*=\s*/i, '').trim();
+      const parts: string[] = [];
+      if (first) parts.push(first);
+      for (let j = i + 1; j < tokens.length; j++) {
+        const next = tokens[j]!;
+        // Stop if we encounter another key=value token (coords are typically "x:y" or "x,y").
+        if (next.includes('=')) break;
+        parts.push(next);
+      }
+      pathRaw = parts.join(';').trim();
+      break;
+    }
+  }
+
+  const path = pathRaw.trim();
+  if (!path) return undefined;
+
+  // Common encoding: "x:y;x:y;…" (sometimes with commas).
+  const pts: IRPoint[] = [];
+  const re = /(-?\d+(?:\.\d+)?)\s*[: ,]\s*(-?\d+(?:\.\d+)?)/g;
+  let mm: RegExpExecArray | null;
+  while ((mm = re.exec(path))) {
+    const x = Number(mm[1]);
+    const y = Number(mm[2]);
+    if (Number.isFinite(x) && Number.isFinite(y)) pts.push({ x, y });
+    if (pts.length > 2000) break; // sanity guard
+  }
+
+  if (pts.length >= 2) return pts;
+
+  // Fallback: attempt numeric pair parsing on the path segment only.
+  return parseExplicitPointList(path);
+}
+
+function parseLinkPoints(link: Element): IRPoint[] | undefined {
+  // Prefer explicit point list attributes (points/waypoints/etc.) when present.
+  for (const k of EA_LINK_POINTS_ATTRS) {
+    if (k === 'geometry') continue;
+    const v = attrAny(link, [k]);
+    if (v && v.trim()) return parseExplicitPointList(v);
+  }
+
+  // EA's connector-as-<element> form usually stores the data in geometry.
+  const geo = attrAny(link, ['geometry']);
+  const pts = parseEaGeometryPathPoints(geo);
   return pts;
 }
 
@@ -144,8 +225,8 @@ function buildRefRaw(el: Element): Record<string, string> {
     if (subject) out.connector = subject;
 
     const style = (attrAny(el, ['style']) ?? '').toString();
-    const soid = /\bSOID=([0-9A-Fa-f]+)\b/.exec(style)?.[1]?.trim();
-    const eoid = /\bEOID=([0-9A-Fa-f]+)\b/.exec(style)?.[1]?.trim();
+    const soid = readStyleKV(style, 'SOID');
+    const eoid = readStyleKV(style, 'EOID');
 
     // Normalize to the keys expected by the resolver.
     if (soid) out.source = soid;
@@ -250,8 +331,7 @@ export function parseEaDiagramConnections(doc: Document, views: IRView[], report
       }
       seenConnIds.add(connId);
 
-      const ptsRaw = attrAny(link, [...EA_LINK_POINTS_ATTRS]);
-      const points = parsePoints(ptsRaw);
+      const points = parseLinkPoints(link);
       const refRaw = buildRefRaw(link);
 
       connections.push({

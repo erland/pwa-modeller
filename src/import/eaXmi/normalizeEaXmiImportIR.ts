@@ -251,6 +251,8 @@ function getConnRefRaw(conn: IRViewConnection): Record<string, string> | undefin
 }
 
 const EA_CONN_REL_KEYS_PRIORITY = [
+  // Connector-as-<element> form may only expose the relationship ref as "subject"
+  'subject',
   'connector',
   'connectorid',
   'connector_id',

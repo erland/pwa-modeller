@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import type { Model, View } from '../../domain';
+import type { AutoLayoutOptions, Model, View } from '../../domain';
 import { createConnector } from '../../domain';
 import { modelStore } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
@@ -134,21 +134,27 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     modelStore.addConnectorToViewAt(activeViewId, conn.id, cx, cy);
   }, [activeViewId, model, viewport.viewportRef, viewport.zoom]);
 
-  const onAutoLayout = useCallback(async () => {
-    if (!activeViewId || !activeView || activeView.kind !== 'archimate') return;
-    try {
-      // Defaults tuned for ArchiMate: layered layout left-to-right with comfortable spacing.
-      await modelStore.autoLayoutView(activeViewId, {
-        scope: 'all',
-        direction: 'RIGHT',
-        spacing: 80,
-        edgeRouting: 'POLYLINE',
-      });
-    } catch (e) {
-      // Avoid crashing the UI; errors can be inspected in dev tools.
-      console.error('Auto layout failed', e);
-    }
-  }, [activeViewId, activeView]);
+  const onAutoLayout = useCallback(
+    async (overrides: Partial<AutoLayoutOptions> = {}) => {
+      if (!activeViewId || !activeView || activeView.kind !== 'archimate') return;
+      try {
+        // Defaults tuned for ArchiMate: layered layout left-to-right with comfortable spacing.
+        const options: AutoLayoutOptions = {
+          scope: 'all',
+          direction: 'RIGHT',
+          spacing: 80,
+          edgeRouting: 'POLYLINE',
+          respectLocked: true,
+          ...overrides
+        };
+        await modelStore.autoLayoutView(activeViewId, options);
+      } catch (e) {
+        // Avoid crashing the UI; errors can be inspected in dev tools.
+        console.error('Auto layout failed', e);
+      }
+    },
+    [activeViewId, activeView]
+  );
 
 
   if (!model) {

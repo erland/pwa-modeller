@@ -65,6 +65,17 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
       </div>
 
       <div className="fieldGroup">
+        <label className="fieldLabel">
+          <input
+            type="checkbox"
+            checked={Boolean(node.locked)}
+            onChange={(e) => actions.updateViewNodeLayout(view.id, element.id, { locked: e.target.checked })}
+          />{' '}
+          Lock position
+        </label>
+      </div>
+
+      <div className="fieldGroup">
         <label className="fieldLabel" htmlFor="node-style-tag">
           Style tag
         </label>

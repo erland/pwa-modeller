@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import type { Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
+import type { AutoLayoutOptions, Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
 import { getRelationshipTypeLabel } from '../../domain';
 import type { Notation } from '../../notations';
 import { Dialog } from '../dialog/Dialog';
@@ -80,7 +80,7 @@ export type DiagramCanvasViewProps = {
 
   canExportImage: boolean;
   onExportImage: () => void;
-  onAutoLayout: () => void;
+  onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
 };

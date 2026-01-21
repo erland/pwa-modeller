@@ -405,7 +405,21 @@ export class ModelStore {
 
     // Lazy-load ELK so it doesn't get pulled into the main bundle until the user runs auto-layout.
     const { elkLayout } = await import('../domain/layout/elk/elkLayout');
-    const output = await elkLayout(input, options);
+        const output = await elkLayout(input, options);
+
+    // If requested, keep locked/pinned nodes at their current positions.
+    if (options.respectLocked) {
+      const fresh = this.state.model?.views[viewId];
+      const rawNodes = fresh?.layout?.nodes ?? [];
+      for (const n of rawNodes) {
+        if (!n.locked) continue;
+        const id = n.elementId ?? n.connectorId;
+        if (!id) continue;
+        if (output.positions[id]) {
+          output.positions[id] = { x: n.x, y: n.y };
+        }
+      }
+    }
 
     this.updateModel((model) => {
       autoLayoutMutations.autoLayoutView(model, viewId, output.positions);

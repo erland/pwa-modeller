@@ -318,6 +318,8 @@ export interface ViewNodeLayout {
   highlighted?: boolean;
   /** View-specific style tag badge (does not change the underlying element). */
   styleTag?: string;
+  /** If true, this node is locked/pinned in the view and should not move during auto-layout. */
+  locked?: boolean;
   /** Optional label offset (relative to default position) for the node's text. */
   label?: LabelOffset;
   /** Optional stacking order (higher renders on top). */

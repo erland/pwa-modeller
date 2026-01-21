@@ -1,4 +1,4 @@
-import type { Model, View } from '../../domain';
+import type { AutoLayoutOptions, Model, View } from '../../domain';
 
 import type { Selection } from '../model/selection';
 
@@ -26,7 +26,7 @@ export type DiagramToolbarProps = {
 
   canExportImage: boolean;
   onExportImage: () => void;
-  onAutoLayout: () => void;
+  onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
 

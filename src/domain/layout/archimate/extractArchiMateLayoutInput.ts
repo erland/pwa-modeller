@@ -97,6 +97,7 @@ export function extractArchiMateLayoutInput(
       id,
       width,
       height,
+      ...(options.respectLocked && n.locked ? { locked: true } : {}),
       ...(layerHint ? { layerHint } : {}),
       ...(groupId ? { groupId } : {})
     });

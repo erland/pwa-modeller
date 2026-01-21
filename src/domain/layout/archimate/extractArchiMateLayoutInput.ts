@@ -1,5 +1,6 @@
 import type { AutoLayoutOptions, LayoutInput, LayoutEdgeInput, LayoutNodeInput } from '../types';
 import type { Model, View, ViewNodeLayout, Relationship } from '../../types';
+import { getArchiMateEdgeWeight, getArchiMateGroupIdHint, getArchiMateLayerHint } from './archimateLayoutPolicy';
 
 const DEFAULT_ELEMENT_SIZE = { width: 120, height: 60 };
 const DEFAULT_CONNECTOR_SIZE = { width: 24, height: 24 };
@@ -26,7 +27,7 @@ function edgeEndpointsFromRelationship(rel: Relationship): { sourceId: string; t
   return { sourceId, targetId };
 }
 
-function edgesFromConnections(view: View, nodeIdSet: Set<string>): LayoutEdgeInput[] {
+function edgesFromConnections(view: View, model: Model, nodeIdSet: Set<string>): LayoutEdgeInput[] {
   const out: LayoutEdgeInput[] = [];
   const seen = new Set<string>();
   for (const c of view.connections ?? []) {
@@ -38,7 +39,8 @@ function edgesFromConnections(view: View, nodeIdSet: Set<string>): LayoutEdgeInp
     const id = c.id || c.relationshipId;
     if (seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, sourceId, targetId });
+    const relType = model.relationships[c.relationshipId]?.type;
+    out.push({ id, sourceId, targetId, weight: getArchiMateEdgeWeight(relType) });
   }
   return out;
 }
@@ -57,7 +59,7 @@ function edgesFromLegacyLayout(view: View, model: Model, nodeIdSet: Set<string>)
     const id = r.relationshipId;
     if (seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, sourceId: ep.sourceId, targetId: ep.targetId });
+    out.push({ id, sourceId: ep.sourceId, targetId: ep.targetId, weight: getArchiMateEdgeWeight(rel.type) });
   }
   return out;
 }
@@ -87,11 +89,16 @@ export function extractArchiMateLayoutInput(
     if (!id) continue;
     const { width, height } = sizeForLayoutNode(n);
 
+    const elementType = model.elements[id]?.type;
+    const layerHint = getArchiMateLayerHint(elementType);
+    const groupId = getArchiMateGroupIdHint(elementType);
+
     allNodes.push({
       id,
       width,
-      height
-      // locked/groupId/layerHint reserved for later steps (policy + UX)
+      height,
+      ...(layerHint ? { layerHint } : {}),
+      ...(groupId ? { groupId } : {})
     });
   }
 
@@ -106,7 +113,7 @@ export function extractArchiMateLayoutInput(
 
   const edges =
     (view.connections?.length ?? 0) > 0
-      ? edgesFromConnections(view, nodeIdSet)
+      ? edgesFromConnections(view, model, nodeIdSet)
       : edgesFromLegacyLayout(view, model, nodeIdSet);
 
   return { nodes, edges };

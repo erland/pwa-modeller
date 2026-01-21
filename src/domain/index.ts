@@ -22,6 +22,8 @@ export * from './graph/trace';
 
 export * from './analysis';
 
+export * from './layout';
+
 export * from './unknownExportPolicy';
 export * from './relationshipValidationMode';
 export * from './viewConnections';

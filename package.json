@@ -2,7 +2,7 @@
   "name": "pwa-modeller",
   "version": "0.1.0",
   "private": true,
-  "description": "Enterprise Architecture Modeling PWA (ArchiMate 3.2) – MVP",
+  "description": "Enterprise Architecture Modeling PWA (ArchiMate 3.2) \u2013 MVP",
   "scripts": {
     "dev": "vite",
     "build": "npm run check:ellipsis && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit && vite build",
@@ -20,7 +20,8 @@
     "react": "^18.3.1",
     "react-aria-components": "^1.5.0",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.29.0"
+    "react-router-dom": "^6.29.0",
+    "elkjs": "^0.11.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

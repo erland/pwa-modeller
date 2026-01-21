@@ -80,6 +80,7 @@ export type DiagramCanvasViewProps = {
 
   canExportImage: boolean;
   onExportImage: () => void;
+  onAutoLayout: () => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
 };
@@ -119,6 +120,7 @@ export function DiagramCanvasView({
   getElementBgVar,
   canExportImage,
   onExportImage,
+  onAutoLayout,
   onAddAndJunction,
   onAddOrJunction,
 }: DiagramCanvasViewProps) {
@@ -140,6 +142,7 @@ export function DiagramCanvasView({
         fitToView={fitToView}
         canExportImage={canExportImage}
         onExportImage={onExportImage}
+        onAutoLayout={onAutoLayout}
         onAddAndJunction={onAddAndJunction}
         onAddOrJunction={onAddOrJunction}
         beginPlaceExistingElement={beginPlaceExistingElement}

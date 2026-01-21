@@ -21,6 +21,7 @@ type Props = {
 
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
+  onAutoLayout: () => void;
 };
 
 export function ArchimateToolbar({
@@ -34,6 +35,7 @@ export function ArchimateToolbar({
   onSelect,
   onAddAndJunction,
   onAddOrJunction,
+  onAutoLayout,
 }: Props) {
   const [archimatePaletteDialog, setArchimatePaletteDialog] = useState<{ initialTypeId?: ElementType } | null>(null);
 
@@ -69,6 +71,20 @@ export function ArchimateToolbar({
         >
           Element
         </button>
+
+        <button
+          type="button"
+          className="shellButton"
+          disabled={!hasActiveView}
+          onClick={() => {
+            setToolMode('select');
+            onAutoLayout();
+          }}
+          title="Auto layout this view (ArchiMate)"
+        >
+          Auto Layout
+        </button>
+
 
         <span className="diagramToolbarDivider" aria-hidden="true" />
 

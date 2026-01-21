@@ -134,6 +134,23 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     modelStore.addConnectorToViewAt(activeViewId, conn.id, cx, cy);
   }, [activeViewId, model, viewport.viewportRef, viewport.zoom]);
 
+  const onAutoLayout = useCallback(async () => {
+    if (!activeViewId || !activeView || activeView.kind !== 'archimate') return;
+    try {
+      // Defaults tuned for ArchiMate: layered layout left-to-right with comfortable spacing.
+      await modelStore.autoLayoutView(activeViewId, {
+        scope: 'all',
+        direction: 'RIGHT',
+        spacing: 80,
+        edgeRouting: 'POLYLINE',
+      });
+    } catch (e) {
+      // Avoid crashing the UI; errors can be inspected in dev tools.
+      console.error('Auto layout failed', e);
+    }
+  }, [activeViewId, activeView]);
+
+
   if (!model) {
     return (
       <div aria-label="Diagram canvas" className="diagramCanvas">
@@ -178,6 +195,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       getElementBgVar={getElementBgVar}
       canExportImage={canExportImage}
       onExportImage={handleExportImage}
+      onAutoLayout={onAutoLayout}
       onAddAndJunction={onAddAndJunction}
       onAddOrJunction={onAddOrJunction}
     />

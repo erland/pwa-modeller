@@ -26,6 +26,7 @@ export type DiagramToolbarProps = {
 
   canExportImage: boolean;
   onExportImage: () => void;
+  onAutoLayout: () => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
 
@@ -48,6 +49,7 @@ export function DiagramToolbar({
   fitToView,
   canExportImage,
   onExportImage,
+  onAutoLayout,
   onAddAndJunction,
   onAddOrJunction,
   beginPlaceExistingElement,
@@ -123,6 +125,7 @@ export function DiagramToolbar({
             onSelect={onSelect}
             onAddAndJunction={onAddAndJunction}
             onAddOrJunction={onAddOrJunction}
+            onAutoLayout={onAutoLayout}
           />
 
           <UmlToolbar

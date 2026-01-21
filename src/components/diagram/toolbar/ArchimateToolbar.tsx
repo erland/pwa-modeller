@@ -5,6 +5,8 @@ import type { AutoLayoutOptions, ElementType, Model, View } from '../../../domai
 import { CreateElementDialog } from '../../model/navigator/dialogs/CreateElementDialog';
 import type { Selection } from '../../model/selection';
 
+import { AutoLayoutDialog } from '../dialogs/AutoLayoutDialog';
+
 import type { ToolMode } from '../hooks/useDiagramToolState';
 
 type Props = {
@@ -38,8 +40,14 @@ export function ArchimateToolbar({
   onAutoLayout,
 }: Props) {
   const [archimatePaletteDialog, setArchimatePaletteDialog] = useState<{ initialTypeId?: ElementType } | null>(null);
-  const [autoLayoutDirection, setAutoLayoutDirection] = useState<'RIGHT' | 'DOWN'>('RIGHT');
-  const [autoLayoutSpacing, setAutoLayoutSpacing] = useState<number>(80);
+  const [autoLayoutDialogOpen, setAutoLayoutDialogOpen] = useState(false);
+  const [autoLayoutSettings, setAutoLayoutSettings] = useState<AutoLayoutOptions>({
+    scope: 'all',
+    direction: 'RIGHT',
+    spacing: 80,
+    edgeRouting: 'POLYLINE',
+    respectLocked: true,
+  });
 
   const rootFolderId = useMemo(() => {
     // The model always has a root folder, but keep a defensive fallback.
@@ -80,43 +88,12 @@ export function ArchimateToolbar({
           disabled={!hasActiveView}
           onClick={() => {
             setToolMode('select');
-            onAutoLayout({ direction: autoLayoutDirection, spacing: autoLayoutSpacing });
+            setAutoLayoutDialogOpen(true);
           }}
           title="Auto layout this view (ArchiMate)"
         >
           Auto Layout
         </button>
-
-        <label className="srOnly" htmlFor="archimate-auto-layout-direction">
-          Auto layout direction
-        </label>
-        <select
-          id="archimate-auto-layout-direction"
-          className="selectInput"
-          disabled={!hasActiveView}
-          value={autoLayoutDirection}
-          onChange={(e) => setAutoLayoutDirection(e.target.value as 'RIGHT' | 'DOWN')}
-          title="Auto layout direction"
-        >
-          <option value="RIGHT">L→R</option>
-          <option value="DOWN">T→B</option>
-        </select>
-
-        <label className="srOnly" htmlFor="archimate-auto-layout-spacing">
-          Auto layout spacing
-        </label>
-        <select
-          id="archimate-auto-layout-spacing"
-          className="selectInput"
-          disabled={!hasActiveView}
-          value={autoLayoutSpacing}
-          onChange={(e) => setAutoLayoutSpacing(Number(e.target.value))}
-          title="Auto layout spacing"
-        >
-          <option value={60}>Compact</option>
-          <option value={80}>Normal</option>
-          <option value={120}>Spacious</option>
-        </select>
 
 
         <span className="diagramToolbarDivider" aria-hidden="true" />
@@ -153,6 +130,17 @@ export function ArchimateToolbar({
         }}
         onClose={() => setArchimatePaletteDialog(null)}
         onSelect={onSelect}
+      />
+
+      <AutoLayoutDialog
+        isOpen={autoLayoutDialogOpen}
+        onClose={() => setAutoLayoutDialogOpen(false)}
+        initialOptions={autoLayoutSettings}
+        onRun={(opts) => {
+          setAutoLayoutSettings(opts);
+          setAutoLayoutDialogOpen(false);
+          onAutoLayout(opts);
+        }}
       />
     </>
   );

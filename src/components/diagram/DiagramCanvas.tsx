@@ -145,15 +145,21 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           spacing: 80,
           edgeRouting: 'POLYLINE',
           respectLocked: true,
-          ...overrides
+          ...overrides,
         };
-        await modelStore.autoLayoutView(activeViewId, options);
+
+        const selectionNodeIds =
+          options.scope === 'selection' && selection.kind === 'viewNode' && selection.viewId === activeViewId
+            ? [selection.elementId]
+            : undefined;
+
+        await modelStore.autoLayoutView(activeViewId, options, selectionNodeIds);
       } catch (e) {
         // Avoid crashing the UI; errors can be inspected in dev tools.
         console.error('Auto layout failed', e);
       }
     },
-    [activeViewId, activeView]
+    [activeViewId, activeView, selection]
   );
 
 

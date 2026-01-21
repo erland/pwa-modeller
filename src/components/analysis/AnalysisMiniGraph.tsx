@@ -8,6 +8,7 @@ import type {
   ArchimateLayer,
   ElementType
 } from '../../domain';
+import type { MiniGraphData, MiniGraphNode } from '../../domain/analysis/miniGraph';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { ModelKind } from '../../domain/types';
 import type { Selection } from '../model/selection';
@@ -17,6 +18,8 @@ import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { useElementBgVar } from '../diagram/hooks/useElementBgVar';
 
 import { QuickTooltip } from './QuickTooltip';
+
+import { buildMiniGraphData, MINI_GRAPH_MAX_EDGES, MINI_GRAPH_MAX_NODES } from '../../domain/analysis/miniGraph';
 
 const ARCHIMATE_LAYER_BG_VAR: Record<ArchimateLayer, string> = {
   Strategy: 'var(--arch-layer-strategy)',
@@ -28,37 +31,11 @@ const ARCHIMATE_LAYER_BG_VAR: Record<ArchimateLayer, string> = {
   ImplementationMigration: 'var(--arch-layer-implementation)'
 };
 
-type GraphNode = {
-  id: string;
-  label: string;
-  level: number;
-  order: number;
-};
-
-type GraphEdge = TraversalStep;
-
-type GraphData = {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  maxLevel: number;
-  trimmed: {
-    nodes: boolean;
-    edges: boolean;
-  };
-};
-
-const MAX_NODES = 150;
-const MAX_EDGES = 300;
-
 function docSnippet(doc: string | undefined): string {
   const t = (doc ?? '').trim();
   if (!t) return '';
   if (t.length <= 240) return t;
   return `${t.slice(0, 239)}…`;
-}
-
-function stableName(labelForId: (id: string) => string, id: string): string {
-  return `${labelForId(id)}\u0000${id}`;
 }
 
 function relationshipIsExplicitlyUndirected(s: TraversalStep): boolean {
@@ -78,161 +55,13 @@ function edgeFromStep(s: TraversalStep): AnalysisEdge {
   };
 }
 
-function uniqEdges(edges: GraphEdge[]): GraphEdge[] {
-  const seen = new Set<string>();
-  const out: GraphEdge[] = [];
-  for (const e of edges) {
-    const key = `${e.relationshipId}:${e.fromId}->${e.toId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(e);
-  }
-  return out;
-}
-
-function graphFromRelated(related: RelatedElementsResult, labelForId: (id: string) => string): GraphData {
-  const startId = related.startElementId;
-  const hits = related.hits;
-
-  const nodesWanted: Array<{ id: string; distance: number }> = [{ id: startId, distance: 0 }].concat(
-    hits.map((h) => ({ id: h.elementId, distance: h.distance }))
-  );
-
-  // Cap nodes (prefer closer distances first).
-  nodesWanted.sort((a, b) => a.distance - b.distance || stableName(labelForId, a.id).localeCompare(stableName(labelForId, b.id)));
-  const trimmedNodes = nodesWanted.length > MAX_NODES;
-  const kept = nodesWanted.slice(0, MAX_NODES);
-
-  const nodeSet = new Set<string>(kept.map((n) => n.id));
-
-  // Build edges from the stored predecessor step (a BFS-tree projection).
-  const edges: GraphEdge[] = [];
-  for (const h of hits) {
-    if (!nodeSet.has(h.elementId)) continue;
-    const via = h.via;
-    if (!via) continue;
-    if (!nodeSet.has(via.fromId) || !nodeSet.has(via.toId)) continue;
-    edges.push({
-      ...via
-    });
-  }
-
-  const edgesUniq = uniqEdges(edges);
-  const trimmedEdges = edgesUniq.length > MAX_EDGES;
-  const edgesKept = edgesUniq.slice(0, MAX_EDGES);
-
-  // Compute ordering per level.
-  const byLevel = new Map<number, string[]>();
-  for (const n of kept) {
-    const level = n.distance;
-    const arr = byLevel.get(level) ?? [];
-    arr.push(n.id);
-    byLevel.set(level, arr);
-  }
-
-  const nodes: GraphNode[] = [];
-  let maxLevel = 0;
-  for (const [level, ids] of byLevel.entries()) {
-    ids.sort((a, b) => stableName(labelForId, a).localeCompare(stableName(labelForId, b)));
-    maxLevel = Math.max(maxLevel, level);
-    ids.forEach((id, order) => nodes.push({ id, label: labelForId(id), level, order }));
-  }
-
-  return {
-    nodes,
-    edges: edgesKept,
-    maxLevel,
-    trimmed: { nodes: trimmedNodes, edges: trimmedEdges }
-  };
-}
-
-function levelForPathsNode(paths: PathsBetweenResult, nodeId: string): number {
-  // Assign level by earliest position in any path.
-  let best: number | undefined;
-  for (const p of paths.paths) {
-    const idx = p.elementIds.indexOf(nodeId);
-    if (idx < 0) continue;
-    if (best === undefined || idx < best) best = idx;
-  }
-  return best ?? 0;
-}
-
-function graphFromPaths(res: PathsBetweenResult, labelForId: (id: string) => string): GraphData {
-  const nodeSet = new Set<string>();
-  const edges: GraphEdge[] = [];
-
-  // Collect union of path nodes/edges.
-  for (const p of res.paths) {
-    for (const id of p.elementIds) nodeSet.add(id);
-    for (const s of p.steps) {
-      edges.push(s);
-    }
-  }
-
-  // Cap nodes (prefer nearer to source by computed level).
-  const nodeList = Array.from(nodeSet);
-  nodeList.sort(
-    (a, b) =>
-      levelForPathsNode(res, a) - levelForPathsNode(res, b) ||
-      stableName(labelForId, a).localeCompare(stableName(labelForId, b))
-  );
-  const trimmedNodes = nodeList.length > MAX_NODES;
-  const keptNodes = nodeList.slice(0, MAX_NODES);
-  const keptSet = new Set<string>(keptNodes);
-
-  const edgesUniq = uniqEdges(edges).filter((e) => keptSet.has(e.fromId) && keptSet.has(e.toId));
-  const trimmedEdges = edgesUniq.length > MAX_EDGES;
-  const edgesKept = edgesUniq.slice(0, MAX_EDGES);
-
-  // Group nodes by level.
-  const byLevel = new Map<number, string[]>();
-  let maxLevel = 0;
-  for (const id of keptNodes) {
-    const lvl = levelForPathsNode(res, id);
-    maxLevel = Math.max(maxLevel, lvl);
-    const arr = byLevel.get(lvl) ?? [];
-    arr.push(id);
-    byLevel.set(lvl, arr);
-  }
-
-  const nodes: GraphNode[] = [];
-  for (const [level, ids] of byLevel.entries()) {
-    ids.sort((a, b) => stableName(labelForId, a).localeCompare(stableName(labelForId, b)));
-    ids.forEach((id, order) => nodes.push({ id, label: labelForId(id), level, order }));
-  }
-
-  return {
-    nodes,
-    edges: edgesKept,
-    maxLevel,
-    trimmed: { nodes: trimmedNodes, edges: trimmedEdges }
-  };
-}
-
-function buildGraphData(
-  labelForId: (id: string) => string,
-  mode: AnalysisMode,
-  relatedResult: RelatedElementsResult | null,
-  pathsResult: PathsBetweenResult | null
-): GraphData | null {
-  if (mode === 'related') {
-    if (!relatedResult) return null;
-    if (!relatedResult.startElementId) return null;
-    if (relatedResult.hits.length === 0) return null;
-    return graphFromRelated(relatedResult, labelForId);
-  }
-  if (!pathsResult) return null;
-  if (pathsResult.paths.length === 0) return null;
-  return graphFromPaths(pathsResult, labelForId);
-}
-
 function nodeRect() {
   const w = 170;
   const h = 34;
   return { w, h };
 }
 
-function nodeXY(node: GraphNode, yCountByLevel: Map<number, number>) {
+function nodeXY(node: MiniGraphNode, yCountByLevel: Map<number, number>) {
   const xSpacing = 220;
   const ySpacing = 56;
   const marginX = 24;
@@ -330,10 +159,11 @@ export function AnalysisMiniGraph({
     return { title: title || '(relationship)', lines };
   };
 
-  const data = useMemo(
-    () => buildGraphData(labelForId, mode, relatedResult, pathsResult),
-    [labelForId, mode, relatedResult, pathsResult]
-  );
+  const data: MiniGraphData | null = useMemo(() => {
+    // Keep the component's public `mode` type, but adapt it to the domain helper.
+    const m = mode === 'related' ? 'related' : 'paths';
+    return buildMiniGraphData(labelForId, m, relatedResult, pathsResult);
+  }, [labelForId, mode, relatedResult, pathsResult]);
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
 
@@ -513,7 +343,7 @@ export function AnalysisMiniGraph({
 
       {data.trimmed.nodes || data.trimmed.edges ? (
         <p className="crudHint" style={{ marginTop: 8 }}>
-          Showing a bounded projection for readability (max {MAX_NODES} nodes, {MAX_EDGES} edges). Use tighter filters to reduce the result set.
+          Showing a bounded projection for readability (max {MINI_GRAPH_MAX_NODES} nodes, {MINI_GRAPH_MAX_EDGES} edges). Use tighter filters to reduce the result set.
         </p>
       ) : null}
 

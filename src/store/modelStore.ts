@@ -13,12 +13,15 @@ import type {
   ViewObjectType,
   ViewConnectionRouteKind,
 } from '../domain';
+import type { AutoLayoutOptions } from '../domain/layout/types';
+import { extractArchiMateLayoutInput } from '../domain/layout/archimate';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
 import {
   connectorMutations,
   elementMutations,
   folderMutations,
   layoutMutations,
+  autoLayoutMutations,
   modelMutations,
   bpmnMutations,
   relationshipMutations,
@@ -387,6 +390,28 @@ export class ModelStore {
   ): void => {
     this.updateModel((model) => layoutMutations.updateViewNodeLayoutAny(model, viewId, ref, patch));
   };
+  autoLayoutView = async (viewId: string, options: AutoLayoutOptions = {}, selectionNodeIds?: string[]): Promise<void> => {
+    const current = this.state.model;
+    if (!current) throw new Error('No model loaded');
+
+    const view = current.views[viewId];
+    if (!view) throw new Error(`View not found: ${viewId}`);
+    if (view.kind !== 'archimate') {
+      throw new Error(`Auto layout is currently only supported for ArchiMate views (got: ${view.kind})`);
+    }
+
+    const input = extractArchiMateLayoutInput(current, viewId, options, selectionNodeIds);
+    if (input.nodes.length === 0) return;
+
+    // Lazy-load ELK so it doesn't get pulled into the main bundle until the user runs auto-layout.
+    const { elkLayout } = await import('../domain/layout/elk/elkLayout');
+    const output = await elkLayout(input, options);
+
+    this.updateModel((model) => {
+      autoLayoutMutations.autoLayoutView(model, viewId, output.positions);
+    });
+  };
+
 
   // -------------------------
   // Folders

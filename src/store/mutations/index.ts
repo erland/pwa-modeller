@@ -5,6 +5,7 @@ export * as connectorMutations from './connectors';
 export * as viewMutations from './views';
 export * as viewObjectMutations from './viewObjects';
 export * as layoutMutations from './layout';
+export * as autoLayoutMutations from './autoLayout';
 export * as folderMutations from './folders';
 export * as bpmnMutations from './bpmn';
 

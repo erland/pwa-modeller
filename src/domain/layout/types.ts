@@ -14,21 +14,23 @@ export interface AutoLayoutOptions {
 
   /**
    * Desired minimum spacing between nodes (in view coordinates/pixels).
+   * Implementation may use this as a hint.
    */
   spacing?: number;
 
   /**
-   * Desired edge routing style. Note: some engines may treat this as a hint.
+   * Preferred edge routing style. (Your diagram router can still re-route after layout.)
    */
   edgeRouting?: EdgeRoutingStyle;
 
   /**
-   * Scope of auto layout.
+   * Scope of auto layout. If 'selection' is requested but the caller does not supply
+   * selection context, implementations may treat it as 'all'.
    */
   scope?: AutoLayoutScope;
 
   /**
-   * If true, nodes marked as locked should keep their positions.
+   * If true, nodes marked as locked/pinned should not be moved by the layout engine.
    */
   respectLocked?: boolean;
 }
@@ -37,24 +39,24 @@ export interface LayoutNodeInput {
   id: string;
   width: number;
   height: number;
-  locked?: boolean;
-
   /**
-   * Optional grouping/container identifier (e.g., lanes, groups).
+   * If true, the node should be treated as fixed (not moved) by the layout algorithm.
+   */
+  locked?: boolean;
+  /**
+   * Optional grouping key (e.g., swimlane, package, layer group).
    */
   groupId?: string;
-
   /**
-   * Optional semantic hint for placing nodes into bands/layers (e.g., business/application/technology).
+   * Optional hint for layered/grouped layouts (e.g., 'business'|'application'|'technology').
    */
   layerHint?: string;
 }
 
 export interface LayoutEdgeInput {
   id: string;
-  source: string;
-  target: string;
-
+  sourceId: string;
+  targetId: string;
   /**
    * Optional weight/priority (higher means "more important" for the layout).
    */

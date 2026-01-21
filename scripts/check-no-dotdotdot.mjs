@@ -1,314 +1,279 @@
 #!/usr/bin/env node
 /**
- * CI guardrail: disallow literal "..." in docs/comments.
+ * CI guardrail: disallow literal three-dot ellipses in Markdown and in code comments.
  *
- * Why: triple-dots in comments/docs can look like "file truncated" to patching tools/LLMs.
+ * Why: "…" in docs/comments can look like "file truncated" to patching tools/LLMs.
  *
  * Allowed:
- *   - real JS/TS spread/rest operator usage in code (e.g. {...obj}, fn(...args))
+ *  - Real JS/TS spread/rest operator usage in code (e.g. {…obj}, fn(…args))
  *
  * Blocked:
- *   - "..." anywhere in Markdown
- *   - "..." inside JS/TS comments (and in Markdown)
+ *  - Three-dot ellipses in Markdown
+ *  - Three-dot ellipses inside JS/TS comments
  */
 
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 
-const PROJECT_ROOT = path.resolve(process.cwd());
+const ROOT = process.cwd();
 
-const INCLUDE_DIRS = ["src", "docs"];
-const INCLUDE_FILES = ["README.md"];
+const MARKDOWN_EXTS = new Set(['.md', '.mdx']);
+const CODE_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 
-const CODE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".cjs", ".mjs"]);
-const MD_EXTS = new Set([".md"]);
+function isIgnoredDir(name) {
+  return (
+    name === 'node_modules' ||
+    name === 'dist' ||
+    name === 'build' ||
+    name === '.git' ||
+    name === '.vite' ||
+    name === 'coverage'
+  );
+}
 
-const SKIP_DIRS = new Set([
-  "node_modules",
-  "dist",
-  "build",
-  "coverage",
-  ".git",
-  ".vite",
-]);
-
-/** Recursively collect files under a directory, skipping common build dirs. */
-function collectFiles(dir) {
-  const out = [];
-  const stack = [dir];
-  while (stack.length) {
-    const cur = stack.pop();
-    let ents;
-    try {
-      ents = fs.readdirSync(cur, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const ent of ents) {
-      const full = path.join(cur, ent.name);
-      if (ent.isDirectory()) {
-        if (SKIP_DIRS.has(ent.name)) continue;
-        stack.push(full);
-      } else if (ent.isFile()) {
-        out.push(full);
-      }
+function walk(dir, out) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (isIgnoredDir(e.name)) continue;
+      walk(full, out);
+    } else if (e.isFile()) {
+      out.push(full);
     }
   }
-  return out;
+}
+
+function getLineCol(text, index) {
+  let line = 1;
+  let col = 1;
+  for (let i = 0; i < index; i++) {
+    if (text[i] === '\n') {
+      line++;
+      col = 1;
+    } else {
+      col++;
+    }
+  }
+  return { line, col };
+}
+
+function getLineSnippet(text, line) {
+  const lines = text.split('\n');
+  return (lines[line - 1] ?? '').slice(0, 220);
+}
+
+function findEllipsesInMarkdown(text) {
+  const hits = [];
+  let idx = text.indexOf('...');
+  while (idx !== -1) {
+    const { line, col } = getLineCol(text, idx);
+    hits.push({ line, col });
+    idx = text.indexOf('...', idx + 3);
+  }
+  return hits;
 }
 
 /**
- * Find "..." inside comments/strings/templates for JS/TS-like files.
- * Tiny lexer:
- * - Allows spread/rest in normal code and inside template ${...} expressions.
- * - Flags "..." in:
- *   - line comments
- *   - block comments
- *   - 'single' and "double" string literals
- *   - template literal raw text (the parts outside ${...})
+ * Scan for "…" inside comments, while ignoring strings/templates.
+ * This is a lightweight state machine; it does not aim to be a perfect JS parser.
  */
 function findEllipsesInCode(text) {
   const hits = [];
-
-  /** @type {Array<{type: string, braceDepth?: number}>} */
-  const stack = [{ type: "normal" }];
-
   let i = 0;
   let line = 1;
   let col = 1;
 
-  function cur() {
-    return stack[stack.length - 1];
-  }
-  function push(frame) {
-    stack.push(frame);
-  }
-  function pop() {
-    if (stack.length > 1) stack.pop();
-  }
-
-  function advance(n = 1) {
-    for (let k = 0; k < n; k++) {
-      const ch = text[i++];
-      if (ch === "\n") {
-        line++;
-        col = 1;
-      } else {
-        col++;
-      }
+  const advance = (ch) => {
+    i++;
+    if (ch === '\n') {
+      line++;
+      col = 1;
+    } else {
+      col++;
     }
-  }
+  };
 
-  function peek(n = 0) {
-    return text[i + n];
-  }
+  let state = 'code'; // code | line_comment | block_comment | single | double | template
+  let blockDepth = 0;
 
   while (i < text.length) {
-    const ch = peek(0);
-    const ch2 = ch + (peek(1) ?? "");
-    const ch3 = ch2 + (peek(2) ?? "");
-    const t = cur().type;
+    const ch = text[i];
+    const next = text[i + 1];
 
-    const banned = t === "sl_comment" || t === "ml_comment";
+    // Helpers to record a hit at current position
+    const maybeHit = () => {
+      if (text.startsWith('...', i)) {
+        hits.push({ line, col });
+      }
+    };
 
-    if (ch3 === "..." && banned) {
-      hits.push({ index: i, line, col });
-      advance(3);
-      continue;
-    }
-
-    // NORMAL-LIKE (includes template_expr)
-    if (t === "normal" || t === "template_expr") {
-      if (ch2 === "//") {
-        push({ type: "sl_comment" });
-        advance(2);
+    if (state === 'code') {
+      // Enter comments
+      if (ch === '/' && next === '/') {
+        state = 'line_comment';
+        advance(ch);
+        advance(next);
         continue;
       }
-      if (ch2 === "/*") {
-        push({ type: "ml_comment" });
-        advance(2);
+      if (ch === '/' && next === '*') {
+        state = 'block_comment';
+        blockDepth = 1;
+        advance(ch);
+        advance(next);
         continue;
       }
+
+      // Enter strings
       if (ch === "'") {
-        push({ type: "s_quote" });
-        advance(1);
+        state = 'single';
+        advance(ch);
         continue;
       }
       if (ch === '"') {
-        push({ type: "d_quote" });
-        advance(1);
+        state = 'double';
+        advance(ch);
         continue;
       }
-      if (ch === "`") {
-        push({ type: "template_text" });
-        advance(1);
+      if (ch === '`') {
+        state = 'template';
+        advance(ch);
         continue;
       }
 
-      if (t === "template_expr") {
-        // Track braces in ${ ... } so we can find the closing '}'
-        if (ch === "{") {
-          cur().braceDepth = (cur().braceDepth ?? 0) + 1;
-          advance(1);
-          continue;
-        }
-        if (ch === "}") {
-          const d = cur().braceDepth ?? 0;
-          if (d === 0) {
-            pop(); // end of ${...}
-            advance(1);
+      advance(ch);
+      continue;
+    }
+
+    if (state === 'line_comment') {
+      maybeHit();
+      if (ch === '\n') {
+        state = 'code';
+      }
+      advance(ch);
+      continue;
+    }
+
+    if (state === 'block_comment') {
+      maybeHit();
+      if (ch === '/' && next === '*') {
+        // nested block comment
+        blockDepth++;
+        advance(ch);
+        advance(next);
+        continue;
+      }
+      if (ch === '*' && next === '/') {
+        blockDepth--;
+        advance(ch);
+        advance(next);
+        if (blockDepth <= 0) state = 'code';
+        continue;
+      }
+      advance(ch);
+      continue;
+    }
+
+    // String states: skip over escaped characters
+    if (state === 'single') {
+      if (ch === '\\') {
+        advance(ch);
+        if (i < text.length) advance(text[i]);
+        continue;
+      }
+      if (ch === "'") {
+        state = 'code';
+      }
+      advance(ch);
+      continue;
+    }
+
+    if (state === 'double') {
+      if (ch === '\\') {
+        advance(ch);
+        if (i < text.length) advance(text[i]);
+        continue;
+      }
+      if (ch === '"') {
+        state = 'code';
+      }
+      advance(ch);
+      continue;
+    }
+
+    if (state === 'template') {
+      if (ch === '\\') {
+        advance(ch);
+        if (i < text.length) advance(text[i]);
+        continue;
+      }
+      if (ch === '`') {
+        state = 'code';
+        advance(ch);
+        continue;
+      }
+      // Ignore ${…} expressions as code (so comments inside are treated as code)
+      if (ch === '$' && next === '{') {
+        advance(ch);
+        advance(next);
+        // consume until matching }
+        let depth = 1;
+        while (i < text.length && depth > 0) {
+          const c = text[i];
+          const n = text[i + 1];
+          if (c === '\\') {
+            advance(c);
+            if (i < text.length) advance(text[i]);
             continue;
           }
-          cur().braceDepth = d - 1;
-          advance(1);
-          continue;
+          if (c === '{') depth++;
+          if (c === '}') depth--;
+          advance(c);
         }
+        continue;
       }
-
-      advance(1);
+      advance(ch);
       continue;
     }
 
-    // TEMPLATE RAW TEXT
-    if (t === "template_text") {
-      if (ch2 === "${") {
-        push({ type: "template_expr", braceDepth: 0 });
-        advance(2);
-        continue;
-      }
-      if (ch === "`") {
-        pop(); // end template
-        advance(1);
-        continue;
-      }
-      if (ch === "\\") {
-        advance(2);
-        continue;
-      }
-      advance(1);
-      continue;
-    }
-
-    // SINGLE LINE COMMENT
-    if (t === "sl_comment") {
-      if (ch === "\n") {
-        pop();
-      }
-      advance(1);
-      continue;
-    }
-
-    // MULTI LINE COMMENT
-    if (t === "ml_comment") {
-      if (ch2 === "*/") {
-        pop();
-        advance(2);
-        continue;
-      }
-      advance(1);
-      continue;
-    }
-
-    // STRINGS (tracked to avoid mis-detecting comments inside strings)
-    if (t === "s_quote") {
-      if (ch === "\\") {
-        advance(2);
-        continue;
-      }
-      if (ch === "'") {
-        pop();
-        advance(1);
-        continue;
-      }
-      advance(1);
-      continue;
-    }
-
-    if (t === "d_quote") {
-      if (ch === "\\") {
-        advance(2);
-        continue;
-      }
-      if (ch === '"') {
-        pop();
-        advance(1);
-        continue;
-      }
-      advance(1);
-      continue;
-    }
-
-    // Fallback
-    advance(1);
+    // fallback
+    advance(ch);
   }
 
   return hits;
 }
 
-function getLineSnippet(text, targetLine) {
-  const lines = text.split(/\r?\n/);
-  const idx = Math.max(0, Math.min(lines.length - 1, targetLine - 1));
-  return lines[idx];
-}
-
-function formatHit(relPath, line, col, snippet) {
-  const pointer = " ".repeat(Math.max(0, col - 1)) + "^";
-  return [
-    `${relPath}:${line}:${col} found "..."`,
-    `  ${snippet}`,
-    `  ${pointer}`,
-  ].join("\n");
+function formatHit(rel, line, col, snippet) {
+  return `${rel}:${line}:${col}\n  ${snippet}`;
 }
 
 const files = [];
+walk(ROOT, files);
 
-// include dirs
-for (const d of INCLUDE_DIRS) {
-  const abs = path.join(PROJECT_ROOT, d);
-  files.push(...collectFiles(abs));
-}
-// include specific files
-for (const f of INCLUDE_FILES) {
-  files.push(path.join(PROJECT_ROOT, f));
-}
-
-let failures = [];
+const failures = [];
 
 for (const file of files) {
   const ext = path.extname(file).toLowerCase();
-  if (!CODE_EXTS.has(ext) && !MD_EXTS.has(ext)) continue;
+  if (!MARKDOWN_EXTS.has(ext) && !CODE_EXTS.has(ext)) continue;
 
-  let text;
-  try {
-    text = fs.readFileSync(file, "utf8");
-  } catch {
-    continue;
-  }
+  const rel = path.relative(ROOT, file);
+  const text = fs.readFileSync(file, 'utf8');
 
-  const rel = path.relative(PROJECT_ROOT, file).replaceAll("\\", "/");
-
-  if (MD_EXTS.has(ext)) {
-    const idx = text.indexOf("...");
-    if (idx !== -1) {
-      const before = text.slice(0, idx);
-      const line = before.split(/\r?\n/).length;
-      const col = before.length - before.lastIndexOf("\n");
-      failures.push(formatHit(rel, line, col, getLineSnippet(text, line)));
-    }
+  if (MARKDOWN_EXTS.has(ext)) {
+    const hits = findEllipsesInMarkdown(text);
+    for (const h of hits) failures.push(formatHit(rel, h.line, h.col, getLineSnippet(text, h.line)));
     continue;
   }
 
   const hits = findEllipsesInCode(text);
-  for (const h of hits) {
-    failures.push(formatHit(rel, h.line, h.col, getLineSnippet(text, h.line)));
-  }
+  for (const h of hits) failures.push(formatHit(rel, h.line, h.col, getLineSnippet(text, h.line)));
 }
 
 if (failures.length) {
-  console.error(`\n❌ Disallowed literal "..." found in docs/comments (${failures.length} hit(s)):\n`);
-  console.error(failures.join("\n\n"));
-  console.error(`\nFix: replace "..." with "…" (Unicode ellipsis) or a clearer placeholder.\n`);
+  console.error(`\n❌ Disallowed three-dot ellipses found in docs/comments (${failures.length} hit(s)):\n`);
+  console.error(failures.join('\n\n'));
+  console.error('\nFix: replace "..." with "…" (Unicode ellipsis) or a clearer placeholder.\n');
   process.exit(1);
 } else {
-  console.log('✅ No disallowed "..." found in docs/comments.');
+  console.log('✅ No disallowed three-dot ellipses found in docs/comments.');
 }

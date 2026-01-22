@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import type { AlignMode, AutoLayoutOptions, Model, View } from '../../domain';
+import type { AlignMode, AutoLayoutOptions, DistributeMode, Model, SameSizeMode, View } from '../../domain';
 
 import type { Selection } from '../model/selection';
 
@@ -33,6 +33,8 @@ export type DiagramToolbarProps = {
   onExportImage: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
   onAlignSelection: (mode: AlignMode) => void;
+  onDistributeSelection: (mode: DistributeMode) => void;
+  onSameSizeSelection: (mode: SameSizeMode) => void;
   onFitToTextSelection: () => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
@@ -59,6 +61,8 @@ export function DiagramToolbar({
   onExportImage,
   onAutoLayout,
   onAlignSelection,
+  onDistributeSelection,
+  onSameSizeSelection,
   onFitToTextSelection,
   onAddAndJunction,
   onAddOrJunction,
@@ -202,9 +206,9 @@ export function DiagramToolbar({
               onClick={() => setAlignDialogOpen(true)}
               className="shellButton"
               disabled={!hasActiveView || selectedNodeCount < 2}
-              title="Align selected nodes"
+              title="Arrange selected nodes"
             >
-              Align
+              Arrange
             </button>
 
             <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>
@@ -220,6 +224,14 @@ export function DiagramToolbar({
         selectedCount={selectedNodeCount}
         onAlign={(mode) => {
           onAlignSelection(mode);
+          setAlignDialogOpen(false);
+        }}
+        onSameSize={(mode) => {
+          onSameSizeSelection(mode);
+          setAlignDialogOpen(false);
+        }}
+        onDistribute={(mode) => {
+          onDistributeSelection(mode);
           setAlignDialogOpen(false);
         }}
       />

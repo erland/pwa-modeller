@@ -7,6 +7,10 @@ export type AutoLayoutScope = 'all' | 'selection';
 // Arrange / alignment utilities.
 export type AlignMode = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 
+export type DistributeMode = 'horizontal' | 'vertical';
+
+export type SameSizeMode = 'width' | 'height' | 'both';
+
 export interface AutoLayoutOptions {
   /**
    * Layout direction for layered layouts.

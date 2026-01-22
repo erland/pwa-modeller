@@ -7,6 +7,7 @@ export * as viewObjectMutations from './viewObjects';
 export * as layoutMutations from './layout';
 export * as autoLayoutMutations from './autoLayout';
 export * as alignMutations from './align';
+export * as arrangeMutations from './arrange';
 export * as fitToTextMutations from './fitToText';
 export * as folderMutations from './folders';
 export * as bpmnMutations from './bpmn';

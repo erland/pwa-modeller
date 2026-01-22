@@ -13,7 +13,7 @@ import type {
   ViewObjectType,
   ViewConnectionRouteKind,
 } from '../domain';
-import type { AlignMode, AutoLayoutOptions } from '../domain/layout/types';
+import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode } from '../domain/layout/types';
 import { extractArchiMateLayoutInput, fitArchiMateBoxToText } from '../domain/layout/archimate';
 import { nudgeOverlaps, snapToGrid } from '../domain/layout/post';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
@@ -24,6 +24,7 @@ import {
   layoutMutations,
   autoLayoutMutations,
   alignMutations,
+  arrangeMutations,
   fitToTextMutations,
   modelMutations,
   bpmnMutations,
@@ -409,6 +410,16 @@ export class ModelStore {
   /** Align element nodes in a view based on the current selection. */
   alignViewElements = (viewId: string, elementIds: string[], mode: AlignMode): void => {
     this.updateModel((model) => alignMutations.alignViewElements(model, viewId, elementIds, mode));
+  };
+
+  /** Distribute selected element nodes evenly within a view. */
+  distributeViewElements = (viewId: string, elementIds: string[], mode: DistributeMode): void => {
+    this.updateModel((model) => arrangeMutations.distributeViewElements(model, viewId, elementIds, mode));
+  };
+
+  /** Make selected element nodes the same size within a view. */
+  sameSizeViewElements = (viewId: string, elementIds: string[], mode: SameSizeMode): void => {
+    this.updateModel((model) => arrangeMutations.sameSizeViewElements(model, viewId, elementIds, mode));
   };
 
   /**

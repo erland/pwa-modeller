@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import type { AlignMode, AutoLayoutOptions, Model, View } from '../../domain';
+import type { AlignMode, AutoLayoutOptions, DistributeMode, Model, SameSizeMode, View } from '../../domain';
 import { createConnector } from '../../domain';
 import { modelStore } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
@@ -227,6 +227,38 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     [activeViewId, activeView, selection]
   );
 
+  const onDistributeSelection = useCallback(
+    (mode: DistributeMode) => {
+      if (!activeViewId || !activeView) return;
+      if (selection.kind !== 'viewNodes') return;
+      if (selection.viewId !== activeViewId) return;
+      if (selection.elementIds.length < 3) return;
+
+      try {
+        modelStore.distributeViewElements(activeViewId, selection.elementIds, mode);
+      } catch (e) {
+        console.error('Distribute failed', e);
+      }
+    },
+    [activeViewId, activeView, selection]
+  );
+
+  const onSameSizeSelection = useCallback(
+    (mode: SameSizeMode) => {
+      if (!activeViewId || !activeView) return;
+      if (selection.kind !== 'viewNodes') return;
+      if (selection.viewId !== activeViewId) return;
+      if (selection.elementIds.length < 2) return;
+
+      try {
+        modelStore.sameSizeViewElements(activeViewId, selection.elementIds, mode);
+      } catch (e) {
+        console.error('Same size failed', e);
+      }
+    },
+    [activeViewId, activeView, selection]
+  );
+
   const onFitToTextSelection = useCallback(() => {
     if (!activeViewId || !activeView || activeView.kind !== 'archimate') return;
 
@@ -296,6 +328,8 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       onExportImage={handleExportImage}
       onAutoLayout={onAutoLayout}
       onAlignSelection={onAlignSelection}
+      onDistributeSelection={onDistributeSelection}
+      onSameSizeSelection={onSameSizeSelection}
       onFitToTextSelection={onFitToTextSelection}
       onAddAndJunction={onAddAndJunction}
       onAddOrJunction={onAddOrJunction}

@@ -14,6 +14,7 @@ import { RelationshipProperties } from './properties/RelationshipProperties';
 import { ViewNodeProperties } from './properties/ViewNodeProperties';
 import { ViewObjectProperties } from './properties/ViewObjectProperties';
 import { ViewProperties } from './properties/ViewProperties';
+import { MultiViewNodesSelectionProperties } from './properties/MultiViewNodesSelectionProperties';
 import { findFolderByKind } from './properties/utils';
 
 type Props = {
@@ -95,6 +96,17 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
   switch (selection.kind) {
     case 'folder':
       return <FolderProperties model={model} folderId={selection.folderId} actions={actions} />;
+case 'viewNodes':
+  return (
+    <MultiViewNodesSelectionProperties
+      model={model}
+      viewId={selection.viewId}
+      elementIds={selection.elementIds}
+      actions={actions}
+      onSelect={onSelect}
+    />
+  );
+
     case 'viewNode':
       return (
         <ViewNodeProperties

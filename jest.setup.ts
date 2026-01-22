@@ -1,5 +1,21 @@
 import '@testing-library/jest-dom';
 
+// JSDOM doesn't implement the Canvas 2D API by default.
+// Some layout helpers use canvas text measurement, so we provide a minimal mock
+// to keep tests deterministic and avoid noisy console errors.
+if (typeof (globalThis as any).HTMLCanvasElement !== 'undefined') {
+  Object.defineProperty((globalThis as any).HTMLCanvasElement.prototype, 'getContext', {
+    configurable: true,
+    value: function getContext(type: string) {
+      if (type !== '2d') return null;
+      return {
+        font: '',
+        measureText: (t: string) => ({ width: Math.max(0, String(t).length) * 7 })
+      } as any;
+    }
+  });
+}
+
 // react-aria-components may rely on browser APIs that JSDOM doesn't implement.
 // Keep these minimal (and no-op) for unit tests.
 if (typeof (globalThis as any).ResizeObserver === 'undefined') {

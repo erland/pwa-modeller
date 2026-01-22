@@ -227,6 +227,24 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     [activeViewId, activeView, selection]
   );
 
+  const onFitToTextSelection = useCallback(() => {
+    if (!activeViewId || !activeView || activeView.kind !== 'archimate') return;
+
+    let ids: string[] = [];
+    if (selection.kind === 'viewNode' && selection.viewId === activeViewId) {
+      ids = [selection.elementId];
+    } else if (selection.kind === 'viewNodes' && selection.viewId === activeViewId) {
+      ids = selection.elementIds;
+    }
+    if (ids.length === 0) return;
+
+    try {
+      modelStore.fitViewElementsToText(activeViewId, ids);
+    } catch (e) {
+      console.error('Fit to text failed', e);
+    }
+  }, [activeViewId, activeView, selection]);
+
 
   if (!model) {
     return (
@@ -278,6 +296,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       onExportImage={handleExportImage}
       onAutoLayout={onAutoLayout}
       onAlignSelection={onAlignSelection}
+      onFitToTextSelection={onFitToTextSelection}
       onAddAndJunction={onAddAndJunction}
       onAddOrJunction={onAddOrJunction}
     />

@@ -87,6 +87,7 @@ export type DiagramCanvasViewProps = {
   onExportImage: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
   onAlignSelection: (mode: AlignMode) => void;
+  onFitToTextSelection: () => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
 };
@@ -132,6 +133,7 @@ export function DiagramCanvasView({
   onExportImage,
   onAutoLayout,
   onAlignSelection,
+  onFitToTextSelection,
   onAddAndJunction,
   onAddOrJunction,
 }: DiagramCanvasViewProps) {
@@ -156,6 +158,7 @@ export function DiagramCanvasView({
         onExportImage={onExportImage}
         onAutoLayout={onAutoLayout}
         onAlignSelection={onAlignSelection}
+        onFitToTextSelection={onFitToTextSelection}
         onAddAndJunction={onAddAndJunction}
         onAddOrJunction={onAddOrJunction}
         beginPlaceExistingElement={beginPlaceExistingElement}

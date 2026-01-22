@@ -14,7 +14,7 @@ import type {
   ViewConnectionRouteKind,
 } from '../domain';
 import type { AlignMode, AutoLayoutOptions } from '../domain/layout/types';
-import { extractArchiMateLayoutInput } from '../domain/layout/archimate';
+import { extractArchiMateLayoutInput, fitArchiMateBoxToText } from '../domain/layout/archimate';
 import { nudgeOverlaps, snapToGrid } from '../domain/layout/post';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
 import {
@@ -24,6 +24,7 @@ import {
   layoutMutations,
   autoLayoutMutations,
   alignMutations,
+  fitToTextMutations,
   modelMutations,
   bpmnMutations,
   relationshipMutations,
@@ -408,6 +409,34 @@ export class ModelStore {
   /** Align element nodes in a view based on the current selection. */
   alignViewElements = (viewId: string, elementIds: string[], mode: AlignMode): void => {
     this.updateModel((model) => alignMutations.alignViewElements(model, viewId, elementIds, mode));
+  };
+
+  /**
+   * Resize selected ArchiMate element boxes so their visible text fits.
+   *
+   * Only applies to element-backed nodes in the given view.
+   */
+  fitViewElementsToText = (viewId: string, elementIds: string[]): void => {
+    if (elementIds.length === 0) return;
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view || view.kind !== 'archimate' || !view.layout) return;
+
+      const idSet = new Set(elementIds);
+      const updates: Array<{ elementId: string; width: number; height: number }> = [];
+
+      for (const n of view.layout.nodes) {
+        if (!n.elementId) continue;
+        if (!idSet.has(n.elementId)) continue;
+        const el = model.elements[n.elementId];
+        if (!el) continue;
+        const { width, height } = fitArchiMateBoxToText(el, n);
+        updates.push({ elementId: n.elementId, width, height });
+      }
+
+      if (updates.length === 0) return;
+      fitToTextMutations.applyViewElementSizes(model, viewId, updates);
+    });
   };
 
   autoLayoutView = async (viewId: string, options: AutoLayoutOptions = {}, selectionNodeIds?: string[]): Promise<void> => {

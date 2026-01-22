@@ -33,6 +33,7 @@ export type DiagramToolbarProps = {
   onExportImage: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
   onAlignSelection: (mode: AlignMode) => void;
+  onFitToTextSelection: () => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
 
@@ -58,6 +59,7 @@ export function DiagramToolbar({
   onExportImage,
   onAutoLayout,
   onAlignSelection,
+  onFitToTextSelection,
   onAddAndJunction,
   onAddOrJunction,
   beginPlaceExistingElement,
@@ -183,6 +185,16 @@ export function DiagramToolbar({
             </button>
             <button type="button" onClick={fitToView} aria-label="Fit to view" disabled={!activeView || nodesCount === 0}>
               Fit
+            </button>
+
+            <button
+              type="button"
+              onClick={onFitToTextSelection}
+              className="shellButton"
+              disabled={!hasActiveView || selectedNodeCount < 1 || activeView?.kind !== 'archimate'}
+              title="Resize selected nodes so their text fits"
+            >
+              Fit Text
             </button>
 
             <button

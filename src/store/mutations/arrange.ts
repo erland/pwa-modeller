@@ -41,7 +41,7 @@ function collectSelectedElementNodes(model: Model, viewId: string, elementIds: s
 /**
  * Make selected element nodes the same size.
  *
- * Uses the first element id in the provided list as the reference.
+ * Uses the last element id in the provided list as the reference (i.e. most recently selected).
  */
 export function sameSizeViewElements(model: Model, viewId: string, elementIds: string[], mode: SameSizeMode): void {
   if (elementIds.length < 2) return;
@@ -52,7 +52,7 @@ export function sameSizeViewElements(model: Model, viewId: string, elementIds: s
   const selected = collectSelectedElementNodes(model, viewId, elementIds);
   if (selected.length < 2) return;
 
-  const refId = elementIds.find((id) => selected.some((n) => n.elementId === id)) ?? selected[0].elementId;
+  const refId = elementIds.slice().reverse().find((id) => selected.some((n) => n.elementId === id)) ?? selected[selected.length - 1].elementId;
   const ref = selected.find((n) => n.elementId === refId);
   if (!ref) return;
 

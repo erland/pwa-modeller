@@ -47,18 +47,18 @@ export function DiagramNodesLayer({
       if (selection.elementId === elementId) {
         onSelect({ kind: 'none' });
       } else {
-        const ids = [selection.elementId, elementId].sort((a, b) => a.localeCompare(b));
+        const ids = [selection.elementId, elementId];
         onSelect({ kind: 'viewNodes', viewId, elementIds: ids });
       }
       return;
     }
 
     if (selection.kind === 'viewNodes' && selection.viewId === viewId) {
-      const set = new Set(selection.elementIds);
-      if (set.has(elementId)) set.delete(elementId);
-      else set.add(elementId);
+      const ids = selection.elementIds.slice();
+      const idx = ids.indexOf(elementId);
+      if (idx >= 0) ids.splice(idx, 1);
+      else ids.push(elementId);
 
-      const ids = Array.from(set).sort((a, b) => a.localeCompare(b));
       if (ids.length === 0) {
         onSelect({ kind: 'none' });
       } else if (ids.length === 1) {

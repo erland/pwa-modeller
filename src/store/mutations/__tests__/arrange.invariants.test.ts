@@ -48,10 +48,10 @@ describe('arrange mutations invariants', () => {
     const after = model.views[view.id].layout.nodes;
     const n1 = after.find((n) => n.elementId === e1.id);
     const n2 = after.find((n) => n.elementId === e2.id);
-    expect(n1?.width).toBe(180);
-    expect(n1?.height).toBe(90);
-    expect(n2?.width).toBe(180);
-    expect(n2?.height).toBe(90);
+    expect(n1?.width).toBe(120);
+    expect(n1?.height).toBe(60);
+    expect(n2?.width).toBe(120);
+    expect(n2?.height).toBe(60);
   });
 
   test('distributeViewElements distributes horizontally keeping the first and last node fixed', () => {

@@ -4,6 +4,9 @@ export type EdgeRoutingStyle = 'POLYLINE' | 'ORTHOGONAL';
 
 export type AutoLayoutScope = 'all' | 'selection';
 
+// Arrange / alignment utilities.
+export type AlignMode = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+
 export interface AutoLayoutOptions {
   /**
    * Layout direction for layered layouts.

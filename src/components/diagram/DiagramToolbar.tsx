@@ -1,4 +1,6 @@
-import type { AutoLayoutOptions, Model, View } from '../../domain';
+import { useMemo, useState } from 'react';
+
+import type { AlignMode, AutoLayoutOptions, Model, View } from '../../domain';
 
 import type { Selection } from '../model/selection';
 
@@ -7,11 +9,14 @@ import type { ToolMode } from './hooks/useDiagramToolState';
 import { ArchimateToolbar } from './toolbar/ArchimateToolbar';
 import { UmlToolbar } from './toolbar/UmlToolbar';
 import { BpmnToolbar } from './toolbar/BpmnToolbar';
+import { AlignDialog } from './dialogs/AlignDialog';
 
 export type DiagramToolbarProps = {
   model: Model;
   activeViewId: string | null;
   activeView: View | null;
+
+  selection: Selection;
 
   nodesCount: number;
 
@@ -27,6 +32,7 @@ export type DiagramToolbarProps = {
   canExportImage: boolean;
   onExportImage: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
+  onAlignSelection: (mode: AlignMode) => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
 
@@ -39,6 +45,7 @@ export function DiagramToolbar({
   model,
   activeViewId,
   activeView,
+  selection,
   nodesCount,
   toolMode,
   setToolMode,
@@ -50,6 +57,7 @@ export function DiagramToolbar({
   canExportImage,
   onExportImage,
   onAutoLayout,
+  onAlignSelection,
   onAddAndJunction,
   onAddOrJunction,
   beginPlaceExistingElement,
@@ -57,6 +65,15 @@ export function DiagramToolbar({
   onSelect,
 }: DiagramToolbarProps) {
   const hasActiveView = Boolean(activeViewId && activeView);
+
+  const [alignDialogOpen, setAlignDialogOpen] = useState(false);
+
+  const selectedNodeCount = useMemo(() => {
+    if (!activeViewId) return 0;
+    if (selection.kind === 'viewNodes' && selection.viewId === activeViewId) return selection.elementIds.length;
+    if (selection.kind === 'viewNode' && selection.viewId === activeViewId) return 1;
+    return 0;
+  }, [activeViewId, selection]);
 
   return (
     <>
@@ -168,12 +185,32 @@ export function DiagramToolbar({
               Fit
             </button>
 
+            <button
+              type="button"
+              onClick={() => setAlignDialogOpen(true)}
+              className="shellButton"
+              disabled={!hasActiveView || selectedNodeCount < 2}
+              title="Align selected nodes"
+            >
+              Align
+            </button>
+
             <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>
               Export as Image
             </button>
           </div>
         </div>
       </div>
+
+      <AlignDialog
+        isOpen={alignDialogOpen}
+        onClose={() => setAlignDialogOpen(false)}
+        selectedCount={selectedNodeCount}
+        onAlign={(mode) => {
+          onAlignSelection(mode);
+          setAlignDialogOpen(false);
+        }}
+      />
     </>
   );
 }

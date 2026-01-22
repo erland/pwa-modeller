@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import type { AutoLayoutOptions, Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
+import type { AlignMode, AutoLayoutOptions, Model, RelationshipType, View, ViewNodeLayout } from '../../domain';
 import { getRelationshipTypeLabel } from '../../domain';
 import type { Notation } from '../../notations';
 import { Dialog } from '../dialog/Dialog';
@@ -86,6 +86,7 @@ export type DiagramCanvasViewProps = {
   canExportImage: boolean;
   onExportImage: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
+  onAlignSelection: (mode: AlignMode) => void;
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
 };
@@ -130,6 +131,7 @@ export function DiagramCanvasView({
   canExportImage,
   onExportImage,
   onAutoLayout,
+  onAlignSelection,
   onAddAndJunction,
   onAddOrJunction,
 }: DiagramCanvasViewProps) {
@@ -141,6 +143,7 @@ export function DiagramCanvasView({
         model={model}
         activeViewId={activeViewId}
         activeView={activeView}
+        selection={selection}
         nodesCount={nodes.length}
         toolMode={toolMode}
         setToolMode={setToolMode}
@@ -152,6 +155,7 @@ export function DiagramCanvasView({
         canExportImage={canExportImage}
         onExportImage={onExportImage}
         onAutoLayout={onAutoLayout}
+        onAlignSelection={onAlignSelection}
         onAddAndJunction={onAddAndJunction}
         onAddOrJunction={onAddOrJunction}
         beginPlaceExistingElement={beginPlaceExistingElement}

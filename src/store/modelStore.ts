@@ -13,7 +13,7 @@ import type {
   ViewObjectType,
   ViewConnectionRouteKind,
 } from '../domain';
-import type { AutoLayoutOptions } from '../domain/layout/types';
+import type { AlignMode, AutoLayoutOptions } from '../domain/layout/types';
 import { extractArchiMateLayoutInput } from '../domain/layout/archimate';
 import { nudgeOverlaps, snapToGrid } from '../domain/layout/post';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
@@ -23,6 +23,7 @@ import {
   folderMutations,
   layoutMutations,
   autoLayoutMutations,
+  alignMutations,
   modelMutations,
   bpmnMutations,
   relationshipMutations,
@@ -403,6 +404,12 @@ export class ModelStore {
   ): void => {
     this.updateModel((model) => layoutMutations.updateViewNodeLayoutAny(model, viewId, ref, patch));
   };
+
+  /** Align element nodes in a view based on the current selection. */
+  alignViewElements = (viewId: string, elementIds: string[], mode: AlignMode): void => {
+    this.updateModel((model) => alignMutations.alignViewElements(model, viewId, elementIds, mode));
+  };
+
   autoLayoutView = async (viewId: string, options: AutoLayoutOptions = {}, selectionNodeIds?: string[]): Promise<void> => {
     const current = this.state.model;
     if (!current) throw new Error('No model loaded');

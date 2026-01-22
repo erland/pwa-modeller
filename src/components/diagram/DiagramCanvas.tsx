@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import type { AutoLayoutOptions, Model, View } from '../../domain';
+import type { AlignMode, AutoLayoutOptions, Model, View } from '../../domain';
 import { createConnector } from '../../domain';
 import { modelStore } from '../../store';
 import { useModelStore } from '../../store/useModelStore';
@@ -211,6 +211,22 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     [activeViewId, activeView, selection]
   );
 
+  const onAlignSelection = useCallback(
+    (mode: AlignMode) => {
+      if (!activeViewId || !activeView) return;
+      if (selection.kind !== 'viewNodes') return;
+      if (selection.viewId !== activeViewId) return;
+      if (selection.elementIds.length < 2) return;
+
+      try {
+        modelStore.alignViewElements(activeViewId, selection.elementIds, mode);
+      } catch (e) {
+        console.error('Align failed', e);
+      }
+    },
+    [activeViewId, activeView, selection]
+  );
+
 
   if (!model) {
     return (
@@ -261,6 +277,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       canExportImage={canExportImage}
       onExportImage={handleExportImage}
       onAutoLayout={onAutoLayout}
+      onAlignSelection={onAlignSelection}
       onAddAndJunction={onAddAndJunction}
       onAddOrJunction={onAddOrJunction}
     />

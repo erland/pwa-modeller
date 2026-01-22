@@ -7,6 +7,7 @@ export type Selection =
   | { kind: 'relationship'; relationshipId: string; viewId?: string }
   | { kind: 'view'; viewId: string }
   | { kind: 'viewNode'; viewId: string; elementId: string }
+  | { kind: 'viewNodes'; viewId: string; elementIds: string[] }
   | { kind: 'viewObject'; viewId: string; objectId: string };
 
 export const noSelection: Selection = { kind: 'none' };

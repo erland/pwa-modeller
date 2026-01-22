@@ -1,6 +1,5 @@
 import type * as React from 'react';
 import type { Element, ViewNodeLayout } from '../../domain';
-import type { Selection } from '../model/selection';
 import type { Notation } from '../../notations';
 import type { Point } from './geometry';
 import type { ConnectableRef } from './connectable';
@@ -42,7 +41,7 @@ type Props = {
   linkDrag: DiagramLinkDrag | null;
   /** Value assigned to CSS var --diagram-node-bg */
   bgVar: string;
-  onSelect: (selection: Selection) => void;
+  onSelectNode: (viewId: string, elementId: string, additive: boolean) => void;
 
   onBeginNodeDrag: (state: DiagramNodeDragState) => void;
   onHoverAsRelationshipTarget: (ref: ConnectableRef | null) => void;
@@ -59,7 +58,7 @@ export function DiagramNode({
   isSelected,
   linkDrag,
   bgVar,
-  onSelect,
+  onSelectNode,
   onBeginNodeDrag,
   onHoverAsRelationshipTarget,
   clientToModelPoint,
@@ -101,9 +100,9 @@ export function DiagramNode({
       role="button"
       tabIndex={0}
       aria-label={`Diagram node ${el.name || '(unnamed)'}`}
-      onClick={() => {
+      onClick={(e) => {
         if (linkDrag) return;
-        onSelect({ kind: 'viewNode', viewId: activeViewId, elementId: el.id });
+        onSelectNode(activeViewId, el.id, Boolean(e.shiftKey));
       }}
       onPointerDown={(e) => {
         if (linkDrag) return;

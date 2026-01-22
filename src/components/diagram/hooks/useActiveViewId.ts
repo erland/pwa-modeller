@@ -9,7 +9,12 @@ export function useActiveViewId(model: Model | null, views: View[], selection: S
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
 
   const selectionViewId =
-    selection.kind === 'view' || selection.kind === 'viewNode' || selection.kind === 'viewObject' ? selection.viewId : null;
+    selection.kind === 'view' ||
+    selection.kind === 'viewNode' ||
+    selection.kind === 'viewNodes' ||
+    selection.kind === 'viewObject'
+      ? selection.viewId
+      : null;
   const firstViewId = views[0]?.id ?? null;
 
   useEffect(() => {

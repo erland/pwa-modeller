@@ -20,6 +20,8 @@ function selectionToElementId(sel: Selection): string | null {
       return sel.elementId;
     case 'viewNode':
       return sel.elementId;
+    case 'viewNodes':
+      return sel.elementIds[0] ?? null;
     case 'relationship':
       // For now we don't map relationship -> endpoint; Step 4+ can add this if desired.
       return null;

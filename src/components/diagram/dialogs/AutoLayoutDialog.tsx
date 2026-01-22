@@ -83,7 +83,7 @@ export function AutoLayoutDialog({ isOpen, onClose, initialOptions, onRun }: Pro
             title="Layout scope"
           >
             <option value="all">All nodes in view</option>
-            <option value="selection">Selected node</option>
+            <option value="selection">Selected nodes</option>
           </select>
 
           <label htmlFor="auto-layout-direction">Direction</label>

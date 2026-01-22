@@ -36,6 +36,43 @@ export function DiagramNodesLayer({
   onStartLinkDrag,
   getElementBgVar,
 }: Props) {
+  const handleSelectNode = (viewId: string, elementId: string, additive: boolean): void => {
+    if (!additive) {
+      onSelect({ kind: 'viewNode', viewId, elementId });
+      return;
+    }
+
+    // Shift+click toggles membership.
+    if (selection.kind === 'viewNode' && selection.viewId === viewId) {
+      if (selection.elementId === elementId) {
+        onSelect({ kind: 'none' });
+      } else {
+        const ids = [selection.elementId, elementId].sort((a, b) => a.localeCompare(b));
+        onSelect({ kind: 'viewNodes', viewId, elementIds: ids });
+      }
+      return;
+    }
+
+    if (selection.kind === 'viewNodes' && selection.viewId === viewId) {
+      const set = new Set(selection.elementIds);
+      if (set.has(elementId)) set.delete(elementId);
+      else set.add(elementId);
+
+      const ids = Array.from(set).sort((a, b) => a.localeCompare(b));
+      if (ids.length === 0) {
+        onSelect({ kind: 'none' });
+      } else if (ids.length === 1) {
+        onSelect({ kind: 'viewNode', viewId, elementId: ids[0] });
+      } else {
+        onSelect({ kind: 'viewNodes', viewId, elementIds: ids });
+      }
+      return;
+    }
+
+    // If selection is from another view or another kind, start a fresh selection.
+    onSelect({ kind: 'viewNode', viewId, elementId });
+  };
+
   return (
     <>
       {nodes.map((n) => {
@@ -46,7 +83,12 @@ export function DiagramNodesLayer({
           const bgVar = getElementBgVar(el.type);
 
           const isSelected =
-            selection.kind === 'viewNode' && selection.viewId === activeView.id && selection.elementId === n.elementId;
+            (selection.kind === 'viewNode' &&
+              selection.viewId === activeView.id &&
+              selection.elementId === n.elementId) ||
+            (selection.kind === 'viewNodes' &&
+              selection.viewId === activeView.id &&
+              selection.elementIds.includes(n.elementId));
 
           return (
             <DiagramNode
@@ -58,7 +100,7 @@ export function DiagramNodesLayer({
               isSelected={isSelected}
               linkDrag={linkDrag}
               bgVar={bgVar}
-              onSelect={onSelect}
+              onSelectNode={handleSelectNode}
               onBeginNodeDrag={onBeginNodeDrag}
               onHoverAsRelationshipTarget={onHoverAsRelationshipTarget}
               clientToModelPoint={clientToModelPoint}

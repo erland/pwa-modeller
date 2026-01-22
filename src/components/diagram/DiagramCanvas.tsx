@@ -148,10 +148,14 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
           ...overrides,
         };
 
-        const selectionNodeIds =
-          options.scope === 'selection' && selection.kind === 'viewNode' && selection.viewId === activeViewId
-            ? [selection.elementId]
-            : undefined;
+        let selectionNodeIds: string[] | undefined;
+        if (options.scope === 'selection') {
+          if (selection.kind === 'viewNode' && selection.viewId === activeViewId) {
+            selectionNodeIds = [selection.elementId];
+          } else if (selection.kind === 'viewNodes' && selection.viewId === activeViewId) {
+            selectionNodeIds = selection.elementIds;
+          }
+        }
 
         await modelStore.autoLayoutView(activeViewId, options, selectionNodeIds);
       } catch (e) {

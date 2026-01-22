@@ -383,6 +383,18 @@ export class ModelStore {
     this.updateModel((model) => layoutMutations.updateViewNodePositionAny(model, viewId, ref, x, y));
   };
 
+  /**
+   * Batch position update for multiple nodes (element/connector/object) in a view.
+   *
+   * This is primarily used for multi-select dragging, to avoid triggering a store update per node.
+   */
+  updateViewNodePositionsAny = (
+    viewId: string,
+    updates: Array<{ ref: { elementId?: string; connectorId?: string; objectId?: string }; x: number; y: number }>
+  ): void => {
+    this.updateModel((model) => layoutMutations.updateViewNodePositionsAny(model, viewId, updates));
+  };
+
   /** Updates layout properties on an element-node, connector-node, or view-object node in a view. */
   updateViewNodeLayoutAny = (
     viewId: string,

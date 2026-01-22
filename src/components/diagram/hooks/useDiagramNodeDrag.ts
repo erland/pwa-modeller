@@ -70,6 +70,11 @@ export function useDiagramNodeDrag(zoom: number) {
             ? { connectorId: d.ref.id }
             : { objectId: d.ref.id };
 
+      // Respect locked nodes for move operations.
+      if (d.action === 'move' && d.locked) {
+        return;
+      }
+
       if (d.action === 'resize') {
         // MVP: bottom-right resize. Clamp to reasonable minimums.
         let minW = 40;
@@ -122,6 +127,33 @@ export function useDiagramNodeDrag(zoom: number) {
         }
 
         modelStore.updateViewNodeLayoutAny(d.viewId, ref, { width: w, height: h });
+        return;
+      }
+
+      // Multi-select batch move: if the drag state has a batch, move all batch members by the same delta.
+      // We apply snap-to-grid per node and perform a single store update for the whole batch.
+      if (d.batch && d.batch.length > 1) {
+        const updates = d.batch
+          .filter((b) => !b.locked)
+          .map((b) => {
+            let x = b.origX + dx;
+            let y = b.origY + dy;
+            if (snap && grid > 1) {
+              x = Math.round(x / grid) * grid;
+              y = Math.round(y / grid) * grid;
+            }
+            const r =
+              b.ref.kind === 'element'
+                ? { elementId: b.ref.id }
+                : b.ref.kind === 'connector'
+                  ? { connectorId: b.ref.id }
+                  : { objectId: b.ref.id };
+            return { ref: r, x, y };
+          });
+
+        if (updates.length > 0) {
+          modelStore.updateViewNodePositionsAny(d.viewId, updates);
+        }
         return;
       }
 
@@ -203,6 +235,27 @@ export function useDiagramNodeDrag(zoom: number) {
           if (hiX >= loX) x = clamp(x, loX, hiX);
           if (hiY >= loY) y = clamp(y, loY, hiY);
         }
+      }
+
+      // Multi-select drag: if a batch was supplied (from selection), apply the same delta to all.
+      // We keep this intentionally simple: move only the explicitly selected nodes.
+      if (d.action === 'move' && d.batch && d.batch.length > 1) {
+        const updates = d.batch
+          .filter((b) => !b.locked && b.ref.kind === 'element')
+          .map((b) => {
+            let bx = b.origX + dx;
+            let by = b.origY + dy;
+            if (snap && grid > 1) {
+              bx = Math.round(bx / grid) * grid;
+              by = Math.round(by / grid) * grid;
+            }
+            return { ref: { elementId: b.ref.id }, x: bx, y: by };
+          });
+
+        if (updates.length > 0) {
+          modelStore.updateViewNodePositionsAny(d.viewId, updates);
+        }
+        return;
       }
 
 

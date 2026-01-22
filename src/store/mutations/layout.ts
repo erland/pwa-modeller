@@ -10,4 +10,5 @@ export {
   updateViewNodePosition
 } from './layout/viewNodeOps';
 export { updateViewNodePositionAny } from './layout/updateViewNodePositionAny';
+export { updateViewNodePositionsAny } from './layout/updateViewNodePositionsAny';
 export { updateViewNodeLayoutAny } from './layout/updateViewNodeLayoutAny';

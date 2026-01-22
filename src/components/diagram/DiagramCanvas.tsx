@@ -13,6 +13,8 @@ import { useDiagramToolState } from './hooks/useDiagramToolState';
 import { useDiagramNodeDrag } from './hooks/useDiagramNodeDrag';
 import { useDiagramRelationshipCreation } from './hooks/useDiagramRelationshipCreation';
 
+import type { DiagramNodeDragState } from './DiagramNode';
+
 import { useDiagramNodes } from './hooks/useDiagramNodes';
 import { useDiagramExportImage } from './hooks/useDiagramExportImage';
 import { useDiagramElementDrop } from './hooks/useDiagramElementDrop';
@@ -78,6 +80,46 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
   });
 
   const nodeDrag = useDiagramNodeDrag(viewport.zoom);
+
+  // Multi-select drag: if the user drags a node that is part of the current multi-selection,
+  // move the entire selection as a single gesture.
+  const onBeginNodeDrag = useCallback(
+    (state: DiagramNodeDragState) => {
+      let next = state;
+
+      if (
+        state.action === 'move' &&
+        state.ref.kind === 'element' &&
+        selection.kind === 'viewNodes' &&
+        selection.viewId === state.viewId
+      ) {
+        // Only batch-move when the dragged node is part of the selection.
+        if (selection.elementIds.includes(state.ref.id)) {
+          const batch = selection.elementIds
+            .map((id) => {
+              const n = nodes.find((x) => x.elementId === id);
+              if (!n) return null;
+              return {
+                ref: { kind: 'element' as const, id },
+                origX: n.x,
+                origY: n.y,
+                origW: n.width ?? 120,
+                origH: n.height ?? 60,
+                locked: Boolean(n.locked),
+              };
+            })
+            .filter((x): x is NonNullable<typeof x> => Boolean(x));
+
+          if (batch.length > 1) {
+            next = { ...state, batch };
+          }
+        }
+      }
+
+      nodeDrag.beginNodeDrag(next);
+    },
+    [nodeDrag, nodes, selection]
+  );
 
   const rel = useDiagramRelationshipCreation({
     model,
@@ -206,7 +248,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       onViewportDrop={drop.handleViewportDrop}
       connectionRenderItems={connectionRenderItems}
       rel={rel as unknown as RelationshipCreationController}
-      onBeginNodeDrag={nodeDrag.beginNodeDrag}
+      onBeginNodeDrag={onBeginNodeDrag}
       clientToModelPoint={viewport.clientToModelPoint}
       getElementBgVar={getElementBgVar}
       canExportImage={canExportImage}

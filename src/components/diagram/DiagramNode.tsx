@@ -30,6 +30,17 @@ export type DiagramNodeDragState = {
   origY: number;
   origW: number;
   origH: number;
+  /** Optional batch move payload (multi-select drag). Present only for action='move'. */
+  batch?: Array<{
+    ref: DiagramDragRef;
+    origX: number;
+    origY: number;
+    origW: number;
+    origH: number;
+    locked?: boolean;
+  }>;
+  /** Whether the primary dragged node is locked. */
+  locked?: boolean;
 };
 
 type Props = {
@@ -121,6 +132,7 @@ export function DiagramNode({
           origY: n.y,
           origW: w,
           origH: h,
+          locked: Boolean(n.locked),
         });
       }}
       onPointerEnter={() => {

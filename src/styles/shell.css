@@ -561,6 +561,13 @@ body {
   stroke-width: 3.5px;
 }
 
+.diagramMarquee {
+  pointer-events: none;
+  border: 1px solid var(--border-3);
+  background: rgba(120, 160, 255, 0.15);
+  border-radius: 6px;
+}
+
 
 .diagramHint {
   position: sticky;

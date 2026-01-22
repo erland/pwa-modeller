@@ -6,6 +6,7 @@ import { Dialog } from '../dialog/Dialog';
 
 import type { Selection } from '../model/selection';
 import type { Point } from './geometry';
+import type { MarqueeRect } from './hooks/useDiagramMarqueeSelection';
 import type { DiagramLinkDrag, DiagramNodeDragState } from './DiagramNode';
 import type { ConnectableRef } from './connectable';
 
@@ -65,6 +66,10 @@ export type DiagramCanvasViewProps = {
   surfaceWidthModel: number;
   surfaceHeightModel: number;
   onSurfacePointerDownCapture: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onSurfacePointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onSurfacePointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onSurfacePointerCancel: (e: React.PointerEvent<HTMLDivElement>) => void;
+  marqueeRect: MarqueeRect | null;
 
   isDragOver: boolean;
   onViewportDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -109,6 +114,10 @@ export function DiagramCanvasView({
   surfaceWidthModel,
   surfaceHeightModel,
   onSurfacePointerDownCapture,
+  onSurfacePointerMove,
+  onSurfacePointerUp,
+  onSurfacePointerCancel,
+  marqueeRect,
   isDragOver,
   onViewportDragOver,
   onViewportDragLeave,
@@ -174,6 +183,9 @@ export function DiagramCanvasView({
                 className="diagramSurface"
                 ref={surfaceRef}
                 onPointerDownCapture={onSurfacePointerDownCapture}
+                onPointerMove={onSurfacePointerMove}
+                onPointerUp={onSurfacePointerUp}
+                onPointerCancel={onSurfacePointerCancel}
                 style={{
                   width: surfaceWidthModel,
                   height: surfaceHeightModel,
@@ -181,6 +193,18 @@ export function DiagramCanvasView({
                   transformOrigin: '0 0',
                 }}
               >
+                {marqueeRect ? (
+                  <div
+                    className="diagramMarquee"
+                    style={{
+                      position: 'absolute',
+                      left: marqueeRect.x,
+                      top: marqueeRect.y,
+                      width: marqueeRect.width,
+                      height: marqueeRect.height,
+                    }}
+                  />
+                ) : null}
                 <DiagramRelationshipsLayer
                   model={model}
                   notation={notation}

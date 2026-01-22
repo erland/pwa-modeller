@@ -19,7 +19,7 @@ import { useDiagramNodes } from './hooks/useDiagramNodes';
 import { useDiagramExportImage } from './hooks/useDiagramExportImage';
 import { useDiagramElementDrop } from './hooks/useDiagramElementDrop';
 import { useDiagramConnections } from './hooks/useDiagramConnections';
-import { useDiagramSurfaceSelection } from './hooks/useDiagramSurfaceSelection';
+import { useDiagramMarqueeSelection } from './hooks/useDiagramMarqueeSelection';
 import { getNotation } from '../../notations';
 
 type Props = {
@@ -140,12 +140,15 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
   const { connectionRenderItems, connectionHitItems } = useDiagramConnections({ model, activeView, nodes });
 
-  const surfaceSelection = useDiagramSurfaceSelection({
+  const surfaceSelection = useDiagramMarqueeSelection({
     toolMode: tool.toolMode,
     model,
     activeViewId,
     activeView,
+    nodes,
+    selection,
     linkDrag: rel.linkDrag,
+    surfaceRef: viewport.surfaceRef,
     clientToModelPoint: viewport.clientToModelPoint,
     zoom: viewport.zoom,
     hitItems: connectionHitItems,
@@ -242,6 +245,10 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       surfaceWidthModel={surfaceWidthModel}
       surfaceHeightModel={surfaceHeightModel}
       onSurfacePointerDownCapture={surfaceSelection.handleSurfacePointerDownCapture}
+      onSurfacePointerMove={surfaceSelection.handleSurfacePointerMove}
+      onSurfacePointerUp={surfaceSelection.handleSurfacePointerUp}
+      onSurfacePointerCancel={surfaceSelection.handleSurfacePointerCancel}
+      marqueeRect={surfaceSelection.marqueeRect}
       isDragOver={drop.isDragOver}
       onViewportDragOver={drop.handleViewportDragOver}
       onViewportDragLeave={drop.handleViewportDragLeave}

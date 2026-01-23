@@ -9,6 +9,7 @@ import { expandFromNode } from '../../analysis/traceability/expand';
 
 import { createTraceabilityExplorerState, traceabilityReducer } from './traceability/traceabilityReducer';
 import { TraceabilityMiniGraph } from './traceability/TraceabilityMiniGraph';
+import { defaultMiniGraphOptions, MiniGraphOptionsToggles } from './MiniGraphOptions';
 
 import {
   deleteTraceabilitySession,
@@ -65,8 +66,7 @@ export function TraceabilityExplorer({
   const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
 
   const [autoExpand, setAutoExpand] = useState(false);
-  const [wrapLabels, setWrapLabels] = useState(true);
-  const [autoFitColumns, setAutoFitColumns] = useState(true);
+  const [graphOptions, setGraphOptions] = useState(defaultMiniGraphOptions);
   const [sessions, setSessions] = useState<Array<{ name: string; savedAt: string }>>([]);
   const [selectedSessionName, setSelectedSessionName] = useState<string>('');
 
@@ -238,14 +238,7 @@ export function TraceabilityExplorer({
                 <input type="checkbox" checked={autoExpand} onChange={(e) => setAutoExpand(e.currentTarget.checked)} />
                 Auto-expand on select
               </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 }}>
-                <input type="checkbox" checked={wrapLabels} onChange={(e) => setWrapLabels(e.currentTarget.checked)} />
-                Wrap labels
-              </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 }}>
-                <input type="checkbox" checked={autoFitColumns} onChange={(e) => setAutoFitColumns(e.currentTarget.checked)} />
-                Auto-fit columns
-              </label>
+              <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} style={{ gap: 16 }} checkboxStyle={{ gap: 8 }} />
             </div>
 
             <div className="toolbarGroup">
@@ -289,8 +282,8 @@ export function TraceabilityExplorer({
       </div>
 
       <TraceabilityMiniGraph
-        wrapLabels={wrapLabels}
-        autoFitColumns={autoFitColumns}
+        wrapLabels={graphOptions.wrapLabels}
+        autoFitColumns={graphOptions.autoFitColumns}
         model={model}
         modelKind={modelKind}
         nodesById={state.nodesById}

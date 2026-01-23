@@ -9,6 +9,7 @@ import type { Selection } from '../model/selection';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 
 import { AnalysisMiniGraph } from './AnalysisMiniGraph';
+import { defaultMiniGraphOptions, MiniGraphOptionsToggles } from './MiniGraphOptions';
 import { QuickTooltip } from './QuickTooltip';
 
 import '../../styles/crud.css';
@@ -68,8 +69,7 @@ export function AnalysisResultTable({
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const [showGraph, setShowGraph] = useState(false);
-  const [wrapLabels, setWrapLabels] = useState(true);
-  const [autoFitColumns, setAutoFitColumns] = useState(true);
+  const [graphOptions, setGraphOptions] = useState(defaultMiniGraphOptions);
   const [tooltip, setTooltip] = useState<{
     x: number;
     y: number;
@@ -236,8 +236,8 @@ export function AnalysisResultTable({
             selection={selection}
             onSelectRelationship={onSelectRelationship}
             onSelectElement={onSelectElement}
-            wrapLabels={wrapLabels}
-            autoFitColumns={autoFitColumns}
+            wrapLabels={graphOptions.wrapLabels}
+            autoFitColumns={graphOptions.autoFitColumns}
           />
         ) : null}
 
@@ -285,14 +285,7 @@ export function AnalysisResultTable({
           >
             {showGraph ? 'Hide graph' : 'Show graph'}
           </button>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.9 }}>
-            <input type="checkbox" checked={wrapLabels} onChange={(e) => setWrapLabels(e.currentTarget.checked)} />
-            Wrap labels
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.9 }}>
-            <input type="checkbox" checked={autoFitColumns} onChange={(e) => setAutoFitColumns(e.currentTarget.checked)} />
-            Auto-fit columns
-          </label>
+          <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} />
           {sourceId ? (
             <button type="button" className="miniLinkButton" onClick={() => onOpenTraceability(sourceId)}>
               Trace from source

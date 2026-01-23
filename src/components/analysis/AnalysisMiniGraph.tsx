@@ -1,26 +1,21 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 
-import type {
-  Model,
-  PathsBetweenResult,
-  RelatedElementsResult,
-  TraversalStep,
-  ArchimateLayer,
-  ElementType
-} from '../../domain';
-import type { MiniGraphData, MiniGraphNode } from '../../domain/analysis/miniGraph';
+import type { Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
+import type { TraversalStep } from '../../domain/analysis/traverse';
+import type { ArchimateLayer, ElementType } from '../../domain/types';
 import type { ModelKind } from '../../domain/types';
 import type { Selection } from '../model/selection';
 import type { AnalysisMode } from './AnalysisQueryPanel';
 
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
+import { buildMiniGraphData, MINI_GRAPH_MAX_EDGES, MINI_GRAPH_MAX_NODES } from '../../domain/analysis/miniGraph';
+import type { MiniGraphData, MiniGraphMode } from '../../domain/analysis/miniGraph';
+
 import { useElementBgVar } from '../diagram/hooks/useElementBgVar';
 
-import { QuickTooltip } from './QuickTooltip';
-import { measureTextPx, measureWrappedLabel, wrapLabel } from './graphLabelLayout';
-
-import { buildMiniGraphData, MINI_GRAPH_MAX_EDGES, MINI_GRAPH_MAX_NODES } from '../../domain/analysis/miniGraph';
+import { MiniColumnGraph } from './MiniColumnGraph';
+import type { MiniColumnGraphTooltip, MiniColumnGraphEdge, MiniColumnGraphNode } from './MiniColumnGraph';
 
 const ARCHIMATE_LAYER_BG_VAR: Record<ArchimateLayer, string> = {
   Strategy: 'var(--arch-layer-strategy)',
@@ -37,6 +32,16 @@ function docSnippet(doc: string | undefined): string {
   if (!t) return '';
   if (t.length <= 240) return t;
   return `${t.slice(0, 239)}…`;
+}
+
+function selectionToRelationshipId(sel: Selection | null | undefined): string | null {
+  if (!sel) return null;
+  return sel.kind === 'relationship' ? sel.relationshipId : null;
+}
+
+function selectionToElementId(sel: Selection | null | undefined): string | null {
+  if (!sel) return null;
+  return sel.kind === 'element' ? sel.elementId : null;
 }
 
 function relationshipIsExplicitlyUndirected(s: TraversalStep): boolean {
@@ -56,37 +61,9 @@ function edgeFromStep(s: TraversalStep): AnalysisEdge {
   };
 }
 
-function nodeRect() {
-  // Base width; height becomes dynamic based on wrapped label (up to 3 lines).
-  const w = 190;
-  const h = 34;
-  return { w, h };
-}
-
-function nodeXY(node: MiniGraphNode, xByLevel: Map<number, number>) {
-  const ySpacing = 74; // allow up to 3 lines of text without overlap
-  const marginY = 24;
-
-  const y = marginY + node.order * ySpacing;
-  const x = xByLevel.get(node.level) ?? 24;
-  return { x, y };
-}
-
-function edgePath(from: { x: number; y: number; w: number; h: number }, to: { x: number; y: number; w: number; h: number }) {
-  const x1 = from.x + from.w;
-  const y1 = from.y + from.h / 2;
-  const x2 = to.x;
-  const y2 = to.y + to.h / 2;
-
-  const dx = Math.max(40, (x2 - x1) / 2);
-  const c1x = x1 + dx;
-  const c2x = x2 - dx;
-  return `M ${x1} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${x2} ${y2}`;
-}
-
-function selectionToRelationshipId(sel: Selection | null | undefined): string | null {
-  if (!sel) return null;
-  return sel.kind === 'relationship' ? sel.relationshipId : null;
+function edgeIdForStep(step: TraversalStep) {
+  // relationshipId alone is not unique (multiple endpoints or reversed rendering), so keep a stable per-edge id.
+  return `${step.relationshipId}:${step.fromId}->${step.toId}${step.reversed ? ':r' : ''}`;
 }
 
 export function AnalysisMiniGraph({
@@ -112,17 +89,8 @@ export function AnalysisMiniGraph({
   wrapLabels?: boolean;
   autoFitColumns?: boolean;
 }) {
-  // Cache wrapped label results to avoid re-wrapping/measuring on every render.
-  const wrapCacheRef = useRef(new Map<string, { lines: string[]; maxLineWidthPx: number }>());
-
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
-  const [tooltip, setTooltip] = useState<{
-    x: number;
-    y: number;
-    title: string;
-    lines: string[];
-  } | null>(null);
 
   const labelForId = useMemo(() => {
     return (id: string): string => {
@@ -131,26 +99,41 @@ export function AnalysisMiniGraph({
     };
   }, [adapter, model]);
 
-  const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => {
+  const m: MiniGraphMode = mode === 'related' ? 'related' : 'paths';
+
+  const data: MiniGraphData | null = useMemo(() => {
+    return buildMiniGraphData(labelForId, m, relatedResult, pathsResult);
+  }, [labelForId, m, relatedResult, pathsResult]);
+
+  // Nothing to show
+  if (!data) return null;
+
+  const selectedRelationshipId = selectionToRelationshipId(selection);
+  const selectedElementId = selectionToElementId(selection);
+
+  const elementTooltip = (elementId: string): MiniColumnGraphTooltip | null => {
     const el = model.elements[elementId];
     if (!el) return null;
 
-    const fullLabel = labelForId(elementId);
+    const label = labelForId(elementId);
     const facets = adapter.getNodeFacetValues(el, model);
-    const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
-    const layer = String((facets.archimateLayer ?? el.layer) ?? '');
-    const doc = docSnippet(el.documentation);
 
     const lines: string[] = [];
     lines.push(`Id: ${elementId}`);
+
+    const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
     if (type) lines.push(`Type: ${type}`);
+
+    const layer = String((facets.archimateLayer ?? (el as unknown as { layer?: string }).layer) ?? '');
     if (layer) lines.push(`Layer: ${layer}`);
+
+    const doc = docSnippet(el.documentation);
     if (doc) lines.push(`Documentation: ${doc}`);
 
-    return { title: fullLabel || el.name || '(unnamed)', lines };
+    return { title: label || String(el.name ?? '') || '(unnamed)', lines };
   };
 
-  const relationshipTooltip = (s: TraversalStep): { title: string; lines: string[] } | null => {
+  const relationshipTooltip = (s: TraversalStep): MiniColumnGraphTooltip | null => {
     const r = s.relationship;
     if (!r) return null;
     const src = r.sourceElementId || s.fromId;
@@ -158,120 +141,63 @@ export function AnalysisMiniGraph({
     const doc = docSnippet(r.documentation);
     const analysisEdge = edgeFromStep(s);
     const label = adapter.getEdgeLabel(analysisEdge, model);
-    const title = (r.name && r.name.trim()) ? r.name : label;
+    const title = r.name && r.name.trim() ? r.name : label;
+
     const lines: string[] = [];
     lines.push(`Type: ${r.type}`);
     if (src) lines.push(`From: ${labelForId(src)}`);
     if (tgt) lines.push(`To: ${labelForId(tgt)}`);
     if (doc) lines.push(`Documentation: ${doc}`);
+
     return { title: title || '(relationship)', lines };
   };
 
-  const data: MiniGraphData | null = useMemo(() => {
-    // Keep the component's public `mode` type, but adapt it to the domain helper.
-    const m = mode === 'related' ? 'related' : 'paths';
-    return buildMiniGraphData(labelForId, m, relatedResult, pathsResult);
-  }, [labelForId, mode, relatedResult, pathsResult]);
+  // Edge lookup for selection + tooltip.
+  const edgeById = useMemo(() => {
+    const map: Record<string, TraversalStep> = {};
+    for (const e of data.edges) map[edgeIdForStep(e)] = e;
+    return map;
+  }, [data.edges]);
 
-  const selectedRelationshipId = selectionToRelationshipId(selection);
+  const graphEdges: MiniColumnGraphEdge[] = useMemo(() => {
+    return data.edges.map((e) => ({ id: edgeIdForStep(e), from: e.fromId, to: e.toId }));
+  }, [data.edges]);
 
-  const positioned = useMemo(() => {
-    const rects = new Map<string, { x: number; y: number; w: number; h: number }>();
-    const linesById = new Map<string, string[]>();
-    if (!data) return { rects, linesById, maxX: 360, maxY: 220 };
+  const graphNodes: MiniColumnGraphNode[] = useMemo(() => {
+    return data.nodes.map((n) => {
+      const el = model.elements[n.id];
 
-    // Guardrail: very large result sets can become expensive to measure/wrap.
-    const nodeCount = data.nodes.length;
-    const effectiveWrapLabels = wrapLabels && nodeCount <= 500;
-    const effectiveAutoFitColumns = autoFitColumns && nodeCount <= 500;
-
-    const cache = wrapCacheRef.current;
-    const getWrapped = (id: string, label: string, maxWidthPx: number, maxLines: number, font: string) => {
-      const k = `${id}\u0000${label}\u0000${maxWidthPx}\u0000${maxLines}\u0000${font}`;
-      const hit = cache.get(k);
-      if (hit) return hit;
-      const wrapped = wrapLabel(label, { maxWidthPx, maxLines, font, measureTextPx });
-      const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
-      const val = { lines: wrapped.lines, maxLineWidthPx: metrics.maxLineWidthPx };
-      if (cache.size > 5000) cache.clear();
-      cache.set(k, val);
-      return val;
-    };
-
-    const base = nodeRect();
-    const font = '12px system-ui';
-    const paddingX = 20;
-
-    // Group nodes per column/level
-    const byLevel = new Map<number, MiniGraphNode[]>();
-    for (const n of data.nodes) {
-      const arr = byLevel.get(n.level) ?? [];
-      arr.push(n);
-      byLevel.set(n.level, arr);
-    }
-
-    // 1) Column widths.
-    // If auto-fit is off -> fixed base width.
-    // If wrapLabels is on -> base measurement uses wrapped line widths.
-    // If wrapLabels is off -> measure the full label width to reduce truncation (bounded to 1.5x).
-    const colWByLevel = new Map<number, number>();
-    for (const [level, nodes] of byLevel.entries()) {
-      if (!effectiveAutoFitColumns) {
-        colWByLevel.set(level, base.w);
-        continue;
+      // Prefer layer colors in ArchiMate, fallback to type-based colors.
+      let bg = 'rgba(255,255,255,0.9)';
+      if (modelKind === 'archimate' && el) {
+        const layer = (el as unknown as { layer?: ArchimateLayer }).layer;
+        const layerFill = layer ? ARCHIMATE_LAYER_BG_VAR[layer] : undefined;
+        bg = layerFill ?? getElementBgVar(el.type as ElementType);
+      } else if (el) {
+        bg = getElementBgVar(el.type as ElementType);
       }
 
-      const maxNeeded = nodes.reduce((m, n) => {
-        const label = n.label || labelForId(n.id);
-        if (effectiveWrapLabels) {
-          const w = getWrapped(n.id, label, base.w - paddingX, 3, font);
-          return Math.max(m, w.maxLineWidthPx);
-        }
-        return Math.max(m, measureTextPx(label, font));
-      }, 0);
+      return { id: n.id, label: n.label, level: n.level, order: n.order, bg };
+    });
+  }, [data.nodes, getElementBgVar, model.elements, modelKind]);
 
-      const desired = maxNeeded + paddingX;
-      const bounded = Math.min(base.w * 1.5, Math.max(base.w, desired));
-      colWByLevel.set(level, bounded);
-    }
+  const getEdgeTooltip = (edgeId: string): MiniColumnGraphTooltip | null => {
+    const step = edgeById[edgeId];
+    if (!step) return null;
+    return relationshipTooltip(step);
+  };
 
-    // 2) X offsets
-    const colGap = 40;
-    const marginX = 24;
-    const levels = [...byLevel.keys()].sort((a, b) => a - b);
-    const xByLevel = new Map<number, number>();
-    let xCursor = marginX;
-    for (const level of levels) {
-      xByLevel.set(level, xCursor);
-      xCursor += (colWByLevel.get(level) ?? base.w) + colGap;
-    }
+  const onSelectEdge = onSelectRelationship
+    ? (edgeId: string) => {
+        const step = edgeById[edgeId];
+        if (!step) return;
+        onSelectRelationship(step.relationshipId);
+      }
+    : undefined;
 
-    // 3) Position nodes and wrap with the effective column width
-    let maxY = 0;
-    for (const n of data.nodes) {
-      const nodeW = colWByLevel.get(n.level) ?? base.w;
-      const maxTextW = nodeW - paddingX;
-      const label = n.label || labelForId(n.id);
-      const maxLines = effectiveWrapLabels ? 3 : 1;
-      const wrapped = getWrapped(n.id, label, maxTextW, maxLines, font);
-
-      const lineHeight = 14;
-      const paddingY = 10;
-      const h = effectiveWrapLabels ? Math.max(base.h, paddingY + wrapped.lines.length * lineHeight + paddingY) : base.h;
-
-      const { x, y } = nodeXY(n, xByLevel);
-      rects.set(n.id, { x, y, w: nodeW, h });
-      linesById.set(n.id, wrapped.lines);
-
-      maxY = Math.max(maxY, y + h);
-    }
-
-    const maxX = xCursor + 60;
-
-    return { rects, linesById, maxX, maxY: maxY + 24 };
-  }, [data, labelForId, wrapLabels, autoFitColumns]);
-
-  if (!data) return null;
+  const isEdgeActive = selectedRelationshipId
+    ? (edgeId: string) => edgeById[edgeId]?.relationshipId === selectedRelationshipId
+    : undefined;
 
   const title = mode === 'related' ? 'Mini graph (related elements)' : 'Mini graph (connection paths)';
 
@@ -287,140 +213,24 @@ export function AnalysisMiniGraph({
         </p>
       </div>
 
-      <div
-        style={{
-          marginTop: 8,
-          border: '1px solid var(--borderColor, rgba(0,0,0,0.15))',
-          borderRadius: 8,
-          overflow: 'auto',
-          maxHeight: 520,
-          background: 'var(--panelBg, rgba(255,255,255,0.6))'
-        }}
-      >
-        <svg
-          width="100%"
-          height={Math.max(220, Math.min(520, positioned.maxY))}
-          viewBox={`0 0 ${Math.max(360, positioned.maxX)} ${Math.max(220, positioned.maxY)}`}
-          role="img"
-          aria-label={title}
-        >
-          <defs>
-            <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
-            </marker>
-          </defs>
-
-          {/* Edges */}
-          <g style={{ color: 'rgba(0,0,0,0.55)' }}>
-            {data.edges.map((e) => {
-              const from = positioned.rects.get(e.fromId);
-              const to = positioned.rects.get(e.toId);
-              if (!from || !to) return null;
-              const d = edgePath(from, to);
-              const isSelected = selectedRelationshipId === e.relationshipId;
-              const key = `${e.relationshipId}:${e.fromId}->${e.toId}`;
-
-              const analysisEdge = edgeFromStep(e);
-              const rel = adapter.getEdgeLabel(analysisEdge, model);
-              const directed = adapter.isEdgeDirected(analysisEdge, model);
-              const arrow = directed ? '→' : '—';
-              const rev = e.reversed && directed ? ' (reversed)' : '';
-              const tip = relationshipTooltip(e);
-              const label = `${labelForId(e.fromId)} —[${rel}]${arrow} ${labelForId(e.toId)}${rev}`;
-              const svgTitle = tip ? `${tip.title}\n${tip.lines.join('\n')}` : label;
-
-              return (
-                <g key={key}>
-                  {/* Click target */}
-                  {onSelectRelationship ? (
-                    <path
-                      d={d}
-                      fill="none"
-                      stroke="transparent"
-                      strokeWidth={10}
-                      style={{ cursor: 'pointer' }}
-                      role="button"
-                      tabIndex={0}
-                      onClick={(ev) => {
-                        onSelectRelationship(e.relationshipId);
-                        const tip = relationshipTooltip(e);
-                        if (tip) setTooltip({ x: ev.clientX, y: ev.clientY, title: tip.title, lines: tip.lines });
-                      }}
-                      onKeyDown={(ev) => {
-                        if (ev.key === 'Enter' || ev.key === ' ') onSelectRelationship(e.relationshipId);
-                      }}
-                    />
-                  ) : null}
-
-                  {/* Visible edge */}
-                  <path
-                    d={d}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={isSelected ? 3 : 1.5}
-                    markerEnd={directed ? 'url(#arrow)' : undefined}
-                    strokeDasharray={e.reversed && directed ? '4 3' : undefined}
-                    opacity={isSelected ? 1 : 0.9}
-                  >
-                    <title>{svgTitle}</title>
-                  </path>
-                </g>
-              );
-            })}
-          </g>
-
-          {/* Nodes */}
-          <g>
-            {data.nodes.map((n) => {
-              const r = positioned.rects.get(n.id);
-              if (!r) return null;
-              const label = n.label;
-              const text = label.length > 26 ? `${label.slice(0, 25)}…` : label;
-              const el = model.elements[n.id];
-              const tip = elementTooltip(n.id);
-              const svgTitle = tip ? `${tip.title}\n${tip.lines.join('\n')}` : label;
-
-              let fill = 'rgba(255,255,255,0.9)';
-              if (modelKind === 'archimate' && el) {
-                const layer = (el as unknown as { layer?: string }).layer;
-                const layerFill = layer ? (ARCHIMATE_LAYER_BG_VAR as unknown as Record<string, string>)[layer] : undefined;
-                fill = layerFill ?? getElementBgVar(el.type as ElementType);
-              }
-              return (
-                <g
-                  key={n.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={(ev) => {
-                    onSelectElement(n.id);
-                    const tip = elementTooltip(n.id);
-                    if (tip) setTooltip({ x: ev.clientX, y: ev.clientY, title: tip.title, lines: tip.lines });
-                  }}
-                  onKeyDown={(ev) => {
-                    if (ev.key === 'Enter' || ev.key === ' ') onSelectElement(n.id);
-                  }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={8} ry={8} fill={fill} stroke="rgba(0,0,0,0.25)" />
-                  <text x={r.x + 10} y={r.y + 22} fontSize={12} style={{ userSelect: 'none' }}>
-                    {text}
-                    <title>{svgTitle}</title>
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+      <div style={{ marginTop: 8, maxHeight: 520, background: 'var(--panelBg, rgba(255,255,255,0.6))' }}>
+        <MiniColumnGraph
+          nodes={graphNodes}
+          edges={graphEdges}
+          selectedNodeId={selectedElementId}
+          selectedEdgeId={null}
+          isEdgeActive={isEdgeActive}
+          onSelectNode={onSelectElement}
+          onSelectEdge={onSelectEdge}
+          getNodeTooltip={elementTooltip}
+          getEdgeTooltip={onSelectRelationship ? getEdgeTooltip : undefined}
+          wrapLabels={wrapLabels}
+          autoFitColumns={autoFitColumns}
+          responsive={true}
+          ariaLabel={title}
+          containerStyle={{ borderRadius: 8, border: '1px solid var(--borderColor, rgba(0,0,0,0.15))' }}
+        />
       </div>
-
-      <QuickTooltip
-        open={Boolean(tooltip)}
-        x={tooltip?.x ?? 0}
-        y={tooltip?.y ?? 0}
-        title={tooltip?.title ?? ''}
-        lines={tooltip?.lines ?? []}
-        onClose={() => setTooltip(null)}
-      />
 
       {data.trimmed.nodes || data.trimmed.edges ? (
         <p className="crudHint" style={{ marginTop: 8 }}>
@@ -436,5 +246,3 @@ export function AnalysisMiniGraph({
     </div>
   );
 }
-
-

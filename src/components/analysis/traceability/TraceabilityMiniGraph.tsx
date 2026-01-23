@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
 
 import type { ElementType, Model } from '../../../domain';
 import type { ModelKind } from '../../../domain/types';
@@ -7,8 +8,8 @@ import type { TraceEdge, TraceNode, TraceSelection } from '../../../domain/analy
 import { getAnalysisAdapter } from '../../../analysis/adapters/registry';
 import { useElementBgVar } from '../../diagram/hooks/useElementBgVar';
 
-import { QuickTooltip } from '../QuickTooltip';
-import { measureTextPx, measureWrappedLabel, wrapLabel } from '../graphLabelLayout';
+import type { MiniColumnGraphTooltip } from '../MiniColumnGraph';
+import { MiniColumnGraph } from '../MiniColumnGraph';
 
 type Props = {
   model: Model;
@@ -24,39 +25,6 @@ type Props = {
   wrapLabels?: boolean;
   autoFitColumns?: boolean;
 };
-
-function nodeRect() {
-  // Base width; height becomes dynamic based on wrapped label (up to 3 lines).
-  const w = 190;
-  const h = 34;
-  return { w, h };
-}
-
-function nodeXY(
-  node: { level: number; order: number },
-  xByLevel: Map<number, number>
-) {
-  const ySpacing = 74; // allow up to 3 lines of text without overlap
-  const marginY = 24;
-
-  const y = marginY + node.order * ySpacing;
-  const x = xByLevel.get(node.level) ?? 24;
-  return { x, y };
-}
-
-function edgePath(from: { x: number; y: number; w: number; h: number }, to: { x: number; y: number; w: number; h: number }) {
-  const x1 = from.x + from.w;
-  const y1 = from.y + from.h / 2;
-  const x2 = to.x;
-  const y2 = to.y + to.h / 2;
-
-  const midX = (x1 + x2) / 2;
-  return `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
-}
-
-function stableName(labelForId: (id: string) => string, id: string): string {
-  return `${labelForId(id)}\u0000${id}`;
-}
 
 export function TraceabilityMiniGraph({
   model,
@@ -74,178 +42,21 @@ export function TraceabilityMiniGraph({
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
 
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; lines: string[] } | null>(null);
-
-  // Cache wrapped label results to avoid re-wrapping/measuring on every render.
-  // Keyed by element id + label + width + font + line count.
-  const wrapCacheRef = useRef(new Map<string, { lines: string[]; maxLineWidthPx: number }>());
-
-
-  const labelForId = useMemo(() => {
-    return (id: string): string => {
-      const el = model.elements[id];
-      return el ? adapter.getNodeLabel(el, model) : '(missing)';
-    };
-  }, [adapter, model]);
-
-  const renderInlineControls = (nodeId: string, nodeW: number) => {
-    const node = nodesById[nodeId];
-    if (!node) return null;
-    const pinned = Boolean(node.pinned);
-
-    // Controls rendered inside SVG as small button-like groups.
-    const btnW = 22;
-    const btnH = 18;
-    const gap = 6;
-
-    const mkBtn = (x: number, label: string, title: string, onClick: () => void) => (
-      <g
-        transform={`translate(${x},2)`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick();
-        }}
-        style={{ cursor: 'pointer' }}
-      >
-        <rect width={btnW} height={btnH} rx={6} ry={6} fill="rgba(0,0,0,0.08)" stroke="currentColor" strokeOpacity={0.25} />
-        <text x={btnW / 2} y={12.5} fontSize={11} textAnchor="middle" fill="currentColor" opacity={0.9}>
-          {label}
-        </text>
-        <title>{title}</title>
-      </g>
-    );
-
-    return (
-      <g transform={`translate(${nodeW - (btnW * 4 + gap * 3) - 8},0)`}>
-        {mkBtn(0, '↑', 'Expand upstream', () => onExpandNode(nodeId, 'incoming'))}
-        {mkBtn(btnW + gap, '↓', 'Expand downstream', () => onExpandNode(nodeId, 'outgoing'))}
-        {mkBtn((btnW + gap) * 2, '↔', 'Expand both', () => onExpandNode(nodeId, 'both'))}
-        {mkBtn((btnW + gap) * 3, pinned ? 'P' : 'p', pinned ? 'Unpin' : 'Pin', () => onTogglePin(nodeId))}
-      </g>
-    );
+  const labelForId = (id: string) => {
+    const el = model.elements[id];
+    if (!el) return id;
+    const name = String(el.name ?? '').trim();
+    return name || id;
   };
 
-  const layout = useMemo(() => {
-    const nodes = Object.values(nodesById).filter((n) => !n.hidden);
-    const edges = Object.values(edgesById).filter((e) => !e.hidden);
-
-    // Guardrail: if the graph is very large, prefer stability over expensive wrapping/auto-fit.
-    const nodeCount = nodes.length;
-    const effectiveWrapLabels = wrapLabels && nodeCount <= 500;
-    const effectiveAutoFitColumns = autoFitColumns && nodeCount <= 500;
-
-    const cache = wrapCacheRef.current;
-    const getWrapped = (id: string, label: string, maxWidthPx: number, maxLines: number, font: string) => {
-      const k = `${id}\u0000${label}\u0000${maxWidthPx}\u0000${maxLines}\u0000${font}`;
-      const hit = cache.get(k);
-      if (hit) return hit;
-      const wrapped = wrapLabel(label, { maxWidthPx, maxLines, font, measureTextPx });
-      const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
-      const val = { lines: wrapped.lines, maxLineWidthPx: metrics.maxLineWidthPx };
-      // Light cap to avoid unbounded growth in long sessions.
-      if (cache.size > 5000) cache.clear();
-      cache.set(k, val);
-      return val;
-    };
-
-    const byLevel = new Map<number, string[]>();
-    for (const n of nodes) {
-      const arr = byLevel.get(n.depth) ?? [];
-      arr.push(n.id);
-      byLevel.set(n.depth, arr);
-    }
-
-  const rect = nodeRect();
-    const font = '12px system-ui';
-
-    // 1) Determine per-column (level) width.
-    // If auto-fit is off -> fixed base width.
-    // If wrapLabels is on -> base measurement uses wrapped line widths.
-    // If wrapLabels is off -> measure the full label width to reduce truncation (bounded to 1.5x).
-    const colWByLevel = new Map<number, number>();
-    const paddingX = 20; // total (left+right) inside node
-    for (const [level, ids] of byLevel.entries()) {
-      if (!effectiveAutoFitColumns) {
-        colWByLevel.set(level, rect.w);
-        continue;
-      }
-
-      const maxNeeded = ids.reduce((m, id) => {
-        const label = labelForId(id);
-        if (effectiveWrapLabels) {
-          const w = getWrapped(id, label, rect.w - paddingX, 3, font);
-          return Math.max(m, w.maxLineWidthPx);
-        }
-        return Math.max(m, measureTextPx(label, font));
-      }, 0);
-
-      const desired = maxNeeded + paddingX;
-      const bounded = Math.min(rect.w * 1.5, Math.max(rect.w, desired));
-      colWByLevel.set(level, bounded);
-    }
-
-    // 2) Compute x offsets per level using cumulative widths
-    const colGap = 40;
-    const marginX = 24;
-    const levels = [...byLevel.keys()].sort((a, b) => a - b);
-    const xByLevel = new Map<number, number>();
-    let xCursor = marginX;
-    for (const level of levels) {
-      xByLevel.set(level, xCursor);
-      xCursor += (colWByLevel.get(level) ?? rect.w) + colGap;
-    }
-
-    // 3) Layout nodes within each level
-    const yCountByLevel = new Map<number, number>();
-    const laidOutNodes: Array<{ id: string; label: string; lines: string[]; level: number; order: number; x: number; y: number; w: number; h: number }> = [];
-
-    for (const [level, ids] of byLevel.entries()) {
-      const sorted = [...ids].sort((a, b) => stableName(labelForId, a).localeCompare(stableName(labelForId, b)));
-      yCountByLevel.set(level, sorted.length);
-
-      const nodeW = colWByLevel.get(level) ?? rect.w;
-      const maxTextW = nodeW - paddingX;
-
-      sorted.forEach((id, order) => {
-        const { x, y } = nodeXY({ level, order }, xByLevel);
-        const label = labelForId(id);
-        const maxLines = effectiveWrapLabels ? 3 : 1;
-        const wrapped = getWrapped(id, label, maxTextW, maxLines, font);
-        const lines = wrapped.lines;
-
-        const lineHeight = 14;
-        const paddingY = 10;
-        const h = effectiveWrapLabels ? Math.max(rect.h, paddingY + lines.length * lineHeight + paddingY) : rect.h;
-
-        laidOutNodes.push({ id, label, lines, level, order, x, y, w: nodeW, h });
-      });
-    }
-
-    const nodePos = new Map<string, { x: number; y: number; w: number; h: number }>();
-    for (const n of laidOutNodes) nodePos.set(n.id, { x: n.x, y: n.y, w: n.w, h: n.h });
-
-    const paths: Array<{ id: string; d: string }> = [];
-    for (const e of edges) {
-      const from = nodePos.get(e.from);
-      const to = nodePos.get(e.to);
-      if (!from || !to) continue;
-      paths.push({ id: e.id, d: edgePath(from, to) });
-    }
-
-    const height = Math.max(160, ...laidOutNodes.map((n) => n.y + n.h + 24));
-    const width = xCursor + 120; // end padding
-
-    return { nodes: laidOutNodes, paths, width, height };
-  }, [edgesById, labelForId, nodesById, wrapLabels, autoFitColumns]);
-
-  const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => {
+  const elementTooltip = (elementId: string): MiniColumnGraphTooltip | null => {
     const el = model.elements[elementId];
     if (!el) return null;
 
     const fullLabel = labelForId(elementId);
     const facets = adapter.getNodeFacetValues(el, model);
     const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
-    const layer = String((facets.archimateLayer ?? el.layer) ?? '');
+    const layer = String((facets.archimateLayer ?? (el as unknown as { layer?: string }).layer) ?? '');
     const doc = String(el.documentation ?? '').trim();
 
     const lines: string[] = [];
@@ -254,10 +65,10 @@ export function TraceabilityMiniGraph({
     if (layer) lines.push(`Layer: ${layer}`);
     if (doc) lines.push(`Documentation: ${doc.length > 240 ? `${doc.slice(0, 239)}…` : doc}`);
 
-    return { title: fullLabel || el.name || '(unnamed)', lines };
+    return { title: fullLabel || String(el.name ?? '') || '(unnamed)', lines };
   };
 
-  const edgeTooltip = (edgeId: string): { title: string; lines: string[] } | null => {
+  const edgeTooltip = (edgeId: string): MiniColumnGraphTooltip | null => {
     const e = edgesById[edgeId];
     if (!e) return null;
 
@@ -277,6 +88,97 @@ export function TraceabilityMiniGraph({
     return { title, lines };
   };
 
+  const renderInlineControls = (nodeId: string, nodeWidth: number) => {
+    const node = nodesById[nodeId];
+    if (!node) return null;
+
+    const iconStyle: CSSProperties = {
+      width: 18,
+      height: 18,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 6,
+      border: '1px solid rgba(0,0,0,0.22)',
+      background: 'rgba(255,255,255,0.75)',
+      cursor: 'pointer',
+      userSelect: 'none'
+    };
+
+    return (
+      <g transform={`translate(${Math.max(10, nodeWidth - 10 - 4 * 24)},${8})`}>
+        <foreignObject width={4 * 24} height={22}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div
+              style={iconStyle}
+              title="Expand incoming"
+              onClick={(ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                onExpandNode(nodeId, 'incoming');
+              }}
+            >
+              ←
+            </div>
+            <div
+              style={iconStyle}
+              title="Expand outgoing"
+              onClick={(ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                onExpandNode(nodeId, 'outgoing');
+              }}
+            >
+              →
+            </div>
+            <div
+              style={iconStyle}
+              title="Expand both"
+              onClick={(ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                onExpandNode(nodeId, 'both');
+              }}
+            >
+              ⇄
+            </div>
+            <div
+              style={{
+                ...iconStyle,
+                fontWeight: node.pinned ? 700 : 400
+              }}
+              title={node.pinned ? 'Unpin' : 'Pin'}
+              onClick={(ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                onTogglePin(nodeId);
+              }}
+            >
+              📌
+            </div>
+          </div>
+        </foreignObject>
+      </g>
+    );
+  };
+
+  const graphNodes = useMemo(() => {
+    const list: Array<{ id: string; label: string; level: number; bg?: string; hidden?: boolean }> = [];
+    for (const n of Object.values(nodesById)) {
+      const label = labelForId(n.id);
+      const el = model.elements[n.id];
+      const facets = el ? adapter.getNodeFacetValues(el, model) : {};
+      const et = (facets.elementType ?? facets.type ?? el?.type) as unknown as ElementType | undefined;
+      const bg = et ? getElementBgVar(et) : 'var(--arch-layer-business)';
+      list.push({ id: n.id, label, level: n.depth, bg, hidden: n.hidden });
+    }
+    return list;
+  }, [adapter, getElementBgVar, model, nodesById]);
+
+  const graphEdges = useMemo(() => {
+    return Object.values(edgesById).map((e) => ({ id: e.id, from: e.from, to: e.to, hidden: e.hidden }));
+  }, [edgesById]);
+
   return (
     <div className="crudSection" style={{ marginTop: 14 }}>
       <div className="crudHeader">
@@ -286,97 +188,20 @@ export function TraceabilityMiniGraph({
         </div>
       </div>
 
-      <div style={{ border: '1px solid var(--border-1)', borderRadius: 12, overflow: 'auto' }}>
-        <svg width={layout.width} height={layout.height} role="img" aria-label="Traceability mini graph">
-          <defs>
-            <marker id="traceArrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
-            </marker>
-          </defs>
-
-          {layout.paths.map((p) => {
-            const active = selection.selectedEdgeId === p.id;
-            return (
-              <path
-                key={p.id}
-                d={p.d}
-                fill="none"
-                stroke="currentColor"
-                opacity={active ? 0.95 : 0.35}
-                strokeWidth={active ? 2.2 : 1.2}
-                markerEnd="url(#traceArrow)"
-                onMouseMove={(e) => {
-                  const t = edgeTooltip(p.id);
-                  if (!t) return;
-                  setTooltip({ x: e.clientX + 12, y: e.clientY + 12, title: t.title, lines: t.lines });
-                }}
-                onMouseLeave={() => setTooltip(null)}
-                onClick={() => onSelectEdge(p.id)}
-                style={{ cursor: 'pointer' }}
-              />
-            );
-          })}
-
-          {layout.nodes.map((n) => {
-            const el = model.elements[n.id];
-            const facets = el ? adapter.getNodeFacetValues(el, model) : {};
-            const et = (facets.elementType ?? facets.type ?? el?.type) as unknown as ElementType | undefined;
-            const bg = et ? getElementBgVar(et) : 'var(--arch-layer-business)';
-            const active = selection.selectedNodeId === n.id;
-            return (
-              <g
-                key={n.id}
-                transform={`translate(${n.x},${n.y})`}
-                onMouseMove={(e) => {
-                  const tip = elementTooltip(n.id);
-                  if (!tip) return;
-                  setTooltip({ x: e.clientX + 12, y: e.clientY + 12, title: tip.title, lines: tip.lines });
-                }}
-                onMouseLeave={() => setTooltip(null)}
-                onClick={() => onSelectNode(n.id)}
-                style={{ cursor: 'pointer' }}
-              >
-                <rect
-                  width={n.w}
-                  height={n.h}
-                  rx={10}
-                  ry={10}
-                  fill={bg}
-                  opacity={0.22}
-                  stroke="currentColor"
-                  strokeOpacity={active ? 0.9 : 0.25}
-                  strokeWidth={active ? 2.2 : 1}
-                />
-                <text x={10} y={18} fontSize={12} fill="currentColor" opacity={0.9}>
-                  {n.lines.length ? (
-                    n.lines.map((line, idx) => (
-                      <tspan key={idx} x={10} dy={idx === 0 ? 0 : 14}>
-                        {line}
-                      </tspan>
-                    ))
-                  ) : (
-                    <tspan x={10} dy={0}>
-                      (unnamed)
-                    </tspan>
-                  )}
-                </text>
-                {active ? renderInlineControls(n.id, n.w) : null}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-
-      {tooltip ? (
-        <QuickTooltip
-          open={true}
-          x={tooltip.x}
-          y={tooltip.y}
-          title={tooltip.title}
-          lines={tooltip.lines}
-          onClose={() => setTooltip(null)}
-        />
-      ) : null}
+      <MiniColumnGraph
+        nodes={graphNodes}
+        edges={graphEdges}
+        selectedNodeId={selection.selectedNodeId}
+        selectedEdgeId={selection.selectedEdgeId}
+        onSelectNode={onSelectNode}
+        onSelectEdge={onSelectEdge}
+        getNodeTooltip={elementTooltip}
+        getEdgeTooltip={edgeTooltip}
+        renderNodeControls={renderInlineControls}
+        wrapLabels={wrapLabels}
+        autoFitColumns={autoFitColumns}
+        ariaLabel="Traceability mini graph"
+      />
     </div>
   );
 }

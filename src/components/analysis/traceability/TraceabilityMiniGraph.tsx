@@ -192,25 +192,39 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
   const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => {
     const el = model.elements[elementId];
     if (!el) return null;
+
+    const fullLabel = labelForId(elementId);
     const facets = adapter.getNodeFacetValues(el, model);
     const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
     const layer = String((facets.archimateLayer ?? el.layer) ?? '');
-    const doc = String((el.documentation ?? '')).trim();
+    const doc = String(el.documentation ?? '').trim();
+
     const lines: string[] = [];
+    lines.push(`Id: ${elementId}`);
     if (type) lines.push(`Type: ${type}`);
     if (layer) lines.push(`Layer: ${layer}`);
     if (doc) lines.push(`Documentation: ${doc.length > 240 ? `${doc.slice(0, 239)}…` : doc}`);
-    return { title: el.name || '(unnamed)', lines };
+
+    return { title: fullLabel || el.name || '(unnamed)', lines };
   };
 
   const edgeTooltip = (edgeId: string): { title: string; lines: string[] } | null => {
     const e = edgesById[edgeId];
     if (!e) return null;
+
     const from = labelForId(e.from);
     const to = labelForId(e.to);
-    const title = e.type ? String(e.type) : 'Relationship';
-    const lines = [`From: ${from}`, `To: ${to}`];
+
+    const rel = e.relationshipId ? model.relationships[e.relationshipId] : undefined;
+    const relName = rel?.name ? String(rel.name) : '';
+    const relType = rel?.type ? String(rel.type) : (e.type ? String(e.type) : 'Relationship');
+    const relDoc = String(rel?.documentation ?? '').trim();
+
+    const title = relName ? `${relType} — ${relName}` : relType;
+    const lines: string[] = [`From: ${from}`, `To: ${to}`];
     if (e.relationshipId) lines.push(`Id: ${e.relationshipId}`);
+    if (relDoc) lines.push(`Documentation: ${relDoc.length > 240 ? `${relDoc.slice(0, 239)}…` : relDoc}`);
+
     return { title, lines };
   };
 

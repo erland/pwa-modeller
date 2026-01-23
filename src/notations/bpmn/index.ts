@@ -85,6 +85,14 @@ export const bpmnNotation: Notation = {
       };
     }
 
+    if (rel.type === 'bpmn.dataInputAssociation' || rel.type === 'bpmn.dataOutputAssociation') {
+      // BPMN data associations are dashed with an open arrow head.
+      return {
+        markerEnd: 'arrowOpen',
+        line: { pattern: 'dashed' },
+      };
+    }
+
     // Fallback: keep it readable.
     return { markerEnd: 'arrowFilled', line: { pattern: 'solid' } };
   },
@@ -138,7 +146,23 @@ export const bpmnNotation: Notation = {
       return { allowed: true };
     }
 
-    return { allowed: false, reason: 'Only Sequence Flow, Message Flow and Association are supported in BPMN v2' };
+    if (relationshipType === 'bpmn.dataInputAssociation') {
+      // Pragmatic rule: data object/store -> flow node
+      const sourceIsData = sourceType === 'bpmn.dataObjectReference' || sourceType === 'bpmn.dataStoreReference';
+      if (!sourceIsData) return { allowed: false, reason: 'Data Input Association must start from Data Object/Store' };
+      if (targetType && !isBpmnConnectableNodeType(targetType)) return { allowed: false, reason: 'Data Input Association must target a BPMN flow node' };
+      return { allowed: true };
+    }
+
+    if (relationshipType === 'bpmn.dataOutputAssociation') {
+      // Pragmatic rule: flow node -> data object/store
+      const targetIsData = targetType === 'bpmn.dataObjectReference' || targetType === 'bpmn.dataStoreReference';
+      if (!targetIsData) return { allowed: false, reason: 'Data Output Association must target Data Object/Store' };
+      if (sourceType && !isBpmnConnectableNodeType(sourceType)) return { allowed: false, reason: 'Data Output Association must start from a BPMN flow node' };
+      return { allowed: true };
+    }
+
+    return { allowed: false, reason: 'Only Sequence Flow, Message Flow, Association and Data Associations are supported in BPMN v2' };
   },
 
   // ------------------------------

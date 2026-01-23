@@ -8,6 +8,10 @@ export function bpmnTypeForRelLocalName(nameLc: string): string | null {
       return 'bpmn.messageFlow';
     case 'association':
       return 'bpmn.association';
+    case 'datainputassociation':
+      return 'bpmn.dataInputAssociation';
+    case 'dataoutputassociation':
+      return 'bpmn.dataOutputAssociation';
     default:
       return null;
   }

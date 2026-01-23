@@ -37,6 +37,8 @@ export type BpmnSubProcessType = (typeof BPMN_SUBPROCESS_TYPES)[number];
 export interface BpmnActivityAttrs {
   /** Loop / multi-instance semantics (kept compact for UI friendliness). */
   loopType?: BpmnLoopType;
+  /** Marks an activity as a compensation activity (BPMN: isForCompensation=true). */
+  isForCompensation?: boolean;
   /** For call activities (or tasks that represent calling behaviour). */
   isCall?: boolean;
   /** Sub-process flavour (only meaningful for subProcess/callActivity in UI). */
@@ -48,6 +50,7 @@ export interface BpmnActivityAttrs {
 export function isBpmnActivityAttrs(x: unknown): x is BpmnActivityAttrs {
   if (!isPlainObject(x)) return false;
   if (x.loopType !== undefined && !isOneOf(x.loopType, BPMN_LOOP_TYPES)) return false;
+  if (x.isForCompensation !== undefined && !isBoolean(x.isForCompensation)) return false;
   if (x.isCall !== undefined && !isBoolean(x.isCall)) return false;
   if (x.subProcessType !== undefined && !isOneOf(x.subProcessType, BPMN_SUBPROCESS_TYPES)) return false;
   if (x.isExpanded !== undefined && !isBoolean(x.isExpanded)) return false;

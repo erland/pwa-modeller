@@ -51,6 +51,7 @@ export function BpmnTaskPropertiesSection({ model, element: el, actions }: Props
   const parsed = isBpmnActivityAttrs(base) ? base : {};
 
   const loopType = typeof parsed.loopType === 'string' ? parsed.loopType : 'none';
+  const isForCompensation = typeof parsed.isForCompensation === 'boolean' ? parsed.isForCompensation : false;
   const subProcessType = typeof parsed.subProcessType === 'string' ? parsed.subProcessType : 'embedded';
   const isExpanded = typeof parsed.isExpanded === 'boolean' ? parsed.isExpanded : true;
 
@@ -100,6 +101,24 @@ export function BpmnTaskPropertiesSection({ model, element: el, actions }: Props
             ))}
           </select>
         </PropertyRow>
+
+        <div className="propertiesRow">
+          <div className="propertiesKey">Compensation</div>
+          <div className="propertiesValue" style={{ fontWeight: 400 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
+              <input
+                type="checkbox"
+                aria-label="BPMN activity for compensation"
+                checked={!!isForCompensation}
+                onChange={(e) => commit({ isForCompensation: e.target.checked ? true : undefined })}
+              />
+              Mark as compensation activity
+            </label>
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+              Stored as semantic attrs (BPMN: isForCompensation).
+            </div>
+          </div>
+        </div>
 
         {isSubProcessLike ? (
           <>

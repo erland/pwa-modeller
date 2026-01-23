@@ -13,6 +13,8 @@ function shortRel(rt: RelationshipType): string {
   if (rt === 'bpmn.sequenceFlow') return 'SF';
   if (rt === 'bpmn.messageFlow') return 'MF';
   if (rt === 'bpmn.association') return 'A';
+  if (rt === 'bpmn.dataInputAssociation') return 'DIA';
+  if (rt === 'bpmn.dataOutputAssociation') return 'DOA';
   return String(rt);
 }
 
@@ -32,6 +34,8 @@ function pillStyle(rt: RelationshipType): CSSProperties {
   if (rt === 'bpmn.sequenceFlow') return { ...base };
   if (rt === 'bpmn.messageFlow') return { ...base, borderStyle: 'dashed' };
   if (rt === 'bpmn.association') return { ...base, opacity: 0.9 };
+  if (rt === 'bpmn.dataInputAssociation') return { ...base, borderStyle: 'dashed' };
+  if (rt === 'bpmn.dataOutputAssociation') return { ...base, borderStyle: 'dashed' };
   return base;
 }
 
@@ -62,7 +66,13 @@ export function BpmnValidationMatrix({ model }: Props) {
     return buildBpmnRelationshipMatrix(types);
   }, [types]);
 
-  const relLegend: RelationshipType[] = ['bpmn.sequenceFlow', 'bpmn.messageFlow', 'bpmn.association'];
+  const relLegend: RelationshipType[] = [
+    'bpmn.sequenceFlow',
+    'bpmn.messageFlow',
+    'bpmn.association',
+    'bpmn.dataInputAssociation',
+    'bpmn.dataOutputAssociation'
+  ];
 
   return (
     <div aria-label="BPMN validation matrix" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -130,7 +140,7 @@ export function BpmnValidationMatrix({ model }: Props) {
       </div>
 
       <p className="panelHint" style={{ margin: 0 }}>
-        Note: The matrix is scoped to the BPMN subset currently supported by the tool (Sequence Flow, Message Flow, Association).
+        Note: The matrix is scoped to the BPMN subset currently supported by the tool (Sequence Flow, Message Flow, Association, Data Associations).
       </p>
     </div>
   );

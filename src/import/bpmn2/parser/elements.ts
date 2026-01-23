@@ -177,6 +177,40 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
   };
 }
 
+function parseActivityAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
+  const isActivity =
+    typeId === 'bpmn.task' ||
+    typeId === 'bpmn.userTask' ||
+    typeId === 'bpmn.serviceTask' ||
+    typeId === 'bpmn.scriptTask' ||
+    typeId === 'bpmn.manualTask' ||
+    typeId === 'bpmn.callActivity' ||
+    typeId === 'bpmn.subProcess';
+  if (!isActivity) return undefined;
+
+  const out: Record<string, unknown> = {};
+
+  // Loop semantics
+  const mi = qa(el, 'multiInstanceLoopCharacteristics')[0];
+  if (mi) {
+    const isSequential = attr(mi, 'isSequential') === 'true';
+    out.loopType = isSequential ? 'multiInstanceSequential' : 'multiInstanceParallel';
+  } else if (qa(el, 'standardLoopCharacteristics')[0]) {
+    out.loopType = 'standard';
+  }
+
+  // Compensation marker
+  // BPMN proper uses @isForCompensation="true" on the activity.
+  // Some exports (and our earlier example) may also embed a compensateEventDefinition under the task.
+  const isForComp = attr(el, 'isForCompensation') === 'true' || qa(el, 'compensateEventDefinition').length > 0;
+  if (isForComp) out.isForCompensation = true;
+
+  // Call activity hint
+  if (typeId === 'bpmn.callActivity') out.isCall = true;
+
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function parseElements(ctx: ParseContext) {
   const { defs, warnings, elements, idIndex, elementById, unsupportedNodeTypes } = ctx;
 
@@ -249,6 +283,7 @@ export function parseElements(ctx: ParseContext) {
 
       const attrs =
         parseEventAttrs(el, typeId) ??
+        parseActivityAttrs(el, typeId) ??
         (typeId === 'bpmn.error'
           ? {
               errorCode: (attr(el, 'errorCode') ?? '').trim() || undefined,

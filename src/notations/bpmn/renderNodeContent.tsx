@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import type { Element, ViewNodeLayout } from '../../domain';
+import { isBpmnActivityAttrs } from '../../domain/bpmnAttrs';
 
 function labelFor(element: Element): string {
   return (element.name || '').trim() || '(unnamed)';
@@ -85,7 +86,74 @@ function TaskBadge({ text }: { text: string }) {
   );
 }
 
-function TaskNode({ name, badge, isCallActivity, isSubProcess }: { name: string; badge?: string; isCallActivity?: boolean; isSubProcess?: boolean }) {
+function ActivityMarkers({ loopType, isForCompensation }: { loopType?: string; isForCompensation?: boolean }) {
+  const parts: string[] = [];
+
+  // Loop markers (compact, UI-friendly approximations).
+  if (loopType === 'standard') parts.push('↻');
+  if (loopType === 'multiInstanceParallel') parts.push('≡');
+  if (loopType === 'multiInstanceSequential') parts.push('⋮');
+
+  // Compensation marker.
+  if (isForCompensation) parts.push('↺');
+
+  if (!parts.length) return null;
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 6,
+        bottom: 6,
+        display: 'inline-flex',
+        gap: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1px 5px',
+        border: '1px solid rgba(0,0,0,0.22)',
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 900,
+        lineHeight: 1,
+        opacity: 0.78,
+        background: 'rgba(0,0,0,0.02)',
+        userSelect: 'none',
+      }}
+      aria-hidden="true"
+      title={
+        [
+          loopType === 'standard'
+            ? 'Standard loop'
+            : loopType === 'multiInstanceParallel'
+              ? 'Multi-instance (parallel)'
+              : loopType === 'multiInstanceSequential'
+                ? 'Multi-instance (sequential)'
+                : null,
+          isForCompensation ? 'Compensation activity' : null,
+        ]
+          .filter(Boolean)
+          .join(' • ')
+      }
+    >
+      {parts.join('')}
+    </div>
+  );
+}
+
+function TaskNode({
+  name,
+  badge,
+  isCallActivity,
+  isSubProcess,
+  loopType,
+  isForCompensation,
+}: {
+  name: string;
+  badge?: string;
+  isCallActivity?: boolean;
+  isSubProcess?: boolean;
+  loopType?: string;
+  isForCompensation?: boolean;
+}) {
   const border = isCallActivity ? '3px solid rgba(0,0,0,0.34)' : '2px solid rgba(0,0,0,0.32)';
   return (
     <div
@@ -105,6 +173,7 @@ function TaskNode({ name, badge, isCallActivity, isSubProcess }: { name: string;
       }}
     >
       {badge ? <TaskBadge text={badge} /> : null}
+      <ActivityMarkers loopType={loopType} isForCompensation={isForCompensation} />
       {isSubProcess ? (
         <div
           style={{
@@ -456,7 +525,18 @@ export function renderBpmnNodeContent(args: { element: Element; node: ViewNodeLa
                   ? 'Sub'
                   : undefined;
 
-    return <TaskNode name={name} badge={badge} isCallActivity={type === 'bpmn.callActivity'} isSubProcess={type === 'bpmn.subProcess'} />;
+    const raw = element.attrs;
+    const parsed = isBpmnActivityAttrs(raw) ? raw : undefined;
+    return (
+      <TaskNode
+        name={name}
+        badge={badge}
+        isCallActivity={type === 'bpmn.callActivity'}
+        isSubProcess={type === 'bpmn.subProcess'}
+        loopType={parsed?.loopType}
+        isForCompensation={parsed?.isForCompensation}
+      />
+    );
   }
 
   // Events

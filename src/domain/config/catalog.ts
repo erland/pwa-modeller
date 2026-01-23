@@ -226,7 +226,9 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
 export const BPMN_RELATIONSHIP_TYPES: RelationshipType[] = [
   'bpmn.sequenceFlow',
   'bpmn.messageFlow',
-  'bpmn.association'
+  'bpmn.association',
+  'bpmn.dataInputAssociation',
+  'bpmn.dataOutputAssociation'
 ];
 
 export type TypeOption<TId extends string = string> = { id: TId; label: string };
@@ -304,7 +306,9 @@ const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = 
 const BPMN_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {
   'bpmn.sequenceFlow': 'Sequence Flow',
   'bpmn.messageFlow': 'Message Flow',
-  'bpmn.association': 'Association'
+  'bpmn.association': 'Association',
+  'bpmn.dataInputAssociation': 'Data Input Association',
+  'bpmn.dataOutputAssociation': 'Data Output Association'
 };
 
 export function getElementTypeLabel(typeId: ElementType | string): string {

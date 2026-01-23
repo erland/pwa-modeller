@@ -1,6 +1,6 @@
 import type { ParseContext } from './context';
 
-import { attr, childByLocalName, localName, qa, text } from '../xml';
+import { attr, childByLocalName, childrenByLocalName, localName, qa, text } from '../xml';
 import { bpmnTypeForRelLocalName, extractExtensionSummary } from './helpers';
 
 /**
@@ -9,7 +9,7 @@ import { bpmnTypeForRelLocalName, extractExtensionSummary } from './helpers';
 export function parseRelationships(ctx: ParseContext) {
   const { defs, warnings, relationships, idIndex, relById } = ctx;
 
-  const supportedRelLocalNames = ['sequenceFlow', 'messageFlow', 'association'];
+  const supportedRelLocalNames = ['sequenceFlow', 'messageFlow', 'association', 'dataInputAssociation', 'dataOutputAssociation'];
   const missingEndpointsWarnings = new Set<string>();
 
   for (const ln of supportedRelLocalNames) {
@@ -23,8 +23,17 @@ export function parseRelationships(ctx: ParseContext) {
       const typeId = bpmnTypeForRelLocalName(localName(relEl));
       if (!typeId) continue;
 
-      const sourceRef = (attr(relEl, 'sourceRef') ?? '').trim();
-      const targetRef = (attr(relEl, 'targetRef') ?? '').trim();
+      // Most BPMN relationships use @sourceRef/@targetRef attributes.
+      // Data associations use nested <sourceRef>/<targetRef> elements instead.
+      let sourceRef = (attr(relEl, 'sourceRef') ?? '').trim();
+      let targetRef = (attr(relEl, 'targetRef') ?? '').trim();
+
+      if (!sourceRef && (typeId === 'bpmn.dataInputAssociation' || typeId === 'bpmn.dataOutputAssociation')) {
+        const sourceEls = childrenByLocalName(relEl, 'sourceRef');
+        sourceRef = (text(sourceEls[0] ?? null) ?? '').trim();
+        const targetEl = childByLocalName(relEl, 'targetRef');
+        targetRef = (text(targetEl) ?? '').trim();
+      }
       if (!sourceRef || !targetRef) {
         warnings.push(`Skipping ${typeId} (${id}) because sourceRef/targetRef is missing.`);
         continue;

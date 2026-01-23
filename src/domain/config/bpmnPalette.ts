@@ -14,11 +14,16 @@ import type { RelationshipMatrix, RelationshipMatrixEntry } from '../validation/
  *  - bpmn.sequenceFlow
  *  - bpmn.messageFlow
  *  - bpmn.association
- *
- * (Data associations and the full BPMN event/message semantics can be added later.)
+ *  - bpmn.dataInputAssociation
+ *  - bpmn.dataOutputAssociation
  */
 
-export type BpmnRelationshipType = 'bpmn.sequenceFlow' | 'bpmn.messageFlow' | 'bpmn.association';
+export type BpmnRelationshipType =
+  | 'bpmn.sequenceFlow'
+  | 'bpmn.messageFlow'
+  | 'bpmn.association'
+  | 'bpmn.dataInputAssociation'
+  | 'bpmn.dataOutputAssociation';
 
 const BPMN_CONTAINERS = new Set<ElementType>(['bpmn.pool', 'bpmn.lane']);
 const BPMN_GLOBALS = new Set<ElementType>(['bpmn.message', 'bpmn.signal', 'bpmn.error', 'bpmn.escalation']);
@@ -79,7 +84,14 @@ export function isBpmnGlobalType(t: ElementType): boolean {
 
 export function getAllowedBpmnRelationshipTypes(sourceType: ElementType, targetType: ElementType): RelationshipType[] {
   // Keep Unknown permissive (e.g. imported legacy types).
-  if (sourceType === 'Unknown' || targetType === 'Unknown') return ['bpmn.sequenceFlow', 'bpmn.messageFlow', 'bpmn.association'];
+  if (sourceType === 'Unknown' || targetType === 'Unknown')
+    return [
+      'bpmn.sequenceFlow',
+      'bpmn.messageFlow',
+      'bpmn.association',
+      'bpmn.dataInputAssociation',
+      'bpmn.dataOutputAssociation'
+    ];
 
   // Only reason about BPMN types.
   if (!isBpmnType(sourceType) || !isBpmnType(targetType)) return [];
@@ -107,6 +119,16 @@ export function getAllowedBpmnRelationshipTypes(sourceType: ElementType, targetT
       allowed.add('bpmn.association');
     }
   }
+
+  // Data associations (pragmatic directionality):
+  // - dataInputAssociation: data -> activity/flow-node
+  // - dataOutputAssociation: activity/flow-node -> data
+  // We treat Data Object/Store references as the primary “data” endpoints.
+  const isDataEndpoint = (t: ElementType) => t === 'bpmn.dataObjectReference' || t === 'bpmn.dataStoreReference';
+  const sData = isDataEndpoint(sourceType);
+  const tData = isDataEndpoint(targetType);
+  if (sData && isBpmnConnectableNodeType(targetType)) allowed.add('bpmn.dataInputAssociation');
+  if (tData && isBpmnConnectableNodeType(sourceType)) allowed.add('bpmn.dataOutputAssociation');
 
   return Array.from(allowed);
 }

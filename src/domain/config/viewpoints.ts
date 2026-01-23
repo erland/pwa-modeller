@@ -89,7 +89,13 @@ export const VIEWPOINTS: Viewpoint[] = [
       'bpmn.dataStoreReference',
       'bpmn.group'
     ],
-    allowedRelationshipTypes: ['bpmn.sequenceFlow', 'bpmn.messageFlow', 'bpmn.association']
+    allowedRelationshipTypes: [
+      'bpmn.sequenceFlow',
+      'bpmn.messageFlow',
+      'bpmn.association',
+      'bpmn.dataInputAssociation',
+      'bpmn.dataOutputAssociation'
+    ]
   }
 ];
 

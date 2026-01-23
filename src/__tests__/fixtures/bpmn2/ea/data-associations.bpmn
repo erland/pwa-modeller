@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Defs_DataAssoc"
+  targetNamespace="http://example.com/bpmn"
+>
+  <bpmn:process id="Proc_1" isExecutable="false">
+    <bpmn:startEvent id="Start_1" name="Start" />
+    <bpmn:task id="Task_1" name="Do work" />
+    <bpmn:endEvent id="End_1" name="End" />
+
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_1" targetRef="Task_1" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="End_1" />
+
+    <bpmn:dataObjectReference id="DOR_1" name="Input" dataObjectRef="DO_1" />
+    <bpmn:dataStoreReference id="DSR_1" name="Store" dataStoreRef="DS_1" />
+
+    <bpmn:dataInputAssociation id="DIA_1">
+      <bpmn:sourceRef>DOR_1</bpmn:sourceRef>
+      <bpmn:targetRef>Task_1</bpmn:targetRef>
+    </bpmn:dataInputAssociation>
+
+    <bpmn:dataOutputAssociation id="DOA_1">
+      <bpmn:sourceRef>Task_1</bpmn:sourceRef>
+      <bpmn:targetRef>DSR_1</bpmn:targetRef>
+    </bpmn:dataOutputAssociation>
+  </bpmn:process>
+</bpmn:definitions>

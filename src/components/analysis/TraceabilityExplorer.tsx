@@ -23,6 +23,9 @@ type Props = {
   elementTypes: ElementType[];
 
   expandDepth: number;
+
+  onSelectElement: (elementId: string) => void;
+  onSelectRelationship: (relationshipId: string) => void;
 };
 
 function toTraceFilters({
@@ -47,7 +50,9 @@ export function TraceabilityExplorer({
   relationshipTypes,
   layers,
   elementTypes,
-  expandDepth
+  expandDepth,
+  onSelectElement,
+  onSelectRelationship
 }: Props) {
   const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
 
@@ -67,6 +72,17 @@ export function TraceabilityExplorer({
     dispatch({ type: 'setFilters', filters: toTraceFilters({ direction, relationshipTypes, layers, elementTypes }) });
   }, [direction, relationshipTypes, layers, elementTypes]); // eslint-disable-line react-hooks/exhaustive-deps
 
+
+  const selectNode = (id: string) => {
+    dispatch({ type: 'selectNode', nodeId: id });
+    onSelectElement(id);
+  };
+
+  const selectEdge = (edgeId: string) => {
+    dispatch({ type: 'selectEdge', edgeId });
+    const e = state.edgesById[edgeId];
+    if (e?.relationshipId) onSelectRelationship(e.relationshipId);
+  };
   const selectedNodeId = state.selection.selectedNodeId ?? seedId;
   const canExpand = Boolean(selectedNodeId && model.elements[selectedNodeId]);
 
@@ -177,15 +193,15 @@ export function TraceabilityExplorer({
         edgesById={state.edgesById}
         selection={state.selection}
         onSelectNode={(id) => {
-          dispatch({ type: 'selectNode', nodeId: id });
+          selectNode(id);
           if (!autoExpand) return;
           if (!model.elements[id]) return;
           if (state.pendingByNodeId[id]) return;
           runExpand(undefined, id);
         }}
-        onSelectEdge={(id) => dispatch({ type: 'selectEdge', edgeId: id })}
+        onSelectEdge={(id) => selectEdge(id)}
         onExpandNode={(id, dir) => {
-          dispatch({ type: 'selectNode', nodeId: id });
+          selectNode(id);
           runExpand(dir, id);
         }}
         onTogglePin={(id) => dispatch({ type: 'togglePin', nodeId: id })}
@@ -223,7 +239,7 @@ export function TraceabilityExplorer({
                       key={n.id}
                       className={state.selection.selectedNodeId === n.id ? 'isSelected' : ''}
                       style={{ cursor: 'pointer' }}
-                      onClick={() => dispatch({ type: 'selectNode', nodeId: n.id })}
+                      onClick={() => selectNode(n.id)}
                     >
                       <td className="mono">{n.depth}</td>
                       <td>

@@ -170,6 +170,12 @@ export function AnalysisWorkspace({
     if (which === 'target') setDraftTargetId(picked);
   }
 
+  const openTraceabilityFrom = (elementId: string) => {
+    setMode('traceability');
+    setDraftStartId(elementId);
+    setActiveStartId(elementId);
+  };
+
   const traceSeedId = activeStartId || draftStartId || selectionToElementId(selection) || '';
   return (
     <div className="workspace" aria-label="Analysis workspace">
@@ -202,6 +208,21 @@ export function AnalysisWorkspace({
             onClick={() => setMode('traceability')}
           >
             Traceability explorer
+          </button>
+        </div>
+        <div className="rowActions">
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={() => {
+              const picked = selectionToElementId(selection);
+              if (picked) openTraceabilityFrom(picked);
+            }}
+            disabled={!selectionToElementId(selection)}
+            aria-disabled={!selectionToElementId(selection)}
+            title="Open Traceability Explorer from the currently selected element"
+          >
+            Open traceability
           </button>
         </div>
       </div>
@@ -262,6 +283,8 @@ export function AnalysisWorkspace({
                 layers={layers}
                 elementTypes={elementTypes}
                 expandDepth={maxDepth}
+                onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+                onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
               />
             ) : (
               <div className="crudSection" style={{ marginTop: 14 }}>
@@ -285,6 +308,7 @@ export function AnalysisWorkspace({
               selection={selection}
               onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+              onOpenTraceability={(elementId) => openTraceabilityFrom(elementId)}
             />
           )}
         </>

@@ -22,6 +22,7 @@ type Props = {
   selection: Selection;
   onSelectRelationship: (relationshipId: string) => void;
   onSelectElement: (elementId: string) => void;
+  onOpenTraceability: (elementId: string) => void;
 };
 
 function docSnippet(doc: string | undefined): string {
@@ -62,7 +63,8 @@ export function AnalysisResultTable({
   pathsResult,
   selection,
   onSelectRelationship,
-  onSelectElement
+  onSelectElement,
+  onOpenTraceability
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const [showGraph, setShowGraph] = useState(false);
@@ -206,6 +208,14 @@ export function AnalysisResultTable({
                       >
                         Select
                       </button>
+                      <button
+                        type="button"
+                        className="miniLinkButton"
+                        onClick={() => onOpenTraceability(h.elementId)}
+                        title="Open Traceability Explorer from this element"
+                      >
+                        Open traceability
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -271,6 +281,16 @@ export function AnalysisResultTable({
           >
             {showGraph ? 'Hide graph' : 'Show graph'}
           </button>
+          {sourceId ? (
+            <button type="button" className="miniLinkButton" onClick={() => onOpenTraceability(sourceId)}>
+              Trace from source
+            </button>
+          ) : null}
+          {targetId ? (
+            <button type="button" className="miniLinkButton" onClick={() => onOpenTraceability(targetId)}>
+              Trace from target
+            </button>
+          ) : null}
         </div>
       </div>
 

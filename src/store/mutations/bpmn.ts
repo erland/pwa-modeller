@@ -38,6 +38,72 @@ export function setSequenceFlowCondition(model: Model, relationshipId: string, c
   });
 }
 
+function ensureElementType(model: Model, elementId: string, expectedType: string, label: string): void {
+  const el = model.elements[elementId];
+  if (!el) throw new Error(`Element not found: ${elementId}`);
+  if (String(el.type) !== expectedType) throw new Error(`${label} must be a ${expectedType}`);
+}
+
+function ensureOptionalRefType(
+  model: Model,
+  refId: string | null | undefined,
+  expectedType: string,
+  label: string
+): string | undefined {
+  const id = refId && String(refId).trim() ? String(refId).trim() : '';
+  if (!id) return undefined;
+  const el = model.elements[id];
+  if (!el) throw new Error(`${label} not found: ${id}`);
+  if (String(el.type) !== expectedType) throw new Error(`${label} must reference a ${expectedType}`);
+  return id;
+}
+
+/** Pool (Participant): set/clear its owning process reference. */
+export function setPoolProcessRef(model: Model, poolId: string, processId: string | null): void {
+  ensureElementType(model, poolId, 'bpmn.pool', 'Pool');
+  const ref = ensureOptionalRefType(model, processId, 'bpmn.process', 'Process');
+  setBpmnElementAttrs(model, poolId, { processRef: ref });
+}
+
+/** Lane: replace its semantic membership list (flowNodeRefs) with a sanitized set of element ids. */
+export function setLaneFlowNodeRefs(model: Model, laneId: string, nodeIds: string[]): void {
+  ensureElementType(model, laneId, 'bpmn.lane', 'Lane');
+  const next: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of nodeIds ?? []) {
+    const id = String(raw).trim();
+    if (!id) continue;
+    if (seen.has(id)) continue;
+    // Only keep ids that exist. We intentionally do NOT enforce "flow node" typing yet,
+    // because the app's BPMN type system is still growing.
+    if (!model.elements[id]) continue;
+    seen.add(id);
+    next.push(id);
+  }
+  setBpmnElementAttrs(model, laneId, { flowNodeRefs: next.length ? next : undefined });
+}
+
+/** Text annotation: set/clear its text content. */
+export function setTextAnnotationText(model: Model, annotationId: string, text: string): void {
+  ensureElementType(model, annotationId, 'bpmn.textAnnotation', 'Text annotation');
+  const t = String(text ?? '').trim();
+  setBpmnElementAttrs(model, annotationId, { text: t.length ? t : undefined });
+}
+
+/** DataObjectReference: set/clear its referenced global DataObject. */
+export function setDataObjectReferenceRef(model: Model, refId: string, dataObjectId: string | null): void {
+  ensureElementType(model, refId, 'bpmn.dataObjectReference', 'Data object reference');
+  const target = ensureOptionalRefType(model, dataObjectId, 'bpmn.dataObject', 'Data Object');
+  setBpmnElementAttrs(model, refId, { dataObjectRef: target });
+}
+
+/** DataStoreReference: set/clear its referenced global DataStore. */
+export function setDataStoreReferenceRef(model: Model, refId: string, dataStoreId: string | null): void {
+  ensureElementType(model, refId, 'bpmn.dataStoreReference', 'Data store reference');
+  const target = ensureOptionalRefType(model, dataStoreId, 'bpmn.dataStore', 'Data Store');
+  setBpmnElementAttrs(model, refId, { dataStoreRef: target });
+}
+
 /**
  * Sets a gateway's default flow.
  *

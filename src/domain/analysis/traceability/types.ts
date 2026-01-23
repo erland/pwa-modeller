@@ -1,4 +1,4 @@
-export type TraceDirection = 'incoming' | 'outgoing' | 'both';
+export type TraceabilityDirection = 'incoming' | 'outgoing' | 'both';
 
 /**
  * A lightweight node used by the Traceability Explorer.
@@ -40,7 +40,7 @@ export type TraceEdge = {
 export type TraceFrontier = Record<string, string[]>;
 
 export type TraceFilters = {
-  direction: TraceDirection;
+  direction: TraceabilityDirection;
   relationshipTypes?: string[];
   layers?: string[];
   elementTypes?: string[];
@@ -69,7 +69,7 @@ export type StopConditions = {
 
 export type ExpandRequest = {
   nodeId: string;
-  direction: TraceDirection;
+  direction: TraceabilityDirection;
   depth: number;
   relationshipTypes?: string[];
   layers?: string[];

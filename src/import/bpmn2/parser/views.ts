@@ -138,19 +138,91 @@ function ensureViewShowsAllBpmnElements(
     return { x: minX, y: minY, width: Math.max(800, maxX - minX + 400), height: Math.max(600, maxY - minY + 300) };
   })();
 
-  const pickContainerFor = (elId: string): Rect => {
-    // Prefer the semantic lane for this element (if the lane has DI bounds).
-    const laneId = preferredLaneByFlowNodeId.get(elId);
-    if (laneId) {
-      const lane = laneRects.find((x) => x.id === laneId);
-      if (lane) return lane.rect;
-    }
-    // Otherwise: first DI container (lane/pool), otherwise global.
-    if (containers.length) return containers[0];
-    return globalRect;
-  };
 
-  // Compute a starting cursor based on existing non-container nodes, so we append rather than overlap.
+const keyFor = (r: Rect) => `${r.x},${r.y},${r.width},${r.height}`;
+
+const laneRectById = new Map<string, Rect>(laneRects.map((x) => [x.id, x.rect]));
+
+const smallestContaining = (rects: { id: string; rect: Rect }[], inner: Rect): Rect | undefined => {
+  const matches = rects.filter((x) => rectContains(x.rect, inner));
+  if (matches.length === 0) return undefined;
+  matches.sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height));
+  return matches[0].rect;
+};
+
+// Map already-placed elements to their containing lane/pool (based on DI bounds).
+// We use this to place DI-missing nodes into the same container as their neighbors.
+const containerKeyByElementId = new Map<string, string>();
+const containerRectByKey = new Map<string, Rect>();
+const containerPopulation = new Map<string, number>();
+
+for (const n of nodes) {
+  if (n.kind !== 'element' || !n.elementId) continue;
+  const t = elementById.get(n.elementId)?.type;
+  if (t === 'bpmn.pool' || t === 'bpmn.lane') continue;
+
+  const b = boundsOrDefault(n, elementById);
+  if (!b) continue;
+
+  const lane = smallestContaining(laneRects, b);
+  const pool = lane ? undefined : smallestContaining(poolRects, b);
+  const container = lane ?? pool;
+  if (!container) continue;
+
+  const k = keyFor(container);
+  containerKeyByElementId.set(n.elementId, k);
+  containerRectByKey.set(k, container);
+  containerPopulation.set(k, (containerPopulation.get(k) ?? 0) + 1);
+}
+
+// Build quick adjacency map from the BPMN model graph (relationships).
+const neighborsByElementId = new Map<string, Set<string>>();
+const addNeighbor = (a: string, b: string) => {
+  if (!neighborsByElementId.has(a)) neighborsByElementId.set(a, new Set<string>());
+  neighborsByElementId.get(a)!.add(b);
+};
+for (const r of relationships) {
+  addNeighbor(r.sourceId, r.targetId);
+  addNeighbor(r.targetId, r.sourceId);
+}
+
+const pickContainerFor = (elId: string): Rect => {
+  // 1) Prefer the semantic lane for this element (if the lane has DI bounds).
+  const preferredLaneId = preferredLaneByFlowNodeId.get(elId);
+  if (preferredLaneId) {
+    const lane = laneRectById.get(preferredLaneId);
+    if (lane) return lane;
+  }
+
+  // 2) Infer container from connected elements that already have DI bounds.
+  const neighbors = neighborsByElementId.get(elId);
+  if (neighbors && neighbors.size > 0) {
+    const votes = new Map<string, number>();
+    for (const nb of neighbors) {
+      const ck = containerKeyByElementId.get(nb);
+      if (!ck) continue;
+      votes.set(ck, (votes.get(ck) ?? 0) + 1);
+    }
+    if (votes.size > 0) {
+      const bestKey = [...votes.entries()].sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))[0][0];
+      const rect = containerRectByKey.get(bestKey);
+      if (rect) return rect;
+    }
+  }
+
+  // 3) Fall back to the most populated container to keep the layout coherent.
+  if (containerPopulation.size > 0) {
+    const bestKey = [...containerPopulation.entries()].sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))[0][0];
+    const rect = containerRectByKey.get(bestKey);
+    if (rect) return rect;
+  }
+
+  // 4) Otherwise: first DI container (lane/pool), otherwise global.
+  if (containers.length) return containers[0];
+  return globalRect;
+};
+
+// Compute a starting cursor based on existing non-container nodes, so we append rather than overlap.
   const computeStartForContainer = (container: Rect): { x: number; y: number } => {
     const padX = 80;
     const padY = 60;
@@ -168,7 +240,6 @@ function ensureViewShowsAllBpmnElements(
   };
 
   const cursorByContainer = new Map<string, { x: number; y: number }>();
-  const keyFor = (r: Rect) => `${r.x},${r.y},${r.width},${r.height}`;
   const getCursor = (r: Rect) => {
     const k = keyFor(r);
     let cur = cursorByContainer.get(k);

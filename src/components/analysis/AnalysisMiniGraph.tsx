@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import type {
   Model,
@@ -112,6 +112,9 @@ export function AnalysisMiniGraph({
   wrapLabels?: boolean;
   autoFitColumns?: boolean;
 }) {
+  // Cache wrapped label results to avoid re-wrapping/measuring on every render.
+  const wrapCacheRef = useRef(new Map<string, { lines: string[]; maxLineWidthPx: number }>());
+
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
   const [tooltip, setTooltip] = useState<{
@@ -177,6 +180,24 @@ export function AnalysisMiniGraph({
     const linesById = new Map<string, string[]>();
     if (!data) return { rects, linesById, maxX: 360, maxY: 220 };
 
+    // Guardrail: very large result sets can become expensive to measure/wrap.
+    const nodeCount = data.nodes.length;
+    const effectiveWrapLabels = wrapLabels && nodeCount <= 500;
+    const effectiveAutoFitColumns = autoFitColumns && nodeCount <= 500;
+
+    const cache = wrapCacheRef.current;
+    const getWrapped = (id: string, label: string, maxWidthPx: number, maxLines: number, font: string) => {
+      const k = `${id}\u0000${label}\u0000${maxWidthPx}\u0000${maxLines}\u0000${font}`;
+      const hit = cache.get(k);
+      if (hit) return hit;
+      const wrapped = wrapLabel(label, { maxWidthPx, maxLines, font, measureTextPx });
+      const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
+      const val = { lines: wrapped.lines, maxLineWidthPx: metrics.maxLineWidthPx };
+      if (cache.size > 5000) cache.clear();
+      cache.set(k, val);
+      return val;
+    };
+
     const base = nodeRect();
     const font = '12px system-ui';
     const paddingX = 20;
@@ -195,17 +216,16 @@ export function AnalysisMiniGraph({
     // If wrapLabels is off -> measure the full label width to reduce truncation (bounded to 1.5x).
     const colWByLevel = new Map<number, number>();
     for (const [level, nodes] of byLevel.entries()) {
-      if (!autoFitColumns) {
+      if (!effectiveAutoFitColumns) {
         colWByLevel.set(level, base.w);
         continue;
       }
 
       const maxNeeded = nodes.reduce((m, n) => {
         const label = n.label || labelForId(n.id);
-        if (wrapLabels) {
-          const wrapped = wrapLabel(label, { maxWidthPx: base.w - paddingX, maxLines: 3, font, measureTextPx });
-          const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
-          return Math.max(m, metrics.maxLineWidthPx);
+        if (effectiveWrapLabels) {
+          const w = getWrapped(n.id, label, base.w - paddingX, 3, font);
+          return Math.max(m, w.maxLineWidthPx);
         }
         return Math.max(m, measureTextPx(label, font));
       }, 0);
@@ -232,11 +252,12 @@ export function AnalysisMiniGraph({
       const nodeW = colWByLevel.get(n.level) ?? base.w;
       const maxTextW = nodeW - paddingX;
       const label = n.label || labelForId(n.id);
-      const wrapped = wrapLabel(label, { maxWidthPx: maxTextW, maxLines: wrapLabels ? 3 : 1, font, measureTextPx });
+      const maxLines = effectiveWrapLabels ? 3 : 1;
+      const wrapped = getWrapped(n.id, label, maxTextW, maxLines, font);
 
       const lineHeight = 14;
       const paddingY = 10;
-      const h = wrapLabels ? Math.max(base.h, paddingY + wrapped.lines.length * lineHeight + paddingY) : base.h;
+      const h = effectiveWrapLabels ? Math.max(base.h, paddingY + wrapped.lines.length * lineHeight + paddingY) : base.h;
 
       const { x, y } = nodeXY(n, xByLevel);
       rects.set(n.id, { x, y, w: nodeW, h });
@@ -415,3 +436,5 @@ export function AnalysisMiniGraph({
     </div>
   );
 }
+
+

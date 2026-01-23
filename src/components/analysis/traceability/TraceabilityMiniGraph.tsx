@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import type { ElementType, Model } from '../../../domain';
 import type { ModelKind } from '../../../domain/types';
@@ -76,6 +76,11 @@ export function TraceabilityMiniGraph({
 
   const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; lines: string[] } | null>(null);
 
+  // Cache wrapped label results to avoid re-wrapping/measuring on every render.
+  // Keyed by element id + label + width + font + line count.
+  const wrapCacheRef = useRef(new Map<string, { lines: string[]; maxLineWidthPx: number }>());
+
+
   const labelForId = useMemo(() => {
     return (id: string): string => {
       const el = model.elements[id];
@@ -124,6 +129,25 @@ export function TraceabilityMiniGraph({
     const nodes = Object.values(nodesById).filter((n) => !n.hidden);
     const edges = Object.values(edgesById);
 
+    // Guardrail: if the graph is very large, prefer stability over expensive wrapping/auto-fit.
+    const nodeCount = nodes.length;
+    const effectiveWrapLabels = wrapLabels && nodeCount <= 500;
+    const effectiveAutoFitColumns = autoFitColumns && nodeCount <= 500;
+
+    const cache = wrapCacheRef.current;
+    const getWrapped = (id: string, label: string, maxWidthPx: number, maxLines: number, font: string) => {
+      const k = `${id}\u0000${label}\u0000${maxWidthPx}\u0000${maxLines}\u0000${font}`;
+      const hit = cache.get(k);
+      if (hit) return hit;
+      const wrapped = wrapLabel(label, { maxWidthPx, maxLines, font, measureTextPx });
+      const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
+      const val = { lines: wrapped.lines, maxLineWidthPx: metrics.maxLineWidthPx };
+      // Light cap to avoid unbounded growth in long sessions.
+      if (cache.size > 5000) cache.clear();
+      cache.set(k, val);
+      return val;
+    };
+
     const byLevel = new Map<number, string[]>();
     for (const n of nodes) {
       const arr = byLevel.get(n.depth) ?? [];
@@ -131,7 +155,7 @@ export function TraceabilityMiniGraph({
       byLevel.set(n.depth, arr);
     }
 
-    const rect = nodeRect();
+  const rect = nodeRect();
     const font = '12px system-ui';
 
     // 1) Determine per-column (level) width.
@@ -141,17 +165,16 @@ export function TraceabilityMiniGraph({
     const colWByLevel = new Map<number, number>();
     const paddingX = 20; // total (left+right) inside node
     for (const [level, ids] of byLevel.entries()) {
-      if (!autoFitColumns) {
+      if (!effectiveAutoFitColumns) {
         colWByLevel.set(level, rect.w);
         continue;
       }
 
       const maxNeeded = ids.reduce((m, id) => {
         const label = labelForId(id);
-        if (wrapLabels) {
-          const wrapped = wrapLabel(label, { maxWidthPx: rect.w - paddingX, maxLines: 3, font, measureTextPx });
-          const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
-          return Math.max(m, metrics.maxLineWidthPx);
+        if (effectiveWrapLabels) {
+          const w = getWrapped(id, label, rect.w - paddingX, 3, font);
+          return Math.max(m, w.maxLineWidthPx);
         }
         return Math.max(m, measureTextPx(label, font));
       }, 0);
@@ -186,12 +209,13 @@ export function TraceabilityMiniGraph({
       sorted.forEach((id, order) => {
         const { x, y } = nodeXY({ level, order }, xByLevel);
         const label = labelForId(id);
-        const wrapped = wrapLabel(label, { maxWidthPx: maxTextW, maxLines: wrapLabels ? 3 : 1, font, measureTextPx });
+        const maxLines = effectiveWrapLabels ? 3 : 1;
+        const wrapped = getWrapped(id, label, maxTextW, maxLines, font);
         const lines = wrapped.lines;
 
         const lineHeight = 14;
         const paddingY = 10;
-        const h = wrapLabels ? Math.max(rect.h, paddingY + lines.length * lineHeight + paddingY) : rect.h;
+        const h = effectiveWrapLabels ? Math.max(rect.h, paddingY + lines.length * lineHeight + paddingY) : rect.h;
 
         laidOutNodes.push({ id, label, lines, level, order, x, y, w: nodeW, h });
       });
@@ -212,7 +236,7 @@ export function TraceabilityMiniGraph({
     const width = xCursor + 120; // end padding
 
     return { nodes: laidOutNodes, paths, width, height };
-  }, [edgesById, labelForId, nodesById]);
+  }, [edgesById, labelForId, nodesById, wrapLabels, autoFitColumns]);
 
   const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => {
     const el = model.elements[elementId];

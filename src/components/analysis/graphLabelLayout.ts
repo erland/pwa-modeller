@@ -39,6 +39,7 @@ let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 
 const measureCache = new Map<string, number>();
+const MAX_MEASURE_CACHE = 20000;
 
 function getFontSizePx(font: string): number {
   const m = /([0-9]+(?:\.[0-9]+)?)px/.exec(font);
@@ -77,6 +78,8 @@ export const measureTextPx: TextMeasurer = (text, font) => {
 
   const context = ensureCanvas(font);
   const w = context ? context.measureText(text).width : fallbackMeasureTextPx(text, font);
+  // Simple guardrail against unbounded growth (long sessions, many unique labels).
+  if (measureCache.size > MAX_MEASURE_CACHE) measureCache.clear();
   measureCache.set(key, w);
   return w;
 };

@@ -97,7 +97,9 @@ export function AnalysisMiniGraph({
   pathsResult,
   selection,
   onSelectElement,
-  onSelectRelationship
+  onSelectRelationship,
+  wrapLabels = true,
+  autoFitColumns = true
 }: {
   model: Model;
   modelKind: ModelKind;
@@ -107,6 +109,8 @@ export function AnalysisMiniGraph({
   selection?: Selection;
   onSelectElement: (elementId: string) => void;
   onSelectRelationship?: (relationshipId: string) => void;
+  wrapLabels?: boolean;
+  autoFitColumns?: boolean;
 }) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
@@ -185,17 +189,28 @@ export function AnalysisMiniGraph({
       byLevel.set(n.level, arr);
     }
 
-    // 1) Column widths (bounded to 1.5x base)
+    // 1) Column widths.
+    // If auto-fit is off -> fixed base width.
+    // If wrapLabels is on -> base measurement uses wrapped line widths.
+    // If wrapLabels is off -> measure the full label width to reduce truncation (bounded to 1.5x).
     const colWByLevel = new Map<number, number>();
     for (const [level, nodes] of byLevel.entries()) {
-      const maxWrapped = nodes.reduce((m, n) => {
+      if (!autoFitColumns) {
+        colWByLevel.set(level, base.w);
+        continue;
+      }
+
+      const maxNeeded = nodes.reduce((m, n) => {
         const label = n.label || labelForId(n.id);
-        const wrapped = wrapLabel(label, { maxWidthPx: base.w - paddingX, maxLines: 3, font, measureTextPx });
-        const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
-        return Math.max(m, metrics.maxLineWidthPx);
+        if (wrapLabels) {
+          const wrapped = wrapLabel(label, { maxWidthPx: base.w - paddingX, maxLines: 3, font, measureTextPx });
+          const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
+          return Math.max(m, metrics.maxLineWidthPx);
+        }
+        return Math.max(m, measureTextPx(label, font));
       }, 0);
 
-      const desired = maxWrapped + paddingX;
+      const desired = maxNeeded + paddingX;
       const bounded = Math.min(base.w * 1.5, Math.max(base.w, desired));
       colWByLevel.set(level, bounded);
     }
@@ -217,11 +232,11 @@ export function AnalysisMiniGraph({
       const nodeW = colWByLevel.get(n.level) ?? base.w;
       const maxTextW = nodeW - paddingX;
       const label = n.label || labelForId(n.id);
-      const wrapped = wrapLabel(label, { maxWidthPx: maxTextW, maxLines: 3, font, measureTextPx });
+      const wrapped = wrapLabel(label, { maxWidthPx: maxTextW, maxLines: wrapLabels ? 3 : 1, font, measureTextPx });
 
       const lineHeight = 14;
       const paddingY = 10;
-      const h = Math.max(base.h, paddingY + wrapped.lines.length * lineHeight + paddingY);
+      const h = wrapLabels ? Math.max(base.h, paddingY + wrapped.lines.length * lineHeight + paddingY) : base.h;
 
       const { x, y } = nodeXY(n, xByLevel);
       rects.set(n.id, { x, y, w: nodeW, h });
@@ -233,7 +248,7 @@ export function AnalysisMiniGraph({
     const maxX = xCursor + 60;
 
     return { rects, linesById, maxX, maxY: maxY + 24 };
-  }, [data, labelForId]);
+  }, [data, labelForId, wrapLabels, autoFitColumns]);
 
   if (!data) return null;
 

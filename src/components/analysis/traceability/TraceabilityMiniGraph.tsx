@@ -20,6 +20,9 @@ type Props = {
   onSelectEdge: (id: string) => void;
   onExpandNode: (id: string, direction: 'incoming' | 'outgoing' | 'both') => void;
   onTogglePin: (id: string) => void;
+
+  wrapLabels?: boolean;
+  autoFitColumns?: boolean;
 };
 
 function nodeRect() {
@@ -55,7 +58,19 @@ function stableName(labelForId: (id: string) => string, id: string): string {
   return `${labelForId(id)}\u0000${id}`;
 }
 
-export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, selection, onSelectNode, onSelectEdge, onExpandNode, onTogglePin }: Props) {
+export function TraceabilityMiniGraph({
+  model,
+  modelKind,
+  nodesById,
+  edgesById,
+  selection,
+  onSelectNode,
+  onSelectEdge,
+  onExpandNode,
+  onTogglePin,
+  wrapLabels = true,
+  autoFitColumns = true
+}: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
 
@@ -119,19 +134,29 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
     const rect = nodeRect();
     const font = '12px system-ui';
 
-    // 1) Determine per-column (level) width based on wrapped label metrics,
-    // bounded to 1.5x base width to keep layout stable.
+    // 1) Determine per-column (level) width.
+    // If auto-fit is off -> fixed base width.
+    // If wrapLabels is on -> base measurement uses wrapped line widths.
+    // If wrapLabels is off -> measure the full label width to reduce truncation (bounded to 1.5x).
     const colWByLevel = new Map<number, number>();
     const paddingX = 20; // total (left+right) inside node
     for (const [level, ids] of byLevel.entries()) {
-      const maxWrapped = ids.reduce((m, id) => {
+      if (!autoFitColumns) {
+        colWByLevel.set(level, rect.w);
+        continue;
+      }
+
+      const maxNeeded = ids.reduce((m, id) => {
         const label = labelForId(id);
-        const wrapped = wrapLabel(label, { maxWidthPx: rect.w - paddingX, maxLines: 3, font, measureTextPx });
-        const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
-        return Math.max(m, metrics.maxLineWidthPx);
+        if (wrapLabels) {
+          const wrapped = wrapLabel(label, { maxWidthPx: rect.w - paddingX, maxLines: 3, font, measureTextPx });
+          const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
+          return Math.max(m, metrics.maxLineWidthPx);
+        }
+        return Math.max(m, measureTextPx(label, font));
       }, 0);
 
-      const desired = maxWrapped + paddingX;
+      const desired = maxNeeded + paddingX;
       const bounded = Math.min(rect.w * 1.5, Math.max(rect.w, desired));
       colWByLevel.set(level, bounded);
     }
@@ -161,12 +186,12 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
       sorted.forEach((id, order) => {
         const { x, y } = nodeXY({ level, order }, xByLevel);
         const label = labelForId(id);
-        const wrapped = wrapLabel(label, { maxWidthPx: maxTextW, maxLines: 3, font, measureTextPx });
+        const wrapped = wrapLabel(label, { maxWidthPx: maxTextW, maxLines: wrapLabels ? 3 : 1, font, measureTextPx });
         const lines = wrapped.lines;
 
         const lineHeight = 14;
         const paddingY = 10;
-        const h = Math.max(rect.h, paddingY + lines.length * lineHeight + paddingY);
+        const h = wrapLabels ? Math.max(rect.h, paddingY + lines.length * lineHeight + paddingY) : rect.h;
 
         laidOutNodes.push({ id, label, lines, level, order, x, y, w: nodeW, h });
       });

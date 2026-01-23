@@ -68,6 +68,8 @@ export function AnalysisResultTable({
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const [showGraph, setShowGraph] = useState(false);
+  const [wrapLabels, setWrapLabels] = useState(true);
+  const [autoFitColumns, setAutoFitColumns] = useState(true);
   const [tooltip, setTooltip] = useState<{
     x: number;
     y: number;
@@ -234,6 +236,8 @@ export function AnalysisResultTable({
             selection={selection}
             onSelectRelationship={onSelectRelationship}
             onSelectElement={onSelectElement}
+            wrapLabels={wrapLabels}
+            autoFitColumns={autoFitColumns}
           />
         ) : null}
 
@@ -281,6 +285,14 @@ export function AnalysisResultTable({
           >
             {showGraph ? 'Hide graph' : 'Show graph'}
           </button>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.9 }}>
+            <input type="checkbox" checked={wrapLabels} onChange={(e) => setWrapLabels(e.currentTarget.checked)} />
+            Wrap labels
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.9 }}>
+            <input type="checkbox" checked={autoFitColumns} onChange={(e) => setAutoFitColumns(e.currentTarget.checked)} />
+            Auto-fit columns
+          </label>
           {sourceId ? (
             <button type="button" className="miniLinkButton" onClick={() => onOpenTraceability(sourceId)}>
               Trace from source

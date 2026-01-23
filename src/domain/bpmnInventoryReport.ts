@@ -79,6 +79,14 @@ export const BPMN_RELATIONSHIP_IMPORTER_ATTRS: Record<string, string[]> = {
 
 export function getBpmnDomainGuardForType(t: string): string | undefined {
   // Keep in sync with src/domain/bpmnAttrs.ts
+  if (t === 'bpmn.pool') return 'isBpmnPoolAttrs';
+  if (t === 'bpmn.process') return 'isBpmnProcessAttrs';
+  if (t === 'bpmn.textAnnotation') return 'isBpmnTextAnnotationAttrs';
+  if (t === 'bpmn.dataObjectReference') return 'isBpmnDataObjectReferenceAttrs';
+  if (t === 'bpmn.dataStoreReference') return 'isBpmnDataStoreReferenceAttrs';
+  if (t === 'bpmn.message') return 'isBpmnMessageAttrs';
+  if (t === 'bpmn.error') return 'isBpmnErrorAttrs';
+  if (t === 'bpmn.escalation') return 'isBpmnEscalationAttrs';
   if (
     t === 'bpmn.task' ||
     t === 'bpmn.userTask' ||

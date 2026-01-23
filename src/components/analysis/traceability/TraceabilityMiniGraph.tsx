@@ -8,6 +8,7 @@ import { getAnalysisAdapter } from '../../../analysis/adapters/registry';
 import { useElementBgVar } from '../../diagram/hooks/useElementBgVar';
 
 import { QuickTooltip } from '../QuickTooltip';
+import { wrapLabel } from '../graphLabelLayout';
 
 type Props = {
   model: Model;
@@ -22,14 +23,15 @@ type Props = {
 };
 
 function nodeRect() {
-  const w = 170;
+  // Base width; height becomes dynamic based on wrapped label (up to 3 lines).
+  const w = 190;
   const h = 34;
   return { w, h };
 }
 
 function nodeXY(node: { level: number; order: number }, yCountByLevel: Map<number, number>) {
   const xSpacing = 220;
-  const ySpacing = 56;
+  const ySpacing = 74; // allow up to 3 lines of text without overlap
   const marginX = 24;
   const marginY = 24;
 
@@ -117,7 +119,7 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
       byLevel.set(n.depth, arr);
     }
 
-    const laidOutNodes: Array<{ id: string; label: string; level: number; order: number; x: number; y: number; w: number; h: number }> = [];
+    const laidOutNodes: Array<{ id: string; label: string; lines: string[]; level: number; order: number; x: number; y: number; w: number; h: number }> = [];
     const rect = nodeRect();
 
     const yCountByLevel = new Map<number, number>();
@@ -126,7 +128,19 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
       yCountByLevel.set(level, sorted.length);
       sorted.forEach((id, order) => {
         const { x, y } = nodeXY({ level, order }, yCountByLevel);
-        laidOutNodes.push({ id, label: labelForId(id), level, order, x, y, w: rect.w, h: rect.h });
+        const label = labelForId(id);
+
+        const lines = wrapLabel(label, {
+          maxWidthPx: rect.w - 20,
+          maxLines: 3,
+          font: '12px system-ui'
+        }).lines;
+
+        const lineHeight = 14;
+        const paddingY = 10;
+        const h = Math.max(rect.h, paddingY + lines.length * lineHeight + paddingY);
+
+        laidOutNodes.push({ id, label, lines, level, order, x, y, w: rect.w, h });
       });
     }
 
@@ -246,8 +260,18 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
                   strokeOpacity={active ? 0.9 : 0.25}
                   strokeWidth={active ? 2.2 : 1}
                 />
-                <text x={10} y={22} fontSize={12} fill="currentColor" opacity={0.9}>
-                  {n.label || '(unnamed)'}
+                <text x={10} y={18} fontSize={12} fill="currentColor" opacity={0.9}>
+                  {n.lines.length ? (
+                    n.lines.map((line, idx) => (
+                      <tspan key={idx} x={10} dy={idx === 0 ? 0 : 14}>
+                        {line}
+                      </tspan>
+                    ))
+                  ) : (
+                    <tspan x={10} dy={0}>
+                      (unnamed)
+                    </tspan>
+                  )}
                 </text>
                 {active ? renderInlineControls(n.id) : null}
               </g>

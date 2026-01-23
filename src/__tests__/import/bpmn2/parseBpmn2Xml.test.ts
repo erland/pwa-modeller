@@ -109,4 +109,37 @@ describe('BPMN2 XML parsing', () => {
     expect(normalized.relationships.find((r) => r.id === 'Dangling_1')).toBeUndefined();
     expect(report.warnings.length).toBeGreaterThan(0);
   });
+
+  it('parses BPMN eventDefinitions into element attrs', () => {
+    const xml = readFixture('event-defs.bpmn');
+    const res = parseBpmn2Xml(xml);
+
+    const byId = new Map(res.importIR.elements.map((e) => [e.id, e] as const));
+
+    const start = byId.get('Start_Message');
+    expect(start?.type).toBe('bpmn.startEvent');
+    expect((start as any)?.attrs?.eventKind).toBe('start');
+    expect((start as any)?.attrs?.eventDefinition?.kind).toBe('message');
+    expect((start as any)?.attrs?.eventDefinition?.messageRef).toBe('Msg_In');
+
+    const boundary = byId.get('Boundary_Error');
+    expect(boundary?.type).toBe('bpmn.boundaryEvent');
+    expect((boundary as any)?.attrs?.eventKind).toBe('boundary');
+    expect((boundary as any)?.attrs?.attachedToRef).toBe('Task_1');
+    expect((boundary as any)?.attrs?.cancelActivity).toBe(false);
+    expect((boundary as any)?.attrs?.eventDefinition?.kind).toBe('error');
+    expect((boundary as any)?.attrs?.eventDefinition?.errorRef).toBe('Err_Bad');
+
+    const timer = byId.get('Catch_Timer');
+    expect(timer?.type).toBe('bpmn.intermediateCatchEvent');
+    expect((timer as any)?.attrs?.eventKind).toBe('intermediateCatch');
+    expect((timer as any)?.attrs?.eventDefinition?.kind).toBe('timer');
+    expect((timer as any)?.attrs?.eventDefinition?.timeDuration).toBe('PT5M');
+
+    const end = byId.get('End_Terminate');
+    expect(end?.type).toBe('bpmn.endEvent');
+    expect((end as any)?.attrs?.eventKind).toBe('end');
+    expect((end as any)?.attrs?.eventDefinition?.kind).toBe('terminate');
+  });
+
 });

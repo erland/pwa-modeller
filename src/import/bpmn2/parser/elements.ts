@@ -9,6 +9,173 @@ import { defaultName, extractExtensionSummary } from './helpers';
 /**
  * Collect BPMN node elements as IR elements (best-effort, permissive scan).
  */
+
+function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
+  // Map internal event types to the domain eventKind values used in attrs.eventDefinition.
+  let eventKind: 'start' | 'end' | 'intermediateCatch' | 'intermediateThrow' | 'boundary' | null = null;
+  switch (typeId) {
+    case 'bpmn.startEvent':
+      eventKind = 'start';
+      break;
+    case 'bpmn.endEvent':
+      eventKind = 'end';
+      break;
+    case 'bpmn.intermediateCatchEvent':
+      eventKind = 'intermediateCatch';
+      break;
+    case 'bpmn.intermediateThrowEvent':
+      eventKind = 'intermediateThrow';
+      break;
+    case 'bpmn.boundaryEvent':
+      eventKind = 'boundary';
+      break;
+    default:
+      return undefined;
+  }
+
+  // BPMN allows multiple eventDefinitions, but for now we pick the first recognized one.
+  const timerDef = qa(el, 'timerEventDefinition')[0];
+  if (timerDef) {
+    const timeDate = text(childByLocalName(timerDef, 'timeDate')) || undefined;
+    const timeDuration = text(childByLocalName(timerDef, 'timeDuration')) || undefined;
+    const timeCycle = text(childByLocalName(timerDef, 'timeCycle')) || undefined;
+
+    return {
+      eventKind,
+      eventDefinition: {
+        kind: 'timer',
+        ...(timeDate ? { timeDate } : {}),
+        ...(timeDuration ? { timeDuration } : {}),
+        ...(timeCycle ? { timeCycle } : {})
+      },
+      ...(eventKind === 'boundary'
+        ? {
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            attachedToRef: attr(el, 'attachedToRef') || undefined
+          }
+        : {})
+    };
+  }
+
+  const messageDef = qa(el, 'messageEventDefinition')[0];
+  if (messageDef) {
+    const messageRef = attr(messageDef, 'messageRef') || undefined;
+    return {
+      eventKind,
+      eventDefinition: { kind: 'message', ...(messageRef ? { messageRef } : {}) },
+      ...(eventKind === 'boundary'
+        ? {
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            attachedToRef: attr(el, 'attachedToRef') || undefined
+          }
+        : {})
+    };
+  }
+
+  const signalDef = qa(el, 'signalEventDefinition')[0];
+  if (signalDef) {
+    const signalRef = attr(signalDef, 'signalRef') || undefined;
+    return {
+      eventKind,
+      eventDefinition: { kind: 'signal', ...(signalRef ? { signalRef } : {}) },
+      ...(eventKind === 'boundary'
+        ? {
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            attachedToRef: attr(el, 'attachedToRef') || undefined
+          }
+        : {})
+    };
+  }
+
+  const errorDef = qa(el, 'errorEventDefinition')[0];
+  if (errorDef) {
+    const errorRef = attr(errorDef, 'errorRef') || undefined;
+    return {
+      eventKind,
+      eventDefinition: { kind: 'error', ...(errorRef ? { errorRef } : {}) },
+      ...(eventKind === 'boundary'
+        ? {
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            attachedToRef: attr(el, 'attachedToRef') || undefined
+          }
+        : {})
+    };
+  }
+
+  const escalationDef = qa(el, 'escalationEventDefinition')[0];
+  if (escalationDef) {
+    const escalationRef = attr(escalationDef, 'escalationRef') || undefined;
+    return {
+      eventKind,
+      eventDefinition: { kind: 'escalation', ...(escalationRef ? { escalationRef } : {}) },
+      ...(eventKind === 'boundary'
+        ? {
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            attachedToRef: attr(el, 'attachedToRef') || undefined
+          }
+        : {})
+    };
+  }
+
+  const conditionalDef = qa(el, 'conditionalEventDefinition')[0];
+  if (conditionalDef) {
+    // The expression may be nested; collect the first common child.
+    const exprEl = childByLocalName(conditionalDef, 'condition') ?? childByLocalName(conditionalDef, 'conditionExpression');
+    const conditionExpression = text(exprEl) || undefined;
+    return {
+      eventKind,
+      eventDefinition: { kind: 'conditional', ...(conditionExpression ? { conditionExpression } : {}) },
+      ...(eventKind === 'boundary'
+        ? {
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            attachedToRef: attr(el, 'attachedToRef') || undefined
+          }
+        : {})
+    };
+  }
+
+  const linkDef = qa(el, 'linkEventDefinition')[0];
+  if (linkDef) {
+    const linkName = (attr(linkDef, 'name') ?? '').trim() || undefined;
+    return {
+      eventKind,
+      eventDefinition: { kind: 'link', ...(linkName ? { linkName } : {}) },
+      ...(eventKind === 'boundary'
+        ? {
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            attachedToRef: attr(el, 'attachedToRef') || undefined
+          }
+        : {})
+    };
+  }
+
+  const terminateDef = qa(el, 'terminateEventDefinition')[0];
+  if (terminateDef) {
+    return {
+      eventKind,
+      eventDefinition: { kind: 'terminate' },
+      ...(eventKind === 'boundary'
+        ? {
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            attachedToRef: attr(el, 'attachedToRef') || undefined
+          }
+        : {})
+    };
+  }
+
+  // Default: keep BPMN semantics explicit.
+  return {
+    eventKind,
+    eventDefinition: { kind: 'none' },
+    ...(eventKind === 'boundary'
+      ? {
+          cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+          attachedToRef: attr(el, 'attachedToRef') || undefined
+        }
+      : {})
+  };
+}
+
 export function parseElements(ctx: ParseContext) {
   const { defs, warnings, elements, idIndex, elementById, unsupportedNodeTypes } = ctx;
 
@@ -73,12 +240,15 @@ export function parseElements(ctx: ParseContext) {
 
       const extTags = extractExtensionSummary(el);
 
+      const attrs = parseEventAttrs(el, typeId);
+
       elements.push({
         id,
         type: typeId,
         name,
         documentation,
         externalIds: [{ system: 'bpmn2', id, kind: 'element' }],
+        ...(attrs ? { attrs } : {}),
         meta: {
           sourceLocalName: localName(el),
           ...(extTags ? { extensionElements: { tags: extTags } } : {})

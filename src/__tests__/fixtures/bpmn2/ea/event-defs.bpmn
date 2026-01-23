@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  id="Defs_EventDefs"
+  targetNamespace="http://example.tullverket.se/bpmn">
+  <bpmn:message id="Msg_In" name="Inkommande"/>
+  <bpmn:error id="Err_Bad" name="Fel" errorCode="TVK-ERR"/>
+
+  <bpmn:process id="Proc_1" isExecutable="false">
+    <bpmn:startEvent id="Start_Message" name="Start (message)">
+      <bpmn:messageEventDefinition messageRef="Msg_In"/>
+    </bpmn:startEvent>
+
+    <bpmn:task id="Task_1" name="Gör något"/>
+
+    <bpmn:boundaryEvent id="Boundary_Error" name="Boundary error" attachedToRef="Task_1" cancelActivity="false">
+      <bpmn:errorEventDefinition errorRef="Err_Bad"/>
+    </bpmn:boundaryEvent>
+
+    <bpmn:intermediateCatchEvent id="Catch_Timer" name="Vänta">
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration>PT5M</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:endEvent id="End_Terminate" name="Slut (terminate)">
+      <bpmn:terminateEventDefinition/>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_Message" targetRef="Task_1"/>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="Catch_Timer"/>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Catch_Timer" targetRef="End_Terminate"/>
+  </bpmn:process>
+</bpmn:definitions>

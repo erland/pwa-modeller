@@ -26,9 +26,24 @@ function applyBpmnZOrder(nodes: IRViewNode[], elementById: Map<string, IRElement
     return a.key.localeCompare(b.key);
   });
 
-  // IRViewNode has no zIndex field; instead we order nodes so containers come first (rendered behind).
-  const ordered = infos.map((i) => i.node);
-  nodes.splice(0, nodes.length, ...ordered);
+  // Assign explicit zIndex via meta so the renderer can reliably layer pools/lanes behind relationships.
+// Using negative zIndex ensures containers never occlude edges even if DOM order changes.
+// Keep ordering stable and predictable.
+const ordered = infos.map((i) => i.node);
+
+// zIndex policy:
+// - Containers (pool/lane): very low zIndex, larger containers even further back.
+// - Others: leave as-is (or default), letting user/layout decide.
+let containerBase = -1000;
+let containerRank = 0;
+for (const info of infos) {
+  if (!info.isContainer) continue;
+  const n = info.node;
+  n.meta = { ...(n.meta ?? {}), zIndex: containerBase - containerRank };
+  containerRank++;
+}
+
+nodes.splice(0, nodes.length, ...ordered);
 }
 
 export function parseViews(ctx: ParseContext) {

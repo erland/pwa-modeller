@@ -261,6 +261,10 @@ const BPMN_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   'bpmn.error': 'Error (Global)',
   'bpmn.escalation': 'Escalation (Global)',
 
+  // Global data definitions
+  'bpmn.dataObject': 'Data Object (Global)',
+  'bpmn.dataStore': 'Data Store (Global)',
+
   // Activities
   'bpmn.task': 'Task',
   'bpmn.userTask': 'User Task',

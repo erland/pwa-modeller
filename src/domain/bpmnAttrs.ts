@@ -37,8 +37,6 @@ export type BpmnSubProcessType = (typeof BPMN_SUBPROCESS_TYPES)[number];
 export interface BpmnActivityAttrs {
   /** Loop / multi-instance semantics (kept compact for UI friendliness). */
   loopType?: BpmnLoopType;
-  /** Marks an activity as a compensation activity (BPMN: isForCompensation=true). */
-  isForCompensation?: boolean;
   /** For call activities (or tasks that represent calling behaviour). */
   isCall?: boolean;
   /** Sub-process flavour (only meaningful for subProcess/callActivity in UI). */
@@ -50,7 +48,6 @@ export interface BpmnActivityAttrs {
 export function isBpmnActivityAttrs(x: unknown): x is BpmnActivityAttrs {
   if (!isPlainObject(x)) return false;
   if (x.loopType !== undefined && !isOneOf(x.loopType, BPMN_LOOP_TYPES)) return false;
-  if (x.isForCompensation !== undefined && !isBoolean(x.isForCompensation)) return false;
   if (x.isCall !== undefined && !isBoolean(x.isCall)) return false;
   if (x.subProcessType !== undefined && !isOneOf(x.subProcessType, BPMN_SUBPROCESS_TYPES)) return false;
   if (x.isExpanded !== undefined && !isBoolean(x.isExpanded)) return false;
@@ -140,6 +137,27 @@ export function isBpmnEventAttrs(x: unknown): x is BpmnEventAttrs {
 
 export const BPMN_GATEWAY_KINDS = ['exclusive', 'parallel', 'inclusive', 'eventBased'] as const;
 export type BpmnGatewayKind = (typeof BPMN_GATEWAY_KINDS)[number];
+
+// ---- Lanes -----------------------------------------------------------------
+
+/**
+ * Lane semantic containment.
+ *
+ * In BPMN XML, lanes contain flow nodes via <flowNodeRef> elements.
+ * During import we rewrite those references to internal element ids.
+ */
+export interface BpmnLaneAttrs {
+  flowNodeRefs?: string[];
+}
+
+export function isBpmnLaneAttrs(x: unknown): x is BpmnLaneAttrs {
+  if (!isPlainObject(x)) return false;
+  if (x.flowNodeRefs !== undefined) {
+    if (!Array.isArray(x.flowNodeRefs)) return false;
+    if (!(x.flowNodeRefs as unknown[]).every((v) => isString(v))) return false;
+  }
+  return true;
+}
 
 export interface BpmnGatewayAttrs {
   gatewayKind: BpmnGatewayKind;

@@ -39,6 +39,17 @@ export function applyElements(ctx: ApplyImportContext): void {
     // Boundary events attach to a host activity/task.
     if (a.attachedToRef) a.attachedToRef = mapBpmnRef(a.attachedToRef);
 
+    // Data references point to global definitions.
+    if (a.dataObjectRef) a.dataObjectRef = mapBpmnRef(a.dataObjectRef);
+    if (a.dataStoreRef) a.dataStoreRef = mapBpmnRef(a.dataStoreRef);
+
+    // Lane containment: translate flow node references to internal element ids.
+    if (Array.isArray(a.flowNodeRefs)) {
+      a.flowNodeRefs = a.flowNodeRefs
+        .map((r: unknown) => mapBpmnRef(r))
+        .filter((r: unknown) => typeof r === 'string' && r.length > 0);
+    }
+
     // Event definitions may reference global BPMN definitions.
     const ed = a.eventDefinition;
     if (ed && typeof ed === 'object') {

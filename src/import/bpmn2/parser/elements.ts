@@ -10,6 +10,64 @@ import { defaultName, extractExtensionSummary } from './helpers';
  * Collect BPMN node elements as IR elements (best-effort, permissive scan).
  */
 
+function parseLaneAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
+  if (typeId !== 'bpmn.lane') return undefined;
+
+  // Lane membership is expressed via <flowNodeRef>childText</flowNodeRef>.
+  // Important: only direct children count.
+  const refs: string[] = [];
+  for (const ch of Array.from(el.children ?? [])) {
+    if (localName(ch) !== 'flowNodeRef') continue;
+    const v = (ch.textContent ?? '').trim();
+    if (v) refs.push(v);
+  }
+  return refs.length ? { flowNodeRefs: refs } : undefined;
+}
+
+function parseActivityAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
+  const isActivityType =
+    typeId === 'bpmn.task' ||
+    typeId === 'bpmn.userTask' ||
+    typeId === 'bpmn.serviceTask' ||
+    typeId === 'bpmn.scriptTask' ||
+    typeId === 'bpmn.manualTask' ||
+    typeId === 'bpmn.callActivity' ||
+    typeId === 'bpmn.subProcess';
+  if (!isActivityType) return undefined;
+
+  // IMPORTANT: use direct children only; do NOT scan descendants.
+  // Otherwise markers from child tasks may "leak" onto subProcess containers.
+  const standardLoop = childByLocalName(el, 'standardLoopCharacteristics');
+  const miLoop = childByLocalName(el, 'multiInstanceLoopCharacteristics');
+
+  let loopType: string | undefined;
+  if (standardLoop) {
+    loopType = 'standard';
+  } else if (miLoop) {
+    const isSeq = (attr(miLoop, 'isSequential') ?? '').trim() === 'true';
+    loopType = isSeq ? 'multiInstanceSequential' : 'multiInstanceParallel';
+  }
+
+  // Compensation semantics
+  const isForCompensation = (attr(el, 'isForCompensation') ?? '').trim() === 'true' ? true : undefined;
+
+  // Some tool exports incorrectly put <compensateEventDefinition/> under the activity.
+  // Treat it as an opt-in marker, but only if present as a DIRECT child.
+  let hasCompDef = false;
+  for (const ch of Array.from(el.children ?? [])) {
+    if (localName(ch) === 'compensateEventDefinition') {
+      hasCompDef = true;
+      break;
+    }
+  }
+
+  const attrs: Record<string, unknown> = {};
+  if (loopType) attrs.loopType = loopType;
+  if (typeId === 'bpmn.callActivity') attrs.isCall = true;
+  if (isForCompensation || hasCompDef) attrs.isForCompensation = true;
+  return Object.keys(attrs).length ? attrs : undefined;
+}
+
 function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
   // Map internal event types to the domain eventKind values used in attrs.eventDefinition.
   let eventKind: 'start' | 'end' | 'intermediateCatch' | 'intermediateThrow' | 'boundary' | null = null;
@@ -177,40 +235,6 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
   };
 }
 
-function parseActivityAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
-  const isActivity =
-    typeId === 'bpmn.task' ||
-    typeId === 'bpmn.userTask' ||
-    typeId === 'bpmn.serviceTask' ||
-    typeId === 'bpmn.scriptTask' ||
-    typeId === 'bpmn.manualTask' ||
-    typeId === 'bpmn.callActivity' ||
-    typeId === 'bpmn.subProcess';
-  if (!isActivity) return undefined;
-
-  const out: Record<string, unknown> = {};
-
-  // Loop semantics
-  const mi = qa(el, 'multiInstanceLoopCharacteristics')[0];
-  if (mi) {
-    const isSequential = attr(mi, 'isSequential') === 'true';
-    out.loopType = isSequential ? 'multiInstanceSequential' : 'multiInstanceParallel';
-  } else if (qa(el, 'standardLoopCharacteristics')[0]) {
-    out.loopType = 'standard';
-  }
-
-  // Compensation marker
-  // BPMN proper uses @isForCompensation="true" on the activity.
-  // Some exports (and our earlier example) may also embed a compensateEventDefinition under the task.
-  const isForComp = attr(el, 'isForCompensation') === 'true' || qa(el, 'compensateEventDefinition').length > 0;
-  if (isForComp) out.isForCompensation = true;
-
-  // Call activity hint
-  if (typeId === 'bpmn.callActivity') out.isCall = true;
-
-  return Object.keys(out).length ? out : undefined;
-}
-
 export function parseElements(ctx: ParseContext) {
   const { defs, warnings, elements, idIndex, elementById, unsupportedNodeTypes } = ctx;
 
@@ -220,6 +244,10 @@ export function parseElements(ctx: ParseContext) {
     'signal',
     'error',
     'escalation',
+
+    // Global data definitions (referenced by dataObjectReference/dataStoreReference)
+    'dataObject',
+    'dataStore',
 
     // Containers
     'participant',
@@ -283,7 +311,17 @@ export function parseElements(ctx: ParseContext) {
 
       const attrs =
         parseEventAttrs(el, typeId) ??
+        parseLaneAttrs(el, typeId) ??
         parseActivityAttrs(el, typeId) ??
+        (typeId === 'bpmn.dataObjectReference'
+          ? {
+              dataObjectRef: (attr(el, 'dataObjectRef') ?? '').trim() || undefined
+            }
+          : typeId === 'bpmn.dataStoreReference'
+            ? {
+                dataStoreRef: (attr(el, 'dataStoreRef') ?? '').trim() || undefined
+              }
+            : undefined) ??
         (typeId === 'bpmn.error'
           ? {
               errorCode: (attr(el, 'errorCode') ?? '').trim() || undefined,

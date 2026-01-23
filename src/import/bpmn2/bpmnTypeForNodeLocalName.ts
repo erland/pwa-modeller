@@ -61,6 +61,12 @@ export function bpmnTypeForNodeLocalName(name: string): string | null {
     case 'escalation':
       return 'bpmn.escalation';
 
+    // Global data definitions
+    case 'dataobject':
+      return 'bpmn.dataObject';
+    case 'datastore':
+      return 'bpmn.dataStore';
+
     // Artifacts / data
     case 'textannotation':
       return 'bpmn.textAnnotation';

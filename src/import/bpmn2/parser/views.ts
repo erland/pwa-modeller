@@ -8,7 +8,20 @@ type Rect = { x: number; y: number; width: number; height: number };
 
 function isBpmnVisualElementType(t: string | undefined): boolean {
   if (!t) return false;
-  return t.startsWith('bpmn.');
+  if (!t.startsWith('bpmn.')) return false;
+
+  // Exclude global definitions (they belong in the model tree, not on diagrams).
+  switch (t) {
+    case 'bpmn.message':
+    case 'bpmn.signal':
+    case 'bpmn.error':
+    case 'bpmn.escalation':
+    case 'bpmn.dataObject':
+    case 'bpmn.dataStore':
+      return false;
+    default:
+      return true;
+  }
 }
 
 function defaultSizeForBpmnType(t: string | undefined): { width: number; height: number } {
@@ -69,6 +82,19 @@ function ensureViewShowsAllBpmnElements(
 ) {
   const { elements, relationships, elementById } = ctx;
 
+  // Semantic containment: lane -> flow nodes (via lane.attrs.flowNodeRefs)
+  // This lets us place DI-missing nodes into the correct lane when possible.
+  const preferredLaneByFlowNodeId = new Map<string, string>();
+  for (const e of elements) {
+    if (e.type !== 'bpmn.lane') continue;
+    const refs = (e as any).attrs?.flowNodeRefs;
+    if (!Array.isArray(refs)) continue;
+    for (const r of refs) {
+      if (typeof r !== 'string' || !r.trim()) continue;
+      if (!preferredLaneByFlowNodeId.has(r)) preferredLaneByFlowNodeId.set(r, e.id);
+    }
+  }
+
   const existingElementNodeIds = new Set<string>();
   for (const n of nodes) {
     if (n.kind === 'element' && n.elementId) existingElementNodeIds.add(n.elementId);
@@ -112,9 +138,13 @@ function ensureViewShowsAllBpmnElements(
   })();
 
   const pickContainerFor = (elId: string): Rect => {
-    // If the element is already inside a lane/pool by DI, keep it. Otherwise place in first container.
-    // (We do not yet parse lane membership from semantic BPMN; this is a simple best-effort.)
-    void elId;
+    // Prefer the semantic lane for this element (if the lane has DI bounds).
+    const laneId = preferredLaneByFlowNodeId.get(elId);
+    if (laneId) {
+      const lane = laneRects.find((x) => x.id === laneId);
+      if (lane) return lane.rect;
+    }
+    // Otherwise: first DI container (lane/pool), otherwise global.
     if (containers.length) return containers[0];
     return globalRect;
   };

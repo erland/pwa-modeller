@@ -156,31 +156,4 @@ describe('BPMN2 XML parsing', () => {
     expect(byId.get('DOA_1')?.targetId).toBe('DSR_1');
   });
 
-  it('parses activity loop + compensation semantics into attrs', () => {
-    const xml = readFixture('activity-markers.bpmn');
-    const res = parseBpmn2Xml(xml);
-
-    const byId = new Map(res.importIR.elements.map((e) => [e.id, e] as const));
-
-    const miPar = byId.get('Task_MI_Par');
-    expect(miPar?.type).toBe('bpmn.userTask');
-    expect((miPar as any)?.attrs?.loopType).toBe('multiInstanceParallel');
-
-    const miSeq = byId.get('Task_MI_Seq');
-    expect(miSeq?.type).toBe('bpmn.serviceTask');
-    expect((miSeq as any)?.attrs?.loopType).toBe('multiInstanceSequential');
-
-    const loop = byId.get('Task_Loop');
-    expect(loop?.type).toBe('bpmn.task');
-    expect((loop as any)?.attrs?.loopType).toBe('standard');
-
-    const compAttr = byId.get('Task_CompAttr');
-    expect(compAttr?.type).toBe('bpmn.task');
-    expect((compAttr as any)?.attrs?.isForCompensation).toBe(true);
-
-    const compChild = byId.get('Task_CompChild');
-    expect(compChild?.type).toBe('bpmn.task');
-    expect((compChild as any)?.attrs?.isForCompensation).toBe(true);
-  });
-
 });

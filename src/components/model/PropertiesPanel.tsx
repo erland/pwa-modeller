@@ -50,6 +50,11 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
     setBpmnRelationshipAttrs: (relationshipId, patch) => modelStore.setBpmnRelationshipAttrs(relationshipId, patch),
     setBpmnGatewayDefaultFlow: (gatewayId, relationshipId) => modelStore.setBpmnGatewayDefaultFlow(gatewayId, relationshipId),
     attachBoundaryEvent: (boundaryId, hostActivityId) => modelStore.attachBoundaryEvent(boundaryId, hostActivityId),
+    setBpmnPoolProcessRef: (poolId, processId) => modelStore.setBpmnPoolProcessRef(poolId, processId),
+    setBpmnLaneFlowNodeRefs: (laneId, nodeIds) => modelStore.setBpmnLaneFlowNodeRefs(laneId, nodeIds),
+    setBpmnTextAnnotationText: (annotationId, text) => modelStore.setBpmnTextAnnotationText(annotationId, text),
+    setBpmnDataObjectReferenceRef: (refId, dataObjectId) => modelStore.setBpmnDataObjectReferenceRef(refId, dataObjectId),
+    setBpmnDataStoreReferenceRef: (refId, dataStoreId) => modelStore.setBpmnDataStoreReferenceRef(refId, dataStoreId),
     moveElementToFolder: (elementId, folderId) => modelStore.moveElementToFolder(elementId, folderId),
     deleteElement: (elementId) => modelStore.deleteElement(elementId),
 

@@ -25,6 +25,14 @@ export type ModelActions = {
   setBpmnRelationshipAttrs: (relationshipId: string, patch: Record<string, unknown>) => void;
   setBpmnGatewayDefaultFlow: (gatewayId: string, relationshipId: string | null) => void;
   attachBoundaryEvent: (boundaryId: string, hostActivityId: string | null) => void;
+
+  // Safe setters for specific BPMN semantic fields
+  setBpmnPoolProcessRef: (poolId: string, processId: string | null) => void;
+  setBpmnLaneFlowNodeRefs: (laneId: string, nodeIds: string[]) => void;
+  setBpmnTextAnnotationText: (annotationId: string, text: string) => void;
+  setBpmnDataObjectReferenceRef: (refId: string, dataObjectId: string | null) => void;
+  setBpmnDataStoreReferenceRef: (refId: string, dataStoreId: string | null) => void;
+
   moveElementToFolder: (elementId: string, folderId: string) => void;
   deleteElement: (elementId: string) => void;
 

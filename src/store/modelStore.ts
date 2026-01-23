@@ -205,6 +205,31 @@ export class ModelStore {
     this.updateModel((model) => bpmnMutations.attachBoundaryEvent(model, boundaryId, hostActivityId));
   };
 
+  /** Pool (Participant): set/clear its process reference. */
+  setBpmnPoolProcessRef = (poolId: string, processId: string | null): void => {
+    this.updateModel((model) => bpmnMutations.setPoolProcessRef(model, poolId, processId));
+  };
+
+  /** Lane: replace its semantic membership list (flowNodeRefs). */
+  setBpmnLaneFlowNodeRefs = (laneId: string, nodeIds: string[]): void => {
+    this.updateModel((model) => bpmnMutations.setLaneFlowNodeRefs(model, laneId, nodeIds));
+  };
+
+  /** Text annotation: set/clear its text. */
+  setBpmnTextAnnotationText = (annotationId: string, text: string): void => {
+    this.updateModel((model) => bpmnMutations.setTextAnnotationText(model, annotationId, text));
+  };
+
+  /** DataObjectReference: set/clear its referenced global DataObject. */
+  setBpmnDataObjectReferenceRef = (refId: string, dataObjectId: string | null): void => {
+    this.updateModel((model) => bpmnMutations.setDataObjectReferenceRef(model, refId, dataObjectId));
+  };
+
+  /** DataStoreReference: set/clear its referenced global DataStore. */
+  setBpmnDataStoreReferenceRef = (refId: string, dataStoreId: string | null): void => {
+    this.updateModel((model) => bpmnMutations.setDataStoreReferenceRef(model, refId, dataStoreId));
+  };
+
   // -------------------------
   // Relationships
   // -------------------------

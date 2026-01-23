@@ -45,6 +45,8 @@ describe('BPMN inventory report', () => {
     // Sanity checks on known mappings (acts as a canary).
     expect(getBpmnDomainGuardForType('bpmn.task')).toBe('isBpmnActivityAttrs');
     expect(getBpmnPropertiesPanelForType('bpmn.task')).toBe('BpmnTaskPropertiesSection');
+    expect(getBpmnDomainGuardForType('bpmn.pool')).toBe('isBpmnPoolAttrs');
+    expect(getBpmnPropertiesPanelForType('bpmn.pool')).toBe('BpmnPoolPropertiesSection');
     expect(getBpmnDomainGuardForType('bpmn.sequenceFlow')).toBe('isBpmnSequenceFlowAttrs');
   });
 });

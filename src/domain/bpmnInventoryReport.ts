@@ -129,6 +129,13 @@ export function getBpmnDomainGuardForType(t: string): string | undefined {
 
 export function getBpmnPropertiesPanelForType(t: string): string | undefined {
   // See src/notations/bpmn/index.ts (getElementPropertySections)
+  if (t === 'bpmn.pool') return 'BpmnPoolPropertiesSection';
+  if (t === 'bpmn.lane') return 'BpmnLanePropertiesSection';
+  if (t === 'bpmn.textAnnotation') return 'BpmnTextAnnotationPropertiesSection';
+  if (t === 'bpmn.dataObjectReference') return 'BpmnDataObjectReferencePropertiesSection';
+  if (t === 'bpmn.dataStoreReference') return 'BpmnDataStoreReferencePropertiesSection';
+  if (t === 'bpmn.process') return 'BpmnProcessPropertiesSection';
+
   if (
     t === 'bpmn.task' ||
     t === 'bpmn.userTask' ||

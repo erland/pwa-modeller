@@ -14,6 +14,12 @@ import { BpmnRelationshipProperties } from '../../components/model/properties/bp
 import { BpmnTaskPropertiesSection } from '../../components/model/properties/bpmn/BpmnTaskPropertiesSection';
 import { BpmnEventPropertiesSection } from '../../components/model/properties/bpmn/BpmnEventPropertiesSection';
 import { BpmnGatewayPropertiesSection } from '../../components/model/properties/bpmn/BpmnGatewayPropertiesSection';
+import { BpmnPoolPropertiesSection } from '../../components/model/properties/bpmn/BpmnPoolPropertiesSection';
+import { BpmnLanePropertiesSection } from '../../components/model/properties/bpmn/BpmnLanePropertiesSection';
+import { BpmnTextAnnotationPropertiesSection } from '../../components/model/properties/bpmn/BpmnTextAnnotationPropertiesSection';
+import { BpmnDataObjectReferencePropertiesSection } from '../../components/model/properties/bpmn/BpmnDataObjectReferencePropertiesSection';
+import { BpmnDataStoreReferencePropertiesSection } from '../../components/model/properties/bpmn/BpmnDataStoreReferencePropertiesSection';
+import { BpmnProcessPropertiesSection } from '../../components/model/properties/bpmn/BpmnProcessPropertiesSection';
 
 
 
@@ -201,9 +207,26 @@ export const bpmnNotation: Notation = {
       t === 'bpmn.gatewayInclusive' ||
       t === 'bpmn.gatewayEventBased';
 
+    const isPool = t === 'bpmn.pool';
+    const isLane = t === 'bpmn.lane';
+    const isTextAnnotation = t === 'bpmn.textAnnotation';
+    const isDataObjectReference = t === 'bpmn.dataObjectReference';
+    const isDataStoreReference = t === 'bpmn.dataStoreReference';
+    const isProcess = t === 'bpmn.process';
+
     if (isActivity) sections.push({ key: 'bpmn.activity', content: React.createElement(BpmnTaskPropertiesSection, { model, element, actions }) });
     if (isEvent) sections.push({ key: 'bpmn.event', content: React.createElement(BpmnEventPropertiesSection, { model, element, actions }) });
     if (isGateway) sections.push({ key: 'bpmn.gateway', content: React.createElement(BpmnGatewayPropertiesSection, { model, element, actions }) });
+
+    if (isPool) sections.push({ key: 'bpmn.pool', content: React.createElement(BpmnPoolPropertiesSection, { model, element, actions }) });
+    if (isLane) sections.push({ key: 'bpmn.lane', content: React.createElement(BpmnLanePropertiesSection, { model, element, actions }) });
+    if (isTextAnnotation)
+      sections.push({ key: 'bpmn.textAnnotation', content: React.createElement(BpmnTextAnnotationPropertiesSection, { model, element, actions }) });
+    if (isDataObjectReference)
+      sections.push({ key: 'bpmn.dataObjectReference', content: React.createElement(BpmnDataObjectReferencePropertiesSection, { model, element, actions }) });
+    if (isDataStoreReference)
+      sections.push({ key: 'bpmn.dataStoreReference', content: React.createElement(BpmnDataStoreReferencePropertiesSection, { model, element, actions }) });
+    if (isProcess) sections.push({ key: 'bpmn.process', content: React.createElement(BpmnProcessPropertiesSection, { model, element, actions }) });
 
     return sections;
   },

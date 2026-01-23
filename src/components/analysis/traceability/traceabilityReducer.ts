@@ -239,7 +239,18 @@ export function traceabilityReducer(state: TraceabilityExplorerState, action: Tr
 
     case 'expandApplied': {
       const nodeId = action.request.nodeId;
-      const nextGraph = applyExpansion(state, action.patch);
+
+      // The expansion engine returns depths relative to the expanded node (rootNodeId depth=0).
+      // In the explorer UI we want depth to be relative to the original seed, so we shift depths
+      // by the current depth of the expanded node.
+      const baseDepth = state.nodesById[action.patch.rootNodeId]?.depth ?? 0;
+      const shiftedPatch = {
+        ...action.patch,
+        addedNodes: action.patch.addedNodes.map((n) => ({ ...n, depth: n.depth + baseDepth }))
+      };
+
+      const nextGraph = applyExpansion(state, shiftedPatch);
+
       const { [nodeId]: _removed, ...restPending } = state.pendingByNodeId;
       return {
         ...(nextGraph as TraceabilityExplorerState),

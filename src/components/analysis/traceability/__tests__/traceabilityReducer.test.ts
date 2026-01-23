@@ -61,6 +61,37 @@ describe('traceabilityReducer', () => {
     expect(state1.nodesById['A'].expanded).toBe(false);
   });
 
+
+  test('expandApplied shifts added node depths by the expanded node depth (depth is relative to the original seed)', () => {
+    // Seed A, add B as depth 1.
+    const state0 = createTraceabilityExplorerState(['A'], { expandedSeeds: true });
+    const state1 = traceabilityReducer(state0, {
+      type: 'expandApplied',
+      request: { nodeId: 'A', direction: 'both', depth: 1 },
+      patch: {
+        rootNodeId: 'A',
+        addedNodes: [{ id: 'B', depth: 1, pinned: false, expanded: false, hidden: false }],
+        addedEdges: [],
+        frontierByNodeId: { B: ['A'] }
+      }
+    });
+    expect(state1.nodesById['B'].depth).toBe(1);
+
+    // Now expand B; the expansion engine returns C with depth=1 relative to B,
+    // but explorer depth should be 2 (relative to A).
+    const state2 = traceabilityReducer(state1, {
+      type: 'expandApplied',
+      request: { nodeId: 'B', direction: 'both', depth: 1 },
+      patch: {
+        rootNodeId: 'B',
+        addedNodes: [{ id: 'C', depth: 1, pinned: false, expanded: false, hidden: false }],
+        addedEdges: [],
+        frontierByNodeId: { C: ['B'] }
+      }
+    });
+    expect(state2.nodesById['C'].depth).toBe(2);
+  });
+
   test('loadSession replaces state', () => {
     const s0 = createTraceabilityExplorerState(['A']);
     const s1 = createTraceabilityExplorerState(['X']);

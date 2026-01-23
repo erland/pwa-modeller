@@ -325,6 +325,7 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     // v6 introduces view.objects + view-only layout nodes (notes/labels/group boxes).
     // v8 introduces view.connections (per-view relationship instances).
     // v9 introduces view.kind (diagram notation).
-    schemaVersion: 9
+    // v10 normalizes BPMN attrs for non-activity containers and global defs.
+    schemaVersion: 10
   };
 }

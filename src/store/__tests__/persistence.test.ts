@@ -196,7 +196,7 @@ describe('persistence', () => {
     modelV4.schemaVersion = 4;
 
     const parsed = deserializeModel(serializeModel(modelV4));
-    expect(parsed.schemaVersion).toBe(9);
+    expect(parsed.schemaVersion).toBe(10);
     expect(parsed.connectors).toEqual({});
   });
 
@@ -209,7 +209,7 @@ describe('persistence', () => {
     modelV5.views[view.id] = view;
 
     const parsed = deserializeModel(serializeModel(modelV5));
-    expect(parsed.schemaVersion).toBe(9);
+    expect(parsed.schemaVersion).toBe(10);
     expect((parsed.views[view.id] as any).objects).toEqual({});
   });
 
@@ -261,7 +261,7 @@ describe('persistence', () => {
     modelV6.connectors[conn.id] = conn;
 
     const parsed = deserializeModel(serializeModel(modelV6));
-    expect(parsed.schemaVersion).toBe(9);
+    expect(parsed.schemaVersion).toBe(10);
 
     const parsedEl: any = parsed.elements[el.id];
     expect(parsedEl.documentation).toBe('Legacy element desc');
@@ -327,7 +327,7 @@ describe('persistence', () => {
 
     const parsed = deserializeModel(serializeModel(modelV1));
 
-    expect(parsed.schemaVersion).toBe(9);
+    expect(parsed.schemaVersion).toBe(10);
 
     const folders = Object.values(parsed.folders);
     expect(folders.find((f) => f.kind === 'elements')).toBeUndefined();

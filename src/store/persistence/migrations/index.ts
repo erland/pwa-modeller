@@ -247,6 +247,115 @@ function migrateV8ToV9(model: Model): Model {
   return model;
 }
 
+/**
+ * v9 -> v10 migration:
+ * - BPMN attribute normalization:
+ *   Remove stray/legacy attrs that don't belong to the element/relationship type.
+ *   This keeps older/buggy imports editable + validates cleanly with current domain guards.
+ */
+function migrateV9ToV10(model: Model): Model {
+  const activityTypes = new Set([
+    'bpmn.task',
+    'bpmn.userTask',
+    'bpmn.serviceTask',
+    'bpmn.scriptTask',
+    'bpmn.manualTask',
+    'bpmn.callActivity',
+    'bpmn.subProcess'
+  ]);
+  const eventTypes = new Set([
+    'bpmn.startEvent',
+    'bpmn.endEvent',
+    'bpmn.intermediateCatchEvent',
+    'bpmn.intermediateThrowEvent',
+    'bpmn.boundaryEvent'
+  ]);
+  const gatewayTypes = new Set([
+    'bpmn.gatewayExclusive',
+    'bpmn.gatewayParallel',
+    'bpmn.gatewayInclusive',
+    'bpmn.gatewayEventBased'
+  ]);
+
+  const cleanupAttrs = (obj: any) => {
+    if (!obj || typeof obj !== 'object') return undefined;
+    const keys = Object.keys(obj);
+    return keys.length === 0 ? undefined : obj;
+  };
+
+  // Elements
+  for (const id of Object.keys(model.elements)) {
+    const el: any = model.elements[id] as any;
+    if (!el || !el.type || typeof el.type !== 'string') continue;
+    if (!el.type.startsWith('bpmn.')) continue;
+    const a: any = el.attrs;
+    if (!a || typeof a !== 'object') continue;
+
+    // Activity-only fields
+    if (!activityTypes.has(el.type)) {
+      delete a.loopType;
+      delete a.isForCompensation;
+      delete a.isExpanded;
+      delete a.subProcessType;
+      delete a.isCall;
+    }
+
+    // Event-only fields
+    if (!eventTypes.has(el.type)) {
+      delete a.eventKind;
+      delete a.eventDefinition;
+      delete a.attachedToRef;
+      delete a.cancelActivity;
+    }
+
+    // Gateway-only fields
+    if (!gatewayTypes.has(el.type)) {
+      delete a.gatewayKind;
+      delete a.defaultFlowRef;
+    }
+
+    // Type-specific fields
+    if (el.type !== 'bpmn.pool') delete a.processRef;
+    if (el.type !== 'bpmn.lane') delete a.flowNodeRefs;
+    if (el.type !== 'bpmn.textAnnotation') delete a.text;
+    if (el.type !== 'bpmn.dataObjectReference') delete a.dataObjectRef;
+    if (el.type !== 'bpmn.dataStoreReference') delete a.dataStoreRef;
+    if (el.type !== 'bpmn.process') delete a.isExecutable;
+
+    if (el.type !== 'bpmn.message') delete a.itemRef;
+    if (el.type !== 'bpmn.error') {
+      delete a.errorCode;
+      delete a.structureRef;
+    }
+    if (el.type !== 'bpmn.escalation') delete a.escalationCode;
+
+    // Clean up empty attrs
+    el.attrs = cleanupAttrs(a);
+  }
+
+  // Relationships
+  for (const id of Object.keys(model.relationships)) {
+    const rel: any = model.relationships[id] as any;
+    if (!rel || !rel.type || typeof rel.type !== 'string') continue;
+    if (!rel.type.startsWith('bpmn.')) continue;
+    const a: any = rel.attrs;
+    if (!a || typeof a !== 'object') continue;
+
+    if (rel.type !== 'bpmn.sequenceFlow') {
+      delete a.conditionExpression;
+      delete a.isDefault;
+    }
+    if (rel.type !== 'bpmn.messageFlow') {
+      delete a.messageRef;
+    }
+
+    rel.attrs = cleanupAttrs(a);
+  }
+
+  model.schemaVersion = 10;
+  return model;
+}
+
 
 export type MigrationResult = {
   model: Model;
@@ -303,6 +412,11 @@ export function runMigrations(model: Model): MigrationResult {
   if (v < 9) {
     model = migrateV8ToV9(model);
     notes.push('migrate v8 -> v9');
+  }
+  v = getSchemaVersion(model);
+  if (v < 10) {
+    model = migrateV9ToV10(model);
+    notes.push('migrate v9 -> v10');
   }
 
   return { model, migratedFromVersion, notes };

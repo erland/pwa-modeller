@@ -49,6 +49,14 @@ export function AnalysisWorkspace({
 
   // Related-only
   const [maxDepth, setMaxDepth] = useState<number>(4);
+
+  // Traceability: default to 1-hop expansion when entering explorer mode.
+  useEffect(() => {
+    if (mode !== 'traceability') return;
+    // Only auto-adjust when still at the global default (4) to avoid overriding user intent.
+    if (maxDepth === 4) setMaxDepth(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
   const [includeStart, setIncludeStart] = useState<boolean>(false);
 
   // Paths-only

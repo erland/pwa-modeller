@@ -1,6 +1,6 @@
 import type { IRElement } from '../../framework/ir';
 
-import { attr, childByLocalName, localName, qa, text } from '../xml';
+import { attr, childByLocalName, childrenByLocalName, localName, qa, text } from '../xml';
 import { bpmnTypeForNodeLocalName } from '../bpmnTypeForNodeLocalName';
 
 import type { ParseContext } from './context';
@@ -16,12 +16,18 @@ function parseLaneAttrs(el: Element, typeId: string): Record<string, unknown> | 
   // Lane membership is expressed via <flowNodeRef>childText</flowNodeRef>.
   // Important: only direct children count.
   const refs: string[] = [];
-  for (const ch of Array.from(el.children ?? [])) {
-    if (localName(ch) !== 'flowNodeRef') continue;
+  for (const ch of childrenByLocalName(el, 'flowNodeRef')) {
     const v = (ch.textContent ?? '').trim();
     if (v) refs.push(v);
   }
+
   return refs.length ? { flowNodeRefs: refs } : undefined;
+}
+
+function parseTextAnnotationAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
+  if (typeId !== 'bpmn.textAnnotation') return undefined;
+  const t = text(childByLocalName(el, 'text')) || undefined;
+  return t ? { text: t } : undefined;
 }
 
 function parseActivityAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
@@ -53,18 +59,16 @@ function parseActivityAttrs(el: Element, typeId: string): Record<string, unknown
 
   // Some tool exports incorrectly put <compensateEventDefinition/> under the activity.
   // Treat it as an opt-in marker, but only if present as a DIRECT child.
-  let hasCompDef = false;
-  for (const ch of Array.from(el.children ?? [])) {
-    if (localName(ch) === 'compensateEventDefinition') {
-      hasCompDef = true;
-      break;
-    }
-  }
+  const hasCompDef = !!childByLocalName(el, 'compensateEventDefinition');
 
   const attrs: Record<string, unknown> = {};
   if (loopType) attrs.loopType = loopType;
   if (typeId === 'bpmn.callActivity') attrs.isCall = true;
-  if (isForCompensation || hasCompDef) attrs.isForCompensation = true;
+  if (isForCompensation || hasCompDef) {
+    // Keep loopType explicit when we add other activity semantics; this matches the default factory behaviour.
+    if (!attrs.loopType) attrs.loopType = 'none';
+    attrs.isForCompensation = true;
+  }
   return Object.keys(attrs).length ? attrs : undefined;
 }
 
@@ -312,6 +316,7 @@ export function parseElements(ctx: ParseContext) {
       const attrs =
         parseEventAttrs(el, typeId) ??
         parseLaneAttrs(el, typeId) ??
+        parseTextAnnotationAttrs(el, typeId) ??
         parseActivityAttrs(el, typeId) ??
         (typeId === 'bpmn.dataObjectReference'
           ? {

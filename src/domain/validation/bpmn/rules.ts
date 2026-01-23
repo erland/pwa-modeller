@@ -4,6 +4,7 @@ import type { ValidationIssue } from '../types';
 import { ruleBoundaryEvents } from './rules/boundaryEvents';
 import { ruleContainersInViews } from './rules/containersInViews';
 import { ruleGatewayFlows } from './rules/gatewayFlows';
+import { ruleRefsIntegrity } from './rules/refsIntegrity';
 import { ruleRelationships } from './rules/relationships';
 import { ruleUnknownBpmnTypes } from './rules/unknownBpmnTypes';
 
@@ -17,6 +18,7 @@ export type BpmnValidationRule = (model: Model) => ValidationIssue[];
 export const bpmnValidationRules: BpmnValidationRule[] = [
   ruleUnknownBpmnTypes,
   ruleContainersInViews,
+  ruleRefsIntegrity,
   ruleBoundaryEvents,
   ruleRelationships,
   ruleGatewayFlows,

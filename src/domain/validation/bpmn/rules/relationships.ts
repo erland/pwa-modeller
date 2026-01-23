@@ -1,5 +1,6 @@
 import type { Model } from '../../../types';
 import { kindFromTypeId } from '../../../kindFromTypeId';
+import { validateBpmnRelationshipByMatrix } from '../../../config/bpmnPalette';
 import { makeIssue } from '../../issues';
 import type { ValidationIssue } from '../../types';
 import {
@@ -16,8 +17,16 @@ import {
 export function ruleRelationships(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
+  const SUPPORTED: Set<string> = new Set([
+    'bpmn.sequenceFlow',
+    'bpmn.messageFlow',
+    'bpmn.association',
+    'bpmn.dataInputAssociation',
+    'bpmn.dataOutputAssociation',
+  ]);
+
   for (const rel of Object.values(model.relationships)) {
-    if (rel.type !== 'bpmn.sequenceFlow' && rel.type !== 'bpmn.messageFlow') continue;
+    if (!SUPPORTED.has(rel.type)) continue;
 
     const src = rel.sourceElementId ? model.elements[rel.sourceElementId] : undefined;
     const tgt = rel.targetElementId ? model.elements[rel.targetElementId] : undefined;
@@ -48,6 +57,23 @@ export function ruleRelationships(model: Model): ValidationIssue[] {
         )
       );
       continue;
+    }
+
+    // Matrix validation (consistent with UI creation rules).
+    const m = validateBpmnRelationshipByMatrix({
+      relationshipType: rel.type,
+      sourceType: src.type,
+      targetType: tgt.type,
+    });
+    if (m.allowed === false) {
+      issues.push(
+        makeIssue(
+          'warning',
+          `${m.reason}${m.allowedTypes.length ? ` Allowed types: ${m.allowedTypes.join(', ')}.` : ''}`,
+          { kind: 'relationship', relationshipId: rel.id },
+          `bpmn-rel-matrix-disallowed:${rel.id}`
+        )
+      );
     }
 
     if (rel.type === 'bpmn.sequenceFlow') {
@@ -148,32 +174,6 @@ export function ruleRelationships(model: Model): ValidationIssue[] {
       }
     }
 
-    // Best-effort pool crossing rule for sequence flows (warning-first).
-    // Note: preserved from the original implementation even though it duplicates the earlier check.
-    if (rel.type === 'bpmn.sequenceFlow') {
-      const viewId = firstBpmnViewWithBothEndpoints(model, src.id, tgt.id);
-      if (!viewId) continue;
-      const view = model.views[viewId];
-      const poolRects: Rect[] = [];
-      for (const n of view.layout?.nodes ?? []) {
-        if (!n.elementId) continue;
-        const el = model.elements[n.elementId];
-        if (el?.type === 'bpmn.pool') poolRects.push(rectForNode(n));
-      }
-      if (!poolRects.length) continue;
-      const sp = poolOfElementInView({ model, viewId, elementId: src.id, poolRects });
-      const tp = poolOfElementInView({ model, viewId, elementId: tgt.id, poolRects });
-      if (sp && tp && sp !== tp) {
-        issues.push(
-          makeIssue(
-            'warning',
-            `Sequence Flow ${rel.id} should not cross Pool boundaries in view "${view.name}".`,
-            { kind: 'relationship', relationshipId: rel.id },
-            `bpmn-seqflow-cross-pool:${viewId}:${rel.id}`
-          )
-        );
-      }
-    }
   }
 
   return issues;

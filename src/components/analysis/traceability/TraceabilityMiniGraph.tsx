@@ -8,7 +8,7 @@ import { getAnalysisAdapter } from '../../../analysis/adapters/registry';
 import { useElementBgVar } from '../../diagram/hooks/useElementBgVar';
 
 import { QuickTooltip } from '../QuickTooltip';
-import { wrapLabel } from '../graphLabelLayout';
+import { measureTextPx, measureWrappedLabel, wrapLabel } from '../graphLabelLayout';
 
 type Props = {
   model: Model;
@@ -29,19 +29,16 @@ function nodeRect() {
   return { w, h };
 }
 
-function nodeXY(node: { level: number; order: number }, yCountByLevel: Map<number, number>) {
-  const xSpacing = 220;
+function nodeXY(
+  node: { level: number; order: number },
+  xByLevel: Map<number, number>
+) {
   const ySpacing = 74; // allow up to 3 lines of text without overlap
-  const marginX = 24;
   const marginY = 24;
 
-  const count = yCountByLevel.get(node.level) ?? 1;
-  const totalH = Math.max(1, count) * ySpacing;
-  const baseY = marginY;
-  const y = baseY + node.order * ySpacing;
-
-  const x = marginX + node.level * xSpacing;
-  return { x, y, totalH };
+  const y = marginY + node.order * ySpacing;
+  const x = xByLevel.get(node.level) ?? 24;
+  return { x, y };
 }
 
 function edgePath(from: { x: number; y: number; w: number; h: number }, to: { x: number; y: number; w: number; h: number }) {
@@ -71,7 +68,7 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
     };
   }, [adapter, model]);
 
-  const renderInlineControls = (nodeId: string) => {
+  const renderInlineControls = (nodeId: string, nodeW: number) => {
     const node = nodesById[nodeId];
     if (!node) return null;
     const pinned = Boolean(node.pinned);
@@ -99,7 +96,7 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
     );
 
     return (
-      <g transform={`translate(${170 - (btnW * 4 + gap * 3) - 8},0)`}>
+      <g transform={`translate(${nodeW - (btnW * 4 + gap * 3) - 8},0)`}>
         {mkBtn(0, '↑', 'Expand upstream', () => onExpandNode(nodeId, 'incoming'))}
         {mkBtn(btnW + gap, '↓', 'Expand downstream', () => onExpandNode(nodeId, 'outgoing'))}
         {mkBtn((btnW + gap) * 2, '↔', 'Expand both', () => onExpandNode(nodeId, 'both'))}
@@ -119,28 +116,59 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
       byLevel.set(n.depth, arr);
     }
 
-    const laidOutNodes: Array<{ id: string; label: string; lines: string[]; level: number; order: number; x: number; y: number; w: number; h: number }> = [];
     const rect = nodeRect();
+    const font = '12px system-ui';
 
+    // 1) Determine per-column (level) width based on wrapped label metrics,
+    // bounded to 1.5x base width to keep layout stable.
+    const colWByLevel = new Map<number, number>();
+    const paddingX = 20; // total (left+right) inside node
+    for (const [level, ids] of byLevel.entries()) {
+      const maxWrapped = ids.reduce((m, id) => {
+        const label = labelForId(id);
+        const wrapped = wrapLabel(label, { maxWidthPx: rect.w - paddingX, maxLines: 3, font, measureTextPx });
+        const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
+        return Math.max(m, metrics.maxLineWidthPx);
+      }, 0);
+
+      const desired = maxWrapped + paddingX;
+      const bounded = Math.min(rect.w * 1.5, Math.max(rect.w, desired));
+      colWByLevel.set(level, bounded);
+    }
+
+    // 2) Compute x offsets per level using cumulative widths
+    const colGap = 40;
+    const marginX = 24;
+    const levels = [...byLevel.keys()].sort((a, b) => a - b);
+    const xByLevel = new Map<number, number>();
+    let xCursor = marginX;
+    for (const level of levels) {
+      xByLevel.set(level, xCursor);
+      xCursor += (colWByLevel.get(level) ?? rect.w) + colGap;
+    }
+
+    // 3) Layout nodes within each level
     const yCountByLevel = new Map<number, number>();
+    const laidOutNodes: Array<{ id: string; label: string; lines: string[]; level: number; order: number; x: number; y: number; w: number; h: number }> = [];
+
     for (const [level, ids] of byLevel.entries()) {
       const sorted = [...ids].sort((a, b) => stableName(labelForId, a).localeCompare(stableName(labelForId, b)));
       yCountByLevel.set(level, sorted.length);
-      sorted.forEach((id, order) => {
-        const { x, y } = nodeXY({ level, order }, yCountByLevel);
-        const label = labelForId(id);
 
-        const lines = wrapLabel(label, {
-          maxWidthPx: rect.w - 20,
-          maxLines: 3,
-          font: '12px system-ui'
-        }).lines;
+      const nodeW = colWByLevel.get(level) ?? rect.w;
+      const maxTextW = nodeW - paddingX;
+
+      sorted.forEach((id, order) => {
+        const { x, y } = nodeXY({ level, order }, xByLevel);
+        const label = labelForId(id);
+        const wrapped = wrapLabel(label, { maxWidthPx: maxTextW, maxLines: 3, font, measureTextPx });
+        const lines = wrapped.lines;
 
         const lineHeight = 14;
         const paddingY = 10;
         const h = Math.max(rect.h, paddingY + lines.length * lineHeight + paddingY);
 
-        laidOutNodes.push({ id, label, lines, level, order, x, y, w: rect.w, h });
+        laidOutNodes.push({ id, label, lines, level, order, x, y, w: nodeW, h });
       });
     }
 
@@ -155,12 +183,8 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
       paths.push({ id: e.id, d: edgePath(from, to) });
     }
 
-    const maxLevel = Math.max(0, ...laidOutNodes.map((n) => n.level));
-    const heightByLevel = new Map<number, number>();
-    for (const [lvl, count] of yCountByLevel.entries()) heightByLevel.set(lvl, 24 + count * 56 + 24);
-
-    const height = Math.max(160, ...Array.from(heightByLevel.values()));
-    const width = 24 + (maxLevel + 1) * 220 + 200;
+    const height = Math.max(160, ...laidOutNodes.map((n) => n.y + n.h + 24));
+    const width = xCursor + 120; // end padding
 
     return { nodes: laidOutNodes, paths, width, height };
   }, [edgesById, labelForId, nodesById]);
@@ -273,7 +297,7 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
                     </tspan>
                   )}
                 </text>
-                {active ? renderInlineControls(n.id) : null}
+                {active ? renderInlineControls(n.id, n.w) : null}
               </g>
             );
           })}

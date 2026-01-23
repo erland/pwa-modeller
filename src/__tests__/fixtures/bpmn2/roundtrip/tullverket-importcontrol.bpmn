@@ -1,0 +1,402 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Defs_Tullverket_Importkontroll_Example"
+  targetNamespace="http://example.tullverket.se/bpmn">
+
+  <!-- ===== Messages & Signals ===== -->
+  <bpmn:message id="Msg_ImportDeclarationSubmitted" name="Importdeklaration inkommen"/>
+  <bpmn:message id="Msg_RequestDocs" name="Begär kompletterande handlingar"/>
+  <bpmn:message id="Msg_DocsProvided" name="Handlingar inkomna"/>
+  <bpmn:message id="Msg_ReleaseDecision" name="Frisläppningsbeslut"/>
+  <bpmn:message id="Msg_PaymentRequest" name="Betalningskrav tull/moms"/>
+  <bpmn:message id="Msg_PaymentConfirmed" name="Betalning bekräftad"/>
+  <bpmn:signal id="Sig_RiskProfileUpdated" name="Riskprofil uppdaterad"/>
+
+  <!-- ===== Errors & Escalations ===== -->
+  <bpmn:error id="Err_InvalidDeclaration" name="Ogiltig deklaration" errorCode="TVK-DECL-INVALID"/>
+  <bpmn:escalation id="Esc_HighRisk" name="Hög risk – eskalera"/>
+  <bpmn:escalation id="Esc_SuspectedCrime" name="Misstänkt brott – eskalera"/>
+
+  <!-- ===== Data Stores ===== -->
+  <bpmn:dataStore id="DS_RiskSystem" name="Riskanalysregister"/>
+  <bpmn:dataStore id="DS_CaseArchive" name="Ärendejournal/Arkiv"/>
+
+  <!-- ===== Collaboration (Pools) ===== -->
+  <bpmn:collaboration id="Collab_ImportControl">
+    <bpmn:participant id="Part_Tullverket" name="Tullverket" processRef="Proc_Tullverket_ImportControl"/>
+    <bpmn:participant id="Part_Importer" name="Importör/Speditör" processRef="Proc_Importer"/>
+    <bpmn:messageFlow id="MF_Decl" name="Deklaration" sourceRef="Throw_DeclSubmitted" targetRef="Start_Message_Decl"/>
+    <bpmn:messageFlow id="MF_RequestDocs" name="Begär handlingar" sourceRef="Throw_RequestDocs" targetRef="Catch_RequestDocs"/>
+    <bpmn:messageFlow id="MF_DocsProvided" name="Handlingar" sourceRef="Throw_DocsProvided" targetRef="Catch_DocsProvided"/>
+    <bpmn:messageFlow id="MF_PaymentRequest" name="Betalningskrav" sourceRef="Throw_PaymentRequest" targetRef="Catch_PaymentRequest"/>
+    <bpmn:messageFlow id="MF_PaymentConfirmed" name="Betalning" sourceRef="Throw_PaymentConfirmed" targetRef="Catch_PaymentConfirmed"/>
+    <bpmn:messageFlow id="MF_ReleaseDecision" name="Frisläppningsbeslut" sourceRef="Throw_ReleaseDecision" targetRef="Catch_ReleaseDecision"/>
+  </bpmn:collaboration>
+
+  <!-- ===== Process: Tullverket ===== -->
+  <bpmn:process id="Proc_Tullverket_ImportControl" name="Importkontroll – Tullverket" isExecutable="false">
+
+    <!-- Lanes -->
+    <bpmn:laneSet id="LaneSet_TVK">
+      <bpmn:lane id="Lane_Handlaggare" name="Handläggning">
+        <bpmn:flowNodeRef>Start_Message_Decl</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_Registrera</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_EventBased_DocsOrTimeout</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Catch_DocsProvided</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Catch_Timer_DocsTimeout</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Sub_ManuellGranskning</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_Reject</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_Release</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Throw_ReleaseDecision</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_Riskanalys" name="Riskanalys">
+        <bpmn:flowNodeRef>Task_RiskScore</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_XOR_RiskOutcome</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Throw_Escalation_HighRisk</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AutoRelease</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_Betalning" name="Avgifter/Betalning">
+        <bpmn:flowNodeRef>Task_BeraknaAvgifter</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Throw_PaymentRequest</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Catch_PaymentConfirmed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_XOR_PaymentOk</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_PaymentFailed</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Data objects & references -->
+    <bpmn:dataObject id="DO_Declaration" name="Importdeklaration"/>
+    <bpmn:dataObjectReference id="DOR_Declaration" dataObjectRef="DO_Declaration" name="Deklaration"/>
+    <bpmn:dataObject id="DO_SupportingDocs" name="Styrkande handlingar"/>
+    <bpmn:dataObjectReference id="DOR_SupportingDocs" dataObjectRef="DO_SupportingDocs" name="Handlingar"/>
+    <bpmn:dataStoreReference id="DSR_RiskSystem" dataStoreRef="DS_RiskSystem" name="Riskanalysregister"/>
+    <bpmn:dataStoreReference id="DSR_CaseArchive" dataStoreRef="DS_CaseArchive" name="Ärendejournal"/>
+
+    <!-- Start -->
+    <bpmn:startEvent id="Start_Message_Decl" name="Deklaration inkommen">
+      <bpmn:messageEventDefinition messageRef="Msg_ImportDeclarationSubmitted"/>
+    </bpmn:startEvent>
+
+    <!-- Task: register -->
+    <bpmn:task id="Task_Registrera" name="Registrera ärende"/>
+
+    <!-- Risk scoring -->
+    <bpmn:serviceTask id="Task_RiskScore" name="Beräkna risk (automatiskt)"/>
+
+    <!-- Inclusive / complex-ish branching via XOR first -->
+    <bpmn:exclusiveGateway id="Gateway_XOR_RiskOutcome" name="Riskutfall?"/>
+
+    <!-- Escalation throw -->
+    <bpmn:intermediateThrowEvent id="Throw_Escalation_HighRisk" name="Eskalera hög risk">
+      <bpmn:escalationEventDefinition escalationRef="Esc_HighRisk"/>
+    </bpmn:intermediateThrowEvent>
+
+    <!-- Auto release path -->
+    <bpmn:task id="Task_AutoRelease" name="Automatisk frisläppning"/>
+
+    <!-- Fees -->
+    <bpmn:task id="Task_BeraknaAvgifter" name="Beräkna tull &amp; moms"/>
+    <bpmn:intermediateThrowEvent id="Throw_PaymentRequest" name="Skicka betalningskrav">
+      <bpmn:messageEventDefinition messageRef="Msg_PaymentRequest"/>
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateCatchEvent id="Catch_PaymentConfirmed" name="Vänta på betalning">
+      <bpmn:messageEventDefinition messageRef="Msg_PaymentConfirmed"/>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:exclusiveGateway id="Gateway_XOR_PaymentOk" name="Betalning OK?"/>
+
+    <!-- Event-based gateway: docs or timeout -->
+    <bpmn:eventBasedGateway id="Gateway_EventBased_DocsOrTimeout" name="Handlingar eller timeout?"/>
+
+    <bpmn:intermediateCatchEvent id="Catch_DocsProvided" name="Handlingar inkomna">
+      <bpmn:messageEventDefinition messageRef="Msg_DocsProvided"/>
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:intermediateCatchEvent id="Catch_Timer_DocsTimeout" name="Timeout">
+      <bpmn:timerEventDefinition>
+        <!-- ISO-8601 duration -->
+        <bpmn:timeDuration>PT72H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+
+    <!-- Subprocess: manual review -->
+    <bpmn:subProcess id="Sub_ManuellGranskning" name="Manuell granskning">
+      <bpmn:startEvent id="SubStart" name="Start granskning"/>
+
+      <bpmn:userTask id="Task_Granska" name="Granska deklaration &amp; handlingar"/>
+      <!-- Boundary error on manual review -->
+      <bpmn:boundaryEvent id="Boundary_Error_InvalidDecl" attachedToRef="Task_Granska" name="Ogiltig deklaration">
+        <bpmn:errorEventDefinition errorRef="Err_InvalidDeclaration"/>
+      </bpmn:boundaryEvent>
+
+      <!-- Boundary escalation: suspected crime -->
+      <bpmn:boundaryEvent id="Boundary_Escalation_SuspectedCrime" attachedToRef="Task_Granska" name="Misstänkt brott">
+        <bpmn:escalationEventDefinition escalationRef="Esc_SuspectedCrime"/>
+      </bpmn:boundaryEvent>
+
+      <!-- Parallel split for checks -->
+      <bpmn:parallelGateway id="Gateway_AND_Split" name="Parallella kontroller"/>
+      <bpmn:task id="Task_DocumentCheck" name="Dokumentkontroll"/>
+      <bpmn:task id="Task_PhysicalControl" name="Fysisk kontroll"/>
+
+      <!-- Multi-instance task (loop) -->
+      <bpmn:task id="Task_SampleCheck" name="Stickprovskontroller">
+        <bpmn:multiInstanceLoopCharacteristics isSequential="false"/>
+      </bpmn:task>
+
+      <bpmn:parallelGateway id="Gateway_AND_Join" name="Sammanställ resultat"/>
+
+      <!-- Conditional intermediate -->
+      <bpmn:intermediateCatchEvent id="Catch_Conditional_ProfileUpdate" name="Vänta på riskprofiluppdatering">
+        <bpmn:conditionalEventDefinition>
+          <bpmn:condition xsi:type="bpmn:tFormalExpression"><![CDATA[ ${riskProfileUpdated} ]]></bpmn:condition>
+        </bpmn:conditionalEventDefinition>
+      </bpmn:intermediateCatchEvent>
+
+      <!-- Signal catch -->
+      <bpmn:intermediateCatchEvent id="Catch_Signal_ProfileUpdated" name="Signal: riskprofil uppdaterad">
+        <bpmn:signalEventDefinition signalRef="Sig_RiskProfileUpdated"/>
+      </bpmn:intermediateCatchEvent>
+
+      <!-- OR gateway (inclusive) -->
+      <bpmn:inclusiveGateway id="Gateway_OR_Decision" name="Åtgärd?"/>
+
+      <!-- Compensation example -->
+      <bpmn:task id="Task_BookInspection" name="Boka inspektör">
+        <bpmn:compensateEventDefinition/>
+      </bpmn:task>
+
+      <bpmn:endEvent id="SubEnd_OK" name="OK">
+        <bpmn:terminateEventDefinition/>
+      </bpmn:endEvent>
+
+      <bpmn:endEvent id="SubEnd_Invalid" name="Avvisa (ogiltig)"/>
+      <bpmn:endEvent id="SubEnd_Escalated" name="Eskalera (brott)"/>
+
+      <!-- Subprocess flows -->
+      <bpmn:sequenceFlow id="SF_Sub_1" sourceRef="SubStart" targetRef="Task_Granska"/>
+      <bpmn:sequenceFlow id="SF_Sub_2" sourceRef="Task_Granska" targetRef="Gateway_AND_Split"/>
+
+      <bpmn:sequenceFlow id="SF_Sub_3" sourceRef="Gateway_AND_Split" targetRef="Task_DocumentCheck"/>
+      <bpmn:sequenceFlow id="SF_Sub_4" sourceRef="Gateway_AND_Split" targetRef="Task_PhysicalControl"/>
+      <bpmn:sequenceFlow id="SF_Sub_5" sourceRef="Gateway_AND_Split" targetRef="Task_SampleCheck"/>
+
+      <bpmn:sequenceFlow id="SF_Sub_6" sourceRef="Task_DocumentCheck" targetRef="Gateway_AND_Join"/>
+      <bpmn:sequenceFlow id="SF_Sub_7" sourceRef="Task_PhysicalControl" targetRef="Gateway_AND_Join"/>
+      <bpmn:sequenceFlow id="SF_Sub_8" sourceRef="Task_SampleCheck" targetRef="Gateway_AND_Join"/>
+
+      <bpmn:sequenceFlow id="SF_Sub_9" sourceRef="Gateway_AND_Join" targetRef="Gateway_OR_Decision"/>
+      <bpmn:sequenceFlow id="SF_Sub_10" sourceRef="Gateway_OR_Decision" targetRef="Catch_Conditional_ProfileUpdate"/>
+      <bpmn:sequenceFlow id="SF_Sub_11" sourceRef="Gateway_OR_Decision" targetRef="Catch_Signal_ProfileUpdated"/>
+      <bpmn:sequenceFlow id="SF_Sub_12" sourceRef="Catch_Conditional_ProfileUpdate" targetRef="SubEnd_OK"/>
+      <bpmn:sequenceFlow id="SF_Sub_13" sourceRef="Catch_Signal_ProfileUpdated" targetRef="SubEnd_OK"/>
+
+      <!-- Boundary flows -->
+      <bpmn:sequenceFlow id="SF_Sub_Err" sourceRef="Boundary_Error_InvalidDecl" targetRef="SubEnd_Invalid"/>
+      <bpmn:sequenceFlow id="SF_Sub_Esc" sourceRef="Boundary_Escalation_SuspectedCrime" targetRef="SubEnd_Escalated"/>
+    </bpmn:subProcess>
+
+    <!-- Text annotation & association -->
+    <bpmn:textAnnotation id="TA_LegalNote">
+      <bpmn:text>Not: Exempelprocess – förenklad importkontroll (Tullverket).</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_Note" sourceRef="Task_Registrera" targetRef="TA_LegalNote" associationDirection="None"/>
+
+    <!-- End events -->
+    <bpmn:endEvent id="End_Reject" name="Avvisa ärende"/>
+    <bpmn:endEvent id="End_PaymentFailed" name="Stoppa: betalning uteblir"/>
+
+    <bpmn:intermediateThrowEvent id="Throw_ReleaseDecision" name="Skicka frisläppningsbeslut">
+      <bpmn:messageEventDefinition messageRef="Msg_ReleaseDecision"/>
+    </bpmn:intermediateThrowEvent>
+
+    <bpmn:endEvent id="End_Release" name="Frisläpp varor"/>
+
+    <!-- Sequence flows (main process) -->
+    <bpmn:sequenceFlow id="SF_1" sourceRef="Start_Message_Decl" targetRef="Task_Registrera"/>
+    <bpmn:sequenceFlow id="SF_2" sourceRef="Task_Registrera" targetRef="Task_RiskScore"/>
+
+    <!-- Data associations -->
+    <bpmn:dataInputAssociation id="DIA_DeclToRisk">
+      <bpmn:sourceRef>DOR_Declaration</bpmn:sourceRef>
+      <bpmn:targetRef>Task_RiskScore</bpmn:targetRef>
+    </bpmn:dataInputAssociation>
+
+    <bpmn:dataOutputAssociation id="DOA_RiskToStore">
+      <bpmn:sourceRef>Task_RiskScore</bpmn:sourceRef>
+      <bpmn:targetRef>DSR_RiskSystem</bpmn:targetRef>
+    </bpmn:dataOutputAssociation>
+
+    <bpmn:sequenceFlow id="SF_3" sourceRef="Task_RiskScore" targetRef="Gateway_XOR_RiskOutcome"/>
+
+    <!-- Low risk => auto release -->
+    <bpmn:sequenceFlow id="SF_4_low" sourceRef="Gateway_XOR_RiskOutcome" targetRef="Task_AutoRelease">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[ ${risk == "LOW"} ]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <!-- High risk => manual review (via escalation throw then continue) -->
+    <bpmn:sequenceFlow id="SF_4_high" sourceRef="Gateway_XOR_RiskOutcome" targetRef="Throw_Escalation_HighRisk">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[ ${risk == "HIGH"} ]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="SF_5_high" sourceRef="Throw_Escalation_HighRisk" targetRef="Throw_RequestDocs"/>
+
+    <!-- Request docs -->
+    <bpmn:intermediateThrowEvent id="Throw_RequestDocs" name="Begär handlingar">
+      <bpmn:messageEventDefinition messageRef="Msg_RequestDocs"/>
+    </bpmn:intermediateThrowEvent>
+
+    <bpmn:sequenceFlow id="SF_6" sourceRef="Throw_RequestDocs" targetRef="Gateway_EventBased_DocsOrTimeout"/>
+
+    <bpmn:sequenceFlow id="SF_7_docs" sourceRef="Gateway_EventBased_DocsOrTimeout" targetRef="Catch_DocsProvided"/>
+    <bpmn:sequenceFlow id="SF_7_time" sourceRef="Gateway_EventBased_DocsOrTimeout" targetRef="Catch_Timer_DocsTimeout"/>
+
+    <bpmn:sequenceFlow id="SF_8_docs" sourceRef="Catch_DocsProvided" targetRef="Sub_ManuellGranskning"/>
+    <bpmn:sequenceFlow id="SF_8_time" sourceRef="Catch_Timer_DocsTimeout" targetRef="End_Reject"/>
+
+    <!-- Manual review outcome to fees -->
+    <bpmn:sequenceFlow id="SF_9" sourceRef="Sub_ManuellGranskning" targetRef="Task_BeraknaAvgifter"/>
+
+    <bpmn:dataInputAssociation id="DIA_DocsToReview">
+      <bpmn:sourceRef>DOR_SupportingDocs</bpmn:sourceRef>
+      <bpmn:targetRef>Sub_ManuellGranskning</bpmn:targetRef>
+    </bpmn:dataInputAssociation>
+
+    <bpmn:dataOutputAssociation id="DOA_ToArchive">
+      <bpmn:sourceRef>Sub_ManuellGranskning</bpmn:sourceRef>
+      <bpmn:targetRef>DSR_CaseArchive</bpmn:targetRef>
+    </bpmn:dataOutputAssociation>
+
+    <bpmn:sequenceFlow id="SF_10" sourceRef="Task_BeraknaAvgifter" targetRef="Throw_PaymentRequest"/>
+    <bpmn:sequenceFlow id="SF_11" sourceRef="Throw_PaymentRequest" targetRef="Catch_PaymentConfirmed"/>
+    <bpmn:sequenceFlow id="SF_12" sourceRef="Catch_PaymentConfirmed" targetRef="Gateway_XOR_PaymentOk"/>
+
+    <bpmn:sequenceFlow id="SF_13_ok" sourceRef="Gateway_XOR_PaymentOk" targetRef="Throw_ReleaseDecision">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[ ${paid == true} ]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="SF_13_no" sourceRef="Gateway_XOR_PaymentOk" targetRef="End_PaymentFailed">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[ ${paid == false} ]]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="SF_14" sourceRef="Throw_ReleaseDecision" targetRef="End_Release"/>
+
+    <!-- Auto release path also sends decision -->
+    <bpmn:sequenceFlow id="SF_15" sourceRef="Task_AutoRelease" targetRef="Throw_ReleaseDecision"/>
+
+  </bpmn:process>
+
+  <!-- ===== Process: Importer/Speditör ===== -->
+  <bpmn:process id="Proc_Importer" name="Importörens hantering" isExecutable="false">
+    <bpmn:startEvent id="Start_Importer" name="Start"/>
+
+    <bpmn:intermediateThrowEvent id="Throw_DeclSubmitted" name="Skicka deklaration">
+      <bpmn:messageEventDefinition messageRef="Msg_ImportDeclarationSubmitted"/>
+    </bpmn:intermediateThrowEvent>
+
+    <bpmn:intermediateCatchEvent id="Catch_RequestDocs" name="Tar emot begäran">
+      <bpmn:messageEventDefinition messageRef="Msg_RequestDocs"/>
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:task id="Task_CollectDocs" name="Samla handlingar"/>
+    <bpmn:intermediateThrowEvent id="Throw_DocsProvided" name="Skicka handlingar">
+      <bpmn:messageEventDefinition messageRef="Msg_DocsProvided"/>
+    </bpmn:intermediateThrowEvent>
+
+    <bpmn:intermediateCatchEvent id="Catch_PaymentRequest" name="Tar emot betalningskrav">
+      <bpmn:messageEventDefinition messageRef="Msg_PaymentRequest"/>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:task id="Task_Pay" name="Betala tull/moms"/>
+    <bpmn:intermediateThrowEvent id="Throw_PaymentConfirmed" name="Bekräfta betalning">
+      <bpmn:messageEventDefinition messageRef="Msg_PaymentConfirmed"/>
+    </bpmn:intermediateThrowEvent>
+
+    <bpmn:intermediateCatchEvent id="Catch_ReleaseDecision" name="Tar emot frisläppning">
+      <bpmn:messageEventDefinition messageRef="Msg_ReleaseDecision"/>
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:endEvent id="End_Importer" name="Klart"/>
+
+    <bpmn:sequenceFlow id="SF_I1" sourceRef="Start_Importer" targetRef="Throw_DeclSubmitted"/>
+    <bpmn:sequenceFlow id="SF_I2" sourceRef="Throw_DeclSubmitted" targetRef="Catch_RequestDocs"/>
+    <bpmn:sequenceFlow id="SF_I3" sourceRef="Catch_RequestDocs" targetRef="Task_CollectDocs"/>
+    <bpmn:sequenceFlow id="SF_I4" sourceRef="Task_CollectDocs" targetRef="Throw_DocsProvided"/>
+    <bpmn:sequenceFlow id="SF_I5" sourceRef="Throw_DocsProvided" targetRef="Catch_PaymentRequest"/>
+    <bpmn:sequenceFlow id="SF_I6" sourceRef="Catch_PaymentRequest" targetRef="Task_Pay"/>
+    <bpmn:sequenceFlow id="SF_I7" sourceRef="Task_Pay" targetRef="Throw_PaymentConfirmed"/>
+    <bpmn:sequenceFlow id="SF_I8" sourceRef="Throw_PaymentConfirmed" targetRef="Catch_ReleaseDecision"/>
+    <bpmn:sequenceFlow id="SF_I9" sourceRef="Catch_ReleaseDecision" targetRef="End_Importer"/>
+  </bpmn:process>
+
+  <!-- ===== Minimal BPMNDI (layout) ===== -->
+  <bpmndi:BPMNDiagram id="Diag_ImportControl">
+    <bpmndi:BPMNPlane id="Plane_ImportControl" bpmnElement="Collab_ImportControl">
+
+      <!-- Participants -->
+      <bpmndi:BPMNShape id="Shape_Part_Tullverket" bpmnElement="Part_Tullverket">
+        <dc:Bounds x="80" y="60" width="1200" height="520"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Part_Importer" bpmnElement="Part_Importer">
+        <dc:Bounds x="80" y="620" width="1200" height="220"/>
+      </bpmndi:BPMNShape>
+
+      <!-- A few key node shapes (enough for many modelers to render; others may auto-layout) -->
+      <bpmndi:BPMNShape id="Shape_Start_Message_Decl" bpmnElement="Start_Message_Decl">
+        <dc:Bounds x="140" y="140" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Registrera" bpmnElement="Task_Registrera">
+        <dc:Bounds x="220" y="125" width="140" height="66"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_RiskScore" bpmnElement="Task_RiskScore">
+        <dc:Bounds x="400" y="125" width="180" height="66"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_XOR_RiskOutcome" bpmnElement="Gateway_XOR_RiskOutcome">
+        <dc:Bounds x="620" y="135" width="50" height="50"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_AutoRelease" bpmnElement="Task_AutoRelease">
+        <dc:Bounds x="720" y="80" width="180" height="66"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Throw_ReleaseDecision" bpmnElement="Throw_ReleaseDecision">
+        <dc:Bounds x="980" y="140" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_Release" bpmnElement="End_Release">
+        <dc:Bounds x="1060" y="140" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Some edges -->
+      <bpmndi:BPMNEdge id="Edge_SF_1" bpmnElement="SF_1">
+        <di:waypoint x="176" y="158"/>
+        <di:waypoint x="220" y="158"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_2" bpmnElement="SF_2">
+        <di:waypoint x="360" y="158"/>
+        <di:waypoint x="400" y="158"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_3" bpmnElement="SF_3">
+        <di:waypoint x="580" y="158"/>
+        <di:waypoint x="620" y="160"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_15" bpmnElement="SF_15">
+        <di:waypoint x="900" y="113"/>
+        <di:waypoint x="980" y="158"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_14" bpmnElement="SF_14">
+        <di:waypoint x="1016" y="158"/>
+        <di:waypoint x="1060" y="158"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- Message flows (one example edge) -->
+      <bpmndi:BPMNEdge id="Edge_MF_Decl" bpmnElement="MF_Decl">
+        <di:waypoint x="220" y="730"/>
+        <di:waypoint x="158" y="158"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</bpmn:definitions>

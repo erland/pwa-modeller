@@ -62,10 +62,11 @@ export function QueryToolbar({
           >
             <option value="related">Related elements</option>
             <option value="paths">Connection between two</option>
+            <option value="traceability">Traceability explorer</option>
           </select>
         </div>
 
-        {mode === 'related' ? (
+        {mode !== 'paths' ? (
           <ElementPickerRow
             which="start"
             label="Start element"

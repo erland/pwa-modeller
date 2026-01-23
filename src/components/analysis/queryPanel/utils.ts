@@ -9,6 +9,8 @@ import type {
 import { getElementTypeLabel } from '../../../domain';
 import { getAnalysisAdapter } from '../../../analysis/adapters/registry';
 
+import type { AnalysisMode } from '../AnalysisQueryPanel';
+
 // We keep filter option lists dynamic (derived from the loaded model) so that
 // users working with a tailored meta-model don't see irrelevant options.
 
@@ -109,7 +111,7 @@ export function labelForElement(e: Element): string {
 }
 
 export function hasAnyFilters(params: {
-  mode: 'related' | 'paths';
+  mode: AnalysisMode;
   relationshipTypesSorted: readonly RelationshipType[];
   layersSorted: readonly string[];
   elementTypesSorted: readonly ElementType[];
@@ -134,10 +136,10 @@ export function hasAnyFilters(params: {
   return (
     relationshipTypesSorted.length > 0 ||
     layersSorted.length > 0 ||
-    (mode === 'related' && elementTypesSorted.length > 0) ||
+    (mode !== 'paths' && elementTypesSorted.length > 0) ||
     direction !== 'both' ||
-    (mode === 'related'
-      ? maxDepth !== 4 || includeStart
+    (mode !== 'paths'
+      ? maxDepth !== 4 || (mode === 'related' && includeStart)
       : maxPaths !== 10 || maxPathLength !== null)
   );
 }

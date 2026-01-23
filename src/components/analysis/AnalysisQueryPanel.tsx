@@ -14,7 +14,7 @@ import { QueryToolbar } from './queryPanel/QueryToolbar';
 import { useAnalysisQueryOptions } from './queryPanel/useAnalysisQueryOptions';
 import { hasAnyFilters as computeHasAnyFilters } from './queryPanel/utils';
 
-export type AnalysisMode = 'related' | 'paths';
+export type AnalysisMode = 'related' | 'paths' | 'traceability';
 
 type Props = {
   model: Model;

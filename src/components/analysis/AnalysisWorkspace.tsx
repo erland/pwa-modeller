@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type {
-  AnalysisDirection,
-    ElementType,
-  ModelKind,
-  RelationshipType
-} from '../../domain';
+import type { AnalysisDirection, ElementType, ModelKind, RelationshipType } from '../../domain';
 import type { Selection } from '../model/selection';
 import { useModelStore, useAnalysisPathsBetween, useAnalysisRelatedElements } from '../../store';
 
@@ -13,6 +8,7 @@ import '../../styles/crud.css';
 
 import { AnalysisQueryPanel, type AnalysisMode } from './AnalysisQueryPanel';
 import { AnalysisResultTable } from './AnalysisResultTable';
+import { TraceabilityExplorer } from './TraceabilityExplorer';
 
 function selectionToElementId(sel: Selection): string | null {
   switch (sel.kind) {
@@ -74,7 +70,7 @@ export function AnalysisWorkspace({
     const picked = selectionToElementId(selection);
     if (!picked) return;
 
-    if (mode === 'related') {
+    if (mode !== 'paths') {
       if (!draftStartId) setDraftStartId(picked);
       return;
     }
@@ -114,12 +110,12 @@ export function AnalysisWorkspace({
 
   const canRun = Boolean(
     model &&
-      (mode === 'related' ? draftStartId : draftSourceId && draftTargetId && draftSourceId !== draftTargetId)
+      (mode !== 'paths' ? draftStartId : draftSourceId && draftTargetId && draftSourceId !== draftTargetId)
   );
 
   function run() {
     if (!model) return;
-    if (mode === 'related') {
+    if (mode !== 'paths') {
       setActiveStartId(draftStartId);
       return;
     }
@@ -174,6 +170,7 @@ export function AnalysisWorkspace({
     if (which === 'target') setDraftTargetId(picked);
   }
 
+  const traceSeedId = activeStartId || draftStartId || selectionToElementId(selection) || '';
   return (
     <div className="workspace" aria-label="Analysis workspace">
       <div className="workspaceHeader">
@@ -196,6 +193,15 @@ export function AnalysisWorkspace({
             onClick={() => setMode('paths')}
           >
             Connection between two
+          </button>
+          <button
+            type="button"
+            className={`tabButton ${mode === 'traceability' ? 'isActive' : ''}`}
+            role="tab"
+            aria-selected={mode === 'traceability'}
+            onClick={() => setMode('traceability')}
+          >
+            Traceability explorer
           </button>
         </div>
       </div>
@@ -245,16 +251,42 @@ export function AnalysisWorkspace({
             onRun={run}
           />
 
-          <AnalysisResultTable
-            model={model}
-            modelKind={modelKind}
-            mode={mode}
-            relatedResult={relatedResult}
-            pathsResult={pathsResult}
-            selection={selection}
-            onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
-            onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
-          />
+          {mode === 'traceability' ? (
+            traceSeedId ? (
+              <TraceabilityExplorer
+                model={model}
+                modelKind={modelKind}
+                seedId={traceSeedId}
+                direction={direction}
+                relationshipTypes={relationshipTypes}
+                layers={layers}
+                elementTypes={elementTypes}
+                expandDepth={maxDepth}
+              />
+            ) : (
+              <div className="crudSection" style={{ marginTop: 14 }}>
+                <div className="crudHeader">
+                  <div>
+                    <p className="crudTitle">No start element</p>
+                    <p className="crudHint">
+                      Pick a start element in the Query panel (or select an element in the model) and click Run analysis.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )
+          ) : (
+            <AnalysisResultTable
+              model={model}
+              modelKind={modelKind}
+              mode={mode}
+              relatedResult={relatedResult}
+              pathsResult={pathsResult}
+              selection={selection}
+              onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
+              onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+            />
+          )}
         </>
       )}
     </div>

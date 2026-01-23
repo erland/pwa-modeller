@@ -3,6 +3,8 @@ import { useEffect, useMemo } from 'react';
 import type { ElementType, Model, ModelKind, RelationshipType } from '../../../domain';
 import { getAnalysisAdapter } from '../../../analysis/adapters/registry';
 
+import type { AnalysisMode } from '../AnalysisQueryPanel';
+
 import {
   collectFacetValues,
   collectFacetValuesConstrained,
@@ -15,7 +17,7 @@ import {
 type Params = {
   model: Model;
   modelKind: ModelKind;
-  mode: 'related' | 'paths';
+  mode: AnalysisMode;
 
   relationshipTypes: RelationshipType[];
   onChangeRelationshipTypes: (types: RelationshipType[]) => void;
@@ -91,7 +93,7 @@ export function useAnalysisQueryOptions({
   }, [layersSorted, availableLayers, onChangeLayers]);
 
   useEffect(() => {
-    if (mode !== 'related') return;
+    if (mode === 'paths') return;
     const pruned = pruneToAllowed(elementTypesSorted, allowedElementTypes);
     if (pruned !== elementTypesSorted) onChangeElementTypes(pruned);
   }, [allowedElementTypes, elementTypesSorted, mode, onChangeElementTypes]);

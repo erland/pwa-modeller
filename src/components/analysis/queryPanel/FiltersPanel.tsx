@@ -94,33 +94,7 @@ export function FiltersPanel({
           </select>
         </div>
 
-        {mode === 'related' ? (
-          <>
-            <div className="toolbarGroup">
-              <label htmlFor="analysis-maxDepth">Max depth</label>
-              <select
-                id="analysis-maxDepth"
-                className="selectInput"
-                value={String(maxDepth)}
-                onChange={(e) => onChangeMaxDepth(Number(e.currentTarget.value))}
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                  <option key={n} value={String(n)}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
-                <input
-                  type="checkbox"
-                  checked={includeStart}
-                  onChange={(e) => onChangeIncludeStart(e.currentTarget.checked)}
-                />
-                Include start element
-              </label>
-            </div>
-          </>
-        ) : (
+        {mode === 'paths' ? (
           <>
             <div className="toolbarGroup">
               <label htmlFor="analysis-maxPaths">Max paths</label>
@@ -156,6 +130,34 @@ export function FiltersPanel({
                   </option>
                 ))}
               </select>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="toolbarGroup">
+              <label htmlFor="analysis-maxDepth">{mode === 'traceability' ? 'Expand depth' : 'Max depth'}</label>
+              <select
+                id="analysis-maxDepth"
+                className="selectInput"
+                value={String(maxDepth)}
+                onChange={(e) => onChangeMaxDepth(Number(e.currentTarget.value))}
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <option key={n} value={String(n)}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              {mode === 'related' ? (
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
+                  <input
+                    type="checkbox"
+                    checked={includeStart}
+                    onChange={(e) => onChangeIncludeStart(e.currentTarget.checked)}
+                  />
+                  Include start element
+                </label>
+              ) : null}
             </div>
           </>
         )}

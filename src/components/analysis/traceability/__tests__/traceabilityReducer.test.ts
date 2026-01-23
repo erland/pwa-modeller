@@ -61,6 +61,14 @@ describe('traceabilityReducer', () => {
     expect(state1.nodesById['A'].expanded).toBe(false);
   });
 
+  test('loadSession replaces state', () => {
+    const s0 = createTraceabilityExplorerState(['A']);
+    const s1 = createTraceabilityExplorerState(['X']);
+    const loaded = traceabilityReducer(s0, { type: 'loadSession', state: s1 });
+    expect(loaded.nodesById['X']).toBeTruthy();
+    expect(loaded.nodesById['A']).toBeUndefined();
+  });
+
   test('setFilters merges into existing filters', () => {
     const state0 = createTraceabilityExplorerState(['A']);
     const state1 = traceabilityReducer(state0, { type: 'setFilters', filters: { direction: 'incoming', relationshipTypes: ['Flow'] } });

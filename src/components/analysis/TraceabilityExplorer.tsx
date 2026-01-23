@@ -10,6 +10,14 @@ import { expandFromNode } from '../../analysis/traceability/expand';
 import { createTraceabilityExplorerState, traceabilityReducer } from './traceability/traceabilityReducer';
 import { TraceabilityMiniGraph } from './traceability/TraceabilityMiniGraph';
 
+import {
+  deleteTraceabilitySession,
+  listTraceabilitySessions,
+  saveTraceabilitySession,
+  toExplorerState,
+  toPersistedState
+} from './traceability/traceabilitySessions';
+
 import type { ExpandRequest, TraceExpansionPatch, TraceFilters } from '../../domain/analysis/traceability/types';
 
 type Props = {
@@ -57,12 +65,21 @@ export function TraceabilityExplorer({
   const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
 
   const [autoExpand, setAutoExpand] = useState(false);
+  const [sessions, setSessions] = useState<Array<{ name: string; savedAt: string }>>([]);
+  const [selectedSessionName, setSelectedSessionName] = useState<string>('');
 
   const [state, dispatch] = useReducer(
     traceabilityReducer,
     undefined,
     () => createTraceabilityExplorerState([seedId], { filters: toTraceFilters({ direction, relationshipTypes, layers, elementTypes }) })
   );
+
+  useEffect(() => {
+    const items = listTraceabilitySessions(modelKind, model.id)
+      .map((s) => ({ name: s.name, savedAt: s.savedAt }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    setSessions(items);
+  }, [model.id, modelKind]);
 
   useEffect(() => {
     dispatch({ type: 'seed', seedIds: [seedId], options: { filters: toTraceFilters({ direction, relationshipTypes, layers, elementTypes }) } });
@@ -106,6 +123,48 @@ export function TraceabilityExplorer({
 
   const selectedName = selectedNodeId ? adapter.getNodeLabel(model.elements[selectedNodeId], model) : '(none)';
 
+  const refreshSessions = () => {
+    const items = listTraceabilitySessions(modelKind, model.id)
+      .map((s) => ({ name: s.name, savedAt: s.savedAt }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    setSessions(items);
+  };
+
+  const doSaveSession = () => {
+    const proposed = selectedSessionName || window.prompt('Session name', seedId ? `Trace from ${seedId}` : 'Trace session') || '';
+    const name = proposed.trim();
+    if (!name) return;
+
+    saveTraceabilitySession(modelKind, model.id, {
+      name,
+      seedId,
+      expandDepth,
+      state: toPersistedState(state)
+    });
+
+    setSelectedSessionName(name);
+    refreshSessions();
+  };
+
+  const doLoadSession = () => {
+    if (!selectedSessionName) return;
+    const s = listTraceabilitySessions(modelKind, model.id).find((x) => x.name === selectedSessionName);
+    if (!s) return;
+
+    // Seed id + depth come from the session.
+    dispatch({ type: 'loadSession', state: toExplorerState(s.state) });
+    onSelectElement(s.seedId);
+  };
+
+  const doDeleteSession = () => {
+    if (!selectedSessionName) return;
+    const ok = window.confirm(`Delete session "${selectedSessionName}"?`);
+    if (!ok) return;
+    deleteTraceabilitySession(modelKind, model.id, selectedSessionName);
+    setSelectedSessionName('');
+    refreshSessions();
+  };
+
   return (
     <div style={{ marginTop: 14 }}>
       <div className="crudSection">
@@ -136,6 +195,39 @@ export function TraceabilityExplorer({
                   + Both
                 </button>
               </div>
+            </div>
+
+            <div className="toolbarGroup">
+              <label>Sessions</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="selectInput"
+                  value={selectedSessionName}
+                  onChange={(e) => setSelectedSessionName(e.currentTarget.value)}
+                  style={{ minWidth: 200 }}
+                >
+                  <option value="">(none)</option>
+                  {sessions.map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" className="miniLinkButton" onClick={doSaveSession}>
+                  Save
+                </button>
+                <button type="button" className="miniLinkButton" onClick={doLoadSession} disabled={!selectedSessionName} aria-disabled={!selectedSessionName}>
+                  Load
+                </button>
+                <button type="button" className="miniLinkButton" onClick={doDeleteSession} disabled={!selectedSessionName} aria-disabled={!selectedSessionName}>
+                  Delete
+                </button>
+              </div>
+              {sessions.length ? (
+                <div className="crudHint" style={{ margin: 0 }}>
+                  Stored locally in this browser.
+                </div>
+              ) : null}
             </div>
 
             <div className="toolbarGroup">

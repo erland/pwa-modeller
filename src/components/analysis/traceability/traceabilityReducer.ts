@@ -71,6 +71,11 @@ export type SetFiltersAction = {
   filters: Partial<TraceFilters>;
 };
 
+export type LoadSessionAction = {
+  type: 'loadSession';
+  state: TraceabilityExplorerState;
+};
+
 export type SetSelectionAction = {
   type: 'setSelection';
   selection: TraceSelection;
@@ -78,6 +83,7 @@ export type SetSelectionAction = {
 
 export type TraceabilityAction =
   | SeedAction
+  | LoadSessionAction
   | ResetAction
   | ExpandRequestedAction
   | ExpandAppliedAction
@@ -170,6 +176,10 @@ export function traceabilityReducer(state: TraceabilityExplorerState, action: Tr
     case 'seed':
     case 'reset': {
       return createTraceabilityExplorerState(action.seedIds, action.options);
+    }
+
+    case 'loadSession': {
+      return { ...action.state, pendingByNodeId: {}, lastExpandRequest: undefined };
     }
 
     case 'setFilters': {

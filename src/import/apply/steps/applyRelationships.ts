@@ -8,6 +8,43 @@ import { pushWarning, resolveRelationshipType, toExternalIds, toTaggedValues } f
 export function applyRelationships(ctx: ApplyImportContext): void {
   const { ir, sourceSystem, report, unknownTypePolicy, mappings } = ctx;
 
+  const isStringId = (x: unknown): x is string => typeof x === 'string' && x.trim().length > 0;
+
+  const mapBpmnElementRefStrict = (opts: {
+    ownerRelId: string;
+    field: string;
+    ref: unknown;
+  }): { mapped?: string; unresolved?: string } => {
+    const { ownerRelId, field, ref } = opts;
+    if (!isStringId(ref)) return {};
+    const mapped = mappings.elements[ref];
+    if (mapped) return { mapped };
+    pushWarning(report, `BPMN: relationship "${ownerRelId}" has unresolved reference ${field}="${ref}" (cleared)`);
+    return { unresolved: ref };
+  };
+
+  const rewriteBpmnRelAttrs = (opts: { ownerRelId: string; attrs: unknown }): unknown => {
+    const { ownerRelId, attrs } = opts;
+    if (!attrs || typeof attrs !== 'object') return attrs;
+    const a: any = { ...(attrs as any) };
+    const unresolvedRefs: Record<string, unknown> = {};
+
+    // Message flow can reference a global message definition.
+    if (isStringId(a.messageRef)) {
+      const { mapped, unresolved } = mapBpmnElementRefStrict({ ownerRelId, field: 'messageRef', ref: a.messageRef });
+      if (mapped) a.messageRef = mapped;
+      else if (unresolved) {
+        delete a.messageRef;
+        unresolvedRefs.messageRef = unresolved;
+      }
+    }
+
+    if (Object.keys(unresolvedRefs).length) {
+      a.unresolvedRefs = unresolvedRefs;
+    }
+    return a;
+  };
+
   for (const rel of ir.relationships ?? []) {
     if (!rel?.id) continue;
 
@@ -55,7 +92,7 @@ export function applyRelationships(ctx: ApplyImportContext): void {
     const umlSanitized = umlAttrs !== undefined ? sanitizeRelationshipAttrs(type, umlAttrs) : undefined;
 
     // BPMN2 importer attaches relationship semantics (e.g. conditionExpression, messageRef) in IR `attrs`.
-    const bpmnAttrs = inferredKind === 'bpmn' ? (rel as any).attrs : undefined;
+    const bpmnAttrs = inferredKind === 'bpmn' ? rewriteBpmnRelAttrs({ ownerRelId: rel.id, attrs: (rel as any).attrs }) : undefined;
 
     const attrs =
       umlSanitized !== undefined && bpmnAttrs !== undefined

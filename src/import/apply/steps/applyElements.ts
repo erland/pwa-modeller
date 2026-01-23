@@ -27,46 +27,102 @@ export function applyElements(ctx: ApplyImportContext): void {
     }
   }
 
-  const mapBpmnRef = (ref: unknown): string | undefined => {
-    if (typeof ref !== 'string' || !ref.trim()) return undefined;
-    return mappings.elements[ref] ?? ref;
+  const isStringId = (x: unknown): x is string => typeof x === 'string' && x.trim().length > 0;
+
+  const mapBpmnRefStrict = (opts: {
+    ownerId: string;
+    ownerName?: string;
+    field: string;
+    ref: unknown;
+  }): { mapped?: string; unresolved?: string } => {
+    const { ownerId, ownerName, field, ref } = opts;
+    if (!isStringId(ref)) return {};
+    const mapped = mappings.elements[ref];
+    if (mapped) return { mapped };
+    // Reference points to an element that was not imported. Keep a warning and record it.
+    pushWarning(
+      report,
+      `BPMN: element "${ownerName ?? ownerId}" has unresolved reference ${field}="${ref}" (cleared)`
+    );
+    return { unresolved: ref };
   };
 
-  const rewriteBpmnAttrs = (attrs: unknown): unknown => {
+  const rewriteBpmnAttrs = (opts: { ownerId: string; ownerName?: string; attrs: unknown }): unknown => {
+    const { ownerId, ownerName, attrs } = opts;
     if (!attrs || typeof attrs !== 'object') return attrs;
+
     const a: any = { ...(attrs as any) };
+    const unresolvedRefs: Record<string, unknown> = {};
+
+    const rewriteField = (field: string) => {
+      if (!isStringId(a[field])) return;
+      const { mapped, unresolved } = mapBpmnRefStrict({ ownerId, ownerName, field, ref: a[field] });
+      if (mapped) a[field] = mapped;
+      else if (unresolved) {
+        delete a[field];
+        unresolvedRefs[field] = unresolved;
+      }
+    };
 
     // Boundary events attach to a host activity/task.
-    if (a.attachedToRef) a.attachedToRef = mapBpmnRef(a.attachedToRef);
+    rewriteField('attachedToRef');
 
     // Data references point to global definitions.
-    if (a.dataObjectRef) a.dataObjectRef = mapBpmnRef(a.dataObjectRef);
-    if (a.dataStoreRef) a.dataStoreRef = mapBpmnRef(a.dataStoreRef);
+    rewriteField('dataObjectRef');
+    rewriteField('dataStoreRef');
 
     // Participant pools may reference the owning process.
-    if (a.processRef) a.processRef = mapBpmnRef(a.processRef);
+    rewriteField('processRef');
 
     // Lane containment: translate flow node references to internal element ids.
     if (Array.isArray(a.flowNodeRefs)) {
-      a.flowNodeRefs = a.flowNodeRefs
-        .map((r: unknown) => mapBpmnRef(r))
-        .filter((r: unknown) => typeof r === 'string' && r.length > 0);
+      const kept: string[] = [];
+      const dropped: string[] = [];
+      for (const r of a.flowNodeRefs as unknown[]) {
+        const { mapped, unresolved } = mapBpmnRefStrict({ ownerId, ownerName, field: 'flowNodeRefs', ref: r });
+        if (mapped) kept.push(mapped);
+        else if (unresolved) dropped.push(unresolved);
+      }
+      if (kept.length) a.flowNodeRefs = kept;
+      else delete a.flowNodeRefs;
+      if (dropped.length) unresolvedRefs.flowNodeRefs = dropped;
     }
 
     // Event definitions may reference global BPMN definitions.
     const ed = a.eventDefinition;
     if (ed && typeof ed === 'object') {
       const ed2: any = { ...(ed as any) };
-      if (ed2.messageRef) ed2.messageRef = mapBpmnRef(ed2.messageRef);
-      if (ed2.signalRef) ed2.signalRef = mapBpmnRef(ed2.signalRef);
-      if (ed2.errorRef) ed2.errorRef = mapBpmnRef(ed2.errorRef);
-      if (ed2.escalationRef) ed2.escalationRef = mapBpmnRef(ed2.escalationRef);
+
+      const rewriteEd = (field: 'messageRef' | 'signalRef' | 'errorRef' | 'escalationRef') => {
+        if (!isStringId(ed2[field])) return;
+        const { mapped, unresolved } = mapBpmnRefStrict({
+          ownerId,
+          ownerName,
+          field: `eventDefinition.${field}`,
+          ref: ed2[field]
+        });
+        if (mapped) ed2[field] = mapped;
+        else if (unresolved) {
+          delete ed2[field];
+          unresolvedRefs[`eventDefinition.${field}`] = unresolved;
+        }
+      };
+
+      rewriteEd('messageRef');
+      rewriteEd('signalRef');
+      rewriteEd('errorRef');
+      rewriteEd('escalationRef');
+
       a.eventDefinition = ed2;
     }
 
     // Gateway default flow may reference a sequenceFlow relationship id, which is not an element.
     // We intentionally do not rewrite defaultFlowRef here.
 
+    if (Object.keys(unresolvedRefs).length) {
+      // Non-schema field that we keep purely for diagnostics and UI/validation.
+      a.unresolvedRefs = unresolvedRefs;
+    }
     return a;
   };
 
@@ -119,7 +175,10 @@ export function applyElements(ctx: ApplyImportContext): void {
 
     // BPMN2 importer attaches semantic node attributes (events, gateways, etc.) in IR `attrs`.
     // Preserve them verbatim for BPMN elements.
-    const bpmnAttrs = inferredKind === 'bpmn' ? rewriteBpmnAttrs((el as any).attrs) : undefined;
+    const bpmnAttrs =
+      inferredKind === 'bpmn'
+        ? rewriteBpmnAttrs({ ownerId: el.id, ownerName: el.name ?? undefined, attrs: (el as any).attrs })
+        : undefined;
 
     const mergedAttrs =
       umlClassifierAttrs !== undefined && bpmnAttrs !== undefined

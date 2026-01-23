@@ -47,6 +47,17 @@ export function parseRelationships(ctx: ParseContext) {
 
       const extTags = extractExtensionSummary(relEl);
 
+      // Lightweight relationship semantics (kept optional / best-effort).
+      let relAttrs: Record<string, unknown> | undefined;
+      if (typeId === 'bpmn.sequenceFlow') {
+        const condEl = childByLocalName(relEl, 'conditionExpression');
+        const conditionExpression = text(condEl) || undefined;
+        if (conditionExpression) relAttrs = { conditionExpression };
+      } else if (typeId === 'bpmn.messageFlow') {
+        const messageRef = (attr(relEl, 'messageRef') ?? '').trim() || undefined;
+        if (messageRef) relAttrs = { messageRef };
+      }
+
       relationships.push({
         id,
         type: typeId,
@@ -55,6 +66,7 @@ export function parseRelationships(ctx: ParseContext) {
         sourceId: sourceRef,
         targetId: targetRef,
         externalIds: [{ system: 'bpmn2', id, kind: 'relationship' }],
+        ...(relAttrs ? { attrs: relAttrs } : {}),
         meta: {
           sourceLocalName: localName(relEl),
           ...(extTags ? { extensionElements: { tags: extTags } } : {})

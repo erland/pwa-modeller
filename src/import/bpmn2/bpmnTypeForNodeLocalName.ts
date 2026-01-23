@@ -43,13 +43,23 @@ export function bpmnTypeForNodeLocalName(name: string): string | null {
 
     // Gateways
     case 'exclusivegateway':
-      return 'bpmn.exclusiveGateway';
+      return 'bpmn.gatewayExclusive';
     case 'parallelgateway':
-      return 'bpmn.parallelGateway';
+      return 'bpmn.gatewayParallel';
     case 'inclusivegateway':
-      return 'bpmn.inclusiveGateway';
+      return 'bpmn.gatewayInclusive';
     case 'eventbasedgateway':
-      return 'bpmn.eventBasedGateway';
+      return 'bpmn.gatewayEventBased';
+
+    // Global definitions (not flow nodes, but referenced by event definitions)
+    case 'message':
+      return 'bpmn.message';
+    case 'signal':
+      return 'bpmn.signal';
+    case 'error':
+      return 'bpmn.error';
+    case 'escalation':
+      return 'bpmn.escalation';
 
     // Artifacts / data
     case 'textannotation':

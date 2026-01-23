@@ -19,10 +19,10 @@ function defaultSizeForBpmnType(t: string | undefined): { width: number; height:
     case 'bpmn.intermediateThrowEvent':
     case 'bpmn.boundaryEvent':
       return { width: 36, height: 36 };
-    case 'bpmn.exclusiveGateway':
-    case 'bpmn.parallelGateway':
-    case 'bpmn.inclusiveGateway':
-    case 'bpmn.eventBasedGateway':
+    case 'bpmn.gatewayExclusive':
+    case 'bpmn.gatewayParallel':
+    case 'bpmn.gatewayInclusive':
+    case 'bpmn.gatewayEventBased':
       return { width: 50, height: 50 };
     case 'bpmn.subProcess':
       return { width: 220, height: 120 };

@@ -2,8 +2,11 @@ import { useMemo, useState } from 'react';
 
 import type { ValidationIssue } from '../../domain';
 import { validateModel } from '../../domain';
+import { kindsPresent } from '../../domain/validation/kindsPresent';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';
+
+import { BpmnValidationMatrix } from './BpmnValidationMatrix';
 
 type Props = {
   onSelect: (selection: Selection) => void;
@@ -35,6 +38,12 @@ function describeTarget(issue: ValidationIssue): string {
 export function ValidationWorkspace({ onSelect, onGoToDiagram }: Props) {
   const model = useModelStore((s) => s.model);
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null);
+  const [panel, setPanel] = useState<'issues' | 'bpmnMatrix'>('issues');
+
+  const hasBpmn = useMemo(() => {
+    if (!model) return false;
+    return kindsPresent(model).has('bpmn');
+  }, [model]);
 
   const summary = useMemo(() => {
     const list = issues ?? [];
@@ -93,6 +102,26 @@ export function ValidationWorkspace({ onSelect, onGoToDiagram }: Props) {
           <p className="crudHint">Run consistency checks and strict notation validation.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} aria-label="Validation panel mode">
+            <button
+              type="button"
+              className={panel === 'issues' ? 'shellButton' : 'miniLinkButton'}
+              onClick={() => setPanel('issues')}
+              aria-pressed={panel === 'issues'}
+            >
+              Issues
+            </button>
+            {hasBpmn ? (
+              <button
+                type="button"
+                className={panel === 'bpmnMatrix' ? 'shellButton' : 'miniLinkButton'}
+                onClick={() => setPanel('bpmnMatrix')}
+                aria-pressed={panel === 'bpmnMatrix'}
+              >
+                BPMN Matrix
+              </button>
+            ) : null}
+          </div>
           <button type="button" className="shellButton" onClick={runValidation}>
             Validate Model
           </button>
@@ -108,7 +137,9 @@ export function ValidationWorkspace({ onSelect, onGoToDiagram }: Props) {
         </div>
       </div>
 
-      {issues === null ? (
+      {panel === 'bpmnMatrix' ? (
+        <BpmnValidationMatrix model={model} />
+      ) : issues === null ? (
         <p className="panelHint">Click “Validate Model” to scan the current model.</p>
       ) : issues.length === 0 ? (
         <p className="panelHint">✅ No issues found.</p>

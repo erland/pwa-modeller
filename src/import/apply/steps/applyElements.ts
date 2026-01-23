@@ -8,6 +8,54 @@ import { guessLayerFromTypeString, pushWarning, resolveElementType, toExternalId
 export function applyElements(ctx: ApplyImportContext): void {
   const { ir, sourceSystem, report, unknownTypePolicy, rootFolderId, mappings } = ctx;
 
+  // -------------------------------------------------------------------------
+  // IMPORTANT: two-pass mapping.
+  //
+  // Some IR attributes reference other IR element ids (e.g. BPMN eventDefinition.messageRef,
+  // boundaryEvent.attachedToRef). During apply we generate new internal ids, so we must
+  // translate those references using `mappings.elements`.
+  //
+  // To make this deterministic regardless of element ordering in the source file, we first
+  // allocate internal ids for *all* IR elements, then do a second pass that creates domain
+  // elements using the completed mapping.
+  // -------------------------------------------------------------------------
+
+  for (const el of ir.elements ?? []) {
+    if (!el?.id) continue;
+    if (!mappings.elements[el.id]) {
+      mappings.elements[el.id] = createId('el');
+    }
+  }
+
+  const mapBpmnRef = (ref: unknown): string | undefined => {
+    if (typeof ref !== 'string' || !ref.trim()) return undefined;
+    return mappings.elements[ref] ?? ref;
+  };
+
+  const rewriteBpmnAttrs = (attrs: unknown): unknown => {
+    if (!attrs || typeof attrs !== 'object') return attrs;
+    const a: any = { ...(attrs as any) };
+
+    // Boundary events attach to a host activity/task.
+    if (a.attachedToRef) a.attachedToRef = mapBpmnRef(a.attachedToRef);
+
+    // Event definitions may reference global BPMN definitions.
+    const ed = a.eventDefinition;
+    if (ed && typeof ed === 'object') {
+      const ed2: any = { ...(ed as any) };
+      if (ed2.messageRef) ed2.messageRef = mapBpmnRef(ed2.messageRef);
+      if (ed2.signalRef) ed2.signalRef = mapBpmnRef(ed2.signalRef);
+      if (ed2.errorRef) ed2.errorRef = mapBpmnRef(ed2.errorRef);
+      if (ed2.escalationRef) ed2.escalationRef = mapBpmnRef(ed2.escalationRef);
+      a.eventDefinition = ed2;
+    }
+
+    // Gateway default flow may reference a sequenceFlow relationship id, which is not an element.
+    // We intentionally do not rewrite defaultFlowRef here.
+
+    return a;
+  };
+
   for (const el of ir.elements ?? []) {
     if (!el?.id) continue;
 
@@ -28,7 +76,7 @@ export function applyElements(ctx: ApplyImportContext): void {
       continue;
     }
 
-    const internalId = createId('el');
+    const internalId = mappings.elements[el.id] ?? createId('el');
     mappings.elements[el.id] = internalId;
 
     const externalIds = toExternalIds(el.externalIds, sourceSystem, el.id);
@@ -55,6 +103,17 @@ export function applyElements(ctx: ApplyImportContext): void {
         ? sanitizeUmlClassifierAttrs((el as any).meta?.umlMembers)
         : undefined;
 
+    // BPMN2 importer attaches semantic node attributes (events, gateways, etc.) in IR `attrs`.
+    // Preserve them verbatim for BPMN elements.
+    const bpmnAttrs = inferredKind === 'bpmn' ? rewriteBpmnAttrs((el as any).attrs) : undefined;
+
+    const mergedAttrs =
+      umlClassifierAttrs !== undefined && bpmnAttrs !== undefined
+        ? { ...(bpmnAttrs as any), ...(umlClassifierAttrs as any) }
+        : umlClassifierAttrs !== undefined
+          ? umlClassifierAttrs
+          : bpmnAttrs;
+
     const domainEl: Element = {
       ...createElement({
         id: internalId,
@@ -62,7 +121,7 @@ export function applyElements(ctx: ApplyImportContext): void {
         ...(layer ? { layer } : {}),
         type,
         documentation: el.documentation,
-        ...(umlClassifierAttrs ? { attrs: umlClassifierAttrs } : {})
+        ...(mergedAttrs !== undefined ? { attrs: mergedAttrs } : {})
       }),
       externalIds,
       taggedValues,

@@ -52,7 +52,17 @@ export function applyRelationships(ctx: ApplyImportContext): void {
       rel.meta && typeof rel.meta === 'object' && 'umlAttrs' in (rel.meta as Record<string, unknown>)
         ? (rel.meta as Record<string, unknown>).umlAttrs
         : undefined;
-    const attrs = umlAttrs !== undefined ? sanitizeRelationshipAttrs(type, umlAttrs) : undefined;
+    const umlSanitized = umlAttrs !== undefined ? sanitizeRelationshipAttrs(type, umlAttrs) : undefined;
+
+    // BPMN2 importer attaches relationship semantics (e.g. conditionExpression, messageRef) in IR `attrs`.
+    const bpmnAttrs = inferredKind === 'bpmn' ? (rel as any).attrs : undefined;
+
+    const attrs =
+      umlSanitized !== undefined && bpmnAttrs !== undefined
+        ? { ...(bpmnAttrs as any), ...(umlSanitized as any) }
+        : umlSanitized !== undefined
+          ? umlSanitized
+          : bpmnAttrs;
 
     const domainRel: Relationship = {
       ...createRelationship({

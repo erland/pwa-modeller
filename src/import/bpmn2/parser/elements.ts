@@ -50,7 +50,8 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
       },
       ...(eventKind === 'boundary'
         ? {
-            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            // BPMN default is interrupting=true (cancelActivity=true). Keep that explicit.
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
             attachedToRef: attr(el, 'attachedToRef') || undefined
           }
         : {})
@@ -65,7 +66,7 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
       eventDefinition: { kind: 'message', ...(messageRef ? { messageRef } : {}) },
       ...(eventKind === 'boundary'
         ? {
-            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
             attachedToRef: attr(el, 'attachedToRef') || undefined
           }
         : {})
@@ -80,7 +81,7 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
       eventDefinition: { kind: 'signal', ...(signalRef ? { signalRef } : {}) },
       ...(eventKind === 'boundary'
         ? {
-            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
             attachedToRef: attr(el, 'attachedToRef') || undefined
           }
         : {})
@@ -95,7 +96,7 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
       eventDefinition: { kind: 'error', ...(errorRef ? { errorRef } : {}) },
       ...(eventKind === 'boundary'
         ? {
-            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
             attachedToRef: attr(el, 'attachedToRef') || undefined
           }
         : {})
@@ -110,7 +111,7 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
       eventDefinition: { kind: 'escalation', ...(escalationRef ? { escalationRef } : {}) },
       ...(eventKind === 'boundary'
         ? {
-            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
             attachedToRef: attr(el, 'attachedToRef') || undefined
           }
         : {})
@@ -127,7 +128,7 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
       eventDefinition: { kind: 'conditional', ...(conditionExpression ? { conditionExpression } : {}) },
       ...(eventKind === 'boundary'
         ? {
-            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
             attachedToRef: attr(el, 'attachedToRef') || undefined
           }
         : {})
@@ -142,7 +143,7 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
       eventDefinition: { kind: 'link', ...(linkName ? { linkName } : {}) },
       ...(eventKind === 'boundary'
         ? {
-            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
             attachedToRef: attr(el, 'attachedToRef') || undefined
           }
         : {})
@@ -156,7 +157,7 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
       eventDefinition: { kind: 'terminate' },
       ...(eventKind === 'boundary'
         ? {
-            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+            cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
             attachedToRef: attr(el, 'attachedToRef') || undefined
           }
         : {})
@@ -169,7 +170,7 @@ function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> |
     eventDefinition: { kind: 'none' },
     ...(eventKind === 'boundary'
       ? {
-          cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : undefined,
+          cancelActivity: attr(el, 'cancelActivity') === 'false' ? false : true,
           attachedToRef: attr(el, 'attachedToRef') || undefined
         }
       : {})
@@ -180,6 +181,12 @@ export function parseElements(ctx: ParseContext) {
   const { defs, warnings, elements, idIndex, elementById, unsupportedNodeTypes } = ctx;
 
   const supportedNodeLocalNames = [
+    // Global definitions (referenced by events / flows)
+    'message',
+    'signal',
+    'error',
+    'escalation',
+
     // Containers
     'participant',
     'lane',
@@ -240,7 +247,22 @@ export function parseElements(ctx: ParseContext) {
 
       const extTags = extractExtensionSummary(el);
 
-      const attrs = parseEventAttrs(el, typeId);
+      const attrs =
+        parseEventAttrs(el, typeId) ??
+        (typeId === 'bpmn.error'
+          ? {
+              errorCode: (attr(el, 'errorCode') ?? '').trim() || undefined,
+              structureRef: (attr(el, 'structureRef') ?? '').trim() || undefined
+            }
+          : typeId === 'bpmn.escalation'
+            ? {
+                escalationCode: (attr(el, 'escalationCode') ?? '').trim() || undefined
+              }
+            : typeId === 'bpmn.message'
+              ? {
+                  itemRef: (attr(el, 'itemRef') ?? '').trim() || undefined
+                }
+              : undefined);
 
       elements.push({
         id,

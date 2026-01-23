@@ -188,6 +188,12 @@ export const BPMN_ELEMENT_TYPES: ElementType[] = [
   'bpmn.pool',
   'bpmn.lane',
 
+  // Global BPMN definitions (referenced by event/message semantics; typically not placed on diagrams)
+  'bpmn.message',
+  'bpmn.signal',
+  'bpmn.error',
+  'bpmn.escalation',
+
   // Activities
   'bpmn.task',
   'bpmn.userTask',
@@ -247,6 +253,11 @@ const BPMN_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   // Containers
   'bpmn.pool': 'Pool (Participant)',
   'bpmn.lane': 'Lane',
+
+  'bpmn.message': 'Message (Global)',
+  'bpmn.signal': 'Signal (Global)',
+  'bpmn.error': 'Error (Global)',
+  'bpmn.escalation': 'Escalation (Global)',
 
   // Activities
   'bpmn.task': 'Task',

@@ -17,6 +17,8 @@ type Props = {
   selection: TraceSelection;
   onSelectNode: (id: string) => void;
   onSelectEdge: (id: string) => void;
+  onExpandNode: (id: string, direction: 'incoming' | 'outgoing' | 'both') => void;
+  onTogglePin: (id: string) => void;
 };
 
 function nodeRect() {
@@ -54,7 +56,7 @@ function stableName(labelForId: (id: string) => string, id: string): string {
   return `${labelForId(id)}\u0000${id}`;
 }
 
-export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, selection, onSelectNode, onSelectEdge }: Props) {
+export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, selection, onSelectNode, onSelectEdge, onExpandNode, onTogglePin }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
 
@@ -66,6 +68,43 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
       return el ? adapter.getNodeLabel(el, model) : '(missing)';
     };
   }, [adapter, model]);
+
+  const renderInlineControls = (nodeId: string) => {
+    const node = nodesById[nodeId];
+    if (!node) return null;
+    const pinned = Boolean(node.pinned);
+
+    // Controls rendered inside SVG as small button-like groups.
+    const btnW = 22;
+    const btnH = 18;
+    const gap = 6;
+
+    const mkBtn = (x: number, label: string, title: string, onClick: () => void) => (
+      <g
+        transform={`translate(${x},2)`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        style={{ cursor: 'pointer' }}
+      >
+        <rect width={btnW} height={btnH} rx={6} ry={6} fill="rgba(0,0,0,0.08)" stroke="currentColor" strokeOpacity={0.25} />
+        <text x={btnW / 2} y={12.5} fontSize={11} textAnchor="middle" fill="currentColor" opacity={0.9}>
+          {label}
+        </text>
+        <title>{title}</title>
+      </g>
+    );
+
+    return (
+      <g transform={`translate(${170 - (btnW * 4 + gap * 3) - 8},0)`}>
+        {mkBtn(0, '↑', 'Expand upstream', () => onExpandNode(nodeId, 'incoming'))}
+        {mkBtn(btnW + gap, '↓', 'Expand downstream', () => onExpandNode(nodeId, 'outgoing'))}
+        {mkBtn((btnW + gap) * 2, '↔', 'Expand both', () => onExpandNode(nodeId, 'both'))}
+        {mkBtn((btnW + gap) * 3, pinned ? 'P' : 'p', pinned ? 'Unpin' : 'Pin', () => onTogglePin(nodeId))}
+      </g>
+    );
+  };
 
   const layout = useMemo(() => {
     const nodes = Object.values(nodesById).filter((n) => !n.hidden);
@@ -210,6 +249,7 @@ export function TraceabilityMiniGraph({ model, modelKind, nodesById, edgesById, 
                 <text x={10} y={22} fontSize={12} fill="currentColor" opacity={0.9}>
                   {n.label || '(unnamed)'}
                 </text>
+                {active ? renderInlineControls(n.id) : null}
               </g>
             );
           })}

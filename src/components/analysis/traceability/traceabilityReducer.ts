@@ -113,6 +113,58 @@ function assertNever(x: never): never {
   throw new Error(`Unhandled TraceabilityAction: ${JSON.stringify(x)}`);
 }
 
+
+function computeHideSet(state: TraceabilityExplorerState, rootId: string): Set<string> {
+  const hidden = new Set<string>();
+  const queue: string[] = [rootId];
+
+  // Build reverse provenance: parentId -> childIds
+  const childrenByParent: Record<string, string[]> = {};
+  for (const [childId, parents] of Object.entries(state.frontierByNodeId)) {
+    for (const p of parents) {
+      if (!childrenByParent[p]) childrenByParent[p] = [];
+      childrenByParent[p].push(childId);
+    }
+  }
+
+  const canHide = (id: string, parents: string[]): boolean => {
+    const node = state.nodesById[id];
+    if (!node) return false;
+    if (node.pinned) return false;
+
+    // Hide only if ALL parents are within the subtree being hidden (root or already hidden).
+    for (const p of parents) {
+      if (p === rootId) continue;
+      if (!hidden.has(p)) return false;
+    }
+    return true;
+  };
+
+  while (queue.length) {
+    const parent = queue.shift()!;
+    const children = childrenByParent[parent] ?? [];
+    for (const c of children) {
+      if (hidden.has(c)) continue;
+      const parents = state.frontierByNodeId[c] ?? [parent];
+      if (!canHide(c, parents)) continue;
+      hidden.add(c);
+      queue.push(c);
+    }
+  }
+
+  return hidden;
+}
+
+function applyHiddenFlags(state: TraceabilityExplorerState, hide: Set<string>, hiddenValue: boolean): TraceabilityExplorerState {
+  if (hide.size === 0) return state;
+  const nodesById = { ...state.nodesById };
+  for (const id of hide) {
+    const node = nodesById[id];
+    if (!node) continue;
+    nodesById[id] = { ...node, hidden: hiddenValue };
+  }
+  return { ...state, nodesById };
+}
 export function traceabilityReducer(state: TraceabilityExplorerState, action: TraceabilityAction): TraceabilityExplorerState {
   switch (action.type) {
     case 'seed':
@@ -161,8 +213,9 @@ export function traceabilityReducer(state: TraceabilityExplorerState, action: Tr
     }
 
     case 'collapseNode': {
-      // v1: just mark the node as not expanded. (Step 5 will add subtree hide rules via frontier provenance.)
-      return setNodeFlag(state, action.nodeId, { expanded: false });
+      const next = setNodeFlag(state, action.nodeId, { expanded: false });
+      const hideSet = computeHideSet(next, action.nodeId);
+      return applyHiddenFlags(next, hideSet, true);
     }
 
     case 'expandRequested': {

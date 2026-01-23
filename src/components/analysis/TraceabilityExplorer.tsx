@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 
 import type { ElementType, Model, RelationshipType } from '../../domain';
 import type { ModelKind } from '../../domain/types';
@@ -51,6 +51,8 @@ export function TraceabilityExplorer({
 }: Props) {
   const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
 
+  const [autoExpand, setAutoExpand] = useState(false);
+
   const [state, dispatch] = useReducer(
     traceabilityReducer,
     undefined,
@@ -68,9 +70,9 @@ export function TraceabilityExplorer({
   const selectedNodeId = state.selection.selectedNodeId ?? seedId;
   const canExpand = Boolean(selectedNodeId && model.elements[selectedNodeId]);
 
-  const runExpand = (dirOverride?: 'incoming' | 'outgoing' | 'both') => {
+  const runExpand = (dirOverride?: 'incoming' | 'outgoing' | 'both', nodeOverride?: string) => {
     if (!canExpand) return;
-    const nodeId = selectedNodeId;
+    const nodeId = nodeOverride ?? selectedNodeId;
 
     const request: ExpandRequest = {
       nodeId,
@@ -121,6 +123,14 @@ export function TraceabilityExplorer({
             </div>
 
             <div className="toolbarGroup">
+              <label>Behavior</label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 }}>
+                <input type="checkbox" checked={autoExpand} onChange={(e) => setAutoExpand(e.currentTarget.checked)} />
+                Auto-expand on select
+              </label>
+            </div>
+
+            <div className="toolbarGroup">
               <label>Actions</label>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
@@ -166,8 +176,19 @@ export function TraceabilityExplorer({
         nodesById={state.nodesById}
         edgesById={state.edgesById}
         selection={state.selection}
-        onSelectNode={(id) => dispatch({ type: 'selectNode', nodeId: id })}
+        onSelectNode={(id) => {
+          dispatch({ type: 'selectNode', nodeId: id });
+          if (!autoExpand) return;
+          if (!model.elements[id]) return;
+          if (state.pendingByNodeId[id]) return;
+          runExpand(undefined, id);
+        }}
         onSelectEdge={(id) => dispatch({ type: 'selectEdge', edgeId: id })}
+        onExpandNode={(id, dir) => {
+          dispatch({ type: 'selectNode', nodeId: id });
+          runExpand(dir, id);
+        }}
+        onTogglePin={(id) => dispatch({ type: 'togglePin', nodeId: id })}
       />
 
       <div className="crudSection" style={{ marginTop: 14 }}>

@@ -30,6 +30,19 @@ function parseTextAnnotationAttrs(el: Element, typeId: string): Record<string, u
   return t ? { text: t } : undefined;
 }
 
+function parseParticipantAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
+  if (typeId !== 'bpmn.pool') return undefined;
+  const pr = (attr(el, 'processRef') ?? '').trim();
+  return pr ? { processRef: pr } : undefined;
+}
+
+function parseProcessAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
+  if (typeId !== 'bpmn.process') return undefined;
+  const isExecRaw = (attr(el, 'isExecutable') ?? '').trim();
+  const isExecutable = isExecRaw === 'true' ? true : isExecRaw === 'false' ? false : undefined;
+  return isExecutable !== undefined ? { isExecutable } : undefined;
+}
+
 function parseActivityAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
   const isActivityType =
     typeId === 'bpmn.task' ||
@@ -254,6 +267,7 @@ export function parseElements(ctx: ParseContext) {
     'dataStore',
 
     // Containers
+    'process',
     'participant',
     'lane',
     // Activities
@@ -316,6 +330,8 @@ export function parseElements(ctx: ParseContext) {
       const attrs =
         parseEventAttrs(el, typeId) ??
         parseLaneAttrs(el, typeId) ??
+        parseParticipantAttrs(el, typeId) ??
+        parseProcessAttrs(el, typeId) ??
         parseTextAnnotationAttrs(el, typeId) ??
         parseActivityAttrs(el, typeId) ??
         (typeId === 'bpmn.dataObjectReference'

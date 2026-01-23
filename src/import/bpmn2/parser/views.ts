@@ -18,6 +18,7 @@ function isBpmnVisualElementType(t: string | undefined): boolean {
     case 'bpmn.escalation':
     case 'bpmn.dataObject':
     case 'bpmn.dataStore':
+    case 'bpmn.process':
       return false;
     default:
       return true;

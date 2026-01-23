@@ -43,6 +43,9 @@ export function applyElements(ctx: ApplyImportContext): void {
     if (a.dataObjectRef) a.dataObjectRef = mapBpmnRef(a.dataObjectRef);
     if (a.dataStoreRef) a.dataStoreRef = mapBpmnRef(a.dataStoreRef);
 
+    // Participant pools may reference the owning process.
+    if (a.processRef) a.processRef = mapBpmnRef(a.processRef);
+
     // Lane containment: translate flow node references to internal element ids.
     if (Array.isArray(a.flowNodeRefs)) {
       a.flowNodeRefs = a.flowNodeRefs

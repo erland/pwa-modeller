@@ -8,6 +8,9 @@ export function bpmnTypeForNodeLocalName(name: string): string | null {
 
   switch (nameLc) {
     // Containers
+    case 'process':
+      return 'bpmn.process';
+
     case 'participant':
       return 'bpmn.pool';
     case 'lane':

@@ -255,6 +255,7 @@ const BPMN_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   // Containers
   'bpmn.pool': 'Pool (Participant)',
   'bpmn.lane': 'Lane',
+  'bpmn.process': 'Process (Container)',
 
   'bpmn.message': 'Message (Global)',
   'bpmn.signal': 'Signal (Global)',

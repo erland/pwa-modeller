@@ -18,6 +18,7 @@ import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { useElementBgVar } from '../diagram/hooks/useElementBgVar';
 
 import { QuickTooltip } from './QuickTooltip';
+import { measureTextPx, measureWrappedLabel, wrapLabel } from './graphLabelLayout';
 
 import { buildMiniGraphData, MINI_GRAPH_MAX_EDGES, MINI_GRAPH_MAX_NODES } from '../../domain/analysis/miniGraph';
 
@@ -56,24 +57,19 @@ function edgeFromStep(s: TraversalStep): AnalysisEdge {
 }
 
 function nodeRect() {
-  const w = 170;
+  // Base width; height becomes dynamic based on wrapped label (up to 3 lines).
+  const w = 190;
   const h = 34;
   return { w, h };
 }
 
-function nodeXY(node: MiniGraphNode, yCountByLevel: Map<number, number>) {
-  const xSpacing = 220;
-  const ySpacing = 56;
-  const marginX = 24;
+function nodeXY(node: MiniGraphNode, xByLevel: Map<number, number>) {
+  const ySpacing = 74; // allow up to 3 lines of text without overlap
   const marginY = 24;
 
-  const count = yCountByLevel.get(node.level) ?? 1;
-  const totalH = Math.max(1, count) * ySpacing;
-  const baseY = marginY;
-  const y = baseY + node.order * ySpacing;
-
-  const x = marginX + node.level * xSpacing;
-  return { x, y, totalH };
+  const y = marginY + node.order * ySpacing;
+  const x = xByLevel.get(node.level) ?? 24;
+  return { x, y };
 }
 
 function edgePath(from: { x: number; y: number; w: number; h: number }, to: { x: number; y: number; w: number; h: number }) {
@@ -131,15 +127,20 @@ export function AnalysisMiniGraph({
   const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => {
     const el = model.elements[elementId];
     if (!el) return null;
+
+    const fullLabel = labelForId(elementId);
     const facets = adapter.getNodeFacetValues(el, model);
     const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
     const layer = String((facets.archimateLayer ?? el.layer) ?? '');
     const doc = docSnippet(el.documentation);
+
     const lines: string[] = [];
+    lines.push(`Id: ${elementId}`);
     if (type) lines.push(`Type: ${type}`);
     if (layer) lines.push(`Layer: ${layer}`);
     if (doc) lines.push(`Documentation: ${doc}`);
-    return { title: el.name || '(unnamed)', lines };
+
+    return { title: fullLabel || el.name || '(unnamed)', lines };
   };
 
   const relationshipTooltip = (s: TraversalStep): { title: string; lines: string[] } | null => {
@@ -167,28 +168,72 @@ export function AnalysisMiniGraph({
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
 
-  const yCountByLevel = useMemo(() => {
-    const map = new Map<number, number>();
-    if (!data) return map;
-    for (const n of data.nodes) map.set(n.level, (map.get(n.level) ?? 0) + 1);
-    return map;
-  }, [data]);
-
   const positioned = useMemo(() => {
     const rects = new Map<string, { x: number; y: number; w: number; h: number }>();
-    if (!data) return { rects, maxX: 360, maxY: 220 };
+    const linesById = new Map<string, string[]>();
+    if (!data) return { rects, linesById, maxX: 360, maxY: 220 };
 
-    let maxY = 0;
-    let maxX = 0;
+    const base = nodeRect();
+    const font = '12px system-ui';
+    const paddingX = 20;
+
+    // Group nodes per column/level
+    const byLevel = new Map<number, MiniGraphNode[]>();
     for (const n of data.nodes) {
-      const { w, h } = nodeRect();
-      const { x, y } = nodeXY(n, yCountByLevel);
-      rects.set(n.id, { x, y, w, h });
-      maxY = Math.max(maxY, y + h);
-      maxX = Math.max(maxX, x + w);
+      const arr = byLevel.get(n.level) ?? [];
+      arr.push(n);
+      byLevel.set(n.level, arr);
     }
-    return { rects, maxX: maxX + 24, maxY: maxY + 24 };
-  }, [data, yCountByLevel]);
+
+    // 1) Column widths (bounded to 1.5x base)
+    const colWByLevel = new Map<number, number>();
+    for (const [level, nodes] of byLevel.entries()) {
+      const maxWrapped = nodes.reduce((m, n) => {
+        const label = n.label || labelForId(n.id);
+        const wrapped = wrapLabel(label, { maxWidthPx: base.w - paddingX, maxLines: 3, font, measureTextPx });
+        const metrics = measureWrappedLabel(wrapped, font, measureTextPx);
+        return Math.max(m, metrics.maxLineWidthPx);
+      }, 0);
+
+      const desired = maxWrapped + paddingX;
+      const bounded = Math.min(base.w * 1.5, Math.max(base.w, desired));
+      colWByLevel.set(level, bounded);
+    }
+
+    // 2) X offsets
+    const colGap = 40;
+    const marginX = 24;
+    const levels = [...byLevel.keys()].sort((a, b) => a - b);
+    const xByLevel = new Map<number, number>();
+    let xCursor = marginX;
+    for (const level of levels) {
+      xByLevel.set(level, xCursor);
+      xCursor += (colWByLevel.get(level) ?? base.w) + colGap;
+    }
+
+    // 3) Position nodes and wrap with the effective column width
+    let maxY = 0;
+    for (const n of data.nodes) {
+      const nodeW = colWByLevel.get(n.level) ?? base.w;
+      const maxTextW = nodeW - paddingX;
+      const label = n.label || labelForId(n.id);
+      const wrapped = wrapLabel(label, { maxWidthPx: maxTextW, maxLines: 3, font, measureTextPx });
+
+      const lineHeight = 14;
+      const paddingY = 10;
+      const h = Math.max(base.h, paddingY + wrapped.lines.length * lineHeight + paddingY);
+
+      const { x, y } = nodeXY(n, xByLevel);
+      rects.set(n.id, { x, y, w: nodeW, h });
+      linesById.set(n.id, wrapped.lines);
+
+      maxY = Math.max(maxY, y + h);
+    }
+
+    const maxX = xCursor + 60;
+
+    return { rects, linesById, maxX, maxY: maxY + 24 };
+  }, [data, labelForId]);
 
   if (!data) return null;
 

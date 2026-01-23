@@ -9,7 +9,8 @@ import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
 import { CommonRelationshipProperties } from '../common/CommonRelationshipProperties';
 import { TextAreaRow } from '../editors/TextAreaRow';
-import { TextInputRow } from '../editors/TextInputRow';
+
+import { bpmnElementOptionLabel } from './bpmnOptionLabel';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -108,6 +109,15 @@ export function BpmnRelationshipProperties({ model, relationshipId, viewId, acti
   const isDefault = sequenceAttrs?.isDefault ?? false;
   const messageRef = messageAttrs?.messageRef ?? '';
 
+  const messageOptions = useMemo(
+    () =>
+      Object.values(model.elements)
+        .filter(Boolean)
+        .filter((e) => String(e.type) === 'bpmn.message')
+        .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' })),
+    [model.elements]
+  );
+
   const notationRows = (
     <>
       {rel.type === 'bpmn.sequenceFlow' ? (
@@ -140,13 +150,36 @@ export function BpmnRelationshipProperties({ model, relationshipId, viewId, acti
       ) : null}
 
       {rel.type === 'bpmn.messageFlow' ? (
-        <TextInputRow
-          label="Message ref"
-          ariaLabel="BPMN message flow ref"
-          value={messageRef}
-          onChange={(v) => updateAttrs({ messageRef: v.trim().length ? v : undefined })}
-          placeholder="(optional)"
-        />
+        <div className="propertiesRow">
+          <div className="propertiesKey">Message</div>
+          <div className="propertiesValue">
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select
+                className="selectInput"
+                aria-label="BPMN message flow ref"
+                value={messageRef}
+                onChange={(e) => updateAttrs({ messageRef: e.target.value ? e.target.value : undefined })}
+                style={{ flex: 1, minWidth: 0 }}
+              >
+                <option value="">(none)</option>
+                {messageOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {bpmnElementOptionLabel(o)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="miniButton"
+                aria-label="Go to referenced message"
+                disabled={!messageRef || !model.elements[messageRef]}
+                onClick={() => messageRef && model.elements[messageRef] && onSelect?.({ kind: 'element', elementId: messageRef })}
+              >
+                Go
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {rel.attrs && rel.type === 'bpmn.association' ? (

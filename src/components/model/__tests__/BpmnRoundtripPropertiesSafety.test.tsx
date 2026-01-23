@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import React from 'react';
-import { render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 
 import type { Element, Model, Relationship } from '../../../domain';
 import {
@@ -57,7 +57,10 @@ function collectRepresentativesByType<T extends { id: string; type: string }>(it
 
 describe('BPMN round-trip fixtures: baseline safety net', () => {
   afterEach(() => {
-    modelStore.reset();
+    cleanup();
+    act(() => {
+      modelStore.reset();
+    });
   });
 
   test('can deserialize the saved round-trip model fixture', () => {

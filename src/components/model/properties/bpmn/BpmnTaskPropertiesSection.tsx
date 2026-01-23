@@ -2,6 +2,7 @@ import type { Element, ElementType, Model } from '../../../../domain';
 import { getElementTypeLabel } from '../../../../domain';
 import { BPMN_LOOP_TYPES, BPMN_SUBPROCESS_TYPES, isBpmnActivityAttrs } from '../../../../domain/bpmnAttrs';
 
+import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
 import { PropertyRow } from '../editors/PropertyRow';
 
@@ -36,12 +37,14 @@ type Props = {
   model: Model;
   element: Element;
   actions: ModelActions;
+  onSelect?: (selection: Selection) => void;
 };
 
 /**
  * BPMN activity semantics: task subtypes + lightweight loop/subprocess attributes.
  */
-export function BpmnTaskPropertiesSection({ model, element: el, actions }: Props) {
+export function BpmnTaskPropertiesSection({ model, element: el, actions, onSelect }: Props) {
+  void onSelect;
   void model; // Reserved for future context-aware rules (participants/containment).
   if (typeof el.type !== 'string' || !String(el.type).startsWith('bpmn.')) return null;
   if (!(ACTIVITY_TYPES as unknown as string[]).includes(String(el.type))) return null;

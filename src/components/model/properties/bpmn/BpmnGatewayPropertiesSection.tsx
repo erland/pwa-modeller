@@ -2,6 +2,7 @@ import type { Element, ElementType, Model, Relationship } from '../../../../doma
 import { isBpmnGatewayAttrs } from '../../../../domain/bpmnAttrs';
 import type { BpmnGatewayAttrs } from '../../../../domain/bpmnAttrs';
 
+import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
 import { PropertyRow } from '../editors/PropertyRow';
 
@@ -55,12 +56,13 @@ type Props = {
   model: Model;
   element: Element;
   actions: ModelActions;
+  onSelect?: (selection: Selection) => void;
 };
 
 /**
  * BPMN gateway semantics: gateway kind + default flow selector.
  */
-export function BpmnGatewayPropertiesSection({ model, element: el, actions }: Props) {
+export function BpmnGatewayPropertiesSection({ model, element: el, actions, onSelect }: Props) {
   if (typeof el.type !== 'string' || !String(el.type).startsWith('bpmn.')) return null;
   if (!(GATEWAY_TYPES as unknown as string[]).includes(String(el.type))) return null;
 
@@ -104,20 +106,36 @@ export function BpmnGatewayPropertiesSection({ model, element: el, actions }: Pr
         </PropertyRow>
 
         <PropertyRow label="Default flow">
-          <select
-            className="selectInput"
-            aria-label="BPMN gateway default flow"
-            value={defaultFlowRef ?? ''}
-            onChange={(e) => actions.setBpmnGatewayDefaultFlow(el.id, e.target.value ? e.target.value : null)}
-            disabled={!outgoingSequenceFlows.length}
-          >
-            <option value="">(none)</option>
-            {outgoingSequenceFlows.map((r) => (
-              <option key={r.id} value={r.id}>
-                {optionLabel(r)}
-              </option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <select
+              className="selectInput"
+              aria-label="BPMN gateway default flow"
+              value={defaultFlowRef ?? ''}
+              onChange={(e) => actions.setBpmnGatewayDefaultFlow(el.id, e.target.value ? e.target.value : null)}
+              disabled={!outgoingSequenceFlows.length}
+              style={{ flex: 1, minWidth: 0 }}
+            >
+              <option value="">(none)</option>
+              {outgoingSequenceFlows.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {optionLabel(r)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="miniButton"
+              aria-label="Go to default flow"
+              disabled={!defaultFlowRef || !model.relationships[defaultFlowRef]}
+              onClick={() =>
+                defaultFlowRef && model.relationships[defaultFlowRef]
+                  ? onSelect?.({ kind: 'relationship', relationshipId: defaultFlowRef })
+                  : undefined
+              }
+            >
+              Go
+            </button>
+          </div>
           <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
             {outgoingSequenceFlows.length
               ? 'Pick which outgoing Sequence Flow is the default.'

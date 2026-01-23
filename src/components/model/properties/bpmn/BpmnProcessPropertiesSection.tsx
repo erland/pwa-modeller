@@ -1,5 +1,6 @@
 import type { Element, Model } from '../../../../domain';
 
+import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
 import { PropertyRow } from '../editors/PropertyRow';
 
@@ -11,10 +12,12 @@ type Props = {
   model: Model;
   element: Element;
   actions: ModelActions;
+  onSelect?: (selection: Selection) => void;
 };
 
 /** Lightweight Process container properties (attrs.isExecutable). */
-export function BpmnProcessPropertiesSection({ model, element: el, actions }: Props) {
+export function BpmnProcessPropertiesSection({ model, element: el, actions, onSelect }: Props) {
+  void onSelect;
   void model;
   if (String(el.type) !== 'bpmn.process') return null;
 

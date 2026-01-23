@@ -1,7 +1,9 @@
 import type { Element, Model } from '../../../../domain';
 
+import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
 import { PropertyRow } from '../editors/PropertyRow';
+import { bpmnElementOptionLabel } from './bpmnOptionLabel';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -24,6 +26,7 @@ type Props = {
   model: Model;
   element: Element;
   actions: ModelActions;
+  onSelect?: (selection: Selection) => void;
 };
 
 /**
@@ -31,7 +34,7 @@ type Props = {
  *
  * We surface `flowNodeRefs[]` (lane.flowNodeRefs → internal element ids).
  */
-export function BpmnLanePropertiesSection({ model, element: el, actions }: Props) {
+export function BpmnLanePropertiesSection({ model, element: el, actions, onSelect }: Props) {
   if (String(el.type) !== 'bpmn.lane') return null;
 
   const attrs = isRecord(el.attrs) ? (el.attrs as Record<string, unknown>) : {};
@@ -64,11 +67,34 @@ export function BpmnLanePropertiesSection({ model, element: el, actions }: Props
           >
             {candidates.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name || c.id}
+                {bpmnElementOptionLabel(c)}
               </option>
             ))}
           </select>
         </PropertyRow>
+
+        {flowNodeRefs.length ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+            {flowNodeRefs
+              .map((id) => model.elements[id])
+              .filter(Boolean)
+              .slice(0, 12)
+              .map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  className="miniButton"
+                  onClick={() => onSelect?.({ kind: 'element', elementId: e.id })}
+                  title="Select element"
+                >
+                  Go: {bpmnElementOptionLabel(e)}
+                </button>
+              ))}
+            {flowNodeRefs.length > 12 ? (
+              <span style={{ fontSize: 12, opacity: 0.75, alignSelf: 'center' }}>+{flowNodeRefs.length - 12} more…</span>
+            ) : null}
+          </div>
+        ) : null}
 
         <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
           Holds <b>{flowNodeRefs.length}</b> flow node reference{flowNodeRefs.length === 1 ? '' : 's'}.

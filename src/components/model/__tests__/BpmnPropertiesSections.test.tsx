@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import type { Element, Model } from '../../../domain';
 import { deserializeModel, modelStore } from '../../../store';
@@ -26,7 +26,12 @@ function asRecord(v: unknown): Record<string, unknown> {
 
 describe('BPMN properties panel: new sections (Step 4) regression', () => {
   afterEach(() => {
-    modelStore.reset();
+    // Ensure RTL cleanup runs before store reset; otherwise store notifications can
+    // cause state updates on mounted components and trigger act() warnings.
+    cleanup();
+    act(() => {
+      modelStore.reset();
+    });
   });
 
   test('pool/processRef dropdown lists processes and mutates model', () => {

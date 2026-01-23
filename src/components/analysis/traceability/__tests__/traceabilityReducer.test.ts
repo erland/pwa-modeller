@@ -106,4 +106,94 @@ describe('traceabilityReducer', () => {
     expect(state1.filters.direction).toBe('incoming');
     expect(state1.filters.relationshipTypes).toEqual(['Flow']);
   });
+
+  test('collapse hides back/cross edges from the collapsed node (edges to same/earlier depth remain hidden until expand)', () => {
+    // Build a small graph: A(depth0) -> B(depth1) -> C(depth2), plus C -> A (back edge), plus C -> D(depth3).
+    let state = createTraceabilityExplorerState(['A'], { expandedSeeds: true });
+
+    // Add B as child of A
+    state = traceabilityReducer(state, {
+      type: 'expandApplied',
+      request: { nodeId: 'A', direction: 'both', depth: 1 },
+      patch: {
+        rootNodeId: 'A',
+        addedNodes: [{ id: 'B', depth: 1, pinned: false, expanded: false, hidden: false }],
+        addedEdges: [{ id: 'eAB', from: 'A', to: 'B' }],
+        frontierByNodeId: { B: ['A'] }
+      }
+    });
+
+    // Add C as child of B
+    state = traceabilityReducer(state, {
+      type: 'expandApplied',
+      request: { nodeId: 'B', direction: 'both', depth: 1 },
+      patch: {
+        rootNodeId: 'B',
+        addedNodes: [{ id: 'C', depth: 1, pinned: false, expanded: false, hidden: false }],
+        addedEdges: [{ id: 'eBC', from: 'B', to: 'C' }],
+        frontierByNodeId: { C: ['B'] }
+      }
+    });
+
+    // Add D as child of C and a back-edge C->A
+    state = traceabilityReducer(state, {
+      type: 'expandApplied',
+      request: { nodeId: 'C', direction: 'both', depth: 1 },
+      patch: {
+        rootNodeId: 'C',
+        addedNodes: [{ id: 'D', depth: 1, pinned: false, expanded: false, hidden: false }],
+        addedEdges: [
+          { id: 'eCD', from: 'C', to: 'D' },
+          { id: 'eCA', from: 'C', to: 'A' }
+        ],
+        frontierByNodeId: { D: ['C'] }
+      }
+    });
+
+    // Collapse C: D should be hidden (descendant), and C->A should be hidden as back edge.
+    state = traceabilityReducer(state, { type: 'collapseNode', nodeId: 'C' });
+
+    expect(state.nodesById['D'].hidden).toBe(true);
+    expect(state.edgesById['eCA'].hidden).toBe(true);
+
+    // Expanding C should unhide C-origin edges (including back edge), but not necessarily restore hidden nodes (handled by expansion).
+    state = traceabilityReducer(state, { type: 'expandRequested', request: { nodeId: 'C', direction: 'both', depth: 1 } });
+    expect(state.edgesById['eCA'].hidden).toBe(false);
+  });
+
+
+  test('expandApplied can unhide previously hidden nodes (re-expanding restores known neighbours)', () => {
+    let state = createTraceabilityExplorerState(['A'], { expandedSeeds: true });
+
+    // Add B as neighbour
+    state = traceabilityReducer(state, {
+      type: 'expandApplied',
+      request: { nodeId: 'A', direction: 'both', depth: 1 },
+      patch: {
+        rootNodeId: 'A',
+        addedNodes: [{ id: 'B', depth: 1, pinned: false, expanded: false, hidden: false }],
+        addedEdges: [{ id: 'eAB', from: 'A', to: 'B' }],
+        frontierByNodeId: { B: ['A'] }
+      }
+    });
+    expect(state.nodesById['B'].hidden).toBe(false);
+
+    // Simulate collapse hiding B
+    state = traceabilityReducer(state, { type: 'collapseNode', nodeId: 'A' });
+    expect(state.nodesById['B'].hidden).toBe(true);
+
+    // Re-expansion patch should make B visible again
+    state = traceabilityReducer(state, {
+      type: 'expandApplied',
+      request: { nodeId: 'A', direction: 'both', depth: 1 },
+      patch: {
+        rootNodeId: 'A',
+        addedNodes: [{ id: 'B', depth: 1, pinned: false, expanded: false, hidden: false }],
+        addedEdges: [{ id: 'eAB', from: 'A', to: 'B' }],
+        frontierByNodeId: { B: ['A'] }
+      }
+    });
+
+    expect(state.nodesById['B'].hidden).toBe(false);
+  });
 });

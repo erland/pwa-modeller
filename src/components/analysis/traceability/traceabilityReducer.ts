@@ -5,7 +5,8 @@ import type {
   TraceFilters,
   TraceGraphState,
   TraceSelection,
-  TraceExpansionPatch
+  TraceExpansionPatch,
+  TraceEdge
 } from '../../../domain/analysis/traceability/types';
 
 /**
@@ -171,6 +172,43 @@ function applyHiddenFlags(state: TraceabilityExplorerState, hide: Set<string>, h
   }
   return { ...state, nodesById };
 }
+function applyEdgeHiddenFlags(state: TraceabilityExplorerState, predicate: (e: TraceEdge) => boolean, hiddenValue: boolean): TraceabilityExplorerState {
+  const edges = state.edgesById;
+  let changed = false;
+  const edgesById: Record<string, TraceEdge> = { ...edges };
+  for (const [id, e] of Object.entries(edges)) {
+    if (!predicate(e)) continue;
+    const current = edgesById[id];
+    if ((current.hidden ?? false) === hiddenValue) continue;
+    edgesById[id] = { ...current, hidden: hiddenValue };
+    changed = true;
+  }
+  return changed ? { ...state, edgesById } : state;
+}
+
+function hideBackAndCrossEdgesOnCollapse(state: TraceabilityExplorerState, rootId: string): TraceabilityExplorerState {
+  const root = state.nodesById[rootId];
+  if (!root) return state;
+  const rootDepth = root.depth;
+
+  return applyEdgeHiddenFlags(
+    state,
+    (e) => {
+      if (e.from !== rootId) return false;
+      const to = state.nodesById[e.to];
+      if (!to) return false;
+      if (to.hidden) return false;
+      // Hide edges that point leftwards or to same column (back/cross edges).
+      return to.depth <= rootDepth;
+    },
+    true
+  );
+}
+
+function unhideEdgesFromNode(state: TraceabilityExplorerState, nodeId: string): TraceabilityExplorerState {
+  return applyEdgeHiddenFlags(state, (e) => e.from === nodeId, false);
+}
+
 export function traceabilityReducer(state: TraceabilityExplorerState, action: TraceabilityAction): TraceabilityExplorerState {
   switch (action.type) {
     case 'seed':
@@ -225,13 +263,15 @@ export function traceabilityReducer(state: TraceabilityExplorerState, action: Tr
     case 'collapseNode': {
       const next = setNodeFlag(state, action.nodeId, { expanded: false });
       const hideSet = computeHideSet(next, action.nodeId);
-      return applyHiddenFlags(next, hideSet, true);
+      const withHiddenNodes = applyHiddenFlags(next, hideSet, true);
+      return hideBackAndCrossEdgesOnCollapse(withHiddenNodes, action.nodeId);
     }
 
     case 'expandRequested': {
       const nodeId = action.request.nodeId;
+      const next = unhideEdgesFromNode(setNodeFlag(state, nodeId, { expanded: true }), nodeId);
       return {
-        ...setNodeFlag(state, nodeId, { expanded: true }),
+        ...next,
         pendingByNodeId: { ...state.pendingByNodeId, [nodeId]: true },
         lastExpandRequest: action.request
       };

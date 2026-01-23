@@ -29,6 +29,8 @@ export type TraceEdge = {
   to: string;
   /** Relationship type (or other edge kind). */
   type?: string;
+  /** UI-only: hidden edges are kept for restore on expand, but not rendered. */
+  hidden?: boolean;
 };
 
 /**
@@ -99,6 +101,16 @@ function uniqPush(arr: string[] | undefined, v: string): string[] {
   return [...arr, v];
 }
 
+function mergeEdge(existing: TraceEdge | undefined, incoming: TraceEdge): TraceEdge {
+  if (!existing) return { ...incoming, hidden: incoming.hidden ?? false };
+  return {
+    ...existing,
+    ...incoming,
+    // Incoming hidden explicitly wins; otherwise keep existing (default false).
+    hidden: incoming.hidden ?? existing.hidden ?? false
+  };
+}
+
 function mergeFrontier(a: TraceFrontier, b?: TraceFrontier): TraceFrontier {
   if (!b) return a;
   const out: TraceFrontier = { ...a };
@@ -118,8 +130,9 @@ function mergeNode(existing: TraceNode | undefined, added: TraceNode): TraceNode
     pinned: existing.pinned || added.pinned,
     // Expanded is additive as well.
     expanded: existing.expanded || added.expanded,
-    // If a node is hidden in any state, keep it hidden.
-    hidden: existing.hidden || added.hidden,
+    // Hidden is UI-only; when expansion re-discovers a node it should become visible again.
+    // Incoming value wins (collapse sets hidden=true in state, expansion sets hidden=false in patches).
+    hidden: added.hidden,
     // Keep the minimum discovered depth.
     depth: Math.min(existing.depth, added.depth)
   };
@@ -187,7 +200,7 @@ export function applyExpansion(state: TraceGraphState, patch: TraceExpansionPatc
   }
 
   for (const n of patch.addedNodes) nodesById[n.id] = mergeNode(nodesById[n.id], n);
-  for (const e of patch.addedEdges) edgesById[e.id] = edgesById[e.id] ?? e;
+  for (const e of patch.addedEdges) edgesById[e.id] = mergeEdge(edgesById[e.id], e);
 
   return {
     ...state,

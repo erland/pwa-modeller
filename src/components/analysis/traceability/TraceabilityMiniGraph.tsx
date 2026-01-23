@@ -127,7 +127,7 @@ export function TraceabilityMiniGraph({
 
   const layout = useMemo(() => {
     const nodes = Object.values(nodesById).filter((n) => !n.hidden);
-    const edges = Object.values(edgesById);
+    const edges = Object.values(edgesById).filter((e) => !e.hidden);
 
     // Guardrail: if the graph is very large, prefer stability over expensive wrapping/auto-fit.
     const nodeCount = nodes.length;

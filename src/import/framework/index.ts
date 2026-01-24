@@ -5,3 +5,4 @@ export * from './importModel';
 export * from './builtins';
 export * from './blobReaders';
 export * from './xmlDecoding';
+export * from './ensureViewComplete';

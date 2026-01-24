@@ -1,10 +1,16 @@
-import type { IRElement, IRPoint, IRViewConnection, IRViewNode, IRBounds } from '../../framework/ir';
+import type { IRPoint, IRViewConnection, IRViewNode, IRBounds } from '../../framework/ir';
+
+import { ensureViewComplete } from '../../framework/ensureViewComplete';
+
+import { applyContainerZOrder } from '../../../diagram/zOrder/applyContainerZOrder';
 
 import { attr, childByLocalName, childrenByLocalName, localName, numberAttr, q, qa } from '../xml';
 
 import type { ParseContext } from './context';
 
-type Rect = { x: number; y: number; width: number; height: number };
+function isBpmnContainerType(t: string | undefined): boolean {
+  return t === 'bpmn.pool' || t === 'bpmn.lane';
+}
 
 function isBpmnVisualElementType(t: string | undefined): boolean {
   if (!t) return false;
@@ -55,27 +61,6 @@ function defaultSizeForBpmnType(t: string | undefined): { width: number; height:
   }
 }
 
-function boundsOrDefault(n: IRViewNode, elementById: Map<string, IRElement>): Rect | undefined {
-  if (n.bounds) return n.bounds;
-  if (n.kind !== 'element' || !n.elementId) return undefined;
-  const t = elementById.get(n.elementId)?.type;
-  const s = defaultSizeForBpmnType(t);
-  return { x: 0, y: 0, width: s.width, height: s.height };
-}
-
-function rectContains(container: Rect, inner: Rect): boolean {
-  return (
-    inner.x >= container.x &&
-    inner.y >= container.y &&
-    inner.x + inner.width <= container.x + container.width &&
-    inner.y + inner.height <= container.y + container.height
-  );
-}
-
-function centerOf(r: Rect): { x: number; y: number } {
-  return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-}
-
 function ensureViewShowsAllBpmnElements(
   nodes: IRViewNode[],
   connections: IRViewConnection[],
@@ -96,273 +81,22 @@ function ensureViewShowsAllBpmnElements(
     }
   }
 
-  const existingElementNodeIds = new Set<string>();
-  for (const n of nodes) {
-    if (n.kind === 'element' && n.elementId) existingElementNodeIds.add(n.elementId);
-  }
-
-  // Determine layout containers from DI: prefer lanes, otherwise pools, otherwise a global canvas.
-  const laneRects: { id: string; rect: Rect }[] = [];
-  const poolRects: { id: string; rect: Rect }[] = [];
-  for (const n of nodes) {
-    if (n.kind !== 'element' || !n.elementId) continue;
-    const elType = elementById.get(n.elementId)?.type;
-    const b = n.bounds;
-    if (!b) continue;
-    if (elType === 'bpmn.lane') laneRects.push({ id: n.elementId, rect: b });
-    if (elType === 'bpmn.pool') poolRects.push({ id: n.elementId, rect: b });
-  }
-
-  laneRects.sort((a, b) => (a.rect.y - b.rect.y) || (a.rect.x - b.rect.x) || a.id.localeCompare(b.id));
-  poolRects.sort((a, b) => (a.rect.y - b.rect.y) || (a.rect.x - b.rect.x) || a.id.localeCompare(b.id));
-
-  const containers = laneRects.length ? laneRects.map((x) => x.rect) : poolRects.length ? poolRects.map((x) => x.rect) : [];
-
-  const globalRect: Rect = (() => {
-    // If we have any DI bounds at all, grow from them. Otherwise default to an origin canvas.
-    let minX = 0;
-    let minY = 0;
-    let maxX = 0;
-    let maxY = 0;
-    let seen = false;
-    for (const n of nodes) {
-      const b = n.bounds;
-      if (!b) continue;
-      seen = true;
-      minX = Math.min(minX, b.x);
-      minY = Math.min(minY, b.y);
-      maxX = Math.max(maxX, b.x + b.width);
-      maxY = Math.max(maxY, b.y + b.height);
+  ensureViewComplete(
+    nodes,
+    connections,
+    { elements, relationships, elementById },
+    {
+      isVisualElementType: isBpmnVisualElementType,
+      defaultSizeForType: defaultSizeForBpmnType,
+      isContainerElementType: isBpmnContainerType,
+      containerPriority: (t) => (t === 'bpmn.lane' ? 0 : t === 'bpmn.pool' ? 1 : 2),
+      preferredContainerIdByElementId: preferredLaneByFlowNodeId,
+      enableNeighborVoting: true,
+      enableAutoConnections: true,
+      skipAutoplaceContainers: true,
+      autoIdPrefix: 'auto:'
     }
-    if (!seen) return { x: 0, y: 0, width: 1600, height: 900 };
-    return { x: minX, y: minY, width: Math.max(800, maxX - minX + 400), height: Math.max(600, maxY - minY + 300) };
-  })();
-
-
-const keyFor = (r: Rect) => `${r.x},${r.y},${r.width},${r.height}`;
-
-const laneRectById = new Map<string, Rect>(laneRects.map((x) => [x.id, x.rect]));
-
-const smallestContaining = (rects: { id: string; rect: Rect }[], inner: Rect): Rect | undefined => {
-  const matches = rects.filter((x) => rectContains(x.rect, inner));
-  if (matches.length === 0) return undefined;
-  matches.sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height));
-  return matches[0].rect;
-};
-
-// Map already-placed elements to their containing lane/pool (based on DI bounds).
-// We use this to place DI-missing nodes into the same container as their neighbors.
-const containerKeyByElementId = new Map<string, string>();
-const containerRectByKey = new Map<string, Rect>();
-const containerPopulation = new Map<string, number>();
-
-for (const n of nodes) {
-  if (n.kind !== 'element' || !n.elementId) continue;
-  const t = elementById.get(n.elementId)?.type;
-  if (t === 'bpmn.pool' || t === 'bpmn.lane') continue;
-
-  const b = boundsOrDefault(n, elementById);
-  if (!b) continue;
-
-  const lane = smallestContaining(laneRects, b);
-  const pool = lane ? undefined : smallestContaining(poolRects, b);
-  const container = lane ?? pool;
-  if (!container) continue;
-
-  const k = keyFor(container);
-  containerKeyByElementId.set(n.elementId, k);
-  containerRectByKey.set(k, container);
-  containerPopulation.set(k, (containerPopulation.get(k) ?? 0) + 1);
-}
-
-// Build quick adjacency map from the BPMN model graph (relationships).
-const neighborsByElementId = new Map<string, Set<string>>();
-const addNeighbor = (a: string, b: string) => {
-  if (!neighborsByElementId.has(a)) neighborsByElementId.set(a, new Set<string>());
-  neighborsByElementId.get(a)!.add(b);
-};
-for (const r of relationships) {
-  addNeighbor(r.sourceId, r.targetId);
-  addNeighbor(r.targetId, r.sourceId);
-}
-
-const pickContainerFor = (elId: string): Rect => {
-  // 1) Prefer the semantic lane for this element (if the lane has DI bounds).
-  const preferredLaneId = preferredLaneByFlowNodeId.get(elId);
-  if (preferredLaneId) {
-    const lane = laneRectById.get(preferredLaneId);
-    if (lane) return lane;
-  }
-
-  // 2) Infer container from connected elements that already have DI bounds.
-  const neighbors = neighborsByElementId.get(elId);
-  if (neighbors && neighbors.size > 0) {
-    const votes = new Map<string, number>();
-    for (const nb of neighbors) {
-      const ck = containerKeyByElementId.get(nb);
-      if (!ck) continue;
-      votes.set(ck, (votes.get(ck) ?? 0) + 1);
-    }
-    if (votes.size > 0) {
-      const bestKey = [...votes.entries()].sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))[0][0];
-      const rect = containerRectByKey.get(bestKey);
-      if (rect) return rect;
-    }
-  }
-
-  // 3) Fall back to the most populated container to keep the layout coherent.
-  if (containerPopulation.size > 0) {
-    const bestKey = [...containerPopulation.entries()].sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))[0][0];
-    const rect = containerRectByKey.get(bestKey);
-    if (rect) return rect;
-  }
-
-  // 4) Otherwise: first DI container (lane/pool), otherwise global.
-  if (containers.length) return containers[0];
-  return globalRect;
-};
-
-// Compute a starting cursor based on existing non-container nodes, so we append rather than overlap.
-  const computeStartForContainer = (container: Rect): { x: number; y: number } => {
-    const padX = 80;
-    const padY = 60;
-    let maxY = container.y + padY;
-    for (const n of nodes) {
-      if (n.kind !== 'element' || !n.elementId) continue;
-      const t = elementById.get(n.elementId)?.type;
-      if (t === 'bpmn.pool' || t === 'bpmn.lane') continue;
-      const b = n.bounds;
-      if (!b) continue;
-      if (!rectContains(container, b)) continue;
-      maxY = Math.max(maxY, b.y + b.height);
-    }
-    return { x: container.x + padX, y: maxY + 40 };
-  };
-
-  const cursorByContainer = new Map<string, { x: number; y: number }>();
-  const getCursor = (r: Rect) => {
-    const k = keyFor(r);
-    let cur = cursorByContainer.get(k);
-    if (!cur) {
-      cur = computeStartForContainer(r);
-      cursorByContainer.set(k, cur);
-    }
-    return cur;
-  };
-
-  const pad = { x: 80, y: 60 };
-  const gap = { x: 40, y: 40 };
-
-  // 1) Add missing element view nodes.
-  for (const e of elements) {
-    if (!isBpmnVisualElementType(e.type)) continue;
-    if (existingElementNodeIds.has(e.id)) continue;
-
-    // Do not auto-place container elements if they already exist as DI-less; they tend to cover everything.
-    if (e.type === 'bpmn.pool' || e.type === 'bpmn.lane') continue;
-
-    const container = pickContainerFor(e.id);
-    const cur = getCursor(container);
-    const size = defaultSizeForBpmnType(e.type);
-
-    const innerW = Math.max(300, container.width - pad.x * 2);
-    const maxX = container.x + pad.x + innerW;
-
-    // Wrap when reaching container width.
-    if (cur.x + size.width > maxX) {
-      cur.x = container.x + pad.x;
-      cur.y += size.height + gap.y;
-    }
-
-    const bounds: Rect = {
-      x: cur.x,
-      y: cur.y,
-      width: size.width,
-      height: size.height
-    };
-
-    nodes.push({
-      id: `auto:${e.id}`,
-      kind: 'element',
-      elementId: e.id,
-      bounds
-    });
-
-    existingElementNodeIds.add(e.id);
-    cur.x += size.width + gap.x;
-  }
-
-  // 2) Add missing view connections for relationships where both ends exist in the view.
-  const existingRelIds = new Set<string>();
-  for (const c of connections) {
-    if (c.relationshipId) existingRelIds.add(c.relationshipId);
-  }
-
-  // Build quick lookup for node centers.
-  const nodeCenterByElementId = new Map<string, { x: number; y: number }>();
-  for (const n of nodes) {
-    if (n.kind !== 'element' || !n.elementId) continue;
-    const b = boundsOrDefault(n, elementById);
-    if (!b) continue;
-    nodeCenterByElementId.set(n.elementId, centerOf(b));
-  }
-
-  for (const r of relationships) {
-    if (existingRelIds.has(r.id)) continue;
-    if (!nodeCenterByElementId.has(r.sourceId) || !nodeCenterByElementId.has(r.targetId)) continue;
-
-    const a = nodeCenterByElementId.get(r.sourceId)!;
-    const b = nodeCenterByElementId.get(r.targetId)!;
-
-    connections.push({
-      id: `auto:${r.id}`,
-      relationshipId: r.id,
-      points: [a, b]
-    });
-    existingRelIds.add(r.id);
-  }
-}
-
-function applyBpmnZOrder(nodes: IRViewNode[], elementById: Map<string, IRElement>) {
-  type Info = { node: IRViewNode; area: number; isContainer: boolean; key: string };
-  const infos: Info[] = nodes.map((n) => {
-    const b = n.bounds;
-    const area = b ? Math.max(0, b.width) * Math.max(0, b.height) : 0;
-    const elType = n.elementId ? elementById.get(n.elementId)?.type : undefined;
-    const isContainer = elType === 'bpmn.pool' || elType === 'bpmn.lane';
-    const key = (n.elementId ?? n.id) as string;
-    return { node: n, area, isContainer, key };
-  });
-
-  infos.sort((a, b) => {
-    // Containers first; within containers sort by area (bigger behind smaller), then stable key.
-    if (a.isContainer !== b.isContainer) return a.isContainer ? -1 : 1;
-    if (a.isContainer && b.isContainer) {
-      if (a.area !== b.area) return b.area - a.area;
-      return a.key.localeCompare(b.key);
-    }
-    // Non-containers: stable by key.
-    return a.key.localeCompare(b.key);
-  });
-
-  // Keep ordering stable/predictable AND assign an explicit zIndex via meta so the renderer can
-  // reliably layer pools/lanes behind relationships even if DOM order changes.
-  //
-  // zIndex policy:
-  // - Containers (pool/lane): very low negative zIndex, larger containers even further back.
-  // - Others: leave as-is (default/undefined), letting user/layout decide.
-  const ordered = infos.map((i) => i.node);
-
-  let containerBase = -1000;
-  let containerRank = 0;
-  for (const info of infos) {
-    if (!info.isContainer) continue;
-    const n = info.node;
-    n.meta = { ...(n.meta ?? {}), zIndex: containerBase - containerRank };
-    containerRank++;
-  }
-
-  nodes.splice(0, nodes.length, ...ordered);
+  );
 }
 
 export function parseViews(ctx: ParseContext) {
@@ -477,7 +211,7 @@ export function parseViews(ctx: ParseContext) {
       ensureViewShowsAllBpmnElements(nodes, connections, { elements, relationships, elementById });
 
       // Ensure background containers (pool/lane) do not hide connections or nested nodes.
-      applyBpmnZOrder(nodes, elementById);
+      applyContainerZOrder(nodes, elementById, isBpmnContainerType);
 
       views.push({
         id: viewId,
@@ -517,7 +251,7 @@ export function addFallbackAutoLayoutView(ctx: ParseContext) {
       }
     }));
 
-    applyBpmnZOrder(nodes, elementById);
+    applyContainerZOrder(nodes, elementById, isBpmnContainerType);
 
     const connections: IRViewConnection[] = relationships.map((r) => ({
       id: `auto:${r.id}`,

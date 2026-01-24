@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 
 import type { ElementType, Model } from '../../../domain';
@@ -24,6 +25,8 @@ type Props = {
 
   wrapLabels?: boolean;
   autoFitColumns?: boolean;
+
+  headerControls?: ReactNode;
 };
 
 export function TraceabilityMiniGraph({
@@ -37,7 +40,8 @@ export function TraceabilityMiniGraph({
   onExpandNode,
   onTogglePin,
   wrapLabels = true,
-  autoFitColumns = true
+  autoFitColumns = true,
+  headerControls
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
@@ -181,11 +185,12 @@ export function TraceabilityMiniGraph({
 
   return (
     <div className="crudSection" style={{ marginTop: 14 }}>
-      <div className="crudHeader">
+      <div className="crudHeader" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <p className="crudTitle">Traceability graph</p>
-          <p className="crudHint">Click nodes/edges to select. Use the controls above to expand.</p>
+          <p className="crudHint">Click nodes/edges to select. Use the controls here to expand.</p>
         </div>
+        {headerControls ? <div>{headerControls}</div> : null}
       </div>
 
       <MiniColumnGraph

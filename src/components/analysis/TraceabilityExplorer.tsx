@@ -9,7 +9,9 @@ import { expandFromNode } from '../../analysis/traceability/expand';
 
 import { createTraceabilityExplorerState, traceabilityReducer } from './traceability/traceabilityReducer';
 import { TraceabilityMiniGraph } from './traceability/TraceabilityMiniGraph';
-import { defaultMiniGraphOptions, MiniGraphOptionsToggles } from './MiniGraphOptions';
+import { defaultMiniGraphOptions } from './MiniGraphOptions';
+import { TraceabilitySettingsDialog } from './traceability/TraceabilitySettingsDialog';
+import { TraceabilitySessionsDialog } from './traceability/TraceabilitySessionsDialog';
 
 import {
   deleteTraceabilitySession,
@@ -69,6 +71,9 @@ export function TraceabilityExplorer({
   const [graphOptions, setGraphOptions] = useState(defaultMiniGraphOptions);
   const [sessions, setSessions] = useState<Array<{ name: string; savedAt: string }>>([]);
   const [selectedSessionName, setSelectedSessionName] = useState<string>('');
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSessionsOpen, setIsSessionsOpen] = useState(false);
 
   const [state, dispatch] = useReducer(
     traceabilityReducer,
@@ -184,90 +189,17 @@ export function TraceabilityExplorer({
               </div>
             </div>
 
-            <div className="toolbarGroup">
-              <label>Expand</label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="miniLinkButton" onClick={() => runExpand('incoming')} disabled={!canExpand}>
-                  + Upstream
-                </button>
-                <button type="button" className="miniLinkButton" onClick={() => runExpand('outgoing')} disabled={!canExpand}>
-                  + Downstream
-                </button>
-                <button type="button" className="miniLinkButton" onClick={() => runExpand('both')} disabled={!canExpand}>
-                  + Both
-                </button>
-              </div>
-            </div>
+
+
 
             <div className="toolbarGroup">
-              <label>Sessions</label>
+              <label>Options</label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <select
-                  className="selectInput"
-                  value={selectedSessionName}
-                  onChange={(e) => setSelectedSessionName(e.currentTarget.value)}
-                  style={{ minWidth: 200 }}
-                >
-                  <option value="">(none)</option>
-                  {sessions.map((s) => (
-                    <option key={s.name} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                <button type="button" className="miniLinkButton" onClick={doSaveSession}>
-                  Save
+                <button type="button" className="miniLinkButton" onClick={() => setIsSettingsOpen(true)} aria-label="Traceability settings">
+                  ⚙︎ Settings
                 </button>
-                <button type="button" className="miniLinkButton" onClick={doLoadSession} disabled={!selectedSessionName} aria-disabled={!selectedSessionName}>
-                  Load
-                </button>
-                <button type="button" className="miniLinkButton" onClick={doDeleteSession} disabled={!selectedSessionName} aria-disabled={!selectedSessionName}>
-                  Delete
-                </button>
-              </div>
-              {sessions.length ? (
-                <div className="crudHint" style={{ margin: 0 }}>
-                  Stored locally in this browser.
-                </div>
-              ) : null}
-            </div>
-
-            <div className="toolbarGroup">
-              <label>Behavior</label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 }}>
-                <input type="checkbox" checked={autoExpand} onChange={(e) => setAutoExpand(e.currentTarget.checked)} />
-                Auto-expand on select
-              </label>
-              <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} style={{ gap: 16 }} checkboxStyle={{ gap: 8 }} />
-            </div>
-
-            <div className="toolbarGroup">
-              <label>Actions</label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="miniLinkButton"
-                  onClick={() => dispatch({ type: 'togglePin', nodeId: selectedNodeId })}
-                  disabled={!canExpand}
-                >
-                  {state.nodesById[selectedNodeId]?.pinned ? 'Unpin' : 'Pin'}
-                </button>
-                <button
-                  type="button"
-                  className="miniLinkButton"
-                  onClick={() => dispatch({ type: 'collapseNode', nodeId: selectedNodeId })}
-                  disabled={!canExpand}
-                >
-                  Collapse
-                </button>
-                <button
-                  type="button"
-                  className="miniLinkButton"
-                  onClick={() =>
-                    dispatch({ type: 'reset', seedIds: [seedId], options: { filters: state.filters } })
-                  }
-                >
-                  Reset
+                <button type="button" className="miniLinkButton" onClick={() => setIsSessionsOpen(true)} aria-label="Traceability sessions">
+                  Sessions
                 </button>
               </div>
             </div>
@@ -284,6 +216,77 @@ export function TraceabilityExplorer({
       <TraceabilityMiniGraph
         wrapLabels={graphOptions.wrapLabels}
         autoFitColumns={graphOptions.autoFitColumns}
+                headerControls={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => runExpand('incoming')}
+              disabled={!canExpand}
+              aria-label="Expand upstream"
+              title="Expand upstream"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => runExpand('outgoing')}
+              disabled={!canExpand}
+              aria-label="Expand downstream"
+              title="Expand downstream"
+            >
+              →
+            </button>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => runExpand('both')}
+              disabled={!canExpand}
+              aria-label="Expand both directions"
+              title="Expand both directions"
+            >
+              ⇄
+            </button>
+
+            <span aria-hidden="true" style={{ opacity: 0.4, padding: '0 2px' }}>
+              |
+            </span>
+
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => dispatch({ type: 'collapseNode', nodeId: selectedNodeId })}
+              disabled={!canExpand}
+              aria-label="Collapse"
+              title="Collapse"
+            >
+              Collapse
+            </button>
+
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => dispatch({ type: 'togglePin', nodeId: selectedNodeId })}
+              disabled={!canExpand}
+              aria-label={state.nodesById[selectedNodeId]?.pinned ? 'Unpin' : 'Pin'}
+              title={state.nodesById[selectedNodeId]?.pinned ? 'Unpin' : 'Pin'}
+              style={{ fontWeight: state.nodesById[selectedNodeId]?.pinned ? 700 : 400 }}
+            >
+              📌
+            </button>
+
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => dispatch({ type: 'reset', seedIds: [seedId], options: { filters: state.filters } })}
+              aria-label="Reset"
+              title="Reset"
+            >
+              Reset
+            </button>
+          </div>
+        }
         model={model}
         modelKind={modelKind}
         nodesById={state.nodesById}
@@ -304,6 +307,26 @@ export function TraceabilityExplorer({
         onTogglePin={(id) => dispatch({ type: 'togglePin', nodeId: id })}
       />
 
+
+      <TraceabilitySettingsDialog
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        autoExpand={autoExpand}
+        onChangeAutoExpand={setAutoExpand}
+        graphOptions={graphOptions}
+        onChangeGraphOptions={setGraphOptions}
+      />
+
+      <TraceabilitySessionsDialog
+        isOpen={isSessionsOpen}
+        onClose={() => setIsSessionsOpen(false)}
+        sessions={sessions}
+        selectedSessionName={selectedSessionName}
+        onChangeSelectedSessionName={setSelectedSessionName}
+        onSave={doSaveSession}
+        onLoad={doLoadSession}
+        onDelete={doDeleteSession}
+      />
       <div className="crudSection" style={{ marginTop: 14 }}>
         <div className="crudHeader">
           <div>

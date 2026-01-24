@@ -1,3 +1,4 @@
+import { formatElementTypeLabel } from '../../../ui/typeLabels';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { AccessType, Element, Model, RelationshipType } from '../../../../domain';
@@ -135,8 +136,8 @@ export function ArchimateRelationshipProperties({ model, relationshipId, viewId,
 
       {!showAllRelationshipTypes && sourceElement && targetElement ? (
         <div style={{ fontSize: 12, opacity: 0.75 }}>
-          Showing types allowed for <span style={{ opacity: 0.95 }}>{sourceElement.type}</span> →{' '}
-          <span style={{ opacity: 0.95 }}>{targetElement.type}</span>.
+          Showing types allowed for <span style={{ opacity: 0.95 }}>{formatElementTypeLabel(sourceElement)}</span> →{' '}
+          <span style={{ opacity: 0.95 }}>{formatElementTypeLabel(targetElement)}</span>.
         </div>
       ) : null}
 

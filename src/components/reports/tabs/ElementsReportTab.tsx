@@ -1,4 +1,5 @@
 import type { ArchimateLayer, ElementType, ElementReportRow } from '../../../domain';
+import { getElementTypeLabel } from '../../../domain';
 import type { ReportsTab } from '../useReportsSorting';
 
 type Props = {
@@ -104,7 +105,7 @@ export function ElementsReportTab({
             rows.map((r) => (
               <tr key={r.id}>
                 <td>{r.name || '(unnamed)'}</td>
-                <td className="mono">{r.type}</td>
+                <td title={r.type}>{getElementTypeLabel(r.type)}</td>
                 <td>{r.layer}</td>
                 <td>{r.folderPath}</td>
               </tr>

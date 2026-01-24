@@ -1,4 +1,5 @@
 import type { RelationshipReportRow } from '../../../domain';
+import { getRelationshipTypeLabel } from '../../../domain';
 import type { ReportsTab } from '../useReportsSorting';
 
 type Props = {
@@ -55,7 +56,7 @@ export function RelationshipsReportTab({ onExport, canExport, rows, thSortProps,
             rows.map((r) => (
               <tr key={r.id}>
                 <td>{r.name || '(unnamed)'}</td>
-                <td className="mono">{r.type}</td>
+                <td title={r.type}>{getRelationshipTypeLabel(r.type)}</td>
                 <td>{r.source}</td>
                 <td>{r.target}</td>
                 <td>{r.documentation}</td>

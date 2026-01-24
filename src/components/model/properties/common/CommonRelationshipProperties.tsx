@@ -5,6 +5,7 @@ import type { Element, Model, Relationship, RelationshipType, ViewConnectionRout
 import { getRelationshipTypeLabel, kindFromTypeId } from '../../../../domain';
 
 import type { Selection } from '../../selection';
+import { formatElementTypeLabel } from '../../../ui/typeLabels';
 import type { ModelActions } from '../actions';
 import { NameEditorRow } from '../editors/NameEditorRow';
 import { DocumentationEditorRow } from '../editors/DocumentationEditorRow';
@@ -42,12 +43,7 @@ export function CommonRelationshipProperties({
 
 
   const elementOptionLabel = (e: Element) => {
-    const typeLabel =
-      e.type === 'Unknown'
-        ? e.unknownType?.name
-          ? `Unknown: ${e.unknownType.name}`
-          : 'Unknown'
-        : e.type;
+    const typeLabel = formatElementTypeLabel(e);
     return `${e.name} (${typeLabel})`;
   };
 

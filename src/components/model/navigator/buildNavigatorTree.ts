@@ -1,6 +1,7 @@
 import type { Model } from '../../../domain';
 
 import type { NavNode } from './types';
+import { formatElementTypeLabel } from '../../ui/typeLabels';
 import {
   makeKey,
   makeSection,
@@ -56,7 +57,7 @@ export function buildNavigatorTreeData(args: {
           key: makeKey('element', el.id),
           kind: 'element',
           label: el.name || '(unnamed)',
-          tooltip: `${el.name || '(unnamed)'} (${el.type})`,
+          tooltip: `${el.name || '(unnamed)'} (${formatElementTypeLabel(el)})`,
           canRename: true,
           canCreateCenteredView: true,
           children: ownedViewNodes.length ? ownedViewNodes : undefined,
@@ -121,7 +122,7 @@ export function buildNavigatorTreeData(args: {
       key: makeKey('element', el.id),
       kind: 'element',
       label: el.name || '(unnamed)',
-      tooltip: `${el.name || '(unnamed)'} (${el.type})`,
+      tooltip: `${el.name || '(unnamed)'} (${formatElementTypeLabel(el)})`,
       canRename: true,
       elementId: el.id
     }));

@@ -2,6 +2,7 @@ import type { Key } from '@react-types/shared';
 
 import type { Folder, Model } from '../../../domain';
 import type { Selection } from '../selection';
+import { formatElementTypeLabel } from '../../ui/typeLabels';
 import type { NavNode, NavNodeKind } from './types';
 
 export function sortByName<T extends { name?: string }>(a: T, b: T): number {
@@ -88,7 +89,7 @@ export function scopeForFolder(
 export function elementOptionLabel(model: Model, elementId: string): string {
   const el = model.elements[elementId];
   if (!el) return elementId;
-  return `${el.name || '(unnamed)'} (${el.type})`;
+  return `${el.name || '(unnamed)'} (${formatElementTypeLabel(el)})`;
 }
 
 export function findNodeByKey(nodes: NavNode[] | null, key: string): NavNode | null {

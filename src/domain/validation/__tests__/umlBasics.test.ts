@@ -1,5 +1,5 @@
 import { createElement, createEmptyModel, createRelationship, createView } from '../../factories';
-import { validateModel } from '../validateModel';
+import { validateModelWithNotations as validateModel } from '../../../notations';
 
 describe('UML validation (v1)', () => {
   it('reports generalization cycles', () => {

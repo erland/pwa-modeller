@@ -8,7 +8,7 @@ function readRelationshipTable(): string {
   return fs.readFileSync(p, 'utf-8');
 }
 
-import { validateModel } from '../modelValidation';
+import { validateModelWithNotations as validateModel } from '../../notations';
 
 describe('validateModel', () => {
   it('reports relationships that reference missing elements', () => {

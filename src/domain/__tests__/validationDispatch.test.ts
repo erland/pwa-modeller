@@ -1,5 +1,5 @@
 import { createElement, createEmptyModel, createRelationship, createView } from '../factories';
-import { validateModel } from '../modelValidation';
+import { validateModelWithNotations as validateModel } from '../../notations';
 
 describe('validateModel dispatch (notation isolation)', () => {
   it('runs validators only for kinds present and aggregates issues from multiple kinds', () => {

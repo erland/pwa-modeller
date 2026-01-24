@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import type { ValidationIssue } from '../../domain';
-import { validateModel } from '../../domain';
+import { validateModelWithNotations as validateModel } from '../../notations';
 import { kindsPresent } from '../../domain/validation/kindsPresent';
 import { useModelStore } from '../../store/useModelStore';
 import type { Selection } from '../model/selection';

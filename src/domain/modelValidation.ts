@@ -1,2 +1,2 @@
 export * from './validation/types';
-export { validateModel } from './validation/validateModel';
+export { validateModelCommon, validateModel } from './validation/validateModel';

@@ -67,6 +67,16 @@ export function BpmnRelationshipProperties({ model, relationshipId, viewId, acti
     return elems.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' }));
   }, [model]);
 
+
+  const messageOptions = useMemo(
+    () =>
+      Object.values(model.elements)
+        .filter(Boolean)
+        .filter((e) => String(e.type) === 'bpmn.message')
+        .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' })),
+    [model.elements]
+  );
+
   const sourceType = rel?.sourceElementId ? model.elements[rel.sourceElementId]?.type : undefined;
   const targetType = rel?.targetElementId ? model.elements[rel.targetElementId]?.type : undefined;
 
@@ -108,15 +118,6 @@ export function BpmnRelationshipProperties({ model, relationshipId, viewId, acti
   const conditionExpression = sequenceAttrs?.conditionExpression ?? '';
   const isDefault = sequenceAttrs?.isDefault ?? false;
   const messageRef = messageAttrs?.messageRef ?? '';
-
-  const messageOptions = useMemo(
-    () =>
-      Object.values(model.elements)
-        .filter(Boolean)
-        .filter((e) => String(e.type) === 'bpmn.message')
-        .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' })),
-    [model.elements]
-  );
 
   const notationRows = (
     <>

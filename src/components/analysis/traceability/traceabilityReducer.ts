@@ -291,7 +291,8 @@ export function traceabilityReducer(state: TraceabilityExplorerState, action: Tr
 
       const nextGraph = applyExpansion(state, shiftedPatch);
 
-      const { [nodeId]: _removed, ...restPending } = state.pendingByNodeId;
+      const restPending = { ...state.pendingByNodeId };
+      delete restPending[nodeId];
       return {
         ...(nextGraph as TraceabilityExplorerState),
         pendingByNodeId: restPending,

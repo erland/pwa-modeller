@@ -1,7 +1,7 @@
 import { measureWrappedLabel, wrapLabel } from '../graphLabelLayout';
 
 const monoMeasurer = (text: string) => text.length * 10; // 10px per char
-const measurer = (text: string, _font: string) => monoMeasurer(text);
+const measurer = (text: string) => monoMeasurer(text);
 
 describe('graphLabelLayout.wrapLabel', () => {
   test('wraps words greedily within maxWidth', () => {

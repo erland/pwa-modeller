@@ -71,7 +71,7 @@ export function nudgeOverlaps(
     }
 
     let x = start.x;
-    let y = start.y;
+    const y = start.y;
     let iterations = 0;
 
     while (iterations++ < maxIterations) {

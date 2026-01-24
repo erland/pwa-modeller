@@ -106,8 +106,8 @@ export function AnalysisMiniGraph({
     return buildMiniGraphData(labelForId, m, relatedResult, pathsResult);
   }, [labelForId, m, relatedResult, pathsResult]);
 
-  // Nothing to show
-  if (!data) return null;
+  const safeData: MiniGraphData =
+    data ?? { nodes: [], edges: [], maxLevel: 0, trimmed: { nodes: false, edges: false } };
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
   const selectedElementId = selectionToElementId(selection);
@@ -157,16 +157,16 @@ export function AnalysisMiniGraph({
   // Edge lookup for selection + tooltip.
   const edgeById = useMemo(() => {
     const map: Record<string, TraversalStep> = {};
-    for (const e of data.edges) map[edgeIdForStep(e)] = e;
+    for (const e of safeData.edges) map[edgeIdForStep(e)] = e;
     return map;
-  }, [data.edges]);
+  }, [safeData.edges]);
 
   const graphEdges: MiniColumnGraphEdge[] = useMemo(() => {
-    return data.edges.map((e) => ({ id: edgeIdForStep(e), from: e.fromId, to: e.toId }));
-  }, [data.edges]);
+    return safeData.edges.map((e) => ({ id: edgeIdForStep(e), from: e.fromId, to: e.toId }));
+  }, [safeData.edges]);
 
   const graphNodes: MiniColumnGraphNode[] = useMemo(() => {
-    return data.nodes.map((n) => {
+    return safeData.nodes.map((n) => {
       const el = model.elements[n.id];
 
       // Prefer layer colors in ArchiMate, fallback to type-based colors.
@@ -181,7 +181,7 @@ export function AnalysisMiniGraph({
 
       return { id: n.id, label: n.label, level: n.level, order: n.order, bg };
     });
-  }, [data.nodes, getElementBgVar, model.elements, modelKind]);
+  }, [safeData.nodes, getElementBgVar, model.elements, modelKind]);
 
   const getEdgeTooltip = (edgeId: string): MiniColumnGraphTooltip | null => {
     const step = edgeById[edgeId];
@@ -203,6 +203,9 @@ export function AnalysisMiniGraph({
 
   const title = mode === 'related' ? 'Mini graph (related elements)' : 'Mini graph (connection paths)';
 
+  // Nothing to show
+  if (!data) return null;
+
   return (
     <div style={{ marginTop: 10 }} aria-label={title}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
@@ -210,8 +213,8 @@ export function AnalysisMiniGraph({
           Graph
         </p>
         <p className="crudHint" style={{ margin: 0 }}>
-          {data.nodes.length} nodes, {data.edges.length} edges
-          {data.trimmed.nodes || data.trimmed.edges ? ' (trimmed)' : ''}
+          {safeData.nodes.length} nodes, {safeData.edges.length} edges
+          {safeData.trimmed.nodes || safeData.trimmed.edges ? ' (trimmed)' : ''}
         </p>
       </div>
 
@@ -234,7 +237,7 @@ export function AnalysisMiniGraph({
         />
       </div>
 
-      {data.trimmed.nodes || data.trimmed.edges ? (
+      {safeData.trimmed.nodes || safeData.trimmed.edges ? (
         <p className="crudHint" style={{ marginTop: 8 }}>
           Showing a bounded projection for readability (max {MINI_GRAPH_MAX_NODES} nodes, {MINI_GRAPH_MAX_EDGES} edges). Use tighter filters to reduce the result set.
         </p>

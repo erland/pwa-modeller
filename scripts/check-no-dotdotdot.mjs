@@ -220,7 +220,6 @@ function findEllipsesInCode(text) {
         let depth = 1;
         while (i < text.length && depth > 0) {
           const c = text[i];
-          const n = text[i + 1];
           if (c === '\\') {
             advance(c);
             if (i < text.length) advance(text[i]);

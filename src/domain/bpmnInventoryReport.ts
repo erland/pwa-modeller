@@ -167,7 +167,8 @@ export function getBpmnPropertiesPanelForType(t: string): string | undefined {
   return undefined;
 }
 
-export function getBpmnPropertiesPanelForRelationshipType(_t: string): string {
+export function getBpmnPropertiesPanelForRelationshipType(t: string): string {
+  void t;
   // See src/notations/bpmn/index.ts (renderRelationshipProperties)
   return 'BpmnRelationshipProperties';
 }

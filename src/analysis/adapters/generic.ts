@@ -1,4 +1,5 @@
 import type { ModelKind } from '../../domain/types';
+import { getElementTypeLabel } from '../../domain';
 import type { AnalysisAdapter } from './AnalysisAdapter';
 
 /**
@@ -12,13 +13,7 @@ export function createGenericAnalysisAdapter(kind: ModelKind): AnalysisAdapter {
     id: kind,
     getNodeLabel(node, model) {
       const el = model.elements[node.id] ?? node;
-      const typeLabel =
-        el.type === 'Unknown'
-          ? el.unknownType?.name
-            ? `Unknown: ${el.unknownType.name}`
-            : 'Unknown'
-          : el.type;
-      return `${el.name} (${typeLabel})`;
+      return el.name && String(el.name).trim() ? String(el.name) : '(unnamed)';
     },
     getEdgeLabel(edge, model) {
       const r = model.relationships[edge.relationshipId] ?? edge.relationship;
@@ -36,10 +31,17 @@ export function createGenericAnalysisAdapter(kind: ModelKind): AnalysisAdapter {
       return [];
     },
     getNodeFacetValues(node, model) {
-      // No facet values by default.
-      void node;
-      void model;
-      return {};
+      const el = model.elements[node.id] ?? node;
+      const typeLabel =
+        el.type === 'Unknown'
+          ? el.unknownType?.name
+            ? `Unknown: ${el.unknownType.name}`
+            : 'Unknown'
+          : getElementTypeLabel(el.type);
+      return {
+        type: typeLabel,
+        elementType: el.type
+      };
     }
   };
 }

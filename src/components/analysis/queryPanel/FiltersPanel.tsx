@@ -1,5 +1,5 @@
 import type { AnalysisDirection, ElementType, RelationshipType } from '../../../domain';
-import { getElementTypeLabel } from '../../../domain';
+import { getElementTypeLabel, getRelationshipTypeLabel } from '../../../domain';
 
 import type { AnalysisMode } from '../AnalysisQueryPanel';
 
@@ -195,7 +195,7 @@ export function FiltersPanel({
                       )
                     }
                   />
-                  <span className="mono">{String(t)}</span>
+                  <span title={String(t)}>{getRelationshipTypeLabel(t)}</span>
                 </label>
               ))
             )}

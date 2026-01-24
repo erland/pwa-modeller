@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import type { Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
+import { getElementTypeLabel } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { TraversalStep } from '../../domain/analysis/traverse';
 import type { ArchimateLayer, ElementType } from '../../domain/types';
@@ -121,8 +122,9 @@ export function AnalysisMiniGraph({
     const lines: string[] = [];
     lines.push(`Id: ${elementId}`);
 
-    const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
-    if (type) lines.push(`Type: ${type}`);
+    const rawType = String((facets.type ?? facets.elementType ?? el.type) ?? '');
+    const typeLabel = rawType ? getElementTypeLabel(rawType) : '';
+    if (typeLabel) lines.push(`Type: ${typeLabel}`);
 
     const layer = String((facets.archimateLayer ?? (el as unknown as { layer?: string }).layer) ?? '');
     if (layer) lines.push(`Layer: ${layer}`);

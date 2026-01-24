@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import type { AnalysisPath, Model, PathsBetweenResult, RelatedElementsResult, TraversalStep } from '../../domain';
+import { getElementTypeLabel } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { ModelKind } from '../../domain/types';
 import type { AnalysisMode } from './AnalysisQueryPanel';
@@ -101,7 +102,8 @@ export function AnalysisResultTable({
     const el = model.elements[id];
     if (!el) return '';
     const facets = adapter.getNodeFacetValues(el, model);
-    return stringFacetValue(facets.elementType ?? facets.type ?? el.type);
+    const rawType = String((facets.type ?? facets.elementType ?? el.type) ?? '');
+    return rawType ? getElementTypeLabel(rawType) : '';
   };
 
   const nodeLayer = (id: string): string => {

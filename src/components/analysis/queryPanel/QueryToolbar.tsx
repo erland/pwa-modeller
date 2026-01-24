@@ -9,7 +9,6 @@ type Props = {
   modelName: string;
 
   mode: AnalysisMode;
-  onChangeMode: (mode: AnalysisMode) => void;
 
   draftStartId: string;
   onChangeDraftStartId: (id: string) => void;
@@ -31,7 +30,6 @@ export function QueryToolbar({
   model,
   modelName,
   mode,
-  onChangeMode,
   draftStartId,
   onChangeDraftStartId,
   draftSourceId,
@@ -52,21 +50,7 @@ export function QueryToolbar({
       </div>
 
       <div className="toolbar" aria-label="Analysis query toolbar">
-        <div className="toolbarGroup">
-          <label htmlFor="analysis-mode">Analysis</label>
-          <select
-            id="analysis-mode"
-            className="selectInput"
-            value={mode}
-            onChange={(e) => onChangeMode(e.currentTarget.value as AnalysisMode)}
-          >
-            <option value="related">Related elements</option>
-            <option value="paths">Connection between two</option>
-            <option value="traceability">Traceability explorer</option>
-          </select>
-        </div>
-
-        {mode !== 'paths' ? (
+                {mode !== 'paths' ? (
           <ElementPickerRow
             which="start"
             label="Start element"

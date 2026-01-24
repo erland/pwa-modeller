@@ -70,7 +70,6 @@ export function AnalysisQueryPanel({
   model,
   modelKind,
   mode,
-  onChangeMode,
   direction,
   onChangeDirection,
   relationshipTypes,
@@ -141,7 +140,6 @@ export function AnalysisQueryPanel({
         model={model}
         modelName={modelName}
         mode={mode}
-        onChangeMode={onChangeMode}
         draftStartId={draftStartId}
         onChangeDraftStartId={onChangeDraftStartId}
         draftSourceId={draftSourceId}

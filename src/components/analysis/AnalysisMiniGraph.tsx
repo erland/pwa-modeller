@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import type { Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
-import { getElementTypeLabel } from '../../domain';
+import { getElementTypeLabel, getRelationshipTypeLabel } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { TraversalStep } from '../../domain/analysis/traverse';
 import type { ArchimateLayer, ElementType } from '../../domain/types';
@@ -146,7 +146,7 @@ export function AnalysisMiniGraph({
     const title = r.name && r.name.trim() ? r.name : label;
 
     const lines: string[] = [];
-    lines.push(`Type: ${r.type}`);
+    lines.push(`Type: ${r.type !== 'Unknown' ? getRelationshipTypeLabel(r.type) : r.unknownType?.name ? `Unknown: ${r.unknownType.name}` : 'Unknown'}`);
     if (src) lines.push(`From: ${labelForId(src)}`);
     if (tgt) lines.push(`To: ${labelForId(tgt)}`);
     if (doc) lines.push(`Documentation: ${doc}`);

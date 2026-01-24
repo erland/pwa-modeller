@@ -1,5 +1,5 @@
 import type { ModelKind } from '../../domain/types';
-import { getElementTypeLabel } from '../../domain';
+import { getElementTypeLabel, getRelationshipTypeLabel } from '../../domain';
 import type { AnalysisAdapter } from './AnalysisAdapter';
 
 /**
@@ -17,7 +17,7 @@ export function createGenericAnalysisAdapter(kind: ModelKind): AnalysisAdapter {
     },
     getEdgeLabel(edge, model) {
       const r = model.relationships[edge.relationshipId] ?? edge.relationship;
-      if (r.type !== 'Unknown') return r.type;
+      if (r.type !== 'Unknown') return getRelationshipTypeLabel(r.type);
       return r.unknownType?.name ? `Unknown: ${r.unknownType.name}` : 'Unknown';
     },
     isEdgeDirected(edge, model) {

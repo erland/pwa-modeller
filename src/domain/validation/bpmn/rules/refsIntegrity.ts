@@ -80,7 +80,7 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
   for (const el of Object.values(model.elements)) {
     if (!el.type.startsWith('bpmn.')) continue;
     if (!isRecord(el.attrs)) continue;
-    const ur = (el.attrs as any).unresolvedRefs;
+    const ur = isRecord(el.attrs) && isRecord(el.attrs['unresolvedRefs']) ? (el.attrs['unresolvedRefs'] as Record<string, unknown>) : undefined;
     if (!isRecord(ur) || !Object.keys(ur).length) continue;
     issues.push(
       makeIssue(
@@ -94,7 +94,7 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
   for (const rel of Object.values(model.relationships)) {
     if (!rel.type.startsWith('bpmn.')) continue;
     if (!isRecord(rel.attrs)) continue;
-    const ur = (rel.attrs as any).unresolvedRefs;
+    const ur = isRecord(rel.attrs) && isRecord(rel.attrs['unresolvedRefs']) ? (rel.attrs['unresolvedRefs'] as Record<string, unknown>) : undefined;
     if (!isRecord(ur) || !Object.keys(ur).length) continue;
     issues.push(
       makeIssue(
@@ -133,7 +133,8 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
   const laneMembership: Record<string, string[]> = {};
   for (const el of Object.values(model.elements)) {
     if (el.type !== 'bpmn.lane') continue;
-    const flowNodeRefs = (isRecord(el.attrs) && Array.isArray((el.attrs as any).flowNodeRefs) ? (el.attrs as any).flowNodeRefs : []) as unknown[];
+        const flowNodeRefsRaw = isRecord(el.attrs) ? el.attrs['flowNodeRefs'] : undefined;
+    const flowNodeRefs = Array.isArray(flowNodeRefsRaw) ? flowNodeRefsRaw : [];
     const ids = flowNodeRefs.filter((v) => typeof v === 'string') as string[];
 
     for (const id of ids) {
@@ -216,7 +217,7 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
 
     // Optional but useful sanity check: cancelActivity should be boolean when present.
     const cancelActivity = getBooleanAttr(el.attrs, 'cancelActivity');
-    if (cancelActivity === undefined && isRecord(el.attrs) && (el.attrs as any).cancelActivity !== undefined) {
+    if (cancelActivity === undefined && isRecord(el.attrs) && el.attrs['cancelActivity'] !== undefined) {
       issues.push(
         makeIssue(
           'warning',

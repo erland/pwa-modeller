@@ -12,6 +12,12 @@ type ElkNode = {
   layoutOptions?: Record<string, string>;
 };
 
+type ElkApi = {
+  layout: (graph: ElkNode) => Promise<ElkNode>;
+};
+
+type ElkCtor = new () => ElkApi;
+
 type ElkEdge = {
   id: string;
   sources: string[];
@@ -74,7 +80,7 @@ export async function elkLayout(input: LayoutInput, options: AutoLayoutOptions =
     })),
   };
 
-  const elk = new (ELK as any)();
+  const elk = new (ELK as unknown as ElkCtor)();
   const laidOut: ElkNode = await elk.layout(root);
 
   const positions: Record<string, { x: number; y: number }> = {};

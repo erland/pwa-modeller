@@ -45,10 +45,10 @@ export function MultiViewNodesSelectionProperties({ model, viewId, elementIds, a
   const allArchimate = selectedElements.length > 0 && selectedElements.every((e) => e.kind === 'archimate');
   const commonLayer = useMemo<ArchimateLayer | null>(() => {
     if (!allArchimate) return null;
-    const first = (selectedElements[0] as any).layer as ArchimateLayer | undefined;
+    const first = (selectedElements[0] as unknown as { layer?: ArchimateLayer }).layer;
     if (!first) return null;
     for (const el of selectedElements) {
-      const l = (el as any).layer as ArchimateLayer | undefined;
+      const l = (el as unknown as { layer?: ArchimateLayer }).layer;
       if (l !== first) return null;
     }
     return first;
@@ -83,7 +83,7 @@ export function MultiViewNodesSelectionProperties({ model, viewId, elementIds, a
   };
 
   const onApplyLayer = (next: ArchimateLayer) => {
-    for (const id of elementIds) actions.updateElement(id, { layer: next } as any);
+    for (const id of elementIds) actions.updateElement(id, ({ layer: next } as unknown) as Partial<Element>);
   };
 
   return (

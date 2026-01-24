@@ -89,12 +89,13 @@ export function TraceabilityExplorer({
   }, [model.id, modelKind]);
 
   useEffect(() => {
-    dispatch({ type: 'seed', seedIds: [seedId], options: { filters: toTraceFilters({ direction, relationshipTypes, layers, elementTypes }) } });
-  }, [seedId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Seed changes are separate from filter changes to avoid surprising resets when tweaking filters.
+    dispatch({ type: 'seed', seedIds: [seedId] });
+  }, [seedId]);
 
   useEffect(() => {
     dispatch({ type: 'setFilters', filters: toTraceFilters({ direction, relationshipTypes, layers, elementTypes }) });
-  }, [direction, relationshipTypes, layers, elementTypes]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [direction, relationshipTypes, layers, elementTypes]);
 
 
   const selectNode = (id: string) => {

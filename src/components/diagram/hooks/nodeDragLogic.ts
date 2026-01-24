@@ -155,8 +155,8 @@ export function clampMoveInsideBpmnContainers(args: {
         type: String(el.type),
         x: n.x,
         y: n.y,
-        width: (n as any).width ?? 120,
-        height: (n as any).height ?? 60,
+        width: (n as { width?: number }).width ?? 120,
+        height: (n as { height?: number }).height ?? 60,
         zIndex: n.zIndex,
       })
     );

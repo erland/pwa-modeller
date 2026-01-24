@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 
@@ -45,13 +45,15 @@ export function TraceabilityMiniGraph({
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
-
-  const labelForId = (id: string) => {
-    const el = model.elements[id];
-    if (!el) return id;
-    const name = String(el.name ?? '').trim();
-    return name || id;
-  };
+  const labelForId = useCallback(
+    (id: string) => {
+      const el = model.elements[id];
+      if (!el) return id;
+      const name = String(el.name ?? '').trim();
+      return name || id;
+    },
+    [model]
+  );
 
   const elementTooltip = (elementId: string): MiniColumnGraphTooltip | null => {
     const el = model.elements[elementId];
@@ -177,7 +179,7 @@ export function TraceabilityMiniGraph({
       list.push({ id: n.id, label, level: n.depth, bg, hidden: n.hidden });
     }
     return list;
-  }, [adapter, getElementBgVar, model, nodesById]);
+  }, [adapter, getElementBgVar, labelForId, model, nodesById]);
 
   const graphEdges = useMemo(() => {
     return Object.values(edgesById).map((e) => ({ id: e.id, from: e.from, to: e.to, hidden: e.hidden }));

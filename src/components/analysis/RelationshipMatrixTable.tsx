@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 import type { RelationshipMatrixResult } from '../../domain/analysis/relationshipMatrix';
@@ -34,6 +34,8 @@ export function RelationshipMatrixTable({
 }: RelationshipMatrixTableProps) {
   const { rows, cols, cells, rowTotals, colTotals, grandTotal } = result;
 
+  const [hideEmpty, setHideEmpty] = useState<boolean>(false);
+
   const maxCellCount = useMemo(() => {
     let max = 0;
     for (const row of cells) {
@@ -43,6 +45,37 @@ export function RelationshipMatrixTable({
     }
     return max;
   }, [cells]);
+
+
+  const { displayRows, displayCols, displayCells, displayRowTotals, displayColTotals } = useMemo(() => {
+    if (!hideEmpty) {
+      return {
+        displayRows: rows,
+        displayCols: cols,
+        displayCells: cells,
+        displayRowTotals: rowTotals,
+        displayColTotals: colTotals
+      };
+    }
+
+    const rowIdxs = rows
+      .map((_, i) => i)
+      .filter((i) => (rowTotals[i] ?? 0) > 0);
+
+    const colIdxs = cols
+      .map((_, i) => i)
+      .filter((i) => (colTotals[i] ?? 0) > 0);
+
+    const displayRows = rowIdxs.map((i) => rows[i]);
+    const displayCols = colIdxs.map((i) => cols[i]);
+    const displayRowTotals = rowIdxs.map((i) => rowTotals[i] ?? 0);
+    const displayColTotals = colIdxs.map((i) => colTotals[i] ?? 0);
+
+    const displayCells = rowIdxs.map((ri) => colIdxs.map((ci) => cells[ri][ci]));
+
+    return { displayRows, displayCols, displayCells, displayRowTotals, displayColTotals };
+  }, [cells, colTotals, cols, hideEmpty, rowTotals, rows]);
+
   const cellBorderStyle: CSSProperties = { border: '1px solid var(--diagram-grid-line)' };
 
   return (
@@ -82,6 +115,11 @@ export function RelationshipMatrixTable({
             <input type="checkbox" checked={highlightMissing} onChange={onToggleHighlightMissing} />
             Highlight missing links (0)
           </label>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
+            <input type="checkbox" checked={hideEmpty} onChange={() => setHideEmpty((v) => !v)} />
+            Hide empty rows/columns
+          </label>
         </div>
       </div>
 
@@ -111,7 +149,7 @@ export function RelationshipMatrixTable({
               >
                 Row \ Col
               </th>
-              {cols.map((c) => (
+              {displayCols.map((c) => (
                 <th
                   key={c.id}
                   style={{
@@ -176,7 +214,7 @@ export function RelationshipMatrixTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, ri) => (
+            {displayRows.map((r, ri) => (
               <tr key={r.id}>
                 <th
                   style={{
@@ -194,7 +232,7 @@ export function RelationshipMatrixTable({
                   {r.label}
                 </th>
                 {cols.map((c, ci) => {
-                  const cell = cells[ri][ci];
+                  const cell = displayCells[ri][ci];
                   const isMissing = cell.count === 0;
                   return (
                     <td
@@ -237,7 +275,7 @@ export function RelationshipMatrixTable({
                 })}
                 <td style={{
                   ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}>
-                  {formatTotal(rowTotals[ri] ?? 0)}
+                  {formatTotal(displayRowTotals[ri] ?? 0)}
                 </td>
               </tr>
             ))}
@@ -254,13 +292,13 @@ export function RelationshipMatrixTable({
               >
                 Total
               </th>
-              {cols.map((c, ci) => (
+              {displayCols.map((c, ci) => (
                 <td
                   key={c.id}
                   style={{
                         ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}
                 >
-                  {formatTotal(colTotals[ci] ?? 0)}
+                  {formatTotal(displayColTotals[ci] ?? 0)}
                 </td>
               ))}
               <td style={{ ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>

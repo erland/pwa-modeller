@@ -97,6 +97,21 @@ export function AnalysisWorkspace({
     relationshipIds: string[];
   } | null>(null);
 
+  const [matrixPresets, setMatrixPresets] = useState<MatrixQueryPreset[]>([]);
+  const [matrixPresetId, setMatrixPresetId] = useState<string>('');
+  const [matrixSnapshots, setMatrixSnapshots] = useState<MatrixQuerySnapshot[]>([]);
+  const [matrixSnapshotId, setMatrixSnapshotId] = useState<string>('');
+
+  useEffect(() => {
+    if (!modelId) return;
+    setMatrixPresets(loadMatrixPresets(modelId));
+    setMatrixSnapshots(loadMatrixSnapshots(modelId));
+    setMatrixPresetId('');
+    setMatrixSnapshotId('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelId]);
+
+
   function applyMatrixUiQuery(query: MatrixQueryPreset['query']): void {
     setMatrixRowSource(query.rowSource);
     setMatrixRowElementType(query.rowElementType as any);
@@ -679,6 +694,51 @@ export function AnalysisWorkspace({
                         onClick={saveMatrixSnapshot}
                       >
                         Save snapshot
+                      </button>
+                    </div>
+
+                    <div className="toolbarGroup" style={{ minWidth: 240 }}>
+                      <label htmlFor="matrix-snapshot" className="crudLabel">Snapshot</label>
+                      <select
+                        id="matrix-snapshot"
+                        className="crudInput"
+                        value={matrixSnapshotId}
+                        onChange={(e) => setMatrixSnapshotId(e.target.value)}
+                      >
+                        <option value="">(none)</option>
+                        {matrixSnapshots.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="toolbarGroup">
+                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Restore</label>
+                      <button
+                        type="button"
+                        className="shellButton"
+                        disabled={!matrixSnapshotId}
+                        onClick={() => restoreMatrixSnapshot(matrixSnapshotId)}
+                      >
+                        Restore
+                      </button>
+                    </div>
+
+                    <div className="toolbarGroup">
+                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Delete snapshot</label>
+                      <button
+                        type="button"
+                        className="shellButton"
+                        disabled={!matrixSnapshotId}
+                        onClick={() => {
+                          const id = matrixSnapshotId;
+                          setMatrixSnapshotId('');
+                          deleteMatrixSnapshot(id);
+                        }}
+                      >
+                        Delete snapshot
                       </button>
                     </div>
                   </div>

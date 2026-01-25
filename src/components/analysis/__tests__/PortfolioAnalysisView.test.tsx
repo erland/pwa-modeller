@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { PortfolioAnalysisView } from '../PortfolioAnalysisView';
-import { createElement, createEmptyModel } from '../../../domain/factories';
+import { createElement, createEmptyModel, createRelationship } from '../../../domain/factories';
 import type { Model } from '../../../domain/types';
 import { noSelection } from '../../model/selection';
 import * as download from '../../../store/download';
@@ -64,6 +64,53 @@ function buildModelForSorting(): Model {
   model.elements[bravo.id] = bravo;
   model.elements[alpha.id] = alpha;
   model.elements[charlie.id] = charlie;
+  return model;
+}
+
+function buildModelForStructuralMetrics(): Model {
+  const model = createEmptyModel({ name: 'Structural' });
+
+  const alpha = createElement({ id: 'A', name: 'Alpha', type: 'ApplicationComponent', layer: 'Application' });
+  const beta = createElement({ id: 'B', name: 'Beta', type: 'ApplicationComponent', layer: 'Application' });
+  const gamma = createElement({ id: 'C', name: 'Gamma', type: 'ApplicationComponent', layer: 'Application' });
+  const delta = createElement({ id: 'D', name: 'Delta', type: 'ApplicationComponent', layer: 'Application' });
+  const epsilon = createElement({ id: 'E', name: 'Epsilon', type: 'ApplicationComponent', layer: 'Application' });
+
+  model.elements[alpha.id] = alpha;
+  model.elements[beta.id] = beta;
+  model.elements[gamma.id] = gamma;
+  model.elements[delta.id] = delta;
+  model.elements[epsilon.id] = epsilon;
+
+  // A -> B, B -> C, B -> D (E is disconnected)
+  const r1 = createRelationship({
+    id: 'r1',
+    kind: 'archimate',
+    type: 'Flow',
+    sourceElementId: 'A',
+    targetElementId: 'B',
+    name: ''
+  });
+  const r2 = createRelationship({
+    id: 'r2',
+    kind: 'archimate',
+    type: 'Flow',
+    sourceElementId: 'B',
+    targetElementId: 'C',
+    name: ''
+  });
+  const r3 = createRelationship({
+    id: 'r3',
+    kind: 'archimate',
+    type: 'Flow',
+    sourceElementId: 'B',
+    targetElementId: 'D',
+    name: ''
+  });
+  model.relationships[r1.id] = r1;
+  model.relationships[r2.id] = r2;
+  model.relationships[r3.id] = r3;
+
   return model;
 }
 
@@ -165,6 +212,67 @@ describe('PortfolioAnalysisView sorting and CSV export', () => {
     expect(lines[2]).toBe('B,Alpha,ApplicationComponent,Application,10');
     // Missing metric exports as an empty cell.
     expect(lines[3]).toBe('C,Charlie,ApplicationComponent,Technology,');
+
+    spy.mockRestore();
+  });
+});
+
+describe('PortfolioAnalysisView structural metrics columns', () => {
+  test('shows Degree and Reach(3) columns, supports sorting, and exports those metrics', async () => {
+    const user = userEvent.setup();
+    const model = buildModelForStructuralMetrics();
+    const onSelectElement = jest.fn();
+    const spy = jest.spyOn(download, 'downloadTextFile').mockImplementation(() => {});
+
+    render(
+      <PortfolioAnalysisView
+        model={model}
+        modelKind="archimate"
+        selection={noSelection}
+        onSelectElement={onSelectElement}
+      />
+    );
+
+    const degreeToggle = screen.getByLabelText('Degree') as HTMLInputElement;
+    await user.click(degreeToggle);
+
+    const table = screen.getByRole('table', { name: 'Portfolio population table' });
+    const rowBeta = within(table).getByText('Beta').closest('tr') as HTMLElement;
+    const rowEpsilon = within(table).getByText('Epsilon').closest('tr') as HTMLElement;
+    expect(within(rowBeta).getByText('3')).toBeInTheDocument();
+    expect(within(rowEpsilon).getByText('0')).toBeInTheDocument();
+
+    // Sort by Degree desc -> Beta (degree 3) should be first.
+    await user.click(within(table).getByRole('button', { name: /^Degree/ })); // asc
+    await user.click(within(table).getByRole('button', { name: /^Degree/ })); // desc
+    expect(tableRowNames(table)[0]).toBe('Beta');
+
+    // Enable Reach(3) and verify disconnected node has 0 reach.
+    const reachToggle = screen.getByLabelText('Reach(3)') as HTMLInputElement;
+    await user.click(reachToggle);
+
+    // Row now contains two separate '0' cells (Degree + Reach), so assert by column.
+    const headers = within(table).getAllByRole('columnheader');
+    const findCol = (re: RegExp): number => {
+      const idx = headers.findIndex((h) => {
+        const btn = within(h).queryByRole('button');
+        const label = (btn ?? h).textContent ?? '';
+        return re.test(label.trim());
+      });
+      expect(idx).toBeGreaterThanOrEqual(0);
+      return idx;
+    };
+    const degreeIdx = findCol(/^Degree/);
+    const reachIdx = findCol(/^Reach\(3\)/);
+    const epsilonCells = within(rowEpsilon).getAllByRole('cell');
+    expect((epsilonCells[degreeIdx].textContent ?? '').trim()).toBe('0');
+    expect((epsilonCells[reachIdx].textContent ?? '').trim()).toBe('0');
+
+    // Export includes extra columns when enabled.
+    await user.click(screen.getByRole('button', { name: /export csv/i }));
+    const csv = spy.mock.calls[0][1] as string;
+    const header = csv.split('\n')[0];
+    expect(header).toBe('elementId,name,type,layer,metric,degree,reach3');
 
     spy.mockRestore();
   });

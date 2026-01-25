@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { Model, ModelKind, ElementType } from '../../domain';
 import { discoverNumericPropertyKeys, getElementTypeLabel, readNumericPropertyFromElement, rowsToCsv } from '../../domain';
 import type { Selection } from '../model/selection';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
-import { buildPortfolioPopulation } from '../../domain/analysis';
+import { buildAnalysisGraph, buildPortfolioPopulation, computeNodeMetric } from '../../domain/analysis';
 import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
 
 import { dedupeSort, toggle, collectFacetValues, sortElementTypesForDisplay } from './queryPanel/utils';
@@ -18,7 +18,7 @@ type Props = {
   onSelectElement: (elementId: string) => void;
 };
 
-type SortKey = 'name' | 'type' | 'layer' | 'metric';
+type SortKey = 'name' | 'type' | 'layer' | 'metric' | 'degree' | 'reach3';
 type SortDir = 'asc' | 'desc';
 
 function formatMetricValue(v: number): string {
@@ -59,6 +59,9 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
   const availablePropertyKeys = useMemo(() => discoverNumericPropertyKeys(model), [model]);
   const [primaryMetricKey, setPrimaryMetricKey] = useState('');
   const [hideMissingMetric, setHideMissingMetric] = useState(false);
+
+  const [showDegree, setShowDegree] = useState(false);
+  const [showReach3, setShowReach3] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -111,6 +114,29 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     return rows.filter((r) => valueByElementId[r.elementId] !== undefined);
   }, [hideMissingMetric, metricKey, rows, valueByElementId]);
 
+  const graph = useMemo(() => buildAnalysisGraph(model), [model]);
+
+  const visibleNodeIds = useMemo(() => displayRows.map((r) => r.elementId), [displayRows]);
+
+  const needsDegree = showDegree || sortKey === 'degree';
+  const degreeByElementId = useMemo(() => {
+    if (!needsDegree || visibleNodeIds.length === 0) return {} as Record<string, number | undefined>;
+    return computeNodeMetric(graph, 'nodeDegree', {
+      direction: 'both',
+      nodeIds: visibleNodeIds
+    });
+  }, [graph, needsDegree, visibleNodeIds]);
+
+  const needsReach3 = showReach3 || sortKey === 'reach3';
+  const reach3ByElementId = useMemo(() => {
+    if (!needsReach3 || visibleNodeIds.length === 0) return {} as Record<string, number | undefined>;
+    return computeNodeMetric(graph, 'nodeReach', {
+      direction: 'both',
+      maxDepth: 3,
+      nodeIds: visibleNodeIds
+    });
+  }, [graph, needsReach3, visibleNodeIds]);
+
   const sortedRows = useMemo(() => {
     const dirMul = sortDir === 'asc' ? 1 : -1;
 
@@ -122,6 +148,26 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
       // For secondary comparisons (tie-breakers), always use Name asc to keep ordering predictable.
       if (sortKey === 'type') return cmpStr(a.typeLabel, b.typeLabel) * dirMul || cmpStr(a.label, b.label);
       if (sortKey === 'layer') return cmpStr(keyString(a.layerLabel), keyString(b.layerLabel)) * dirMul || cmpStr(a.label, b.label);
+      if (sortKey === 'degree') {
+        const av = degreeByElementId[a.elementId];
+        const bv = degreeByElementId[b.elementId];
+        const aMissing = av === undefined;
+        const bMissing = bv === undefined;
+        if (aMissing !== bMissing) return aMissing ? 1 : -1;
+        if (av === undefined || bv === undefined) return cmpStr(a.label, b.label);
+        if (av !== bv) return (av - bv) * dirMul;
+        return cmpStr(a.label, b.label);
+      }
+      if (sortKey === 'reach3') {
+        const av = reach3ByElementId[a.elementId];
+        const bv = reach3ByElementId[b.elementId];
+        const aMissing = av === undefined;
+        const bMissing = bv === undefined;
+        if (aMissing !== bMissing) return aMissing ? 1 : -1;
+        if (av === undefined || bv === undefined) return cmpStr(a.label, b.label);
+        if (av !== bv) return (av - bv) * dirMul;
+        return cmpStr(a.label, b.label);
+      }
       // metric
       const av = metricKey ? valueByElementId[a.elementId] : undefined;
       const bv = metricKey ? valueByElementId[b.elementId] : undefined;
@@ -139,7 +185,20 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
       .map((r, i) => ({ r, i }))
       .sort((a, b) => cmp(a.r, b.r) || a.i - b.i)
       .map((x) => x.r);
-  }, [displayRows, metricKey, sortDir, sortKey, valueByElementId]);
+  }, [degreeByElementId, displayRows, metricKey, reach3ByElementId, sortDir, sortKey, valueByElementId]);
+
+  // If a user hides a column that is currently used for sorting, fall back to Name.
+  // (Keeps UI behavior predictable and avoids sorting by a hidden column.)
+  useEffect(() => {
+    if (sortKey === 'degree' && !showDegree) {
+      setSortKey('name');
+      setSortDir('asc');
+    }
+    if (sortKey === 'reach3' && !showReach3) {
+      setSortKey('name');
+      setSortDir('asc');
+    }
+  }, [showDegree, showReach3, sortKey]);
 
   const selectedElementId = selection.kind === 'element' ? selection.elementId : null;
 
@@ -157,6 +216,8 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
   const toggleSort = (nextKey: SortKey): void => {
     if (nextKey === 'metric' && !metricKey) return;
     if (nextKey === 'layer' && !hasLayerFacet) return;
+    if (nextKey === 'degree' && !showDegree) return;
+    if (nextKey === 'reach3' && !showReach3) return;
     setSortKey((cur) => {
       if (cur !== nextKey) {
         setSortDir('asc');
@@ -182,15 +243,21 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     ];
     if (hasLayerFacet) columns.push({ key: 'layer', header: 'layer' });
     columns.push({ key: 'metric', header: metricKey ? metricKey : 'metric' });
+    if (showDegree) columns.push({ key: 'degree', header: 'degree' });
+    if (showReach3) columns.push({ key: 'reach3', header: 'reach3' });
 
     const exportRows: Record<string, unknown>[] = sortedRows.map((r) => {
       const v = metricKey ? valueByElementId[r.elementId] : undefined;
+      const degree = showDegree ? (degreeByElementId[r.elementId] ?? '') : '';
+      const reach3 = showReach3 ? (reach3ByElementId[r.elementId] ?? '') : '';
       return {
         elementId: r.elementId,
         name: r.label,
         type: r.typeLabel,
         layer: r.layerLabel ?? '',
-        metric: v ?? ''
+        metric: v ?? '',
+        degree,
+        reach3
       };
     });
 
@@ -243,6 +310,20 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
                 onChange={() => setHideMissingMetric(!hideMissingMetric)}
               />
               Hide missing
+            </label>
+          </div>
+        </div>
+
+        <div className="toolbarGroup" style={{ minWidth: 260 }}>
+          <label>Extra metrics</label>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, whiteSpace: 'nowrap' }}>
+              <input type="checkbox" checked={showDegree} onChange={() => setShowDegree(!showDegree)} />
+              Degree
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, whiteSpace: 'nowrap' }}>
+              <input type="checkbox" checked={showReach3} onChange={() => setShowReach3(!showReach3)} />
+              Reach(3)
             </label>
           </div>
         </div>
@@ -428,6 +509,20 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
                   Metric{sortIndicator('metric')}
                 </button>
               </th>
+              {showDegree ? (
+                <th style={{ textAlign: 'right' }}>
+                  <button type="button" className="miniLinkButton" onClick={() => toggleSort('degree')} title="Sort by degree">
+                    Degree{sortIndicator('degree')}
+                  </button>
+                </th>
+              ) : null}
+              {showReach3 ? (
+                <th style={{ textAlign: 'right' }}>
+                  <button type="button" className="miniLinkButton" onClick={() => toggleSort('reach3')} title="Sort by reach within 3 steps">
+                    Reach(3){sortIndicator('reach3')}
+                  </button>
+                </th>
+              ) : null}
               <th style={{ width: 1 }} />
             </tr>
           </thead>
@@ -463,6 +558,16 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
                 >
                   {metricKey ? (v === undefined ? '—' : formatMetricValue(v)) : '—'}
                 </td>
+                {showDegree ? (
+                  <td className="mono" style={{ textAlign: 'right', opacity: degreeByElementId[r.elementId] === undefined ? 0.6 : 1 }}>
+                    {degreeByElementId[r.elementId] ?? '—'}
+                  </td>
+                ) : null}
+                {showReach3 ? (
+                  <td className="mono" style={{ textAlign: 'right', opacity: reach3ByElementId[r.elementId] === undefined ? 0.6 : 1 }}>
+                    {reach3ByElementId[r.elementId] ?? '—'}
+                  </td>
+                ) : null}
                 <td>
                   <div className="rowActions">
                     <button type="button" className="miniLinkButton" onClick={() => onSelectElement(r.elementId)}>

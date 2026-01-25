@@ -32,6 +32,10 @@
   --diagram-rel-stroke: rgba(255, 255, 255, 0.72);
   --diagram-rel-stroke-selected: rgba(255, 255, 255, 0.95);
 
+  /* Analysis heatmaps (used by Relationship Matrix and overlays) */
+  --analysis-heatmap-fill-rgb: 255, 255, 255;
+  --analysis-matrix-missing-bg: rgba(255, 255, 255, 0.03);
+
   /* ArchiMate classic layer palette (light fills) */
   --arch-layer-strategy: rgba(182, 139, 106, 0.92);
   --arch-layer-motivation: rgba(197, 168, 255, 0.92);
@@ -74,6 +78,10 @@
 
   --diagram-rel-stroke: rgba(17, 24, 39, 0.55);
   --diagram-rel-stroke-selected: rgba(17, 24, 39, 0.88);
+
+  /* Analysis heatmaps (used by Relationship Matrix and overlays) */
+  --analysis-heatmap-fill-rgb: 17, 24, 39;
+  --analysis-matrix-missing-bg: rgba(17, 24, 39, 0.06);
 }
 
 html,
@@ -92,6 +100,27 @@ body {
 
 #root {
   min-height: 100%;
+}
+
+/* Small shared UI bits */
+.analysisHeatLegend {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.analysisHeatLegendBar {
+  width: 120px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-1);
+  background: linear-gradient(
+    to right,
+    rgba(var(--analysis-heatmap-fill-rgb), 0),
+    rgba(var(--analysis-heatmap-fill-rgb), 0.18)
+  );
 }
 
 code {

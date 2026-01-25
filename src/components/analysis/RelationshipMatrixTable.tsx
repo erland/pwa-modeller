@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 import type { RelationshipMatrixResult } from '../../domain/analysis/relationshipMatrix';
@@ -53,6 +53,12 @@ export function RelationshipMatrixTable({
   const { rows, cols, cells, rowTotals, colTotals, grandTotal } = result;
 
   const [hideEmpty, setHideEmpty] = useState<boolean>(false);
+  const [heatmapEnabled, setHeatmapEnabled] = useState<boolean>(false);
+
+  // If cell values are disabled, heatmap shading doesn't make sense.
+  useEffect(() => {
+    if (cellMetricId === 'off' && heatmapEnabled) setHeatmapEnabled(false);
+  }, [cellMetricId, heatmapEnabled]);
 
   const maxCellCount = useMemo(() => {
     let max = 0;
@@ -105,6 +111,19 @@ export function RelationshipMatrixTable({
     return { displayRows, displayCols, displayCells, displayValues, displayRowTotals, displayColTotals };
   }, [baseValues, cells, colTotals, cols, hideEmpty, rowTotals, rows]);
 
+  const heatmapMaxValue = useMemo(() => {
+    if (!heatmapEnabled) return 0;
+    if (cellMetricId === 'off') return 0;
+    if (!displayValues) return 0;
+    let max = 0;
+    for (const row of displayValues) {
+      for (const v of row) {
+        if (Number.isFinite(v) && v > max) max = v;
+      }
+    }
+    return max;
+  }, [cellMetricId, displayValues, heatmapEnabled]);
+
   const cellBorderStyle: CSSProperties = { border: '1px solid var(--diagram-grid-line)' };
 
   return (
@@ -136,6 +155,26 @@ export function RelationshipMatrixTable({
               <option value="matrixRelationshipCount">Relationship count</option>
             </select>
           </label>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
+            <input
+              type="checkbox"
+              checked={heatmapEnabled}
+              disabled={cellMetricId === 'off'}
+              onChange={() => setHeatmapEnabled((v) => !v)}
+            />
+            Heatmap shading
+          </label>
+
+          {heatmapEnabled && cellMetricId !== 'off' && heatmapMaxValue > 0 ? (
+            <div className="analysisHeatLegend" title="Heatmap scale">
+              <span>Low</span>
+              <div className="analysisHeatLegendBar" aria-hidden="true" />
+              <span>
+                High (<span className="mono">{formatCellValue(heatmapMaxValue)}</span>)
+              </span>
+            </div>
+          ) : null}
 
           <button
             type="button"
@@ -280,16 +319,26 @@ export function RelationshipMatrixTable({
                   const rawValue = displayValues ? (displayValues[ri]?.[ci] ?? 0) : cell.count;
                   const valueText =
                     cellMetricId === 'off' ? '' : rawValue ? formatCellValue(rawValue) : '';
+
+                  const heatIntensity =
+                    heatmapEnabled && cellMetricId !== 'off' && heatmapMaxValue > 0
+                      ? Math.max(0, Math.min(1, rawValue / heatmapMaxValue))
+                      : 0;
+                  // Keep TS free from color choices; alpha is derived, base RGB comes from CSS vars.
+                  const heatAlpha = heatIntensity > 0 ? 0.18 * heatIntensity : 0;
+                  const heatmapBg =
+                    heatAlpha > 0 ? `rgba(var(--analysis-heatmap-fill-rgb), ${heatAlpha})` : undefined;
                   return (
                     <td
                       key={c.id}
+                      data-heat={heatIntensity > 0 ? heatIntensity.toFixed(3) : undefined}
                       style={{
                         ...cellBorderStyle,
                         textAlign: 'right',
                         padding: '8px 10px',
                         fontVariantNumeric: 'tabular-nums',
-                        // Heatmap touchpoint (Step 3+): background shading will be computed from a selected cell metric
-                        background: highlightMissing && isMissing ? 'rgba(255, 255, 255, 0.03)' : undefined,
+                        background:
+                          heatmapBg ?? (highlightMissing && isMissing ? 'var(--analysis-matrix-missing-bg)' : undefined),
                         opacity: isMissing ? 0.7 : 1,
                       }}
                       title={cell.relationshipIds.length ? cell.relationshipIds.join('\n') : 'No links'}

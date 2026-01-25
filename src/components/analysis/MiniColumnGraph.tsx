@@ -17,6 +17,8 @@ export type MiniColumnGraphNode = {
   bg?: string;
   /** Optional overlay badge (e.g., node degree). */
   badge?: string;
+  /** Optional per-node size scale (e.g., based on score). Clamp to a small range like 0.85–1.25. */
+  sizeScale?: number;
   /** UI-only: hidden nodes are not rendered. */
   hidden?: boolean;
 };
@@ -69,6 +71,12 @@ function nodeBaseRect() {
   const h = 34;
   return { w, h };
 }
+
+function clamp(n: number, min: number, max: number): number {
+  if (Number.isNaN(n)) return min;
+  return Math.min(max, Math.max(min, n));
+}
+
 
 function edgePath(from: { x: number; y: number; w: number; h: number }, to: { x: number; y: number; w: number; h: number }) {
   const x1 = from.x + from.w;
@@ -147,12 +155,16 @@ export function MiniColumnGraph({
     }
     const levels = [...byLevel.keys()].sort((a, b) => a - b);
 
-    // Column widths
-    const colWByLevel = new Map<number, number>();
+    // Column base widths (auto-fit) + max size scale per column.
+    const colBaseWByLevel = new Map<number, number>();
+    const colMaxScaleByLevel = new Map<number, number>();
     for (const level of levels) {
       const colNodes = byLevel.get(level) ?? [];
+      const maxScale = colNodes.reduce((m, n) => Math.max(m, clamp(n.sizeScale ?? 1, 0.85, 1.25)), 1);
+      colMaxScaleByLevel.set(level, maxScale);
+
       if (!effectiveAutoFitColumns) {
-        colWByLevel.set(level, rect.w);
+        colBaseWByLevel.set(level, rect.w);
         continue;
       }
 
@@ -167,7 +179,7 @@ export function MiniColumnGraph({
 
       const desired = maxNeeded + paddingX;
       const bounded = Math.min(rect.w * 1.5, Math.max(rect.w, desired));
-      colWByLevel.set(level, bounded);
+      colBaseWByLevel.set(level, bounded);
     }
 
     // X offsets
@@ -176,12 +188,15 @@ export function MiniColumnGraph({
     const xByLevel = new Map<number, number>();
     let xCursor = marginX;
     for (const level of levels) {
+      const baseW = colBaseWByLevel.get(level) ?? rect.w;
+      const maxScale = colMaxScaleByLevel.get(level) ?? 1;
+      const colW = baseW * maxScale;
       xByLevel.set(level, xCursor);
-      xCursor += (colWByLevel.get(level) ?? rect.w) + colGap;
+      xCursor += colW + colGap;
     }
 
     // Layout nodes
-    const ySpacing = 74; // allow up to 3 lines
+    const baseYSpacing = 74; // allow up to 3 lines
     const marginY = 24;
 
     const laidOutNodes: Array<{
@@ -207,14 +222,20 @@ export function MiniColumnGraph({
         return stableSortLabel(a.label).localeCompare(stableSortLabel(b.label));
       });
 
-      const nodeW = colWByLevel.get(level) ?? rect.w;
-      const maxTextW = nodeW - paddingX;
+      const baseNodeW = colBaseWByLevel.get(level) ?? rect.w;
+      // Per-column spacing based on the tallest scaled node in that column (avoid overlaps when scaling is enabled).
+      const maxScale = colMaxScaleByLevel.get(level) ?? 1;
+      const ySpacing = Math.max(baseYSpacing, rect.h * maxScale + 44);
 
       colNodes.forEach((n, order) => {
         const label = n.label || '';
+        const nodeScale = clamp(n.sizeScale ?? 1, 0.85, 1.25);
+        const nodeW = baseNodeW * nodeScale;
+        const maxTextW = nodeW - paddingX;
         const maxLines = effectiveWrapLabels ? 3 : 1;
         const wrapped = getWrapped(n.id, label, maxTextW, maxLines);
-        const h = effectiveWrapLabels ? Math.max(rect.h, paddingY + wrapped.lines.length * lineHeight + paddingY) : rect.h;
+        const baseH = effectiveWrapLabels ? Math.max(rect.h, paddingY + wrapped.lines.length * lineHeight + paddingY) : rect.h;
+        const h = baseH * nodeScale;
 
         const x = xByLevel.get(level) ?? marginX;
         const y = marginY + order * ySpacing;

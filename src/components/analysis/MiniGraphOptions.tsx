@@ -8,13 +8,16 @@ export type MiniGraphOptions = {
   nodeOverlayMetricId: 'off' | NodeMetricId;
   /** Used when nodeOverlayMetricId === 'nodeReach'. */
   nodeOverlayReachDepth: 2 | 3 | 4;
+  /** If true, scale node size based on the active overlay metric value. */
+  scaleNodesByOverlayScore: boolean;
 };
 
 export const defaultMiniGraphOptions: MiniGraphOptions = {
   wrapLabels: true,
   autoFitColumns: true,
   nodeOverlayMetricId: 'off',
-  nodeOverlayReachDepth: 3
+  nodeOverlayReachDepth: 3,
+  scaleNodesByOverlayScore: false
 };
 
 type Props = {
@@ -84,6 +87,16 @@ export function MiniGraphOptionsToggles({ options, onChange, style, checkboxStyl
           <option value="nodeReach:3">Reach (3)</option>
           <option value="nodeReach:4">Reach (4)</option>
         </select>
+      </label>
+
+      <label style={labelStyle}>
+        <input
+          type="checkbox"
+          checked={options.scaleNodesByOverlayScore}
+          disabled={options.nodeOverlayMetricId === 'off'}
+          onChange={(e) => onChange({ ...options, scaleNodesByOverlayScore: e.currentTarget.checked })}
+        />
+        Size by score
       </label>
     </div>
   );

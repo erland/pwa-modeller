@@ -247,6 +247,7 @@ export function AnalysisResultTable({
             autoFitColumns={graphOptions.autoFitColumns}
             nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
             nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
+            scaleNodesByOverlayScore={graphOptions.scaleNodesByOverlayScore}
             overlayDirection={direction}
             overlayRelationshipTypes={relationshipTypes}
           />
@@ -394,6 +395,7 @@ export function AnalysisResultTable({
           autoFitColumns={graphOptions.autoFitColumns}
           nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
           nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
+          scaleNodesByOverlayScore={graphOptions.scaleNodesByOverlayScore}
           overlayDirection={direction}
           overlayRelationshipTypes={relationshipTypes}
         />

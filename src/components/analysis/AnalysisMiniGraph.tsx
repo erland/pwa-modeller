@@ -80,6 +80,7 @@ export function AnalysisMiniGraph({
   autoFitColumns = true,
   nodeOverlayMetricId = 'off',
   nodeOverlayReachDepth = 3,
+  scaleNodesByOverlayScore = false,
   overlayDirection = 'both',
   overlayRelationshipTypes
 }: {
@@ -95,6 +96,7 @@ export function AnalysisMiniGraph({
   autoFitColumns?: boolean;
   nodeOverlayMetricId?: 'off' | NodeMetricId;
   nodeOverlayReachDepth?: 2 | 3 | 4;
+  scaleNodesByOverlayScore?: boolean;
   overlayDirection?: AnalysisDirection;
   overlayRelationshipTypes?: RelationshipType[];
 }) {
@@ -204,6 +206,27 @@ export function AnalysisMiniGraph({
   }, [safeData.edges]);
 
   const graphNodes: MiniColumnGraphNode[] = useMemo(() => {
+    const shouldScale = Boolean(scaleNodesByOverlayScore && nodeOverlayMetricId !== 'off' && nodeOverlayScores);
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    if (shouldScale) {
+      for (const n of safeData.nodes) {
+        const v = nodeOverlayScores ? nodeOverlayScores[n.id] : undefined;
+        if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+    }
+
+    const computeScale = (score: number | undefined): number | undefined => {
+      if (!shouldScale) return undefined;
+      if (typeof score !== 'number' || !Number.isFinite(score)) return 1;
+      if (!(max > min)) return 1;
+      const t = (score - min) / (max - min);
+      // Clamp to a subtle range to avoid layout blowups.
+      return 0.85 + Math.max(0, Math.min(1, t)) * (1.25 - 0.85);
+    };
+
     return safeData.nodes.map((n) => {
       const el = model.elements[n.id];
 
@@ -221,9 +244,10 @@ export function AnalysisMiniGraph({
       // additional style hints (e.g., scale) based on computed per-node metric values for the nodes in `safeData`.
       const score = nodeOverlayScores ? nodeOverlayScores[n.id] : undefined;
       const badge = typeof score === 'number' ? String(score) : undefined;
-      return { id: n.id, label: n.label, level: n.level, order: n.order, bg, badge };
+      const sizeScale = computeScale(score);
+      return { id: n.id, label: n.label, level: n.level, order: n.order, bg, badge, sizeScale };
     });
-  }, [safeData.nodes, getElementBgVar, model.elements, modelKind, nodeOverlayScores]);
+  }, [safeData.nodes, getElementBgVar, model.elements, modelKind, nodeOverlayScores, nodeOverlayMetricId, scaleNodesByOverlayScore]);
 
   const getEdgeTooltip = (edgeId: string): MiniColumnGraphTooltip | null => {
     const step = edgeById[edgeId];

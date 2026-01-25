@@ -20,6 +20,11 @@ function normalizeStringArray<T extends string>(arr: readonly T[] | undefined): 
 }
 
 function stableAnalysisKey(opts: RelatedElementsOptions | PathsBetweenOptions | undefined): string {
+  // NOTE (Analysis metrics plan): this key is ONLY for the domain queries (related/paths).
+  // Heatmap/overlay metric options will be stored separately and should NOT affect these memoization keys
+  // unless they change the *query* itself. If/when we introduce query-affecting metric params, add them
+  // here in a backwards-compatible way and update relatedOptsFromKey/pathsOptsFromKey.
+
   if (!opts) return ''; 
   const o: {
     direction?: string;

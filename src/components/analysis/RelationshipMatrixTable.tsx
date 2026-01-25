@@ -242,6 +242,7 @@ export function RelationshipMatrixTable({
                         textAlign: 'right',
                         padding: '8px 10px',
                         fontVariantNumeric: 'tabular-nums',
+                        // Heatmap touchpoint (Step 3+): background shading will be computed from a selected cell metric
                         background: highlightMissing && isMissing ? 'rgba(255, 255, 255, 0.03)' : undefined,
                         opacity: isMissing ? 0.7 : 1,
                       }}

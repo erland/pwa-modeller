@@ -179,6 +179,8 @@ export function AnalysisMiniGraph({
         bg = getElementBgVar(el.type as ElementType);
       }
 
+      // Score overlay touchpoint (Step 4+): when enabled, we can add a badge suffix to `label` or provide
+      // additional style hints (e.g., scale) based on computed per-node metric values for the nodes in `safeData`.
       return { id: n.id, label: n.label, level: n.level, order: n.order, bg };
     });
   }, [safeData.nodes, getElementBgVar, model.elements, modelKind]);

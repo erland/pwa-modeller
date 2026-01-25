@@ -67,6 +67,8 @@ export function AnalysisWorkspace({
 
   // -----------------------------
   // Matrix (draft)
+  // Touchpoints for Step 1+ (heatmaps + metrics): matrix metric selection (cell values), heatmap shading toggle, and
+  // optional relationship-type weights will be added in this section and then forwarded to RelationshipMatrixTable.
   // -----------------------------
   const [matrixRowSource, setMatrixRowSource] = useState<'facet' | 'selection'>('facet');
   const [matrixRowElementType, setMatrixRowElementType] = useState<ElementType | ''>('');
@@ -244,6 +246,8 @@ export function AnalysisWorkspace({
 
   // -----------------------------
   // Filters (draft)
+  // Touchpoints for Step 4+ (score overlays): node overlay metric id/params and render toggles (badge/scale)
+  // will live next to these global filters (direction/layer/type), because overlays usually respect the same filtering.
   // -----------------------------
   const [direction, setDirection] = useState<AnalysisDirection>('both');
   const [relationshipTypes, setRelationshipTypes] = useState<RelationshipType[]>([]);

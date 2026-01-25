@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 
 import type { RelationshipMatrixResult } from '../../domain/analysis/relationshipMatrix';
+import { exportRelationshipMatrixCsv, exportRelationshipMatrixMissingLinksCsv } from './exportRelationshipMatrixCsv';
 
 export interface RelationshipMatrixTableProps {
+  modelName: string;
   result: RelationshipMatrixResult;
   /** If true, visually highlight 0-count cells. */
   highlightMissing: boolean;
@@ -23,6 +25,7 @@ function formatTotal(n: number): string {
 }
 
 export function RelationshipMatrixTable({
+  modelName,
   result,
   highlightMissing,
   onToggleHighlightMissing,
@@ -55,7 +58,24 @@ export function RelationshipMatrixTable({
             ) : null}
           </p>
         </div>
-        <div className="crudActions" style={{ alignItems: 'center' }}>
+        <div className="crudActions" style={{ alignItems: 'center', gap: 10 }}>
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => exportRelationshipMatrixCsv(modelName, result)}
+            title="Export the entire matrix as CSV"
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            className="shellButton"
+            onClick={() => exportRelationshipMatrixMissingLinksCsv(modelName, result)}
+            title="Export all 0-count cells as a flat missing-links list"
+          >
+            Export missing links
+          </button>
+
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
             <input type="checkbox" checked={highlightMissing} onChange={onToggleHighlightMissing} />
             Highlight missing links (0)

@@ -483,6 +483,7 @@ export function AnalysisWorkspace({
 
               {matrixResult ? (
                 <RelationshipMatrixTable
+                  modelName={model.metadata?.name || 'model'}
                   result={matrixResult}
                   highlightMissing={matrixHighlightMissing}
                   onToggleHighlightMissing={() => setMatrixHighlightMissing((v) => !v)}

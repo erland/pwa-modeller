@@ -14,6 +14,7 @@ import { QueryToolbar } from './queryPanel/QueryToolbar';
 import { useAnalysisQueryOptions } from './queryPanel/useAnalysisQueryOptions';
 import {
   collectFacetValues,
+  collectFacetValuesConstrained,
   hasAnyFilters as computeHasAnyFilters,
   sortElementTypesForDisplay
 } from './queryPanel/utils';
@@ -185,6 +186,29 @@ export function AnalysisQueryPanel({
     return sortElementTypesForDisplay(types);
   }, [hasElementTypeFacet, model, modelKind]);
 
+  const availableElementTypesByLayer = useMemo(() => {
+    if (!hasElementTypeFacet || !hasLayerFacet) return new Map<string, ElementType[]>();
+    const map = new Map<string, ElementType[]>();
+    for (const layer of availableLayers) {
+      const types = collectFacetValuesConstrained<ElementType>(model, modelKind, 'elementType', 'archimateLayer', [layer]);
+      map.set(layer, sortElementTypesForDisplay(types));
+    }
+    return map;
+  }, [availableLayers, hasElementTypeFacet, hasLayerFacet, model, modelKind]);
+
+  const availableRowElementTypes = useMemo(() => {
+    if (!hasElementTypeFacet) return [] as ElementType[];
+    if (!matrixRowLayer || !hasLayerFacet) return availableElementTypesAll;
+    return availableElementTypesByLayer.get(matrixRowLayer) ?? ([] as ElementType[]);
+  }, [availableElementTypesAll, availableElementTypesByLayer, hasElementTypeFacet, hasLayerFacet, matrixRowLayer]);
+
+  const availableColElementTypes = useMemo(() => {
+    if (!hasElementTypeFacet) return [] as ElementType[];
+    if (!matrixColLayer || !hasLayerFacet) return availableElementTypesAll;
+    return availableElementTypesByLayer.get(matrixColLayer) ?? ([] as ElementType[]);
+  }, [availableElementTypesAll, availableElementTypesByLayer, hasElementTypeFacet, hasLayerFacet, matrixColLayer]);
+
+
   return (
     <section className="crudSection" aria-label="Analysis query">
       {mode === 'matrix' ? (
@@ -209,24 +233,22 @@ export function AnalysisQueryPanel({
                 </select>
                 {matrixRowSource === 'facet' ? (
                   <>
-                    <select
-                      className="selectInput"
-                      value={matrixRowElementType}
-                      onChange={(e) => onChangeMatrixRowElementType(e.currentTarget.value as ElementType | '')}
-                      title="Row element type"
-                    >
-                      <option value="">Select type…</option>
-                      {availableElementTypesAll.map((t) => (
-                        <option key={t} value={t}>
-                          {String(t)}
-                        </option>
-                      ))}
-                    </select>
                     {hasLayerFacet ? (
                       <select
                         className="selectInput"
                         value={matrixRowLayer}
-                        onChange={(e) => onChangeMatrixRowLayer(e.currentTarget.value)}
+                        onChange={(e) => {
+                          const nextLayer = e.currentTarget.value;
+                          onChangeMatrixRowLayer(nextLayer);
+                          // If the layer constraint makes the currently selected type invalid, clear it.
+                          if (
+                            nextLayer &&
+                            matrixRowElementType &&
+                            !availableElementTypesByLayer.get(nextLayer)?.includes(matrixRowElementType)
+                          ) {
+                            onChangeMatrixRowElementType('');
+                          }
+                        }}
                         title="Optional layer constraint"
                       >
                         <option value="">Any layer</option>
@@ -237,6 +259,19 @@ export function AnalysisQueryPanel({
                         ))}
                       </select>
                     ) : null}
+                    <select
+                      className="selectInput"
+                      value={matrixRowElementType}
+                      onChange={(e) => onChangeMatrixRowElementType(e.currentTarget.value as ElementType | '')}
+                      title="Row element type"
+                    >
+                      <option value="">Select type…</option>
+                      {availableRowElementTypes.map((t) => (
+                        <option key={t} value={t}>
+                          {String(t)}
+                        </option>
+                      ))}
+                    </select>
                   </>
                 ) : (
                   <>
@@ -271,24 +306,22 @@ export function AnalysisQueryPanel({
                 </select>
                 {matrixColSource === 'facet' ? (
                   <>
-                    <select
-                      className="selectInput"
-                      value={matrixColElementType}
-                      onChange={(e) => onChangeMatrixColElementType(e.currentTarget.value as ElementType | '')}
-                      title="Column element type"
-                    >
-                      <option value="">Select type…</option>
-                      {availableElementTypesAll.map((t) => (
-                        <option key={t} value={t}>
-                          {String(t)}
-                        </option>
-                      ))}
-                    </select>
                     {hasLayerFacet ? (
                       <select
                         className="selectInput"
                         value={matrixColLayer}
-                        onChange={(e) => onChangeMatrixColLayer(e.currentTarget.value)}
+                        onChange={(e) => {
+                          const nextLayer = e.currentTarget.value;
+                          onChangeMatrixColLayer(nextLayer);
+                          // If the layer constraint makes the currently selected type invalid, clear it.
+                          if (
+                            nextLayer &&
+                            matrixColElementType &&
+                            !availableElementTypesByLayer.get(nextLayer)?.includes(matrixColElementType)
+                          ) {
+                            onChangeMatrixColElementType('');
+                          }
+                        }}
                         title="Optional layer constraint"
                       >
                         <option value="">Any layer</option>
@@ -299,6 +332,19 @@ export function AnalysisQueryPanel({
                         ))}
                       </select>
                     ) : null}
+                    <select
+                      className="selectInput"
+                      value={matrixColElementType}
+                      onChange={(e) => onChangeMatrixColElementType(e.currentTarget.value as ElementType | '')}
+                      title="Column element type"
+                    >
+                      <option value="">Select type…</option>
+                      {availableColElementTypes.map((t) => (
+                        <option key={t} value={t}>
+                          {String(t)}
+                        </option>
+                      ))}
+                    </select>
                   </>
                 ) : (
                   <>

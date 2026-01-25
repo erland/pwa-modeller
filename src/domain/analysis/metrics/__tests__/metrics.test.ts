@@ -1,13 +1,13 @@
 import { createElement, createEmptyModel, createRelationship } from '../../../factories';
 import type { Model } from '../../../types';
 import { buildAnalysisGraph } from '../../graph';
-import { computeMatrixMetric, computeNodeMetric } from '../index';
+import { computeMatrixMetric, computeNodeMetric, discoverNumericPropertyKeys, readNumericPropertyFromElement } from '../index';
 
 function buildSmallModel(): Model {
   const model = createEmptyModel({ name: 't' });
 
-  const a = createElement({ id: 'A', name: 'A', type: 'BusinessActor', layer: 'Business' });
-  const b = createElement({ id: 'B', name: 'B', type: 'ApplicationComponent', layer: 'Application' });
+  const a = createElement({ id: 'A', name: 'A', type: 'BusinessActor', layer: 'Business', taggedValues: [{ id: 'tv2', ns: 'x', key: 'cost', type: 'number', value: '10' }] });
+  const b = createElement({ id: 'B', name: 'B', type: 'ApplicationComponent', layer: 'Application', taggedValues: [{ id: 'tv1', key: 'risk', type: 'number', value: '2.5' }] });
   const c = createElement({ id: 'C', name: 'C', type: 'Node', layer: 'Technology' });
   const d = createElement({ id: 'D', name: 'D', type: 'BusinessRole', layer: 'Business' });
 
@@ -80,6 +80,28 @@ describe('analysis metrics', () => {
     });
     expect(servingOnlyReach2.A).toBe(1);
     expect(servingOnlyReach2.B).toBe(0);
+  });
+
+
+  test('nodePropertyNumber reads numeric values from tagged values', () => {
+    const model = buildSmallModel();
+    const graph = buildAnalysisGraph(model);
+
+    const byId = (nodeId: string, key: string): number | undefined =>
+      readNumericPropertyFromElement(model.elements[nodeId], key);
+
+    const risk = computeNodeMetric(graph, 'nodePropertyNumber', { key: 'risk', getValueByNodeId: byId });
+    expect(risk.B).toBeCloseTo(2.5);
+    expect(risk.A).toBeUndefined();
+
+    const costNs = computeNodeMetric(graph, 'nodePropertyNumber', { key: 'x:cost', getValueByNodeId: byId });
+    expect(costNs.A).toBe(10);
+  });
+
+  test('discoverNumericPropertyKeys returns likely numeric keys', () => {
+    const model = buildSmallModel();
+    const keys = discoverNumericPropertyKeys(model);
+    expect(keys).toEqual(expect.arrayContaining(['risk', 'cost', 'x:cost']));
   });
 
   test('matrixRelationshipCount respects direction and treats undirected as bidirectional', () => {

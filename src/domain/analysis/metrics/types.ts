@@ -9,7 +9,7 @@ export type MetricTarget = 'node' | 'edge' | 'matrixCell';
  *
  * Keep these stable since they may be persisted in local storage.
  */
-export type NodeMetricId = 'nodeDegree' | 'nodeReach';
+export type NodeMetricId = 'nodeDegree' | 'nodeReach' | 'nodePropertyNumber';
 export type MatrixMetricId = 'matrixRelationshipCount';
 export type BuiltInMetricId = NodeMetricId | MatrixMetricId;
 
@@ -40,6 +40,21 @@ export type NodeReachMetricParams = {
   maxVisited?: number;
 };
 
+
+export type NodePropertyNumberMetricParams = {
+  /** Property key. Supports "ns:key" (tagged value), or plain "key". */
+  key: string;
+  /** Optional subset of nodes to compute the metric for. If omitted, computes for all nodes. */
+  nodeIds?: string[];
+  /**
+   * Resolver for a node's numeric value.
+   *
+   * This is intentionally injected so the metrics layer stays notation-agnostic,
+   * while callers decide how to map nodeIds to element/relationship metadata.
+   */
+  getValueByNodeId: (nodeId: string, key: string) => number | undefined;
+};
+
 export type MatrixRelationshipCountMetricParams = {
   rowIds: string[];
   colIds: string[];
@@ -50,6 +65,7 @@ export type MatrixRelationshipCountMetricParams = {
 export type MetricParamsById = {
   nodeDegree: NodeDegreeMetricParams;
   nodeReach: NodeReachMetricParams;
+  nodePropertyNumber: NodePropertyNumberMetricParams;
   matrixRelationshipCount: MatrixRelationshipCountMetricParams;
 };
 

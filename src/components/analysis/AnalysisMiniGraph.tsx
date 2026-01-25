@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import type { AnalysisDirection, RelationshipType, NodeMetricId, Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
-import { buildAnalysisGraph, computeNodeMetric, getElementTypeLabel, getRelationshipTypeLabel } from '../../domain';
+import { buildAnalysisGraph, computeNodeMetric, getElementTypeLabel, getRelationshipTypeLabel, readNumericPropertyFromElement } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { TraversalStep } from '../../domain/analysis/traverse';
 import type { ArchimateLayer, ElementType } from '../../domain/types';
@@ -80,6 +80,7 @@ export function AnalysisMiniGraph({
   autoFitColumns = true,
   nodeOverlayMetricId = 'off',
   nodeOverlayReachDepth = 3,
+  nodeOverlayPropertyKey = '',
   scaleNodesByOverlayScore = false,
   overlayDirection = 'both',
   overlayRelationshipTypes
@@ -96,6 +97,7 @@ export function AnalysisMiniGraph({
   autoFitColumns?: boolean;
   nodeOverlayMetricId?: 'off' | NodeMetricId;
   nodeOverlayReachDepth?: 2 | 3 | 4;
+  nodeOverlayPropertyKey?: string;
   scaleNodesByOverlayScore?: boolean;
   overlayDirection?: AnalysisDirection;
   overlayRelationshipTypes?: RelationshipType[];
@@ -142,12 +144,22 @@ export function AnalysisMiniGraph({
       });
     }
 
+    if (nodeOverlayMetricId === 'nodePropertyNumber') {
+      const key = (nodeOverlayPropertyKey ?? '').trim();
+      if (!key) return {};
+      return computeNodeMetric(analysisGraph, 'nodePropertyNumber', {
+        key,
+        nodeIds,
+        getValueByNodeId: (nodeId, k) => readNumericPropertyFromElement(model.elements[nodeId], k)
+      });
+    }
+
     return computeNodeMetric(analysisGraph, nodeOverlayMetricId, {
       direction: overlayDirection,
       relationshipTypes,
       nodeIds
     });
-  }, [analysisGraph, nodeOverlayMetricId, nodeOverlayReachDepth, overlayDirection, overlayRelationshipTypes, safeData.nodes]);
+  }, [analysisGraph, nodeOverlayMetricId, nodeOverlayReachDepth, nodeOverlayPropertyKey, overlayDirection, overlayRelationshipTypes, safeData.nodes, model.elements]);
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
   const selectedElementId = selectionToElementId(selection);

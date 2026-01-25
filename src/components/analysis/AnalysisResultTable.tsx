@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { AnalysisDirection, RelationshipType, AnalysisPath, Model, PathsBetweenResult, RelatedElementsResult, TraversalStep } from '../../domain';
-import { getElementTypeLabel } from '../../domain';
+import { discoverNumericPropertyKeys, getElementTypeLabel } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { ModelKind } from '../../domain/types';
 import type { AnalysisMode } from './AnalysisQueryPanel';
@@ -76,6 +76,8 @@ export function AnalysisResultTable({
   const adapter = getAnalysisAdapter(modelKind);
   const [showGraph, setShowGraph] = useState(false);
   const [graphOptions, setGraphOptions] = useState(defaultMiniGraphOptions);
+
+  const availablePropertyKeys = useMemo(() => discoverNumericPropertyKeys(model), [model]);
   const [tooltip, setTooltip] = useState<{
     x: number;
     y: number;
@@ -247,6 +249,7 @@ export function AnalysisResultTable({
             autoFitColumns={graphOptions.autoFitColumns}
             nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
             nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
+            nodeOverlayPropertyKey={graphOptions.nodeOverlayPropertyKey}
             scaleNodesByOverlayScore={graphOptions.scaleNodesByOverlayScore}
             overlayDirection={direction}
             overlayRelationshipTypes={relationshipTypes}
@@ -297,7 +300,7 @@ export function AnalysisResultTable({
           >
             {showGraph ? 'Hide graph' : 'Show graph'}
           </button>
-          <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} />
+          <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} availablePropertyKeys={availablePropertyKeys} />
           {sourceId ? (
             <button type="button" className="miniLinkButton" onClick={() => onOpenTraceability(sourceId)}>
               Trace from source
@@ -395,6 +398,7 @@ export function AnalysisResultTable({
           autoFitColumns={graphOptions.autoFitColumns}
           nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
           nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
+          nodeOverlayPropertyKey={graphOptions.nodeOverlayPropertyKey}
           scaleNodesByOverlayScore={graphOptions.scaleNodesByOverlayScore}
           overlayDirection={direction}
           overlayRelationshipTypes={relationshipTypes}

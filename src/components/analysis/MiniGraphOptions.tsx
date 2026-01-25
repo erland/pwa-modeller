@@ -8,6 +8,8 @@ export type MiniGraphOptions = {
   nodeOverlayMetricId: 'off' | NodeMetricId;
   /** Used when nodeOverlayMetricId === 'nodeReach'. */
   nodeOverlayReachDepth: 2 | 3 | 4;
+  /** Used when nodeOverlayMetricId === 'nodePropertyNumber'. */
+  nodeOverlayPropertyKey: string;
   /** If true, scale node size based on the active overlay metric value. */
   scaleNodesByOverlayScore: boolean;
 };
@@ -17,17 +19,20 @@ export const defaultMiniGraphOptions: MiniGraphOptions = {
   autoFitColumns: true,
   nodeOverlayMetricId: 'off',
   nodeOverlayReachDepth: 3,
+  nodeOverlayPropertyKey: '',
   scaleNodesByOverlayScore: false
 };
 
 type Props = {
   options: MiniGraphOptions;
   onChange: (next: MiniGraphOptions) => void;
+  /** Optional list of discovered numeric property keys for autocomplete. */
+  availablePropertyKeys?: string[];
   style?: CSSProperties;
   checkboxStyle?: CSSProperties;
 };
 
-export function MiniGraphOptionsToggles({ options, onChange, style, checkboxStyle }: Props) {
+export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKeys, style, checkboxStyle }: Props) {
   const labelStyle: CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -67,7 +72,7 @@ export function MiniGraphOptionsToggles({ options, onChange, style, checkboxStyl
           }
           onChange={(e) => {
             const v = e.currentTarget.value;
-            if (v === 'off' || v === 'nodeDegree') {
+            if (v === 'off' || v === 'nodeDegree' || v === 'nodePropertyNumber') {
               onChange({ ...options, nodeOverlayMetricId: v });
               return;
             }
@@ -86,7 +91,30 @@ export function MiniGraphOptionsToggles({ options, onChange, style, checkboxStyl
           <option value="nodeReach:2">Reach (2)</option>
           <option value="nodeReach:3">Reach (3)</option>
           <option value="nodeReach:4">Reach (4)</option>
+          <option value="nodePropertyNumber">Property…</option>
         </select>
+
+        {options.nodeOverlayMetricId === 'nodePropertyNumber' ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <input
+              aria-label="Overlay property key"
+              type="text"
+              value={options.nodeOverlayPropertyKey}
+              onChange={(e) => onChange({ ...options, nodeOverlayPropertyKey: e.currentTarget.value })}
+              placeholder="e.g. risk or ns:key"
+              list="analysisOverlayPropertyKeys"
+              style={{ fontSize: 12, width: 140 }}
+            />
+            {availablePropertyKeys && availablePropertyKeys.length ? (
+              <datalist id="analysisOverlayPropertyKeys">
+                {availablePropertyKeys.map((k) => (
+                  <option key={k} value={k} />
+                ))}
+              </datalist>
+            ) : null}
+          </span>
+        ) : null}
+
       </label>
 
       <label style={labelStyle}>

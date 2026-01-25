@@ -19,6 +19,12 @@ export const BUILT_IN_METRICS: MetricDefinition[] = [
     description: 'Number of distinct nodes reachable within N hops (direction-aware).'
   },
   {
+    id: 'nodePropertyNumber',
+    label: 'Property (number)',
+    target: 'node',
+    description: 'Numeric value read from a tagged value or notation-specific property.'
+  },
+  {
     id: 'matrixRelationshipCount',
     label: 'Relationship count',
     target: 'matrixCell',

@@ -6,7 +6,8 @@ import type {
   MetricParamsById,
   NodeMetricResult,
   NodeDegreeMetricParams,
-  NodeReachMetricParams
+  NodeReachMetricParams,
+  NodePropertyNumberMetricParams
 } from './types';
 
 function normalizeRelationshipTypes(types?: RelationshipType[]): ReadonlySet<RelationshipType> | undefined {
@@ -73,6 +74,24 @@ function computeNodeReach(graph: AnalysisGraph, params: NodeReachMetricParams): 
   return out;
 }
 
+
+function computeNodePropertyNumber(graph: AnalysisGraph, params: NodePropertyNumberMetricParams): NodeMetricResult {
+  const out: NodeMetricResult = {};
+
+  const key = (params.key ?? '').trim();
+  if (!key) return out;
+
+  const nodeIds = params.nodeIds && params.nodeIds.length ? params.nodeIds : Array.from(graph.nodes.keys());
+  for (const nodeId of nodeIds) {
+    if (!graph.nodes.has(nodeId)) continue;
+    const v = params.getValueByNodeId(nodeId, key);
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    out[nodeId] = v;
+  }
+
+  return out;
+}
+
 /**
  * Compute a node-targeted metric for all nodes in the graph.
  */
@@ -86,6 +105,8 @@ export function computeNodeMetric(
       return computeNodeDegree(graph, params as NodeDegreeMetricParams);
     case 'nodeReach':
       return computeNodeReach(graph, params as NodeReachMetricParams);
+    case 'nodePropertyNumber':
+      return computeNodePropertyNumber(graph, params as NodePropertyNumberMetricParams);
     default: {
       // Compile-time should prevent unsupported ids, but keep runtime guard.
       const exhaustiveCheck: never = metricId;

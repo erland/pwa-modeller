@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
-import type { Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
-import { getElementTypeLabel, getRelationshipTypeLabel } from '../../domain';
+import type { AnalysisDirection, RelationshipType, NodeMetricId, Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
+import { buildAnalysisGraph, computeNodeMetric, getElementTypeLabel, getRelationshipTypeLabel } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { TraversalStep } from '../../domain/analysis/traverse';
 import type { ArchimateLayer, ElementType } from '../../domain/types';
@@ -77,7 +77,10 @@ export function AnalysisMiniGraph({
   onSelectElement,
   onSelectRelationship,
   wrapLabels = true,
-  autoFitColumns = true
+  autoFitColumns = true,
+  nodeOverlayMetricId = 'off',
+  overlayDirection = 'both',
+  overlayRelationshipTypes
 }: {
   model: Model;
   modelKind: ModelKind;
@@ -89,6 +92,9 @@ export function AnalysisMiniGraph({
   onSelectRelationship?: (relationshipId: string) => void;
   wrapLabels?: boolean;
   autoFitColumns?: boolean;
+  nodeOverlayMetricId?: 'off' | NodeMetricId;
+  overlayDirection?: AnalysisDirection;
+  overlayRelationshipTypes?: RelationshipType[];
 }) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
@@ -108,6 +114,20 @@ export function AnalysisMiniGraph({
 
   const safeData: MiniGraphData =
     data ?? { nodes: [], edges: [], maxLevel: 0, trimmed: { nodes: false, edges: false } };
+
+  const analysisGraph = useMemo(() => {
+    if (nodeOverlayMetricId === 'off') return null;
+    return buildAnalysisGraph(model);
+  }, [model, nodeOverlayMetricId]);
+
+  const nodeOverlayScores = useMemo(() => {
+    if (nodeOverlayMetricId === 'off') return null;
+    if (!analysisGraph) return null;
+    return computeNodeMetric(analysisGraph, nodeOverlayMetricId, {
+      direction: overlayDirection,
+      relationshipTypes: overlayRelationshipTypes && overlayRelationshipTypes.length ? overlayRelationshipTypes : undefined
+    });
+  }, [analysisGraph, nodeOverlayMetricId, overlayDirection, overlayRelationshipTypes]);
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
   const selectedElementId = selectionToElementId(selection);
@@ -181,9 +201,11 @@ export function AnalysisMiniGraph({
 
       // Score overlay touchpoint (Step 4+): when enabled, we can add a badge suffix to `label` or provide
       // additional style hints (e.g., scale) based on computed per-node metric values for the nodes in `safeData`.
-      return { id: n.id, label: n.label, level: n.level, order: n.order, bg };
+      const score = nodeOverlayScores ? nodeOverlayScores[n.id] : undefined;
+      const badge = typeof score === 'number' ? String(score) : undefined;
+      return { id: n.id, label: n.label, level: n.level, order: n.order, bg, badge };
     });
-  }, [safeData.nodes, getElementBgVar, model.elements, modelKind]);
+  }, [safeData.nodes, getElementBgVar, model.elements, modelKind, nodeOverlayScores]);
 
   const getEdgeTooltip = (edgeId: string): MiniColumnGraphTooltip | null => {
     const step = edgeById[edgeId];

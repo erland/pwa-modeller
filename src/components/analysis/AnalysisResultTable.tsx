@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import type { AnalysisPath, Model, PathsBetweenResult, RelatedElementsResult, TraversalStep } from '../../domain';
+import type { AnalysisDirection, RelationshipType, AnalysisPath, Model, PathsBetweenResult, RelatedElementsResult, TraversalStep } from '../../domain';
 import { getElementTypeLabel } from '../../domain';
 import type { AnalysisEdge } from '../../domain/analysis/graph';
 import type { ModelKind } from '../../domain/types';
@@ -19,9 +19,12 @@ type Props = {
   model: Model;
   modelKind: ModelKind;
   mode: AnalysisMode;
+
   relatedResult: RelatedElementsResult | null;
   pathsResult: PathsBetweenResult | null;
   selection: Selection;
+  direction: AnalysisDirection;
+  relationshipTypes: RelationshipType[];
   onSelectRelationship: (relationshipId: string) => void;
   onSelectElement: (elementId: string) => void;
   onOpenTraceability: (elementId: string) => void;
@@ -61,6 +64,8 @@ export function AnalysisResultTable({
   model,
   modelKind,
   mode,
+  direction,
+  relationshipTypes,
   relatedResult,
   pathsResult,
   selection,
@@ -240,6 +245,9 @@ export function AnalysisResultTable({
             onSelectElement={onSelectElement}
             wrapLabels={graphOptions.wrapLabels}
             autoFitColumns={graphOptions.autoFitColumns}
+            nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
+            overlayDirection={direction}
+            overlayRelationshipTypes={relationshipTypes}
           />
         ) : null}
 
@@ -381,6 +389,11 @@ export function AnalysisResultTable({
           selection={selection}
           onSelectRelationship={onSelectRelationship}
           onSelectElement={onSelectElement}
+          wrapLabels={graphOptions.wrapLabels}
+          autoFitColumns={graphOptions.autoFitColumns}
+          nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
+          overlayDirection={direction}
+          overlayRelationshipTypes={relationshipTypes}
         />
       ) : null}
 

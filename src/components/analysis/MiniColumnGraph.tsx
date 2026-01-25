@@ -15,6 +15,8 @@ export type MiniColumnGraphNode = {
   order?: number;
   /** Optional background fill (CSS color or var). */
   bg?: string;
+  /** Optional overlay badge (e.g., node degree). */
+  badge?: string;
   /** UI-only: hidden nodes are not rendered. */
   hidden?: boolean;
 };
@@ -193,6 +195,7 @@ export function MiniColumnGraph({
       w: number;
       h: number;
       bg?: string;
+      badge?: string;
     }> = [];
 
     for (const level of levels) {
@@ -226,7 +229,8 @@ export function MiniColumnGraph({
           y,
           w: nodeW,
           h,
-          bg: n.bg
+          bg: n.bg,
+          badge: n.badge
         });
       });
     }
@@ -362,6 +366,41 @@ export function MiniColumnGraph({
                 strokeOpacity={active ? 0.9 : 0.25}
                 strokeWidth={active ? 2.2 : 1}
               />
+              {n.badge && String(n.badge).trim() ? (() => {
+                const badgeText = String(n.badge).trim();
+                const font = '11px system-ui';
+                const padX = 6;
+                const badgeW = Math.min(n.w - 16, measureTextPx(badgeText, font) + padX * 2);
+                const badgeH = 16;
+                const bx = Math.max(8, n.w - badgeW - 8);
+                const by = 8;
+                return (
+                  <g aria-label={`Node metric badge: ${badgeText}`}>
+                    <rect
+                      x={bx}
+                      y={by}
+                      width={badgeW}
+                      height={badgeH}
+                      rx={8}
+                      ry={8}
+                      fill="rgba(0,0,0,0.08)"
+                      stroke="currentColor"
+                      strokeOpacity={0.18}
+                    />
+                    <text
+                      x={bx + badgeW / 2}
+                      y={by + 12}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fill="currentColor"
+                      opacity={0.85}
+                      style={{ userSelect: 'none' }}
+                    >
+                      {badgeText}
+                    </text>
+                  </g>
+                );
+              })() : null}
               <text x={10} y={18} fontSize={12} fill="currentColor" opacity={0.9} style={{ userSelect: 'none' }}>
                 {n.lines.length ? (
                   n.lines.map((line, idx) => (

@@ -1,13 +1,17 @@
 import type { CSSProperties } from 'react';
 
+import type { NodeMetricId } from '../../domain';
+
 export type MiniGraphOptions = {
   wrapLabels: boolean;
   autoFitColumns: boolean;
+  nodeOverlayMetricId: 'off' | NodeMetricId;
 };
 
 export const defaultMiniGraphOptions: MiniGraphOptions = {
   wrapLabels: true,
-  autoFitColumns: true
+  autoFitColumns: true,
+  nodeOverlayMetricId: 'off'
 };
 
 type Props = {
@@ -44,6 +48,19 @@ export function MiniGraphOptionsToggles({ options, onChange, style, checkboxStyl
           onChange={(e) => onChange({ ...options, autoFitColumns: e.currentTarget.checked })}
         />
         Auto-fit columns
+      </label>
+
+      <label style={labelStyle}>
+        Overlay
+        <select
+          aria-label="Node overlay"
+          value={options.nodeOverlayMetricId}
+          onChange={(e) => onChange({ ...options, nodeOverlayMetricId: (e.currentTarget.value as 'off' | NodeMetricId) })}
+          style={{ fontSize: 12 }}
+        >
+          <option value="off">Off</option>
+          <option value="nodeDegree">Degree</option>
+        </select>
       </label>
     </div>
   );

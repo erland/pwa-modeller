@@ -842,6 +842,8 @@ export function AnalysisWorkspace({
               relatedResult={relatedResult}
               pathsResult={pathsResult}
               selection={selection}
+              direction={direction}
+              relationshipTypes={relationshipTypes}
               onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
               onOpenTraceability={(elementId) => openTraceabilityFrom(elementId)}

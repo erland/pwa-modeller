@@ -93,7 +93,7 @@ export function AnalysisResultTable({
     if (!modelId) return;
     const ui = loadAnalysisUiState(modelId);
     if (ui?.miniGraphOptions) {
-      setGraphOptions({ ...defaultMiniGraphOptions, ...ui.miniGraphOptions });
+      setGraphOptions({ ...defaultMiniGraphOptions, ...ui.miniGraphOptions, wrapLabels: true, autoFitColumns: true });
     }
   }, [modelId]);
 
@@ -253,6 +253,9 @@ export function AnalysisResultTable({
               {showGraph ? 'Hide graph' : 'Show graph'}
             </button>
 
+            {/* Step 7/9: mini-graph overlay options (degree/reach/property) and sizing, persisted per model */}
+            <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} availablePropertyKeys={availablePropertyKeys} />
+
             <button
               type="button"
               className="miniLinkButton"
@@ -333,8 +336,8 @@ export function AnalysisResultTable({
             selection={selection}
             onSelectRelationship={onSelectRelationship}
             onSelectElement={onSelectElement}
-            wrapLabels={graphOptions.wrapLabels}
-            autoFitColumns={graphOptions.autoFitColumns}
+            wrapLabels={true}
+            autoFitColumns={true}
             nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
             nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
             nodeOverlayPropertyKey={graphOptions.nodeOverlayPropertyKey}
@@ -492,8 +495,8 @@ export function AnalysisResultTable({
           selection={selection}
           onSelectRelationship={onSelectRelationship}
           onSelectElement={onSelectElement}
-          wrapLabels={graphOptions.wrapLabels}
-          autoFitColumns={graphOptions.autoFitColumns}
+          wrapLabels={true}
+          autoFitColumns={true}
           nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
           nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
           nodeOverlayPropertyKey={graphOptions.nodeOverlayPropertyKey}

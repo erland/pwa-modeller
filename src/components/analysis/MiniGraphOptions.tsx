@@ -42,6 +42,10 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
     ...(checkboxStyle ?? {})
   };
 
+  const commit = (next: MiniGraphOptions): void => {
+    onChange({ ...next, wrapLabels: true, autoFitColumns: true });
+  };
+
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, ...(style ?? {}) }}>
       <label style={labelStyle}>
@@ -75,7 +79,7 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
           onChange={(e) => {
             const v = e.currentTarget.value;
             if (v === 'off') {
-              onChange({
+              commit({
                 ...options,
                 nodeOverlayMetricId: 'off',
                 nodeOverlayPropertyKey: '',
@@ -84,7 +88,7 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
               return;
             }
             if (v === 'degree') {
-              onChange({
+              commit({
                 ...options,
                 nodeOverlayMetricId: 'nodeDegree',
                 nodeOverlayPropertyKey: '',
@@ -93,7 +97,7 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
               return;
             }
             if (v === 'reach3') {
-              onChange({
+              commit({
                 ...options,
                 nodeOverlayMetricId: 'nodeReach',
                 nodeOverlayReachDepth: 3,
@@ -103,7 +107,7 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
               return;
             }
             if (v === 'risk') {
-              onChange({
+              commit({
                 ...options,
                 nodeOverlayMetricId: 'nodePropertyNumber',
                 nodeOverlayPropertyKey: 'risk',
@@ -123,24 +127,6 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
           <option value="custom">Custom</option>
         </select>
       </label>
-
-      <label style={labelStyle}>
-        <input
-          type="checkbox"
-          checked={options.wrapLabels}
-          onChange={(e) => onChange({ ...options, wrapLabels: e.currentTarget.checked })}
-        />
-        Wrap labels
-      </label>
-      <label style={labelStyle}>
-        <input
-          type="checkbox"
-          checked={options.autoFitColumns}
-          onChange={(e) => onChange({ ...options, autoFitColumns: e.currentTarget.checked })}
-        />
-        Auto-fit columns
-      </label>
-
       <label style={labelStyle}>
         Overlay
         <select
@@ -153,16 +139,16 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
           onChange={(e) => {
             const v = e.currentTarget.value;
             if (v === 'off' || v === 'nodeDegree' || v === 'nodePropertyNumber') {
-              onChange({ ...options, nodeOverlayMetricId: v });
+              commit({ ...options, nodeOverlayMetricId: v });
               return;
             }
             if (v.startsWith('nodeReach:')) {
               const depth = Number(v.split(':')[1]) as 2 | 3 | 4;
-              onChange({ ...options, nodeOverlayMetricId: 'nodeReach', nodeOverlayReachDepth: depth });
+              commit({ ...options, nodeOverlayMetricId: 'nodeReach', nodeOverlayReachDepth: depth });
               return;
             }
             // Fallback: treat unknown values as off.
-            onChange({ ...options, nodeOverlayMetricId: 'off' });
+            commit({ ...options, nodeOverlayMetricId: 'off' });
           }}
           style={{ fontSize: 12 }}
         >
@@ -180,7 +166,7 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
               aria-label="Overlay property key"
               type="text"
               value={options.nodeOverlayPropertyKey}
-              onChange={(e) => onChange({ ...options, nodeOverlayPropertyKey: e.currentTarget.value })}
+              onChange={(e) => commit({ ...options, nodeOverlayPropertyKey: e.currentTarget.value })}
               placeholder="e.g. risk or ns:key"
               list="analysisOverlayPropertyKeys"
               style={{ fontSize: 12, width: 140 }}
@@ -202,7 +188,7 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
           type="checkbox"
           checked={options.scaleNodesByOverlayScore}
           disabled={options.nodeOverlayMetricId === 'off'}
-          onChange={(e) => onChange({ ...options, scaleNodesByOverlayScore: e.currentTarget.checked })}
+          onChange={(e) => commit({ ...options, scaleNodesByOverlayScore: e.currentTarget.checked })}
         />
         Size by score
       </label>

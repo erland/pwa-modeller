@@ -215,8 +215,8 @@ export function TraceabilityExplorer({
       </div>
 
       <TraceabilityMiniGraph
-        wrapLabels={graphOptions.wrapLabels}
-        autoFitColumns={graphOptions.autoFitColumns}
+        wrapLabels={true}
+        autoFitColumns={true}
                 headerControls={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button

@@ -64,11 +64,10 @@ export function readNumericPropertyFromElement(el: Element | undefined, property
     const parts = key.split('.').map((p) => p.trim()).filter(Boolean);
     if (!parts.length) return undefined;
 
-    let cur: unknown = el.attrs;
+    let cur: any = el.attrs as any;
     for (const p of parts) {
       if (!cur || typeof cur !== 'object') return undefined;
-      const rec = cur as Record<string, unknown>;
-      cur = rec[p];
+      cur = cur[p];
     }
     return asFiniteNumber(cur);
   }

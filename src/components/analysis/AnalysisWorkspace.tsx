@@ -10,6 +10,8 @@ import { AnalysisQueryPanel, type AnalysisMode } from './AnalysisQueryPanel';
 import { AnalysisResultTable } from './AnalysisResultTable';
 import { TraceabilityExplorer } from './TraceabilityExplorer';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
+import { buildRelationshipMatrix, type RelationshipMatrixDirection } from '../../domain/analysis/relationshipMatrix';
+import { RelationshipMatrixTable } from './RelationshipMatrixTable';
 
 function selectionToElementId(sel: Selection): string | null {
   switch (sel.kind) {
@@ -67,6 +69,15 @@ export function AnalysisWorkspace({
   const [matrixColSelectionIds, setMatrixColSelectionIds] = useState<string[]>([]);
 
   const [matrixBuildNonce, setMatrixBuildNonce] = useState<number>(0);
+
+  const [matrixBuiltQuery, setMatrixBuiltQuery] = useState<{
+    rowIds: string[];
+    colIds: string[];
+    relationshipTypes: RelationshipType[];
+    direction: RelationshipMatrixDirection;
+  } | null>(null);
+
+  const [matrixHighlightMissing, setMatrixHighlightMissing] = useState<boolean>(true);
 
   // -----------------------------
   // Filters (draft)
@@ -194,6 +205,17 @@ export function AnalysisWorkspace({
   const matrixRowIds = matrixRowSource === 'selection' ? matrixRowSelectionIds : resolveMatrixFacetIds.rowIds;
   const matrixColIds = matrixColSource === 'selection' ? matrixColSelectionIds : resolveMatrixFacetIds.colIds;
 
+  const matrixResult = useMemo(() => {
+    if (!model || !matrixBuiltQuery) return null;
+    return buildRelationshipMatrix(
+      model,
+      matrixBuiltQuery.rowIds,
+      matrixBuiltQuery.colIds,
+      { relationshipTypes: matrixBuiltQuery.relationshipTypes, direction: matrixBuiltQuery.direction },
+      { includeSelf: false }
+    );
+  }, [model, matrixBuiltQuery]);
+
   const canRun = Boolean(
     model &&
       (mode === 'matrix'
@@ -206,7 +228,17 @@ export function AnalysisWorkspace({
   function run() {
     if (!model) return;
     if (mode === 'matrix') {
-      // For Step 2 we only capture the configured query (no table rendering yet).
+      const matrixDirection: RelationshipMatrixDirection =
+        direction === 'outgoing' ? 'rowToCol' : direction === 'incoming' ? 'colToRow' : 'both';
+
+      setMatrixBuiltQuery({
+        rowIds: [...matrixRowIds],
+        colIds: [...matrixColIds],
+        relationshipTypes: [...relationshipTypes],
+        direction: matrixDirection,
+      });
+
+      // Bump nonce to make it obvious in UI when a new build occurred.
       setMatrixBuildNonce((n) => n + 1);
       return;
     }
@@ -417,23 +449,36 @@ export function AnalysisWorkspace({
           />
 
           {mode === 'matrix' ? (
-            <div className="crudSection" style={{ marginTop: 14 }}>
-              <div className="crudHeader">
-                <div>
-                  <p className="crudTitle">Matrix query configured</p>
-                  <p className="crudHint">
-                    Rows: <span className="mono">{matrixRowIds.length}</span>, Columns:{' '}
-                    <span className="mono">{matrixColIds.length}</span>. Click “Build matrix” after changing options.
-                  </p>
-                  <p className="crudHint" style={{ marginTop: 8 }}>
-                    Table rendering comes in Step 3.
-                  </p>
-                  <p className="crudHint" style={{ marginTop: 8 }}>
-                    Build counter: <span className="mono">{matrixBuildNonce}</span>
-                  </p>
+            <>
+              <div className="crudSection" style={{ marginTop: 14 }}>
+                <div className="crudHeader">
+                  <div>
+                    <p className="crudTitle">Matrix query</p>
+                    <p className="crudHint">
+                      Rows: <span className="mono">{matrixRowIds.length}</span>, Columns: <span className="mono">{matrixColIds.length}</span>.
+                      Click “Build matrix” to compute the table.
+                    </p>
+                    {matrixBuiltQuery ? (
+                      <p className="crudHint" style={{ marginTop: 8 }}>
+                        Last build: <span className="mono">{matrixBuildNonce}</span>
+                      </p>
+                    ) : (
+                      <p className="crudHint" style={{ marginTop: 8 }}>
+                        No matrix built yet.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+
+              {matrixResult ? (
+                <RelationshipMatrixTable
+                  result={matrixResult}
+                  highlightMissing={matrixHighlightMissing}
+                  onToggleHighlightMissing={() => setMatrixHighlightMissing((v) => !v)}
+                />
+              ) : null}
+            </>
           ) : mode === 'traceability' ? (
             traceSeedId ? (
               <TraceabilityExplorer

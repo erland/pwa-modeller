@@ -45,6 +45,86 @@ export function MiniGraphOptionsToggles({ options, onChange, availablePropertyKe
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, ...(style ?? {}) }}>
       <label style={labelStyle}>
+        Preset
+        <select
+          aria-label="Overlay preset"
+          value={(() => {
+            if (options.nodeOverlayMetricId === 'off') return 'off';
+            if (
+              options.nodeOverlayMetricId === 'nodeDegree' &&
+              !options.scaleNodesByOverlayScore
+            ) {
+              return 'degree';
+            }
+            if (
+              options.nodeOverlayMetricId === 'nodeReach' &&
+              options.nodeOverlayReachDepth === 3 &&
+              !options.scaleNodesByOverlayScore
+            ) {
+              return 'reach3';
+            }
+            if (
+              options.nodeOverlayMetricId === 'nodePropertyNumber' &&
+              options.nodeOverlayPropertyKey.trim() === 'risk' &&
+              !options.scaleNodesByOverlayScore
+            ) {
+              return 'risk';
+            }
+            return 'custom';
+          })()}
+          onChange={(e) => {
+            const v = e.currentTarget.value;
+            if (v === 'off') {
+              onChange({
+                ...options,
+                nodeOverlayMetricId: 'off',
+                nodeOverlayPropertyKey: '',
+                scaleNodesByOverlayScore: false
+              });
+              return;
+            }
+            if (v === 'degree') {
+              onChange({
+                ...options,
+                nodeOverlayMetricId: 'nodeDegree',
+                nodeOverlayPropertyKey: '',
+                scaleNodesByOverlayScore: false
+              });
+              return;
+            }
+            if (v === 'reach3') {
+              onChange({
+                ...options,
+                nodeOverlayMetricId: 'nodeReach',
+                nodeOverlayReachDepth: 3,
+                nodeOverlayPropertyKey: '',
+                scaleNodesByOverlayScore: false
+              });
+              return;
+            }
+            if (v === 'risk') {
+              onChange({
+                ...options,
+                nodeOverlayMetricId: 'nodePropertyNumber',
+                nodeOverlayPropertyKey: 'risk',
+                scaleNodesByOverlayScore: false
+              });
+              return;
+            }
+            // custom: noop
+          }}
+          style={{ fontSize: 12 }}
+          title="Quick overlay presets"
+        >
+          <option value="off">Off</option>
+          <option value="degree">Degree</option>
+          <option value="reach3">Reach (3)</option>
+          <option value="risk">Property: risk</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+
+      <label style={labelStyle}>
         <input
           type="checkbox"
           checked={options.wrapLabels}

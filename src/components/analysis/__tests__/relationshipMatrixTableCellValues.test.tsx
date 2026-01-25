@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import type { RelationshipMatrixResult } from '../../../domain/analysis/relationshipMatrix';
@@ -25,6 +25,10 @@ describe('RelationshipMatrixTable cell metric rendering', () => {
         cellValues={[[2]]}
         highlightMissing={false}
         onToggleHighlightMissing={() => {}}
+        heatmapEnabled={false}
+        onChangeHeatmapEnabled={() => {}}
+        hideEmpty={false}
+        onChangeHideEmpty={() => {}}
       />
     );
 
@@ -48,17 +52,26 @@ describe('RelationshipMatrixTable cell metric rendering', () => {
       grandTotal: 3,
     };
 
-    render(
-      <RelationshipMatrixTable
-        modelName="model"
-        result={result}
-        cellMetricId="matrixRelationshipCount"
-        onChangeCellMetricId={() => {}}
-        cellValues={[[1, 2]]}
-        highlightMissing={false}
-        onToggleHighlightMissing={() => {}}
-      />
-    );
+    function Harness() {
+      const [heatmapEnabled, setHeatmapEnabled] = useState(false);
+      return (
+        <RelationshipMatrixTable
+          modelName="model"
+          result={result}
+          cellMetricId="matrixRelationshipCount"
+          onChangeCellMetricId={() => {}}
+          cellValues={[[1, 2]]}
+          highlightMissing={false}
+          onToggleHighlightMissing={() => {}}
+          heatmapEnabled={heatmapEnabled}
+          onChangeHeatmapEnabled={setHeatmapEnabled}
+          hideEmpty={false}
+          onChangeHideEmpty={() => {}}
+        />
+      );
+    }
+
+    render(<Harness />);
 
     // Enable heatmap shading
     const heatmapToggle = screen.getByLabelText('Heatmap shading');

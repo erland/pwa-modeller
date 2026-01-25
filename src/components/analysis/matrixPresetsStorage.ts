@@ -19,8 +19,13 @@ export type MatrixQueryPreset = {
     direction: AnalysisDirection;
     relationshipTypes: RelationshipType[];
 
-    // Heatmap/metrics touchpoint (Step 2+): presets may later include matrix metric config
-    // (metric id/params + heatmap toggle) so that users can restore a full matrix 'view' and not just the axes.
+    // Step 9: optional metric + heatmap configuration (backwards compatible).
+    cellMetricId?: 'off' | string;
+    heatmapEnabled?: boolean;
+    hideEmpty?: boolean;
+    highlightMissing?: boolean;
+    weightPresetId?: string;
+    weightsByRelationshipType?: Record<string, number>;
   };
 };
 

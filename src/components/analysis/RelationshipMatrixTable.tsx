@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 
 import type { RelationshipMatrixResult } from '../../domain/analysis/relationshipMatrix';
@@ -30,6 +30,12 @@ export interface RelationshipMatrixTableProps {
   /** If true, visually highlight 0-count cells. */
   highlightMissing: boolean;
   onToggleHighlightMissing: () => void;
+
+  /** Step 9: persisted view toggles. */
+  heatmapEnabled: boolean;
+  onChangeHeatmapEnabled: (v: boolean) => void;
+  hideEmpty: boolean;
+  onChangeHideEmpty: (v: boolean) => void;
 
   /** Optional: open a drill-down inspector for a specific cell. */
   onOpenCell?: (args: {
@@ -64,17 +70,18 @@ export function RelationshipMatrixTable({
   cellValues,
   highlightMissing,
   onToggleHighlightMissing,
+  heatmapEnabled,
+  onChangeHeatmapEnabled,
+  hideEmpty,
+  onChangeHideEmpty,
   onOpenCell
 }: RelationshipMatrixTableProps) {
   const { rows, cols, cells, rowTotals, colTotals, grandTotal } = result;
 
-  const [hideEmpty, setHideEmpty] = useState<boolean>(false);
-  const [heatmapEnabled, setHeatmapEnabled] = useState<boolean>(false);
-
   // If cell values are disabled, heatmap shading doesn't make sense.
   useEffect(() => {
-    if (cellMetricId === 'off' && heatmapEnabled) setHeatmapEnabled(false);
-  }, [cellMetricId, heatmapEnabled]);
+    if (cellMetricId === 'off' && heatmapEnabled) onChangeHeatmapEnabled(false);
+  }, [cellMetricId, heatmapEnabled, onChangeHeatmapEnabled]);
 
   const maxCellCount = useMemo(() => {
     let max = 0;
@@ -182,6 +189,32 @@ export function RelationshipMatrixTable({
         </div>
         <div className="crudActions" style={{ alignItems: 'center', gap: 10 }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
+            Preset
+            <select
+              className="selectInput"
+              aria-label="Matrix preset"
+              value={
+                cellMetricId === 'off'
+                  ? 'off'
+                  : cellMetricId === 'matrixWeightedCount'
+                    ? 'weighted'
+                    : 'count'
+              }
+              onChange={(e) => {
+                const v = e.currentTarget.value;
+                if (v === 'off') onChangeCellMetricId('off');
+                else if (v === 'weighted') onChangeCellMetricId('matrixWeightedCount');
+                else onChangeCellMetricId('matrixRelationshipCount');
+              }}
+              title="Quickly switch between common matrix value presets"
+            >
+              <option value="off">Off</option>
+              <option value="count">Count</option>
+              <option value="weighted">Weighted</option>
+            </select>
+          </label>
+
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
             Cell values
             <select
               className="selectInput"
@@ -263,7 +296,7 @@ export function RelationshipMatrixTable({
               type="checkbox"
               checked={heatmapEnabled}
               disabled={cellMetricId === 'off'}
-              onChange={() => setHeatmapEnabled((v) => !v)}
+              onChange={() => onChangeHeatmapEnabled(!heatmapEnabled)}
             />
             Heatmap shading
           </label>
@@ -301,7 +334,7 @@ export function RelationshipMatrixTable({
           </label>
 
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
-            <input type="checkbox" checked={hideEmpty} onChange={() => setHideEmpty((v) => !v)} />
+            <input type="checkbox" checked={hideEmpty} onChange={() => onChangeHideEmpty(!hideEmpty)} />
             Hide empty rows/columns
           </label>
         </div>

@@ -12,6 +12,8 @@ import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { AnalysisMiniGraph } from './AnalysisMiniGraph';
 import { defaultMiniGraphOptions, MiniGraphOptionsToggles } from './MiniGraphOptions';
 import { QuickTooltip } from './QuickTooltip';
+import { loadAnalysisUiState, mergeAnalysisUiState } from './analysisUiStateStorage';
+import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
 
 import '../../styles/crud.css';
 
@@ -41,6 +43,14 @@ function stringFacetValue(v: unknown): string {
   if (v === null || v === undefined) return '';
   if (Array.isArray(v)) return v.filter((x) => x !== null && x !== undefined).map(String).join(', ');
   return String(v);
+}
+
+function escapeCsvValue(v: unknown): string {
+  const s = v === null || v === undefined ? '' : String(v);
+  if (/[",\r\n]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
 }
 
 function relationshipIsExplicitlyUndirected(s: TraversalStep): boolean {
@@ -74,8 +84,23 @@ export function AnalysisResultTable({
   onOpenTraceability
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
+  const modelId = model.id ?? '';
   const [showGraph, setShowGraph] = useState(false);
   const [graphOptions, setGraphOptions] = useState(defaultMiniGraphOptions);
+
+  // Step 9: restore + persist mini-graph UI options per model.
+  useEffect(() => {
+    if (!modelId) return;
+    const ui = loadAnalysisUiState(modelId);
+    if (ui?.miniGraphOptions) {
+      setGraphOptions({ ...defaultMiniGraphOptions, ...ui.miniGraphOptions });
+    }
+  }, [modelId]);
+
+  useEffect(() => {
+    if (!modelId) return;
+    mergeAnalysisUiState(modelId, { miniGraphOptions: graphOptions });
+  }, [modelId, graphOptions]);
 
   const availablePropertyKeys = useMemo(() => discoverNumericPropertyKeys(model), [model]);
   const [tooltip, setTooltip] = useState<{
@@ -140,6 +165,58 @@ export function AnalysisResultTable({
     return `${a} → ${b} (${hops} hops)`;
   };
 
+  const modelName = model.metadata?.name || 'model';
+
+  const exportRelatedCsv = (): void => {
+    const hits = relatedResult?.hits ?? [];
+    if (hits.length === 0) return;
+    const startId = relatedResult?.startElementId ?? '';
+    const fileBase = `${modelName}-analysis-related${startId ? `-${nodeLabel(startId)}` : ''}`;
+    const lines: string[] = [];
+    lines.push(['distance', 'elementId', 'name', 'type', 'layer'].map(escapeCsvValue).join(','));
+    for (const h of hits) {
+      lines.push(
+        [h.distance, h.elementId, nodeLabel(h.elementId), nodeType(h.elementId), nodeLayer(h.elementId)]
+          .map(escapeCsvValue)
+          .join(',')
+      );
+    }
+    downloadTextFile(sanitizeFileNameWithExtension(fileBase, 'csv'), lines.join('\n'), 'text/csv');
+  };
+
+  const exportPathsCsv = (): void => {
+    const paths = pathsResult?.paths ?? [];
+    if (paths.length === 0) return;
+    const fileBase = `${modelName}-analysis-paths`;
+    const lines: string[] = [];
+    lines.push(
+      ['pathIndex', 'hopIndex', 'fromId', 'fromName', 'relationshipId', 'relationshipType', 'toId', 'toName']
+        .map(escapeCsvValue)
+        .join(',')
+    );
+    for (let pi = 0; pi < paths.length; pi++) {
+      const p = paths[pi];
+      for (let hi = 0; hi < p.steps.length; hi++) {
+        const s = p.steps[hi];
+        lines.push(
+          [
+            pi + 1,
+            hi + 1,
+            s.fromId,
+            nodeLabel(s.fromId),
+            s.relationshipId,
+            s.relationshipType,
+            s.toId,
+            nodeLabel(s.toId)
+          ]
+            .map(escapeCsvValue)
+            .join(',')
+        );
+      }
+    }
+    downloadTextFile(sanitizeFileNameWithExtension(fileBase, 'csv'), lines.join('\n'), 'text/csv');
+  };
+
   // Auto-enable the graph once results appear (but don't force it back on if the user turns it off).
   useEffect(() => {
     if (showGraph) return;
@@ -174,6 +251,17 @@ export function AnalysisResultTable({
               aria-disabled={hits.length === 0}
             >
               {showGraph ? 'Hide graph' : 'Show graph'}
+            </button>
+
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={exportRelatedCsv}
+              disabled={hits.length === 0}
+              aria-disabled={hits.length === 0}
+              title="Export the related-elements table as CSV"
+            >
+              Export CSV
             </button>
           </div>
         </div>
@@ -299,6 +387,16 @@ export function AnalysisResultTable({
             aria-disabled={paths.length === 0}
           >
             {showGraph ? 'Hide graph' : 'Show graph'}
+          </button>
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={exportPathsCsv}
+            disabled={paths.length === 0}
+            aria-disabled={paths.length === 0}
+            title="Export all paths (flattened steps) as CSV"
+          >
+            Export CSV
           </button>
           <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} availablePropertyKeys={availablePropertyKeys} />
           {sourceId ? (

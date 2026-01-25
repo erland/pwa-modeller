@@ -14,6 +14,7 @@ import { buildRelationshipMatrix, type RelationshipMatrixDirection } from '../..
 import { computeMatrixMetric } from '../../domain';
 import { RelationshipMatrixTable } from './RelationshipMatrixTable';
 import { RelationshipMatrixCellDialog } from './RelationshipMatrixCellDialog';
+import { loadAnalysisUiState, mergeAnalysisUiState } from './analysisUiStateStorage';
 import {
   loadMatrixPresets,
   loadMatrixSnapshots,
@@ -92,6 +93,10 @@ export function AnalysisWorkspace({
 
   const [matrixHighlightMissing, setMatrixHighlightMissing] = useState<boolean>(true);
 
+  // Step 9: additional (persisted) matrix UI options.
+  const [matrixHeatmapEnabled, setMatrixHeatmapEnabled] = useState<boolean>(false);
+  const [matrixHideEmpty, setMatrixHideEmpty] = useState<boolean>(false);
+
   // Matrix cell-value metric selection (Step 2): in Step 3 this also drives heatmap shading.
   const [matrixCellMetricId, setMatrixCellMetricId] = useState<'off' | MatrixMetricId>('matrixRelationshipCount');
 
@@ -107,20 +112,9 @@ export function AnalysisWorkspace({
   const [matrixWeightPresetId, setMatrixWeightPresetId] = useState<string>('default');
   const [matrixWeightsByRelationshipType, setMatrixWeightsByRelationshipType] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    // When model kind changes, reset to default to avoid applying ArchiMate weights to other notations.
-    setMatrixWeightPresetId('default');
-    setMatrixWeightsByRelationshipType({});
-  }, [modelKind]);
-
-  useEffect(() => {
-    if (matrixWeightPresetId === 'default') {
-      setMatrixWeightsByRelationshipType({});
-      return;
-    }
-    if (matrixWeightPresetId === 'archimateDependencies') {
-      // Conservative defaults: emphasize dependency-like semantics.
-      setMatrixWeightsByRelationshipType({
+  const weightsForMatrixPreset = (presetId: string): Record<string, number> => {
+    if (presetId === 'archimateDependencies') {
+      return {
         Access: 3,
         Serving: 2,
         Flow: 2,
@@ -132,9 +126,20 @@ export function AnalysisWorkspace({
         Aggregation: 1,
         Composition: 1,
         Specialization: 1,
-      });
+      };
     }
-  }, [matrixWeightPresetId]);
+    return {};
+  };
+
+  const applyMatrixWeightPreset = (presetId: string): void => {
+    setMatrixWeightPresetId(presetId);
+    setMatrixWeightsByRelationshipType(weightsForMatrixPreset(presetId));
+  };
+
+  useEffect(() => {
+    // When model kind changes, reset to default to avoid applying ArchiMate weights to other notations.
+    applyMatrixWeightPreset('default');
+  }, [modelKind]);
 
   const [matrixCellDialog, setMatrixCellDialog] = useState<{
     rowId: string;
@@ -155,7 +160,45 @@ export function AnalysisWorkspace({
     setMatrixSnapshots(loadMatrixSnapshots(modelId));
     setMatrixPresetId('');
     setMatrixSnapshotId('');
+
+    // Step 9: restore persisted Analysis UI state (mini-graph options are restored by AnalysisResultTable).
+    const ui = loadAnalysisUiState(modelId);
+    if (ui?.matrix) {
+      const cellMetricId = ui.matrix.cellMetricId;
+      if (cellMetricId && (cellMetricId === 'off' || cellMetricId === 'matrixRelationshipCount' || cellMetricId === 'matrixWeightedCount')) {
+        setMatrixCellMetricId(cellMetricId);
+      }
+      if (typeof ui.matrix.heatmapEnabled === 'boolean') setMatrixHeatmapEnabled(ui.matrix.heatmapEnabled);
+      if (typeof ui.matrix.hideEmpty === 'boolean') setMatrixHideEmpty(ui.matrix.hideEmpty);
+      if (typeof ui.matrix.highlightMissing === 'boolean') setMatrixHighlightMissing(ui.matrix.highlightMissing);
+      if (typeof ui.matrix.weightPresetId === 'string') {
+        applyMatrixWeightPreset(ui.matrix.weightPresetId);
+      }
+      if (ui.matrix.weightsByRelationshipType && typeof ui.matrix.weightsByRelationshipType === 'object') {
+        setMatrixWeightsByRelationshipType(ui.matrix.weightsByRelationshipType);
+      }
+    }
   }, [modelId]);
+
+  // Step 9: persist matrix UI settings per model.
+  useEffect(() => {
+    if (!modelId) return;
+    mergeAnalysisUiState(modelId, {
+      matrix: {
+        cellMetricId: matrixCellMetricId,
+        heatmapEnabled: matrixHeatmapEnabled,
+        hideEmpty: matrixHideEmpty,
+        highlightMissing: matrixHighlightMissing,
+        weightPresetId: matrixWeightPresetId,
+        weightsByRelationshipType: matrixWeightsByRelationshipType,
+      }
+    });
+  }, [modelId, matrixCellMetricId, matrixHeatmapEnabled, matrixHideEmpty, matrixHighlightMissing, matrixWeightPresetId, matrixWeightsByRelationshipType]);
+
+  // If cell values are disabled, heatmap shading doesn't make sense.
+  useEffect(() => {
+    if (matrixCellMetricId === 'off' && matrixHeatmapEnabled) setMatrixHeatmapEnabled(false);
+  }, [matrixCellMetricId, matrixHeatmapEnabled]);
 
 
   function applyMatrixUiQuery(query: MatrixQueryPreset['query']): void {
@@ -171,6 +214,18 @@ export function AnalysisWorkspace({
 
     setDirection(query.direction);
     setRelationshipTypes(query.relationshipTypes);
+
+    // Step 9: optional metric configuration (older presets may omit these).
+    if (query.cellMetricId && (query.cellMetricId === 'off' || query.cellMetricId === 'matrixRelationshipCount' || query.cellMetricId === 'matrixWeightedCount')) {
+      setMatrixCellMetricId(query.cellMetricId);
+    }
+    if (typeof query.heatmapEnabled === 'boolean') setMatrixHeatmapEnabled(query.heatmapEnabled);
+    if (typeof query.hideEmpty === 'boolean') setMatrixHideEmpty(query.hideEmpty);
+    if (typeof query.highlightMissing === 'boolean') setMatrixHighlightMissing(query.highlightMissing);
+    if (typeof query.weightPresetId === 'string') applyMatrixWeightPreset(query.weightPresetId);
+    if (query.weightsByRelationshipType && typeof query.weightsByRelationshipType === 'object') {
+      setMatrixWeightsByRelationshipType(query.weightsByRelationshipType);
+    }
   }
 
   function saveCurrentMatrixPreset(): void {
@@ -192,6 +247,13 @@ export function AnalysisWorkspace({
         colSelectionIds: [...matrixColSelectionIds],
         direction,
         relationshipTypes: [...relationshipTypes],
+
+        cellMetricId: matrixCellMetricId,
+        heatmapEnabled: matrixHeatmapEnabled,
+        hideEmpty: matrixHideEmpty,
+        highlightMissing: matrixHighlightMissing,
+        weightPresetId: matrixWeightPresetId,
+        weightsByRelationshipType: matrixWeightsByRelationshipType,
       }
     };
     const next = [preset, ...matrixPresets].slice(0, 50);
@@ -249,6 +311,13 @@ export function AnalysisWorkspace({
         colSelectionIds: [...matrixColSelectionIds],
         direction,
         relationshipTypes: [...relationshipTypes],
+
+        cellMetricId: matrixCellMetricId,
+        heatmapEnabled: matrixHeatmapEnabled,
+        hideEmpty: matrixHideEmpty,
+        highlightMissing: matrixHighlightMissing,
+        weightPresetId: matrixWeightPresetId,
+        weightsByRelationshipType: matrixWeightsByRelationshipType,
       },
       summary: {
         rowCount: matrixResult.rows.length,
@@ -864,11 +933,15 @@ export function AnalysisWorkspace({
                   }
                   weightPresets={matrixWeightPresets}
                   weightPresetId={matrixWeightPresetId}
-                  onChangeWeightPresetId={(presetId) => setMatrixWeightPresetId(presetId)}
+                  onChangeWeightPresetId={(presetId) => applyMatrixWeightPreset(presetId)}
                   relationshipTypesForWeights={matrixRelationshipTypesForWeights}
                   cellValues={matrixCellValues}
                   highlightMissing={matrixHighlightMissing}
                   onToggleHighlightMissing={() => setMatrixHighlightMissing((v) => !v)}
+                  heatmapEnabled={matrixHeatmapEnabled}
+                  onChangeHeatmapEnabled={setMatrixHeatmapEnabled}
+                  hideEmpty={matrixHideEmpty}
+                  onChangeHideEmpty={setMatrixHideEmpty}
                   onOpenCell={(info) => setMatrixCellDialog(info)}
                 />
               ) : null}

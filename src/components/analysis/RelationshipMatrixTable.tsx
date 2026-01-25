@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 import type { RelationshipMatrixResult } from '../../domain/analysis/relationshipMatrix';
+import type { MatrixMetricId } from '../../domain/analysis/metrics';
 import { exportRelationshipMatrixCsv, exportRelationshipMatrixMissingLinksCsv } from './exportRelationshipMatrixCsv';
 
 export interface RelationshipMatrixTableProps {
@@ -9,8 +10,17 @@ export interface RelationshipMatrixTableProps {
   result: RelationshipMatrixResult;
 
   /** Which numeric metric (if any) to display in each cell. */
-  cellMetricId: 'off' | 'matrixRelationshipCount';
-  onChangeCellMetricId: (v: 'off' | 'matrixRelationshipCount') => void;
+  cellMetricId: 'off' | MatrixMetricId;
+  onChangeCellMetricId: (v: 'off' | MatrixMetricId) => void;
+
+  /** Optional: relationship-type weights used when cellMetricId === 'matrixWeightedCount'. */
+  weightsByRelationshipType?: Record<string, number>;
+  onChangeRelationshipTypeWeight?: (relationshipType: string, weight: number) => void;
+  weightPresets?: Array<{ id: string; label: string }>;
+  weightPresetId?: string;
+  onChangeWeightPresetId?: (presetId: string) => void;
+  /** Relationship types to display in the weights editor (order preserved). */
+  relationshipTypesForWeights?: string[];
 
   /**
    * Optional precomputed metric values (cells[rowIndex][colIndex]).
@@ -45,6 +55,12 @@ export function RelationshipMatrixTable({
   result,
   cellMetricId,
   onChangeCellMetricId,
+  weightsByRelationshipType,
+  onChangeRelationshipTypeWeight,
+  weightPresets,
+  weightPresetId,
+  onChangeWeightPresetId,
+  relationshipTypesForWeights,
   cellValues,
   highlightMissing,
   onToggleHighlightMissing,
@@ -111,6 +127,24 @@ export function RelationshipMatrixTable({
     return { displayRows, displayCols, displayCells, displayValues, displayRowTotals, displayColTotals };
   }, [baseValues, cells, colTotals, cols, hideEmpty, rowTotals, rows]);
 
+  const metricTotals = useMemo(() => {
+    if (!displayValues) {
+      const gt = (displayRowTotals ?? []).reduce((a, b) => a + (b ?? 0), 0);
+      return {
+        rowTotals: displayRowTotals,
+        colTotals: displayColTotals,
+        grandTotal: gt,
+      };
+    }
+
+    const rowTotals = displayValues.map((row) => row.reduce((sum, v) => sum + (Number.isFinite(v) ? v : 0), 0));
+    const colTotals = displayCols.map((_, ci) =>
+      displayValues.reduce((sum, row) => sum + (Number.isFinite(row[ci]) ? row[ci] : 0), 0)
+    );
+    const grandTotal = rowTotals.reduce((a, b) => a + b, 0);
+    return { rowTotals, colTotals, grandTotal };
+  }, [displayColTotals, displayCols, displayRowTotals, displayValues]);
+
   const heatmapMaxValue = useMemo(() => {
     if (!heatmapEnabled) return 0;
     if (cellMetricId === 'off') return 0;
@@ -134,6 +168,11 @@ export function RelationshipMatrixTable({
           <p className="crudHint">
             Rows: <span className="mono">{rows.length}</span>, Columns: <span className="mono">{cols.length}</span>, Total
             links: <span className="mono">{formatTotal(grandTotal)}</span>
+            {cellMetricId !== 'off' ? (
+              <>
+                , Total value: <span className="mono">{formatCellValue(metricTotals.grandTotal)}</span>
+              </>
+            ) : null}
             {maxCellCount > 0 ? (
               <>
                 , Max cell: <span className="mono">{formatTotal(maxCellCount)}</span>
@@ -148,13 +187,76 @@ export function RelationshipMatrixTable({
               className="selectInput"
               aria-label="Matrix cell values"
               value={cellMetricId}
-              onChange={(e) => onChangeCellMetricId(e.currentTarget.value as 'off' | 'matrixRelationshipCount')}
+              onChange={(e) => onChangeCellMetricId(e.currentTarget.value as 'off' | MatrixMetricId)}
               title="Which numeric value to show in each cell"
             >
               <option value="off">Off</option>
               <option value="matrixRelationshipCount">Relationship count</option>
+              <option value="matrixWeightedCount">Weighted count</option>
             </select>
           </label>
+
+          {cellMetricId === 'matrixWeightedCount' ? (
+            <details style={{ fontSize: 12, opacity: 0.9 }}>
+              <summary style={{ cursor: 'pointer', userSelect: 'none' }}>Weights</summary>
+              <div style={{ marginTop: 8, padding: 10, border: '1px solid var(--border-1)', borderRadius: 12 }}>
+                {weightPresets && weightPresets.length && onChangeWeightPresetId ? (
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                    Preset
+                    <select
+                      className="selectInput"
+                      aria-label="Weight preset"
+                      value={weightPresetId ?? 'default'}
+                      onChange={(e) => onChangeWeightPresetId(e.currentTarget.value)}
+                    >
+                      {weightPresets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
+                <div style={{ maxHeight: 220, overflow: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', paddingRight: 12 }}>Relationship type</th>
+                        <th style={{ textAlign: 'right' }}>Weight</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(relationshipTypesForWeights && relationshipTypesForWeights.length
+                        ? relationshipTypesForWeights
+                        : Object.keys(weightsByRelationshipType ?? {}).sort((a, b) => a.localeCompare(b))
+                      ).map((t) => (
+                        <tr key={t}>
+                          <td style={{ padding: '4px 12px 4px 0' }}>
+                            <span className="mono">{t}</span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={(weightsByRelationshipType?.[t] ?? 1).toString()}
+                              onChange={(e) =>
+                                onChangeRelationshipTypeWeight?.(t, Number.parseFloat(e.currentTarget.value))
+                              }
+                              style={{ width: 80 }}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p style={{ marginTop: 8, opacity: 0.8 }}>
+                  Types not listed use weight <span className="mono">1</span>.
+                </p>
+              </div>
+            </details>
+          ) : null}
 
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
             <input
@@ -179,7 +281,7 @@ export function RelationshipMatrixTable({
           <button
             type="button"
             className="shellButton"
-            onClick={() => exportRelationshipMatrixCsv(modelName, result)}
+            onClick={() => exportRelationshipMatrixCsv(modelName, result, baseValues)}
             title="Export the entire matrix as CSV"
           >
             Export CSV
@@ -371,7 +473,7 @@ export function RelationshipMatrixTable({
                 })}
                 <td style={{
                   ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}>
-                  {formatTotal(displayRowTotals[ri] ?? 0)}
+                  {formatCellValue(metricTotals.rowTotals[ri] ?? 0)}
                 </td>
               </tr>
             ))}
@@ -394,11 +496,11 @@ export function RelationshipMatrixTable({
                   style={{
                         ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}
                 >
-                  {formatTotal(displayColTotals[ci] ?? 0)}
+                  {formatCellValue(metricTotals.colTotals[ci] ?? 0)}
                 </td>
               ))}
               <td style={{ ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                {formatTotal(grandTotal)}
+                {formatCellValue(metricTotals.grandTotal)}
               </td>
             </tr>
           </tbody>

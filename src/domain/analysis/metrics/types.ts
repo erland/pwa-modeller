@@ -10,7 +10,7 @@ export type MetricTarget = 'node' | 'edge' | 'matrixCell';
  * Keep these stable since they may be persisted in local storage.
  */
 export type NodeMetricId = 'nodeDegree' | 'nodeReach' | 'nodePropertyNumber';
-export type MatrixMetricId = 'matrixRelationshipCount';
+export type MatrixMetricId = 'matrixRelationshipCount' | 'matrixWeightedCount';
 export type BuiltInMetricId = NodeMetricId | MatrixMetricId;
 
 /** Any metric id supported by the domain layer. */
@@ -62,11 +62,23 @@ export type MatrixRelationshipCountMetricParams = {
   options?: RelationshipMatrixOptions;
 };
 
+export type MatrixWeightedCountMetricParams = {
+  rowIds: string[];
+  colIds: string[];
+  filters?: RelationshipMatrixFilters;
+  options?: RelationshipMatrixOptions;
+  /** Weight per relationship type. Types not present default to defaultWeight. */
+  weightsByRelationshipType: Record<string, number>;
+  /** Default weight when a type isn't included in weightsByRelationshipType. Defaults to 1. */
+  defaultWeight?: number;
+};
+
 export type MetricParamsById = {
   nodeDegree: NodeDegreeMetricParams;
   nodeReach: NodeReachMetricParams;
   nodePropertyNumber: NodePropertyNumberMetricParams;
   matrixRelationshipCount: MatrixRelationshipCountMetricParams;
+  matrixWeightedCount: MatrixWeightedCountMetricParams;
 };
 
 export type NodeMetricResult = Record<string, number>;

@@ -29,5 +29,11 @@ export const BUILT_IN_METRICS: MetricDefinition[] = [
     label: 'Relationship count',
     target: 'matrixCell',
     description: 'Number of relationships in each matrix cell.'
+  },
+  {
+    id: 'matrixWeightedCount',
+    label: 'Weighted count',
+    target: 'matrixCell',
+    description: 'Sum of relationship-type weights for each matrix cell.'
   }
 ];

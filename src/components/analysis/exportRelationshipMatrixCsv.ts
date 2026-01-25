@@ -10,8 +10,16 @@ function escapeCsvValue(v: unknown): string {
   return s;
 }
 
-export function exportRelationshipMatrixCsv(modelName: string, result: RelationshipMatrixResult): void {
-  const { rows, cols, cells, rowTotals, colTotals, grandTotal } = result;
+export function exportRelationshipMatrixCsv(modelName: string, result: RelationshipMatrixResult, values?: number[][]): void {
+  const { rows, cols, cells } = result;
+
+  const effectiveValues: number[][] = values && values.length
+    ? values
+    : cells.map((row) => row.map((c) => c.count));
+
+  const rowTotals = effectiveValues.map((row) => row.reduce((sum, v) => sum + (Number.isFinite(v) ? v : 0), 0));
+  const colTotals = cols.map((_, ci) => effectiveValues.reduce((sum, row) => sum + (Number.isFinite(row[ci]) ? row[ci] : 0), 0));
+  const grandTotal = rowTotals.reduce((a, b) => a + b, 0);
 
   const header = ['Row \\ Col', ...cols.map((c) => c.label), 'Total'];
   const lines: string[] = [];
@@ -21,7 +29,8 @@ export function exportRelationshipMatrixCsv(modelName: string, result: Relations
     const r = rows[ri];
     const rowVals: unknown[] = [r.label];
     for (let ci = 0; ci < cols.length; ci++) {
-      rowVals.push(cells[ri][ci].count || '');
+      const v = effectiveValues[ri]?.[ci] ?? 0;
+      rowVals.push(v ? v : '');
     }
     rowVals.push(rowTotals[ri] ?? 0);
     lines.push(rowVals.map(escapeCsvValue).join(','));

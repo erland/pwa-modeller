@@ -95,6 +95,47 @@ export function AnalysisWorkspace({
   // Matrix cell-value metric selection (Step 2): in Step 3 this also drives heatmap shading.
   const [matrixCellMetricId, setMatrixCellMetricId] = useState<'off' | MatrixMetricId>('matrixRelationshipCount');
 
+  // Step 8: weighted matrix metric configuration
+  const matrixWeightPresets = useMemo(() => {
+    const base = [{ id: 'default', label: 'Default (all 1)' }];
+    if (modelKind === 'archimate') {
+      base.push({ id: 'archimateDependencies', label: 'ArchiMate: dependency emphasis' });
+    }
+    return base;
+  }, [modelKind]);
+
+  const [matrixWeightPresetId, setMatrixWeightPresetId] = useState<string>('default');
+  const [matrixWeightsByRelationshipType, setMatrixWeightsByRelationshipType] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    // When model kind changes, reset to default to avoid applying ArchiMate weights to other notations.
+    setMatrixWeightPresetId('default');
+    setMatrixWeightsByRelationshipType({});
+  }, [modelKind]);
+
+  useEffect(() => {
+    if (matrixWeightPresetId === 'default') {
+      setMatrixWeightsByRelationshipType({});
+      return;
+    }
+    if (matrixWeightPresetId === 'archimateDependencies') {
+      // Conservative defaults: emphasize dependency-like semantics.
+      setMatrixWeightsByRelationshipType({
+        Access: 3,
+        Serving: 2,
+        Flow: 2,
+        Triggering: 2,
+        Influence: 2,
+        Realization: 1,
+        Assignment: 1,
+        Association: 1,
+        Aggregation: 1,
+        Composition: 1,
+        Specialization: 1,
+      });
+    }
+  }, [matrixWeightPresetId]);
+
   const [matrixCellDialog, setMatrixCellDialog] = useState<{
     rowId: string;
     rowLabel: string;
@@ -389,7 +430,7 @@ export function AnalysisWorkspace({
   const matrixCellValues = useMemo(() => {
     if (!model || !matrixBuiltQuery) return undefined;
     if (matrixCellMetricId === 'off') return undefined;
-    return computeMatrixMetric(model, matrixCellMetricId, {
+    const baseParams = {
       rowIds: matrixBuiltQuery.rowIds,
       colIds: matrixBuiltQuery.colIds,
       filters: {
@@ -397,8 +438,33 @@ export function AnalysisWorkspace({
         relationshipTypes: matrixBuiltQuery.relationshipTypes.length ? matrixBuiltQuery.relationshipTypes : undefined,
       },
       options: { includeSelf: false },
-    }).values;
-  }, [matrixBuiltQuery, matrixCellMetricId, model]);
+    } as const;
+
+    if (matrixCellMetricId === 'matrixWeightedCount') {
+      return computeMatrixMetric(model, 'matrixWeightedCount', {
+        ...baseParams,
+        weightsByRelationshipType: matrixWeightsByRelationshipType,
+        defaultWeight: 1,
+      }).values;
+    }
+
+    return computeMatrixMetric(model, matrixCellMetricId, baseParams).values;
+  }, [matrixBuiltQuery, matrixCellMetricId, matrixWeightsByRelationshipType, model]);
+
+  const matrixRelationshipTypesForWeights = useMemo(() => {
+    if (!model || !matrixResult) return [] as string[];
+    const found = new Set<string>();
+    for (const row of matrixResult.cells) {
+      for (const cell of row) {
+        for (const id of cell.relationshipIds) {
+          const rel = model.relationships[id];
+          if (!rel) continue;
+          found.add(String(rel.type));
+        }
+      }
+    }
+    return Array.from(found).sort((a, b) => a.localeCompare(b));
+  }, [matrixResult, model]);
 
   const canRun = Boolean(
     model &&
@@ -790,8 +856,16 @@ export function AnalysisWorkspace({
                 <RelationshipMatrixTable
                   modelName={model.metadata?.name || 'model'}
                   result={matrixResult}
-                  cellMetricId={matrixCellMetricId as 'off' | 'matrixRelationshipCount'}
+                  cellMetricId={matrixCellMetricId}
                   onChangeCellMetricId={(v) => setMatrixCellMetricId(v)}
+                  weightsByRelationshipType={matrixWeightsByRelationshipType}
+                  onChangeRelationshipTypeWeight={(relationshipType, weight) =>
+                    setMatrixWeightsByRelationshipType((prev) => ({ ...prev, [relationshipType]: weight }))
+                  }
+                  weightPresets={matrixWeightPresets}
+                  weightPresetId={matrixWeightPresetId}
+                  onChangeWeightPresetId={(presetId) => setMatrixWeightPresetId(presetId)}
+                  relationshipTypesForWeights={matrixRelationshipTypesForWeights}
                   cellValues={matrixCellValues}
                   highlightMissing={matrixHighlightMissing}
                   onToggleHighlightMissing={() => setMatrixHighlightMissing((v) => !v)}

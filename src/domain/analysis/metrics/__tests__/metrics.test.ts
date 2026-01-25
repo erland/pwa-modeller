@@ -131,4 +131,39 @@ describe('analysis metrics', () => {
       [1, 0]
     ]);
   });
+
+  test('matrixWeightedCount applies relationship-type weights', () => {
+    const model = buildSmallModel();
+
+    const weighted = computeMatrixMetric(model, 'matrixWeightedCount', {
+      rowIds: ['A', 'B'],
+      colIds: ['B', 'C'],
+      filters: { direction: 'rowToCol' },
+      weightsByRelationshipType: {
+        Serving: 2,
+        Flow: 1.5,
+      },
+      defaultWeight: 1,
+    });
+
+    // A->B (Serving=2) and B->C (Flow=1.5)
+    expect(weighted.values).toEqual([
+      [2, 0],
+      [0, 1.5]
+    ]);
+
+    const undirectedWeighted = computeMatrixMetric(model, 'matrixWeightedCount', {
+      rowIds: ['A', 'D'],
+      colIds: ['A', 'D'],
+      filters: { direction: 'both' },
+      weightsByRelationshipType: { Association: 0.25 },
+      defaultWeight: 1,
+    });
+
+    // Association A<->D shows in both directions and uses weight 0.25
+    expect(undirectedWeighted.values).toEqual([
+      [0, 0.25],
+      [0.25, 0]
+    ]);
+  });
 });

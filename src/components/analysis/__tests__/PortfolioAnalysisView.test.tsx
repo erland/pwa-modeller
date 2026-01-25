@@ -114,6 +114,39 @@ function buildModelForStructuralMetrics(): Model {
   return model;
 }
 
+function buildModelForGrouping(): Model {
+  const model = createEmptyModel({ name: 'Grouping' });
+
+  const app1 = createElement({
+    id: 'A',
+    name: 'Alpha',
+    type: 'ApplicationComponent',
+    layer: 'Application',
+    taggedValues: [{ key: 'cost', value: 10 }]
+  });
+  const app2 = createElement({
+    id: 'B',
+    name: 'Beta',
+    type: 'ApplicationComponent',
+    layer: 'Application',
+    taggedValues: [{ key: 'cost', value: 40 }]
+  });
+  const biz1 = createElement({
+    id: 'C',
+    name: 'Bravo',
+    type: 'BusinessProcess',
+    layer: 'Business',
+    taggedValues: [{ key: 'cost', value: 30 }]
+  });
+  const biz2 = createElement({ id: 'D', name: 'Delta', type: 'BusinessProcess', layer: 'Business' });
+
+  model.elements[app1.id] = app1;
+  model.elements[app2.id] = app2;
+  model.elements[biz1.id] = biz1;
+  model.elements[biz2.id] = biz2;
+  return model;
+}
+
 function tableRowNames(table: HTMLElement): string[] {
   const rows = within(table).getAllByRole('row').slice(1); // skip header
   return rows.map((r) => within(r).getAllByRole('cell')[0].textContent || '');
@@ -275,5 +308,43 @@ describe('PortfolioAnalysisView structural metrics columns', () => {
     expect(header).toBe('elementId,name,type,layer,metric,degree,reach3');
 
     spy.mockRestore();
+  });
+});
+
+describe('PortfolioAnalysisView grouping and rollups', () => {
+  test('groups by Type and shows count/sum/avg/missing totals for the primary metric', async () => {
+    const user = userEvent.setup();
+    const model = buildModelForGrouping();
+    const onSelectElement = jest.fn();
+
+    render(
+      <PortfolioAnalysisView
+        model={model}
+        modelKind="archimate"
+        selection={noSelection}
+        onSelectElement={onSelectElement}
+      />
+    );
+
+    const metricInput = screen.getByLabelText('Primary metric') as HTMLInputElement;
+    await user.clear(metricInput);
+    await user.type(metricInput, 'cost');
+
+    const groupBy = screen.getByLabelText('Group by') as HTMLSelectElement;
+    await user.selectOptions(groupBy, 'type');
+
+    const appGroup = screen.getByTestId('portfolio-group-type-ApplicationComponent');
+    expect(appGroup).toHaveTextContent('ApplicationComponent');
+    expect(appGroup).toHaveTextContent('Count: 2');
+    expect(appGroup).toHaveTextContent('Sum cost: 50');
+    expect(appGroup).toHaveTextContent('Avg: 25');
+    expect(appGroup).toHaveTextContent('Missing: 0');
+
+    const bizGroup = screen.getByTestId('portfolio-group-type-BusinessProcess');
+    expect(bizGroup).toHaveTextContent('BusinessProcess');
+    expect(bizGroup).toHaveTextContent('Count: 2');
+    expect(bizGroup).toHaveTextContent('Sum cost: 30');
+    expect(bizGroup).toHaveTextContent('Avg: 30');
+    expect(bizGroup).toHaveTextContent('Missing: 1');
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
 import type { Model, ModelKind, ElementType } from '../../domain';
 import { discoverNumericPropertyKeys, getElementTypeLabel, readNumericPropertyFromElement, rowsToCsv } from '../../domain';
@@ -20,6 +20,7 @@ type Props = {
 
 type SortKey = 'name' | 'type' | 'layer' | 'metric' | 'degree' | 'reach3';
 type SortDir = 'asc' | 'desc';
+type GroupBy = 'none' | 'type' | 'layer';
 
 function formatMetricValue(v: number): string {
   if (!Number.isFinite(v)) return '';
@@ -33,6 +34,10 @@ function clamp01(x: number): number {
   if (x < 0) return 0;
   if (x > 1) return 1;
   return x;
+}
+
+function toTestIdKey(s: string): string {
+  return s.replace(/[^a-zA-Z0-9_-]+/g, '_');
 }
 
 export function PortfolioAnalysisView({ model, modelKind, selection, onSelectElement }: Props) {
@@ -62,6 +67,8 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
 
   const [showDegree, setShowDegree] = useState(false);
   const [showReach3, setShowReach3] = useState(false);
+
+  const [groupBy, setGroupBy] = useState<GroupBy>('none');
 
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -137,13 +144,13 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     });
   }, [graph, needsReach3, visibleNodeIds]);
 
-  const sortedRows = useMemo(() => {
+  const rowComparator = useMemo(() => {
     const dirMul = sortDir === 'asc' ? 1 : -1;
 
     const keyString = (s: string | null | undefined): string => (s ?? '').toString();
     const cmpStr = (a: string, b: string): number => a.localeCompare(b, undefined, { sensitivity: 'base' });
 
-    const cmp = (a: (typeof displayRows)[number], b: (typeof displayRows)[number]): number => {
+    return (a: (typeof displayRows)[number], b: (typeof displayRows)[number]): number => {
       if (sortKey === 'name') return cmpStr(a.label, b.label) * dirMul;
       // For secondary comparisons (tie-breakers), always use Name asc to keep ordering predictable.
       if (sortKey === 'type') return cmpStr(a.typeLabel, b.typeLabel) * dirMul || cmpStr(a.label, b.label);
@@ -179,13 +186,68 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
       if (av !== bv) return (av - bv) * dirMul;
       return cmpStr(a.label, b.label);
     };
+  }, [degreeByElementId, displayRows, metricKey, reach3ByElementId, sortDir, sortKey, valueByElementId]);
 
+  const sortedRows = useMemo(() => {
     // Stable sort.
     return displayRows
       .map((r, i) => ({ r, i }))
-      .sort((a, b) => cmp(a.r, b.r) || a.i - b.i)
+      .sort((a, b) => rowComparator(a.r, b.r) || a.i - b.i)
       .map((x) => x.r);
-  }, [degreeByElementId, displayRows, metricKey, reach3ByElementId, sortDir, sortKey, valueByElementId]);
+  }, [displayRows, rowComparator]);
+
+  const grouped = useMemo(() => {
+    if (groupBy === 'none') return null;
+    if (groupBy === 'layer' && !hasLayerFacet) return null;
+
+    const keyForRow = (r: (typeof sortedRows)[number]): string => {
+      if (groupBy === 'type') return r.typeLabel;
+      return r.layerLabel ?? '—';
+    };
+
+    const groups = new Map<string, (typeof sortedRows)[number][]>();
+    for (const r of sortedRows) {
+      const k = keyForRow(r);
+      const cur = groups.get(k);
+      if (cur) cur.push(r);
+      else groups.set(k, [r]);
+    }
+
+    const groupKeys = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    const indexById: Record<string, number> = {};
+    for (let i = 0; i < displayRows.length; i++) indexById[displayRows[i].elementId] = i;
+
+    const stableSort = (arr: (typeof sortedRows)[number][]): (typeof sortedRows)[number][] =>
+      arr
+        .map((r) => ({ r, i: indexById[r.elementId] ?? 0 }))
+        .sort((a, b) => rowComparator(a.r, b.r) || a.i - b.i)
+        .map((x) => x.r);
+
+    return groupKeys.map((k) => {
+      const rowsInGroup = stableSort(groups.get(k) ?? []);
+      let sum = 0;
+      let present = 0;
+      let missing = 0;
+      if (metricKey) {
+        for (const r of rowsInGroup) {
+          const v = valueByElementId[r.elementId];
+          if (v === undefined) missing++;
+          else {
+            present++;
+            sum += v;
+          }
+        }
+      }
+      const avg = metricKey && present > 0 ? sum / present : null;
+      return { key: k, rows: rowsInGroup, rollup: { count: rowsInGroup.length, sum: metricKey ? sum : null, avg, missing: metricKey ? missing : 0 } };
+    });
+  }, [displayRows, groupBy, hasLayerFacet, metricKey, rowComparator, sortedRows, valueByElementId]);
+
+  const tableRows = useMemo(() => {
+    if (!grouped) return sortedRows;
+    return grouped.flatMap((g) => g.rows);
+  }, [grouped, sortedRows]);
 
   // If a user hides a column that is currently used for sorting, fall back to Name.
   // (Keeps UI behavior predictable and avoids sorting by a hidden column.)
@@ -199,6 +261,10 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
       setSortDir('asc');
     }
   }, [showDegree, showReach3, sortKey]);
+
+  useEffect(() => {
+    if (groupBy === 'layer' && !hasLayerFacet) setGroupBy('none');
+  }, [groupBy, hasLayerFacet]);
 
   const selectedElementId = selection.kind === 'element' ? selection.elementId : null;
 
@@ -233,7 +299,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
   const modelName = model.metadata?.name || 'model';
 
   const exportCsv = (): void => {
-    if (sortedRows.length === 0) return;
+    if (tableRows.length === 0) return;
     const base = metricKey ? `${modelName}-portfolio-${metricKey}` : `${modelName}-portfolio`;
 
     const columns: Array<{ key: string; header: string }> = [
@@ -246,7 +312,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     if (showDegree) columns.push({ key: 'degree', header: 'degree' });
     if (showReach3) columns.push({ key: 'reach3', header: 'reach3' });
 
-    const exportRows: Record<string, unknown>[] = sortedRows.map((r) => {
+    const exportRows: Record<string, unknown>[] = tableRows.map((r) => {
       const v = metricKey ? valueByElementId[r.elementId] : undefined;
       const degree = showDegree ? (degreeByElementId[r.elementId] ?? '') : '';
       const reach3 = showReach3 ? (reach3ByElementId[r.elementId] ?? '') : '';
@@ -328,6 +394,20 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
           </div>
         </div>
 
+        <div className="toolbarGroup" style={{ minWidth: 220 }}>
+          <label htmlFor="portfolio-groupby">Group by</label>
+          <select
+            id="portfolio-groupby"
+            className="textInput"
+            value={groupBy}
+            onChange={(e) => setGroupBy(e.currentTarget.value as GroupBy)}
+          >
+            <option value="none">None</option>
+            <option value="type">Type</option>
+            {hasLayerFacet ? <option value="layer">Layer</option> : null}
+          </select>
+        </div>
+
         <div className="toolbarGroup" style={{ minWidth: 0 }}>
           <label style={{ visibility: 'hidden' }} aria-hidden="true">
             Actions
@@ -337,8 +417,8 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
               type="button"
               className="shellButton"
               onClick={exportCsv}
-              disabled={sortedRows.length === 0}
-              aria-disabled={sortedRows.length === 0}
+              disabled={tableRows.length === 0}
+              aria-disabled={tableRows.length === 0}
               title="Export the portfolio table as CSV"
             >
               Export CSV
@@ -527,7 +607,102 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((r) => {
+            {grouped
+              ? grouped.map((g) => {
+                  const colSpan =
+                    1 +
+                    1 +
+                    (hasLayerFacet ? 1 : 0) +
+                    1 +
+                    (showDegree ? 1 : 0) +
+                    (showReach3 ? 1 : 0) +
+                    1;
+
+                  const metricLabel = metricKey ? metricKey : 'metric';
+                  const sumText = g.rollup.sum !== null ? formatMetricValue(g.rollup.sum) : '';
+                  const avgText = g.rollup.avg !== null ? formatMetricValue(g.rollup.avg) : '';
+
+                  return (
+                    <Fragment key={`group-${groupBy}-${g.key}`}>
+                      <tr
+                        data-testid={`portfolio-group-${groupBy}-${toTestIdKey(g.key)}`}
+                        style={{ background: 'rgba(255,255,255,0.03)' }}
+                      >
+                        <td colSpan={colSpan}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 700 }}>{g.key}</span>
+                            <span className="crudHint" style={{ margin: 0 }}>
+                              Count: <span className="mono">{g.rollup.count}</span>
+                              {metricKey ? (
+                                <>
+                                  {' '}• Sum {metricLabel}: <span className="mono">{sumText || '—'}</span>
+                                  {' '}• Avg: <span className="mono">{avgText || '—'}</span>
+                                  {' '}• Missing: <span className="mono">{g.rollup.missing}</span>
+                                </>
+                              ) : null}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                      {g.rows.map((r) => {
+                        const v = metricKey ? valueByElementId[r.elementId] : undefined;
+                        const range = metricRange;
+                        const intensity =
+                          metricKey && v !== undefined && range
+                            ? range.max === range.min
+                              ? 1
+                              : clamp01((v - range.min) / (range.max - range.min))
+                            : 0;
+                        const heatAlpha = intensity > 0 ? 0.18 * intensity : 0;
+                        const heatmapBg = heatAlpha > 0 ? `rgba(var(--analysis-heatmap-fill-rgb), ${heatAlpha})` : undefined;
+
+                        return (
+                          <tr
+                            key={r.elementId}
+                            style={
+                              selectedElementId === r.elementId ? { background: 'rgba(255,255,255,0.04)' } : undefined
+                            }
+                          >
+                            <td>{r.label}</td>
+                            <td className="mono">{r.typeLabel}</td>
+                            {hasLayerFacet ? <td>{r.layerLabel ?? ''}</td> : null}
+                            <td
+                              className="mono"
+                              style={{ textAlign: 'right', background: heatmapBg, opacity: metricKey && v === undefined ? 0.6 : 1 }}
+                              data-heat={intensity > 0 ? intensity.toFixed(3) : undefined}
+                            >
+                              {metricKey ? (v === undefined ? '—' : formatMetricValue(v)) : '—'}
+                            </td>
+                            {showDegree ? (
+                              <td
+                                className="mono"
+                                style={{ textAlign: 'right', opacity: degreeByElementId[r.elementId] === undefined ? 0.6 : 1 }}
+                              >
+                                {degreeByElementId[r.elementId] ?? '—'}
+                              </td>
+                            ) : null}
+                            {showReach3 ? (
+                              <td
+                                className="mono"
+                                style={{ textAlign: 'right', opacity: reach3ByElementId[r.elementId] === undefined ? 0.6 : 1 }}
+                              >
+                                {reach3ByElementId[r.elementId] ?? '—'}
+                              </td>
+                            ) : null}
+                            <td>
+                              <div className="rowActions">
+                                <button type="button" className="miniLinkButton" onClick={() => onSelectElement(r.elementId)}>
+                                  Select
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })
+              : tableRows.map((r) => {
               const v = metricKey ? valueByElementId[r.elementId] : undefined;
               const range = metricRange;
               const intensity =
@@ -583,7 +758,8 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
       )}
 
       <p className="crudHint" style={{ marginTop: 10 }}>
-        Showing {sortedRows.length} element{sortedRows.length === 1 ? '' : 's'}. Sorted by {sortKey} ({sortDir}).
+        Showing {tableRows.length} element{tableRows.length === 1 ? '' : 's'}.
+        {grouped ? ` Grouped by ${groupBy}.` : ''} Sorted by {sortKey} ({sortDir}).
       </p>
     </div>
   );

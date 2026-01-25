@@ -6,4 +6,5 @@ export * from './relationshipMatrix';
 export * from './metrics';
 export * from './queries/relatedElements';
 export * from './queries/pathsBetween';
+export * from './queries/portfolioPopulation';
 export * from './traceability/types';

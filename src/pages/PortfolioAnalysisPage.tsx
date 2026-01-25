@@ -7,7 +7,7 @@ import { PropertiesPanel } from '../components/model/PropertiesPanel';
 import { noSelection, type Selection } from '../components/model/selection';
 import { AppShell } from '../components/shell/AppShell';
 import { AnalysisModeBar } from '../components/analysis/AnalysisModeBar';
-import { PortfolioWorkspace } from '../components/analysis/PortfolioWorkspace';
+import { PortfolioAnalysisView } from '../components/analysis/PortfolioAnalysisView';
 import type { Model, ModelKind } from '../domain';
 import { kindFromTypeId } from '../domain';
 import { useModelStore } from '../store';
@@ -52,8 +52,7 @@ export default function PortfolioAnalysisPage() {
   const model = useModelStore((s) => s.model);
   const modelKind = useMemo(() => inferAnalysisKind(model, selection), [model, selection]);
 
-  // Step 1: portfolio shell only. We still compute modelKind so later steps can share the same adapter selection logic.
-  void modelKind;
+  const hasModel = !!model;
 
   const shellSubtitle = useMemo(() => 'Portfolio view: compare and prioritize elements across your model', []);
 
@@ -73,7 +72,23 @@ export default function PortfolioAnalysisPage() {
         }
       >
         <AnalysisModeBar />
-        <PortfolioWorkspace />
+        {hasModel && model ? (
+          <PortfolioAnalysisView
+            model={model}
+            modelKind={modelKind}
+            selection={selection}
+            onSelectElement={(elementId) => setSelection({ kind: 'element', elementId })}
+          />
+        ) : (
+          <div className="workspace" aria-label="Portfolio analysis workspace">
+            <div className="workspaceHeader">
+              <h1 className="workspaceTitle">Portfolio analysis</h1>
+            </div>
+            <p className="crudHint" style={{ marginTop: 10 }}>
+              Load a model to start portfolio analysis.
+            </p>
+          </div>
+        )}
       </AppShell>
 
       <ModelPropertiesDialog isOpen={modelPropsOpen} onClose={() => setModelPropsOpen(false)} />

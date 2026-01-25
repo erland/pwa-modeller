@@ -79,6 +79,7 @@ export function AnalysisMiniGraph({
   wrapLabels = true,
   autoFitColumns = true,
   nodeOverlayMetricId = 'off',
+  nodeOverlayReachDepth = 3,
   overlayDirection = 'both',
   overlayRelationshipTypes
 }: {
@@ -93,6 +94,7 @@ export function AnalysisMiniGraph({
   wrapLabels?: boolean;
   autoFitColumns?: boolean;
   nodeOverlayMetricId?: 'off' | NodeMetricId;
+  nodeOverlayReachDepth?: 2 | 3 | 4;
   overlayDirection?: AnalysisDirection;
   overlayRelationshipTypes?: RelationshipType[];
 }) {
@@ -123,11 +125,27 @@ export function AnalysisMiniGraph({
   const nodeOverlayScores = useMemo(() => {
     if (nodeOverlayMetricId === 'off') return null;
     if (!analysisGraph) return null;
+
+    const nodeIds = safeData.nodes.map((n) => n.id);
+    const relationshipTypes = overlayRelationshipTypes && overlayRelationshipTypes.length ? overlayRelationshipTypes : undefined;
+
+    if (nodeOverlayMetricId === 'nodeReach') {
+      return computeNodeMetric(analysisGraph, 'nodeReach', {
+        direction: overlayDirection,
+        relationshipTypes,
+        maxDepth: nodeOverlayReachDepth,
+        nodeIds,
+        // Defensive cap: avoids worst-case blowups on dense graphs.
+        maxVisited: 5000
+      });
+    }
+
     return computeNodeMetric(analysisGraph, nodeOverlayMetricId, {
       direction: overlayDirection,
-      relationshipTypes: overlayRelationshipTypes && overlayRelationshipTypes.length ? overlayRelationshipTypes : undefined
+      relationshipTypes,
+      nodeIds
     });
-  }, [analysisGraph, nodeOverlayMetricId, overlayDirection, overlayRelationshipTypes]);
+  }, [analysisGraph, nodeOverlayMetricId, nodeOverlayReachDepth, overlayDirection, overlayRelationshipTypes, safeData.nodes]);
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
   const selectedElementId = selectionToElementId(selection);

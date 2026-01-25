@@ -14,6 +14,16 @@ describe('Routing', () => {
     expect(screen.getByRole('heading', { name: /about/i })).toBeInTheDocument();
   });
 
+  it('shows the Portfolio analysis page when navigating to /analysis/portfolio', () => {
+    render(
+      <MemoryRouter initialEntries={['/analysis/portfolio']}>
+        <AppRoutes />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('heading', { name: /portfolio analysis/i })).toBeInTheDocument();
+  });
+
   it('redirects unknown routes to the workspace', () => {
     render(
       <MemoryRouter initialEntries={['/does-not-exist']}>

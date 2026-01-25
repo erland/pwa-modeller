@@ -34,6 +34,8 @@ export function ElementPickerRow({
   onOpenChooser,
   onClear
 }: Props) {
+  const open = () => onOpenChooser(which);
+
   return (
     <div className="toolbarGroup">
       <label htmlFor={inputId}>{label}</label>
@@ -44,10 +46,16 @@ export function ElementPickerRow({
           readOnly
           value={elementLabel(model, valueId)}
           placeholder="Select…"
+          onClick={open}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              open();
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+          title="Click to choose an element"
         />
-        <button type="button" className="shellButton secondary" onClick={() => onOpenChooser(which)}>
-          Choose…
-        </button>
         <button type="button" className="shellButton secondary" disabled={!valueId} onClick={onClear}>
           Clear
         </button>

@@ -1,0 +1,72 @@
+export type MatrixQueryPreset = {
+  id: string;
+  name: string;
+  createdAt: string; // ISO
+  query: {
+    rowSource: 'facet' | 'selection';
+    rowElementType: string | '';
+    rowLayer: string | '';
+    rowSelectionIds: string[];
+
+    colSource: 'facet' | 'selection';
+    colElementType: string | '';
+    colLayer: string | '';
+    colSelectionIds: string[];
+
+    direction: 'incoming' | 'outgoing' | 'both';
+    relationshipTypes: string[];
+  };
+};
+
+export type MatrixQuerySnapshot = {
+  id: string;
+  name: string;
+  createdAt: string; // ISO
+  // Snapshot captures the resolved ids used when it was created (stable evidence),
+  // plus the UI query so it can be restored.
+  builtQuery: {
+    rowIds: string[];
+    colIds: string[];
+    direction: 'rowToCol' | 'colToRow' | 'both';
+    relationshipTypes: string[];
+  };
+  uiQuery: MatrixQueryPreset['query'];
+  summary: {
+    rowCount: number;
+    colCount: number;
+    grandTotal: number;
+    missingCells: number;
+    nonZeroCells: number;
+  };
+};
+
+function key(modelId: string, kind: 'presets' | 'snapshots'): string {
+  return `ea-modeller:analysis:matrix:${kind}:${modelId}`;
+}
+
+function safeParse<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function loadMatrixPresets(modelId: string): MatrixQueryPreset[] {
+  const parsed = safeParse<MatrixQueryPreset[]>(localStorage.getItem(key(modelId, 'presets')));
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+export function saveMatrixPresets(modelId: string, presets: MatrixQueryPreset[]): void {
+  localStorage.setItem(key(modelId, 'presets'), JSON.stringify(presets));
+}
+
+export function loadMatrixSnapshots(modelId: string): MatrixQuerySnapshot[] {
+  const parsed = safeParse<MatrixQuerySnapshot[]>(localStorage.getItem(key(modelId, 'snapshots')));
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+export function saveMatrixSnapshots(modelId: string, snapshots: MatrixQuerySnapshot[]): void {
+  localStorage.setItem(key(modelId, 'snapshots'), JSON.stringify(snapshots));
+}

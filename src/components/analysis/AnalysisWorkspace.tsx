@@ -13,6 +13,14 @@ import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildRelationshipMatrix, type RelationshipMatrixDirection } from '../../domain/analysis/relationshipMatrix';
 import { RelationshipMatrixTable } from './RelationshipMatrixTable';
 import { RelationshipMatrixCellDialog } from './RelationshipMatrixCellDialog';
+import {
+  loadMatrixPresets,
+  loadMatrixSnapshots,
+  saveMatrixPresets,
+  saveMatrixSnapshots,
+  type MatrixQueryPreset,
+  type MatrixQuerySnapshot
+} from './matrixPresetsStorage';
 
 function selectionToElementId(sel: Selection): string | null {
   switch (sel.kind) {
@@ -53,6 +61,7 @@ export function AnalysisWorkspace({
   onSelect: (sel: Selection) => void;
 }) {
   const model = useModelStore((s) => s.model);
+  const modelId = model?.id ?? '';
 
   const [mode, setMode] = useState<AnalysisMode>('related');
 
@@ -87,6 +96,136 @@ export function AnalysisWorkspace({
     colLabel: string;
     relationshipIds: string[];
   } | null>(null);
+
+  function applyMatrixUiQuery(query: MatrixQueryPreset['query']): void {
+    setMatrixRowSource(query.rowSource);
+    setMatrixRowElementType(query.rowElementType as any);
+    setMatrixRowLayer(query.rowLayer);
+    setMatrixRowSelectionIds([...query.rowSelectionIds]);
+
+    setMatrixColSource(query.colSource);
+    setMatrixColElementType(query.colElementType as any);
+    setMatrixColLayer(query.colLayer);
+    setMatrixColSelectionIds([...query.colSelectionIds]);
+
+    setDirection(query.direction as any);
+    setRelationshipTypes(query.relationshipTypes as any);
+  }
+
+  function saveCurrentMatrixPreset(): void {
+    if (!modelId) return;
+    const name = window.prompt('Preset name?');
+    if (!name) return;
+    const preset: MatrixQueryPreset = {
+      id: `preset_${Date.now()}`,
+      name,
+      createdAt: new Date().toISOString(),
+      query: {
+        rowSource: matrixRowSource,
+        rowElementType: matrixRowElementType,
+        rowLayer: matrixRowLayer,
+        rowSelectionIds: [...matrixRowSelectionIds],
+        colSource: matrixColSource,
+        colElementType: matrixColElementType,
+        colLayer: matrixColLayer,
+        colSelectionIds: [...matrixColSelectionIds],
+        direction,
+        relationshipTypes: [...relationshipTypes],
+      }
+    };
+    const next = [preset, ...matrixPresets].slice(0, 50);
+    setMatrixPresets(next);
+    setMatrixPresetId(preset.id);
+    saveMatrixPresets(modelId, next);
+  }
+
+  function deleteSelectedMatrixPreset(): void {
+    if (!modelId || !matrixPresetId) return;
+    const preset = matrixPresets.find((p) => p.id === matrixPresetId);
+    const ok = window.confirm(`Delete preset “${preset?.name ?? 'Unnamed'}”?`);
+    if (!ok) return;
+    const next = matrixPresets.filter((p) => p.id !== matrixPresetId);
+    setMatrixPresets(next);
+    setMatrixPresetId('');
+    saveMatrixPresets(modelId, next);
+  }
+
+  function saveMatrixSnapshot(): void {
+    if (!modelId || !matrixBuiltQuery || !matrixResult) return;
+    const name = window.prompt('Snapshot name?');
+    if (!name) return;
+
+    let missingCells = 0;
+    let nonZeroCells = 0;
+    for (const row of matrixResult.cells) {
+      for (const cell of row) {
+        if (cell.count === 0) missingCells += 1;
+        else nonZeroCells += 1;
+      }
+    }
+
+    const matrixDirection: RelationshipMatrixDirection =
+      direction === 'outgoing' ? 'rowToCol' : direction === 'incoming' ? 'colToRow' : 'both';
+
+    const snapshot: MatrixQuerySnapshot = {
+      id: `snap_${Date.now()}`,
+      name,
+      createdAt: new Date().toISOString(),
+      builtQuery: {
+        rowIds: [...matrixBuiltQuery.rowIds],
+        colIds: [...matrixBuiltQuery.colIds],
+        direction: matrixDirection,
+        relationshipTypes: [...matrixBuiltQuery.relationshipTypes],
+      },
+      uiQuery: {
+        rowSource: matrixRowSource,
+        rowElementType: matrixRowElementType,
+        rowLayer: matrixRowLayer,
+        rowSelectionIds: [...matrixRowSelectionIds],
+        colSource: matrixColSource,
+        colElementType: matrixColElementType,
+        colLayer: matrixColLayer,
+        colSelectionIds: [...matrixColSelectionIds],
+        direction,
+        relationshipTypes: [...relationshipTypes],
+      },
+      summary: {
+        rowCount: matrixResult.rows.length,
+        colCount: matrixResult.cols.length,
+        grandTotal: matrixResult.grandTotal,
+        missingCells,
+        nonZeroCells,
+      }
+    };
+
+    const next = [snapshot, ...matrixSnapshots].slice(0, 50);
+    setMatrixSnapshots(next);
+    saveMatrixSnapshots(modelId, next);
+  }
+
+  function restoreMatrixSnapshot(snapshotId: string): void {
+    const snap = matrixSnapshots.find((s) => s.id === snapshotId);
+    if (!snap) return;
+    applyMatrixUiQuery(snap.uiQuery);
+    setMatrixBuiltQuery({
+      rowIds: [...snap.builtQuery.rowIds],
+      colIds: [...snap.builtQuery.colIds],
+      relationshipTypes: [...(snap.builtQuery.relationshipTypes as any)],
+      direction: snap.builtQuery.direction,
+    });
+    setMatrixBuildNonce((n) => n + 1);
+  }
+
+  function deleteMatrixSnapshot(snapshotId: string): void {
+    if (!modelId) return;
+    const snap = matrixSnapshots.find((s) => s.id === snapshotId);
+    const ok = window.confirm(`Delete snapshot “${snap?.name ?? 'Unnamed'}”?`);
+    if (!ok) return;
+    const next = matrixSnapshots.filter((s) => s.id !== snapshotId);
+    setMatrixSnapshots(next);
+    saveMatrixSnapshots(modelId, next);
+  }
+
 
 
   // -----------------------------
@@ -477,6 +616,71 @@ export function AnalysisWorkspace({
                         No matrix built yet.
                       </p>
                     )}
+                  </div>
+
+                  <div className="toolbar" aria-label="Matrix presets toolbar" style={{ justifyContent: 'flex-end' }}>
+                    <div className="toolbarGroup" style={{ minWidth: 220 }}>
+                      <label htmlFor="matrix-preset" className="crudLabel">Preset</label>
+                      <select
+                        id="matrix-preset"
+                        className="crudInput"
+                        value={matrixPresetId}
+                        onChange={(e) => setMatrixPresetId(e.target.value)}
+                      >
+                        <option value="">(none)</option>
+                        {matrixPresets.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="toolbarGroup">
+                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Actions</label>
+                      <button type="button" className="shellButton" onClick={saveCurrentMatrixPreset}>
+                        Save preset
+                      </button>
+                    </div>
+
+                    <div className="toolbarGroup">
+                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Apply</label>
+                      <button
+                        type="button"
+                        className="shellButton"
+                        disabled={!matrixPresetId}
+                        onClick={() => {
+                          const p = matrixPresets.find((x) => x.id === matrixPresetId);
+                          if (p) applyMatrixUiQuery(p.query);
+                        }}
+                      >
+                        Apply
+                      </button>
+                    </div>
+
+                    <div className="toolbarGroup">
+                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Delete</label>
+                      <button
+                        type="button"
+                        className="shellButton"
+                        disabled={!matrixPresetId}
+                        onClick={deleteSelectedMatrixPreset}
+                      >
+                        Delete
+                      </button>
+                    </div>
+
+                    <div className="toolbarGroup">
+                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Snapshot</label>
+                      <button
+                        type="button"
+                        className="shellButton"
+                        disabled={!matrixResult}
+                        onClick={saveMatrixSnapshot}
+                      >
+                        Save snapshot
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

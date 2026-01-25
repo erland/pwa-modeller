@@ -12,6 +12,7 @@ import { TraceabilityExplorer } from './TraceabilityExplorer';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildRelationshipMatrix, type RelationshipMatrixDirection } from '../../domain/analysis/relationshipMatrix';
 import { RelationshipMatrixTable } from './RelationshipMatrixTable';
+import { RelationshipMatrixCellDialog } from './RelationshipMatrixCellDialog';
 
 function selectionToElementId(sel: Selection): string | null {
   switch (sel.kind) {
@@ -78,6 +79,15 @@ export function AnalysisWorkspace({
   } | null>(null);
 
   const [matrixHighlightMissing, setMatrixHighlightMissing] = useState<boolean>(true);
+
+  const [matrixCellDialog, setMatrixCellDialog] = useState<{
+    rowId: string;
+    rowLabel: string;
+    colId: string;
+    colLabel: string;
+    relationshipIds: string[];
+  } | null>(null);
+
 
   // -----------------------------
   // Filters (draft)
@@ -476,6 +486,16 @@ export function AnalysisWorkspace({
                   result={matrixResult}
                   highlightMissing={matrixHighlightMissing}
                   onToggleHighlightMissing={() => setMatrixHighlightMissing((v) => !v)}
+                  onOpenCell={(info) => setMatrixCellDialog(info)}
+                />
+              ) : null}
+
+              {matrixResult && model && matrixCellDialog ? (
+                <RelationshipMatrixCellDialog
+                  isOpen={Boolean(matrixCellDialog)}
+                  onClose={() => setMatrixCellDialog(null)}
+                  model={model}
+                  cell={matrixCellDialog}
                 />
               ) : null}
             </>

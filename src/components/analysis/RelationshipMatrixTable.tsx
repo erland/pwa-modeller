@@ -7,13 +7,27 @@ export interface RelationshipMatrixTableProps {
   /** If true, visually highlight 0-count cells. */
   highlightMissing: boolean;
   onToggleHighlightMissing: () => void;
+
+  /** Optional: open a drill-down inspector for a specific cell. */
+  onOpenCell?: (args: {
+    rowId: string;
+    rowLabel: string;
+    colId: string;
+    colLabel: string;
+    relationshipIds: string[];
+  }) => void;
 }
 
 function formatTotal(n: number): string {
   return String(n);
 }
 
-export function RelationshipMatrixTable({ result, highlightMissing, onToggleHighlightMissing }: RelationshipMatrixTableProps) {
+export function RelationshipMatrixTable({
+  result,
+  highlightMissing,
+  onToggleHighlightMissing,
+  onOpenCell
+}: RelationshipMatrixTableProps) {
   const { rows, cols, cells, rowTotals, colTotals, grandTotal } = result;
 
   const maxCellCount = useMemo(() => {
@@ -138,7 +152,29 @@ export function RelationshipMatrixTable({ result, highlightMissing, onToggleHigh
                       }}
                       title={cell.relationshipIds.length ? cell.relationshipIds.join('\n') : 'No links'}
                     >
-                      {cell.count ? formatTotal(cell.count) : ''}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenCell?.({
+                            rowId: r.id,
+                            rowLabel: r.label,
+                            colId: c.id,
+                            colLabel: c.label,
+                            relationshipIds: cell.relationshipIds,
+                          })
+                        }
+                        aria-label={`Open cell details for ${r.label} → ${c.label}`}
+                        style={{
+                          all: 'unset',
+                          cursor: 'pointer',
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'right',
+                          padding: 0,
+                        }}
+                      >
+                        {cell.count ? formatTotal(cell.count) : ''}
+                      </button>
                     </td>
                   );
                 })}

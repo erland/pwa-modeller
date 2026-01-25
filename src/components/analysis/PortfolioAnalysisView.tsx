@@ -508,21 +508,11 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
 
   return (
     <div className="workspace" aria-label="Portfolio analysis workspace">
-      <div className="toolbar" aria-label="Portfolio population filters">
-        <div className="toolbarGroup" style={{ minWidth: 280 }}>
-          <label htmlFor="portfolio-search">Search</label>
-          <input
-            id="portfolio-search"
-            className="textInput"
-            placeholder="Filter by name…"
-            value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
-          />
-        </div>
+      <div className="toolbar" aria-label="Portfolio population filters" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
 
         <div className="toolbarGroup" style={{ minWidth: 320 }}>
           <label htmlFor="portfolio-metric">Primary metric</label>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <input
               id="portfolio-metric"
               className="textInput"
@@ -530,13 +520,24 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
               value={primaryMetricKey}
               onChange={(e) => setPrimaryMetricKey(e.currentTarget.value)}
               list="portfolio-metric-keys"
+              style={{ width: 'auto', flex: '1 1 220px', minWidth: 180 }}
             />
             <datalist id="portfolio-metric-keys">
               {availablePropertyKeys.map((k) => (
                 <option key={k} value={k} />
               ))}
             </datalist>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, whiteSpace: 'nowrap' }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 12,
+                opacity: 0.9,
+                whiteSpace: 'nowrap',
+                flex: '0 0 auto'
+              }}
+            >
               <input
                 type="checkbox"
                 checked={hideMissingMetric}
@@ -650,104 +651,135 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
         </div>
       ) : null}
 
-      <div className="toolbar" style={{ marginTop: 10 }}>
-        {hasLayerFacet ? (
-          <div className="toolbarGroup" style={{ minWidth: 260 }}>
-            <label>
-              Layers ({layersSorted.length}/{availableLayers.length})
-            </label>
-            <div
-              style={{
-                maxHeight: 160,
-                overflow: 'auto',
-                border: '1px solid var(--border-1)',
-                borderRadius: 10,
-                padding: '8px 10px',
-                background: 'rgba(255,255,255,0.02)'
-              }}
-            >
-              {availableLayers.length === 0 ? (
-                <p className="crudHint" style={{ margin: 0 }}>
-                  No layers found in the model.
-                </p>
-              ) : (
-                availableLayers.map((l) => (
-                  <label
-                    key={l}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
-                  >
-                    <input type="checkbox" checked={layersSorted.includes(l)} onChange={() => setLayers(toggle(layersSorted, l))} />
-                    <span title={String(l)}>{String(l)}</span>
-                  </label>
-                ))
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="miniLinkButton"
-                onClick={() => setLayers(availableLayers)}
-                disabled={availableLayers.length === 0}
-              >
-                All
-              </button>
-              <button type="button" className="miniLinkButton" onClick={() => setLayers([])}>
-                None
-              </button>
-            </div>
-          </div>
-        ) : null}
 
-        {hasElementTypeFacet ? (
-          <div className="toolbarGroup" style={{ minWidth: 260 }}>
-            <label>
-              Types ({typesSorted.length}/{availableElementTypes.length})
-            </label>
-            <div
-              style={{
-                maxHeight: 160,
-                overflow: 'auto',
-                border: '1px solid var(--border-1)',
-                borderRadius: 10,
-                padding: '8px 10px',
-                background: 'rgba(255,255,255,0.02)'
-              }}
-            >
-              {availableElementTypes.length === 0 ? (
-                <p className="crudHint" style={{ margin: 0 }}>
-                  No element types found in the model.
-                </p>
-              ) : (
-                availableElementTypes.map((t) => (
-                  <label
-                    key={t}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={typesSorted.includes(t)}
-                      onChange={() => setTypes(toggle(typesSorted, t) as ElementType[])}
-                    />
-                    <span title={String(t)}>{getElementTypeLabel(t)}</span>
-                  </label>
-                ))
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="miniLinkButton"
-                onClick={() => setTypes(availableElementTypes)}
-                disabled={availableElementTypes.length === 0}
+      {/* Filter controls row: keep a clear gap between Search and the facet panels. */}
+      <div className="toolbar" style={{ marginTop: 10, flexWrap: 'wrap', alignItems: 'flex-start', gap: 48 }}>
+        {/* Search is a result filter, so keep it compact and aligned with the layer/type panels. */}
+        <div className="toolbarGroup" style={{ minWidth: 260, maxWidth: 260, flex: '0 0 260px' }}>
+          <label htmlFor="portfolio-search">Search</label>
+          <input
+            id="portfolio-search"
+            className="textInput"
+            placeholder="Filter by name…"
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            style={{ minWidth: 0 }}
+          />
+        </div>
+
+        {/* Keep Layers and Types together as a unit when wrapping on narrow screens. */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 16,
+            flexWrap: 'wrap',
+            alignItems: 'flex-start',
+            flex: '1 1 560px',
+            minWidth: 0
+          }}
+        >
+          {hasLayerFacet ? (
+            <div className="toolbarGroup" style={{ minWidth: 260, flex: '1 1 260px' }}>
+              <label>
+                Layers ({layersSorted.length}/{availableLayers.length})
+              </label>
+              <div
+                style={{
+                  maxHeight: 160,
+                  overflow: 'auto',
+                  border: '1px solid var(--border-1)',
+                  borderRadius: 10,
+                  padding: '8px 10px',
+                  background: 'rgba(255,255,255,0.02)'
+                }}
               >
-                All
-              </button>
-              <button type="button" className="miniLinkButton" onClick={() => setTypes([])}>
-                None
-              </button>
+                {availableLayers.length === 0 ? (
+                  <p className="crudHint" style={{ margin: 0 }}>
+                    No layers found in the model.
+                  </p>
+                ) : (
+                  availableLayers.map((l) => (
+                    <label
+                      key={l}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={layersSorted.includes(l)}
+                        onChange={() => setLayers(toggle(layersSorted, l))}
+                      />
+                      <span title={String(l)}>{String(l)}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="miniLinkButton"
+                  onClick={() => setLayers(availableLayers)}
+                  disabled={availableLayers.length === 0}
+                >
+                  All
+                </button>
+                <button type="button" className="miniLinkButton" onClick={() => setLayers([])}>
+                  None
+                </button>
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
+
+          {hasElementTypeFacet ? (
+            <div className="toolbarGroup" style={{ minWidth: 260, flex: '1 1 260px' }}>
+              <label>
+                Types ({typesSorted.length}/{availableElementTypes.length})
+              </label>
+              <div
+                style={{
+                  maxHeight: 160,
+                  overflow: 'auto',
+                  border: '1px solid var(--border-1)',
+                  borderRadius: 10,
+                  padding: '8px 10px',
+                  background: 'rgba(255,255,255,0.02)'
+                }}
+              >
+                {availableElementTypes.length === 0 ? (
+                  <p className="crudHint" style={{ margin: 0 }}>
+                    No element types found in the model.
+                  </p>
+                ) : (
+                  availableElementTypes.map((t) => (
+                    <label
+                      key={t}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={typesSorted.includes(t)}
+                        onChange={() => setTypes(toggle(typesSorted, t) as ElementType[])}
+                      />
+                      <span title={String(t)}>{getElementTypeLabel(t)}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="miniLinkButton"
+                  onClick={() => setTypes(availableElementTypes)}
+                  disabled={availableElementTypes.length === 0}
+                >
+                  All
+                </button>
+                <button type="button" className="miniLinkButton" onClick={() => setTypes([])}>
+                  None
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div

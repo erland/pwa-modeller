@@ -50,6 +50,8 @@ type Props = {
   matrixColSelectionIds: string[];
   onCaptureMatrixColSelection: () => void;
 
+  onSwapMatrixAxes: () => void;
+
   // -----------------------------
   // Filters (draft)
   // -----------------------------
@@ -115,6 +117,7 @@ export function AnalysisQueryPanel({
   onChangeMatrixColLayer,
   matrixColSelectionIds,
   onCaptureMatrixColSelection,
+  onSwapMatrixAxes,
   direction,
   onChangeDirection,
   relationshipTypes,
@@ -290,6 +293,20 @@ export function AnalysisQueryPanel({
                   </>
                 )}
               </div>
+            </div>
+
+            <div className="toolbarGroup" style={{ minWidth: 0 }}>
+              <label style={{ visibility: 'hidden' }} aria-hidden="true">
+                Swap
+              </label>
+              <button
+                type="button"
+                className="shellButton"
+                onClick={onSwapMatrixAxes}
+                title="Swap row and column selections"
+              >
+                ⇄ Swap
+              </button>
             </div>
 
             <div className="toolbarGroup" style={{ minWidth: 260 }}>

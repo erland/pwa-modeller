@@ -477,7 +477,27 @@ export function AnalysisWorkspace({
     const picked = selectionToElementIds(selection);
     setMatrixColSource('selection');
     setMatrixColSelectionIds(picked);
+  };  const swapMatrixAxes = () => {
+    const prevRowSource = matrixRowSource;
+    const prevRowElementType = matrixRowElementType;
+    const prevRowLayer = matrixRowLayer;
+    const prevRowSelectionIds = matrixRowSelectionIds;
+
+    setMatrixRowSource(matrixColSource);
+    setMatrixRowElementType(matrixColElementType);
+    setMatrixRowLayer(matrixColLayer);
+    setMatrixRowSelectionIds(matrixColSelectionIds);
+
+    setMatrixColSource(prevRowSource);
+    setMatrixColElementType(prevRowElementType);
+    setMatrixColLayer(prevRowLayer);
+    setMatrixColSelectionIds(prevRowSelectionIds);
+
+    // Clear built result to avoid showing stale matrix after swapping.
+    setMatrixBuiltQuery(null);
   };
+
+
 
   const openTraceabilityFrom = (elementId: string) => {
     setMode('traceability');
@@ -580,6 +600,7 @@ export function AnalysisWorkspace({
             onChangeMatrixColLayer={setMatrixColLayer}
             matrixColSelectionIds={matrixColSelectionIds}
             onCaptureMatrixColSelection={captureSelectionAsMatrixCols}
+            onSwapMatrixAxes={swapMatrixAxes}
 
             direction={direction}
             onChangeDirection={setDirection}

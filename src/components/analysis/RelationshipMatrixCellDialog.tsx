@@ -28,9 +28,12 @@ function getEndpointLabel(model: Model, elementId: string | undefined, connector
 }
 
 function isDirected(rel: Relationship): boolean {
-  const attrs = rel.attrs as any;
+  const attrs = rel.attrs;
   // ArchiMate RelationshipAttributes uses isDirected; for others, default true.
-  if (attrs && typeof attrs.isDirected === 'boolean') return attrs.isDirected;
+  if (attrs && typeof attrs === 'object' && 'isDirected' in attrs) {
+    const v = (attrs as { isDirected?: unknown }).isDirected;
+    if (typeof v === 'boolean') return v;
+  }
   return true;
 }
 

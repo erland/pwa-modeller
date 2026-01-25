@@ -108,23 +108,22 @@ export function AnalysisWorkspace({
     setMatrixSnapshots(loadMatrixSnapshots(modelId));
     setMatrixPresetId('');
     setMatrixSnapshotId('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelId]);
 
 
   function applyMatrixUiQuery(query: MatrixQueryPreset['query']): void {
     setMatrixRowSource(query.rowSource);
-    setMatrixRowElementType(query.rowElementType as any);
+    setMatrixRowElementType(query.rowElementType);
     setMatrixRowLayer(query.rowLayer);
     setMatrixRowSelectionIds([...query.rowSelectionIds]);
 
     setMatrixColSource(query.colSource);
-    setMatrixColElementType(query.colElementType as any);
+    setMatrixColElementType(query.colElementType);
     setMatrixColLayer(query.colLayer);
     setMatrixColSelectionIds([...query.colSelectionIds]);
 
-    setDirection(query.direction as any);
-    setRelationshipTypes(query.relationshipTypes as any);
+    setDirection(query.direction);
+    setRelationshipTypes(query.relationshipTypes);
   }
 
   function saveCurrentMatrixPreset(): void {
@@ -225,7 +224,7 @@ export function AnalysisWorkspace({
     setMatrixBuiltQuery({
       rowIds: [...snap.builtQuery.rowIds],
       colIds: [...snap.builtQuery.colIds],
-      relationshipTypes: [...(snap.builtQuery.relationshipTypes as any)],
+      relationshipTypes: [...snap.builtQuery.relationshipTypes],
       direction: snap.builtQuery.direction,
     });
     setMatrixBuildNonce((n) => n + 1);
@@ -259,8 +258,7 @@ export function AnalysisWorkspace({
     if (mode !== 'traceability') return;
     // Only auto-adjust when still at the global default (4) to avoid overriding user intent.
     if (maxDepth === 4) setMaxDepth(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, maxDepth]);
   const [includeStart, setIncludeStart] = useState<boolean>(false);
 
   // Paths-only

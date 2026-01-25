@@ -1,20 +1,23 @@
+import type { ElementType, RelationshipType } from '../../domain';
+import type { AnalysisDirection } from '../../domain/analysis/filters';
+
 export type MatrixQueryPreset = {
   id: string;
   name: string;
   createdAt: string; // ISO
   query: {
     rowSource: 'facet' | 'selection';
-    rowElementType: string | '';
+    rowElementType: ElementType | '';
     rowLayer: string | '';
     rowSelectionIds: string[];
 
     colSource: 'facet' | 'selection';
-    colElementType: string | '';
+    colElementType: ElementType | '';
     colLayer: string | '';
     colSelectionIds: string[];
 
-    direction: 'incoming' | 'outgoing' | 'both';
-    relationshipTypes: string[];
+    direction: AnalysisDirection;
+    relationshipTypes: RelationshipType[];
   };
 };
 
@@ -28,7 +31,7 @@ export type MatrixQuerySnapshot = {
     rowIds: string[];
     colIds: string[];
     direction: 'rowToCol' | 'colToRow' | 'both';
-    relationshipTypes: string[];
+    relationshipTypes: RelationshipType[];
   };
   uiQuery: MatrixQueryPreset['query'];
   summary: {

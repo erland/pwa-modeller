@@ -215,7 +215,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
       if (av !== bv) return (av - bv) * dirMul;
       return cmpStr(a.label, b.label);
     };
-  }, [degreeByElementId, displayRows, metricKey, reach3ByElementId, sortDir, sortKey, valueByElementId]);
+  }, [degreeByElementId, metricKey, reach3ByElementId, sortDir, sortKey, valueByElementId]);
 
   const sortedRows = useMemo(() => {
     // Stable sort.

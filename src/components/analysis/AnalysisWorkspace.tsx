@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { AnalysisDirection, ElementType, ModelKind, RelationshipType, MatrixMetricId } from '../../domain';
 import type { Selection } from '../model/selection';
@@ -112,7 +112,7 @@ export function AnalysisWorkspace({
   const [matrixWeightPresetId, setMatrixWeightPresetId] = useState<string>('default');
   const [matrixWeightsByRelationshipType, setMatrixWeightsByRelationshipType] = useState<Record<string, number>>({});
 
-  const weightsForMatrixPreset = (presetId: string): Record<string, number> => {
+  const weightsForMatrixPreset = useCallback((presetId: string): Record<string, number> => {
     if (presetId === 'archimateDependencies') {
       return {
         Access: 3,
@@ -129,17 +129,17 @@ export function AnalysisWorkspace({
       };
     }
     return {};
-  };
+  }, []);
 
-  const applyMatrixWeightPreset = (presetId: string): void => {
+  const applyMatrixWeightPreset = useCallback((presetId: string): void => {
     setMatrixWeightPresetId(presetId);
     setMatrixWeightsByRelationshipType(weightsForMatrixPreset(presetId));
-  };
+  }, [weightsForMatrixPreset]);
 
   useEffect(() => {
     // When model kind changes, reset to default to avoid applying ArchiMate weights to other notations.
     applyMatrixWeightPreset('default');
-  }, [modelKind]);
+  }, [applyMatrixWeightPreset, modelKind]);
 
   const [matrixCellDialog, setMatrixCellDialog] = useState<{
     rowId: string;
@@ -178,7 +178,7 @@ export function AnalysisWorkspace({
         setMatrixWeightsByRelationshipType(ui.matrix.weightsByRelationshipType);
       }
     }
-  }, [modelId]);
+  }, [applyMatrixWeightPreset, modelId]);
 
   // Step 9: persist matrix UI settings per model.
   useEffect(() => {

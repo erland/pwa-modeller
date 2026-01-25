@@ -7,6 +7,8 @@ import type { Model } from '../../../domain/types';
 import { noSelection } from '../../model/selection';
 import * as download from '../../../store/download';
 
+const PRESET_KEY = (modelId: string): string => `ea-modeller:analysis:portfolio:presets:${modelId}`;
+
 function buildModelWithCost(): Model {
   const model = createEmptyModel({ name: 't' });
 
@@ -227,6 +229,49 @@ describe('PortfolioAnalysisView completeness widget', () => {
     expect(screen.getByTestId('portfolio-completeness-present')).toHaveTextContent('2');
     expect(screen.getByTestId('portfolio-completeness-missing')).toHaveTextContent('1');
     expect(screen.getByTestId('portfolio-completeness-percent')).toHaveTextContent('67%');
+  });
+});
+
+describe('PortfolioAnalysisView presets', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  test('loads presets per model and applies the selected preset', async () => {
+    const user = userEvent.setup();
+    const model = buildModelForSorting();
+
+    // Seed localStorage with a preset that filters to only "Alpha".
+    window.localStorage.setItem(
+      PRESET_KEY(model.id),
+      JSON.stringify([
+        {
+          version: 1,
+          id: 'p1',
+          name: 'Only Alpha',
+          createdAt: '2026-01-25T00:00:00.000Z',
+          state: { search: 'Alpha' }
+        }
+      ])
+    );
+
+    render(
+      <PortfolioAnalysisView
+        model={model}
+        modelKind="archimate"
+        selection={noSelection}
+        onSelectElement={jest.fn()}
+      />
+    );
+
+    const table = screen.getByRole('table', { name: 'Portfolio population table' });
+    expect(tableRowNames(table)).toEqual(['Alpha', 'Bravo', 'Charlie']);
+
+    const presetSelect = screen.getByLabelText('Preset') as HTMLSelectElement;
+    await user.selectOptions(presetSelect, 'p1');
+
+    expect((screen.getByLabelText('Search') as HTMLInputElement).value).toBe('Alpha');
+    expect(tableRowNames(table)).toEqual(['Alpha']);
   });
 });
 

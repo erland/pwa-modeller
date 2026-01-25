@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Model, ModelKind, ElementType } from '../../domain';
 import { discoverNumericPropertyKeys, getElementTypeLabel, readNumericPropertyFromElement, rowsToCsv } from '../../domain';
@@ -6,6 +6,10 @@ import type { Selection } from '../model/selection';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildAnalysisGraph, buildPortfolioPopulation, computeNodeMetric } from '../../domain/analysis';
 import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
+
+import { loadAnalysisUiState, mergeAnalysisUiState } from './analysisUiStateStorage';
+import { loadPortfolioPresets, savePortfolioPresets, normalizePortfolioPresetState } from './portfolioPresetsStorage';
+import type { PortfolioPresetStateV1, PortfolioPresetV1 } from './portfolioPresetsStorage';
 
 import { dedupeSort, toggle, collectFacetValues, sortElementTypesForDisplay } from './queryPanel/utils';
 
@@ -77,6 +81,12 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
 
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  // Presets + persistence (per model).
+  const modelId = model.id;
+  const [presets, setPresets] = useState<PortfolioPresetV1[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+  const didRestoreRef = useRef(false);
 
   // Prune selections when the model changes.
   const layersSorted = useMemo(() => dedupeSort(layers), [layers]);
@@ -268,6 +278,62 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     return grouped.flatMap((g) => g.rows);
   }, [grouped, sortedRows]);
 
+  // Restore persisted UI state + presets when the model changes.
+  useEffect(() => {
+    didRestoreRef.current = false;
+  }, [modelId]);
+
+  useEffect(() => {
+    if (!modelId || didRestoreRef.current) return;
+    didRestoreRef.current = true;
+
+    // Presets
+    setPresets(loadPortfolioPresets(modelId));
+
+    // UI state
+    const ui = loadAnalysisUiState(modelId)?.portfolio;
+    if (!ui) return;
+
+    if (Array.isArray(ui.layers)) setLayers(ui.layers.filter((x) => typeof x === 'string'));
+    if (Array.isArray(ui.types)) setTypes(ui.types.filter((x) => typeof x === 'string') as unknown as ElementType[]);
+    if (typeof ui.search === 'string') setSearch(ui.search);
+    if (typeof ui.primaryMetricKey === 'string') setPrimaryMetricKey(ui.primaryMetricKey);
+    if (typeof ui.hideMissingMetric === 'boolean') setHideMissingMetric(ui.hideMissingMetric);
+    if (typeof ui.showDegree === 'boolean') setShowDegree(ui.showDegree);
+    if (typeof ui.showReach3 === 'boolean') setShowReach3(ui.showReach3);
+    if (ui.groupBy === 'none' || ui.groupBy === 'type' || ui.groupBy === 'layer') setGroupBy(ui.groupBy);
+    if (ui.sortKey) setSortKey(ui.sortKey as SortKey);
+    if (ui.sortDir === 'asc' || ui.sortDir === 'desc') setSortDir(ui.sortDir);
+    if (typeof ui.presetId === 'string') setSelectedPresetId(ui.presetId);
+  }, [modelId]);
+
+  // Persist UI state (skip in tests to avoid cross-test storage leakage).
+  useEffect(() => {
+    if (!modelId) return;
+    // Avoid relying on Node globals (e.g. `process`) since this is browser code.
+    // In Jest/JSDOM runs, skip persistence to prevent cross-test localStorage leakage.
+    const isJsDom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent ?? '');
+    if (isJsDom) return;
+    const handle = window.setTimeout(() => {
+      mergeAnalysisUiState(modelId, {
+        portfolio: {
+          presetId: selectedPresetId || undefined,
+          layers: layersSorted,
+          types: (typesSorted as unknown as string[]) ?? [],
+          search,
+          primaryMetricKey,
+          hideMissingMetric,
+          showDegree,
+          showReach3,
+          groupBy,
+          sortKey,
+          sortDir
+        }
+      });
+    }, 200);
+    return () => window.clearTimeout(handle);
+  }, [groupBy, hideMissingMetric, layersSorted, modelId, primaryMetricKey, search, selectedPresetId, showDegree, showReach3, sortDir, sortKey, typesSorted]);
+
   // If a user hides a column that is currently used for sorting, fall back to Name.
   // (Keeps UI behavior predictable and avoids sorting by a hidden column.)
   useEffect(() => {
@@ -296,6 +362,69 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
   const clearMetric = () => {
     setPrimaryMetricKey('');
     setHideMissingMetric(false);
+  };
+
+  const snapshotPresetState = (): PortfolioPresetStateV1 => ({
+    layers: layersSorted,
+    types: (typesSorted as unknown as string[]) ?? [],
+    search,
+    primaryMetricKey,
+    hideMissingMetric,
+    showDegree,
+    showReach3,
+    groupBy,
+    sortKey,
+    sortDir
+  });
+
+  const applyPresetState = (state: PortfolioPresetStateV1): void => {
+    setLayers(state.layers);
+    setTypes(state.types as unknown as ElementType[]);
+    setSearch(state.search);
+    setPrimaryMetricKey(state.primaryMetricKey);
+    setHideMissingMetric(state.hideMissingMetric);
+    setShowDegree(state.showDegree);
+    setShowReach3(state.showReach3);
+    setGroupBy(state.groupBy as GroupBy);
+    setSortKey(state.sortKey as SortKey);
+    setSortDir(state.sortDir as SortDir);
+  };
+
+  const createPresetId = (): string => `pp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const savePreset = (): void => {
+    const name = window.prompt('Preset name?', '');
+    if (!name || !name.trim()) return;
+    const next: PortfolioPresetV1 = {
+      version: 1,
+      id: createPresetId(),
+      name: name.trim(),
+      createdAt: new Date().toISOString(),
+      state: snapshotPresetState()
+    };
+    const updated = [next, ...presets];
+    setPresets(updated);
+    savePortfolioPresets(modelId, updated);
+    setSelectedPresetId(next.id);
+  };
+
+  const deleteSelectedPreset = (): void => {
+    if (!selectedPresetId) return;
+    const preset = presets.find((p) => p.id === selectedPresetId);
+    if (!preset) return;
+    const ok = window.confirm(`Delete preset "${preset.name}"?`);
+    if (!ok) return;
+    const updated = presets.filter((p) => p.id !== selectedPresetId);
+    setPresets(updated);
+    savePortfolioPresets(modelId, updated);
+    setSelectedPresetId('');
+  };
+
+  const applySelectedPreset = (presetId: string): void => {
+    const preset = presets.find((p) => p.id === presetId);
+    if (!preset) return;
+    const state = normalizePortfolioPresetState(preset.state);
+    applyPresetState(state);
   };
 
   const toggleSort = (nextKey: SortKey): void => {
@@ -425,6 +554,36 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
             <option value="type">Type</option>
             {hasLayerFacet ? <option value="layer">Layer</option> : null}
           </select>
+        </div>
+
+        <div className="toolbarGroup" style={{ minWidth: 320 }}>
+          <label htmlFor="portfolio-preset">Preset</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select
+              id="portfolio-preset"
+              className="textInput"
+              value={selectedPresetId}
+              onChange={(e) => {
+                const nextId = e.currentTarget.value;
+                setSelectedPresetId(nextId);
+                if (nextId) applySelectedPreset(nextId);
+              }}
+              style={{ minWidth: 200 }}
+            >
+              <option value="">—</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="shellButton" onClick={savePreset} disabled={!modelId}>
+              Save preset
+            </button>
+            <button type="button" className="shellButton" onClick={deleteSelectedPreset} disabled={!selectedPresetId}>
+              Delete
+            </button>
+          </div>
         </div>
 
         <div className="toolbarGroup" style={{ minWidth: 0 }}>

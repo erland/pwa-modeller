@@ -13,6 +13,19 @@ export type AnalysisUiStateV1 = {
     weightPresetId?: string;
     weightsByRelationshipType?: Record<string, number>;
   };
+  portfolio?: {
+    presetId?: string;
+    layers?: string[];
+    types?: string[];
+    search?: string;
+    primaryMetricKey?: string;
+    hideMissingMetric?: boolean;
+    showDegree?: boolean;
+    showReach3?: boolean;
+    groupBy?: 'none' | 'type' | 'layer';
+    sortKey?: 'name' | 'type' | 'layer' | 'metric' | 'degree' | 'reach3';
+    sortDir?: 'asc' | 'desc';
+  };
 };
 
 type AnyState = AnalysisUiStateV1;
@@ -51,6 +64,10 @@ export function mergeAnalysisUiState(modelId: string, patch: Partial<AnalysisUiS
     matrix: {
       ...(current.matrix ?? {}),
       ...(patch.matrix ?? {})
+    },
+    portfolio: {
+      ...(current.portfolio ?? {}),
+      ...(patch.portfolio ?? {})
     }
   };
   saveAnalysisUiState(modelId, next);

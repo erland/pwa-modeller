@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 
 import type { Model, ModelKind, ElementType } from '../../domain';
-import { discoverNumericPropertyKeys, getElementTypeLabel, readNumericPropertyFromElement } from '../../domain';
+import { discoverNumericPropertyKeys, getElementTypeLabel, readNumericPropertyFromElement, rowsToCsv } from '../../domain';
 import type { Selection } from '../model/selection';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildPortfolioPopulation } from '../../domain/analysis';
+import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
 
 import { dedupeSort, toggle, collectFacetValues, sortElementTypesForDisplay } from './queryPanel/utils';
 
@@ -16,6 +17,9 @@ type Props = {
   selection: Selection;
   onSelectElement: (elementId: string) => void;
 };
+
+type SortKey = 'name' | 'type' | 'layer' | 'metric';
+type SortDir = 'asc' | 'desc';
 
 function formatMetricValue(v: number): string {
   if (!Number.isFinite(v)) return '';
@@ -55,6 +59,9 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
   const availablePropertyKeys = useMemo(() => discoverNumericPropertyKeys(model), [model]);
   const [primaryMetricKey, setPrimaryMetricKey] = useState('');
   const [hideMissingMetric, setHideMissingMetric] = useState(false);
+
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   // Prune selections when the model changes.
   const layersSorted = useMemo(() => dedupeSort(layers), [layers]);
@@ -104,6 +111,36 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     return rows.filter((r) => valueByElementId[r.elementId] !== undefined);
   }, [hideMissingMetric, metricKey, rows, valueByElementId]);
 
+  const sortedRows = useMemo(() => {
+    const dirMul = sortDir === 'asc' ? 1 : -1;
+
+    const keyString = (s: string | null | undefined): string => (s ?? '').toString();
+    const cmpStr = (a: string, b: string): number => a.localeCompare(b, undefined, { sensitivity: 'base' });
+
+    const cmp = (a: (typeof displayRows)[number], b: (typeof displayRows)[number]): number => {
+      if (sortKey === 'name') return cmpStr(a.label, b.label) * dirMul;
+      // For secondary comparisons (tie-breakers), always use Name asc to keep ordering predictable.
+      if (sortKey === 'type') return cmpStr(a.typeLabel, b.typeLabel) * dirMul || cmpStr(a.label, b.label);
+      if (sortKey === 'layer') return cmpStr(keyString(a.layerLabel), keyString(b.layerLabel)) * dirMul || cmpStr(a.label, b.label);
+      // metric
+      const av = metricKey ? valueByElementId[a.elementId] : undefined;
+      const bv = metricKey ? valueByElementId[b.elementId] : undefined;
+      // Keep missing values at the bottom regardless of sort direction.
+      const aMissing = av === undefined;
+      const bMissing = bv === undefined;
+      if (aMissing !== bMissing) return aMissing ? 1 : -1;
+      if (av === undefined || bv === undefined) return cmpStr(a.label, b.label);
+      if (av !== bv) return (av - bv) * dirMul;
+      return cmpStr(a.label, b.label);
+    };
+
+    // Stable sort.
+    return displayRows
+      .map((r, i) => ({ r, i }))
+      .sort((a, b) => cmp(a.r, b.r) || a.i - b.i)
+      .map((x) => x.r);
+  }, [displayRows, metricKey, sortDir, sortKey, valueByElementId]);
+
   const selectedElementId = selection.kind === 'element' ? selection.elementId : null;
 
   const clearFilters = () => {
@@ -115,6 +152,53 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
   const clearMetric = () => {
     setPrimaryMetricKey('');
     setHideMissingMetric(false);
+  };
+
+  const toggleSort = (nextKey: SortKey): void => {
+    if (nextKey === 'metric' && !metricKey) return;
+    if (nextKey === 'layer' && !hasLayerFacet) return;
+    setSortKey((cur) => {
+      if (cur !== nextKey) {
+        setSortDir('asc');
+        return nextKey;
+      }
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      return cur;
+    });
+  };
+
+  const sortIndicator = (k: SortKey): string => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+
+  const modelName = model.metadata?.name || 'model';
+
+  const exportCsv = (): void => {
+    if (sortedRows.length === 0) return;
+    const base = metricKey ? `${modelName}-portfolio-${metricKey}` : `${modelName}-portfolio`;
+
+    const columns: Array<{ key: string; header: string }> = [
+      { key: 'elementId', header: 'elementId' },
+      { key: 'name', header: 'name' },
+      { key: 'type', header: 'type' }
+    ];
+    if (hasLayerFacet) columns.push({ key: 'layer', header: 'layer' });
+    columns.push({ key: 'metric', header: metricKey ? metricKey : 'metric' });
+
+    const exportRows: Record<string, unknown>[] = sortedRows.map((r) => {
+      const v = metricKey ? valueByElementId[r.elementId] : undefined;
+      return {
+        elementId: r.elementId,
+        name: r.label,
+        type: r.typeLabel,
+        layer: r.layerLabel ?? '',
+        metric: v ?? ''
+      };
+    });
+
+    const csv = rowsToCsv(
+      exportRows as unknown as Record<string, unknown>[],
+      columns.map((c) => ({ key: c.key as never, header: c.header })) as never
+    );
+    downloadTextFile(sanitizeFileNameWithExtension(base, 'csv'), csv, 'text/csv');
   };
 
   return (
@@ -168,6 +252,16 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
             Actions
           </label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="shellButton"
+              onClick={exportCsv}
+              disabled={sortedRows.length === 0}
+              aria-disabled={sortedRows.length === 0}
+              title="Export the portfolio table as CSV"
+            >
+              Export CSV
+            </button>
             <button
               type="button"
               className="shellButton"
@@ -305,21 +399,40 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
         <table className="dataTable" aria-label="Portfolio population table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Type</th>
-              {hasLayerFacet ? <th>Layer</th> : null}
+              <th>
+                <button type="button" className="miniLinkButton" onClick={() => toggleSort('name')} title="Sort by name">
+                  Name{sortIndicator('name')}
+                </button>
+              </th>
+              <th>
+                <button type="button" className="miniLinkButton" onClick={() => toggleSort('type')} title="Sort by type">
+                  Type{sortIndicator('type')}
+                </button>
+              </th>
+              {hasLayerFacet ? (
+                <th>
+                  <button type="button" className="miniLinkButton" onClick={() => toggleSort('layer')} title="Sort by layer">
+                    Layer{sortIndicator('layer')}
+                  </button>
+                </th>
+              ) : null}
               <th style={{ textAlign: 'right' }}>
-                {metricKey ? (
-                  <span title={`Numeric property: ${metricKey}`}>Metric</span>
-                ) : (
-                  <span title="Choose a numeric property key to enable the heat metric column">Metric</span>
-                )}
+                <button
+                  type="button"
+                  className="miniLinkButton"
+                  onClick={() => toggleSort('metric')}
+                  title={metricKey ? `Sort by numeric property: ${metricKey}` : 'Choose a numeric property key to enable metric sorting'}
+                  disabled={!metricKey}
+                  aria-disabled={!metricKey}
+                >
+                  Metric{sortIndicator('metric')}
+                </button>
               </th>
               <th style={{ width: 1 }} />
             </tr>
           </thead>
           <tbody>
-            {displayRows.map((r) => {
+            {sortedRows.map((r) => {
               const v = metricKey ? valueByElementId[r.elementId] : undefined;
               const range = metricRange;
               const intensity =
@@ -365,7 +478,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
       )}
 
       <p className="crudHint" style={{ marginTop: 10 }}>
-        Showing {displayRows.length} element{displayRows.length === 1 ? '' : 's'}. Next step will add sorting and CSV export.
+        Showing {sortedRows.length} element{sortedRows.length === 1 ? '' : 's'}. Sorted by {sortKey} ({sortDir}).
       </p>
     </div>
   );

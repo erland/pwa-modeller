@@ -5,6 +5,7 @@ import { PortfolioAnalysisView } from '../PortfolioAnalysisView';
 import { createElement, createEmptyModel } from '../../../domain/factories';
 import type { Model } from '../../../domain/types';
 import { noSelection } from '../../model/selection';
+import * as download from '../../../store/download';
 
 function buildModelWithCost(): Model {
   const model = createEmptyModel({ name: 't' });
@@ -34,6 +35,41 @@ function buildModelWithCost(): Model {
   model.elements[b.id] = b;
   model.elements[c.id] = c;
   return model;
+}
+
+function buildModelForSorting(): Model {
+  const model = createEmptyModel({ name: 'Sort Model' });
+
+  const bravo = createElement({
+    id: 'A',
+    name: 'Bravo',
+    type: 'BusinessProcess',
+    layer: 'Business',
+    taggedValues: [{ key: 'cost', value: 30 }]
+  });
+  const alpha = createElement({
+    id: 'B',
+    name: 'Alpha',
+    type: 'ApplicationComponent',
+    layer: 'Application',
+    taggedValues: [{ key: 'cost', value: 10 }]
+  });
+  const charlie = createElement({
+    id: 'C',
+    name: 'Charlie',
+    type: 'ApplicationComponent',
+    layer: 'Technology'
+  });
+
+  model.elements[bravo.id] = bravo;
+  model.elements[alpha.id] = alpha;
+  model.elements[charlie.id] = charlie;
+  return model;
+}
+
+function tableRowNames(table: HTMLElement): string[] {
+  const rows = within(table).getAllByRole('row').slice(1); // skip header
+  return rows.map((r) => within(r).getAllByRole('cell')[0].textContent || '');
 }
 
 describe('PortfolioAnalysisView primary metric column', () => {
@@ -81,5 +117,55 @@ describe('PortfolioAnalysisView primary metric column', () => {
     const hideMissing = screen.getByLabelText('Hide missing') as HTMLInputElement;
     await user.click(hideMissing);
     expect(screen.queryByText('Gamma')).not.toBeInTheDocument();
+  });
+});
+
+describe('PortfolioAnalysisView sorting and CSV export', () => {
+  test('sorts by columns and exports the current table order as CSV', async () => {
+    const user = userEvent.setup();
+    const model = buildModelForSorting();
+    const onSelectElement = jest.fn();
+    const spy = jest.spyOn(download, 'downloadTextFile').mockImplementation(() => {});
+
+    render(
+      <PortfolioAnalysisView
+        model={model}
+        modelKind="archimate"
+        selection={noSelection}
+        onSelectElement={onSelectElement}
+      />
+    );
+
+    const table = screen.getByRole('table', { name: 'Portfolio population table' });
+
+    // Default sort is by name (asc).
+    expect(tableRowNames(table)).toEqual(['Alpha', 'Bravo', 'Charlie']);
+
+    // Sort by type (asc), then desc.
+    await user.click(within(table).getByRole('button', { name: /^Type/ }));
+    expect(tableRowNames(table)).toEqual(['Alpha', 'Charlie', 'Bravo']);
+    await user.click(within(table).getByRole('button', { name: /^Type/ }));
+    expect(tableRowNames(table)).toEqual(['Bravo', 'Alpha', 'Charlie']);
+
+    // Enable metric and sort by it (desc keeps missing values last).
+    const metricInput = screen.getByLabelText('Primary metric') as HTMLInputElement;
+    await user.clear(metricInput);
+    await user.type(metricInput, 'cost');
+    await user.click(within(table).getByRole('button', { name: /^Metric/ })); // metric asc
+    await user.click(within(table).getByRole('button', { name: /^Metric/ })); // metric desc
+    expect(tableRowNames(table)).toEqual(['Bravo', 'Alpha', 'Charlie']);
+
+    // Export CSV reflects the current sorted rows.
+    await user.click(screen.getByRole('button', { name: /export csv/i }));
+    expect(spy).toHaveBeenCalled();
+    const csv = spy.mock.calls[0][1] as string;
+    const lines = csv.split('\n');
+    expect(lines[0]).toBe('elementId,name,type,layer,cost');
+    expect(lines[1]).toBe('A,Bravo,BusinessProcess,Business,30');
+    expect(lines[2]).toBe('B,Alpha,ApplicationComponent,Application,10');
+    // Missing metric exports as an empty cell.
+    expect(lines[3]).toBe('C,Charlie,ApplicationComponent,Technology,');
+
+    spy.mockRestore();
   });
 });

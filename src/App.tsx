@@ -5,7 +5,6 @@ import { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
 
 import AboutPage from './pages/AboutPage';
 import AnalysisPage from './pages/AnalysisPage';
-import PortfolioAnalysisPage from './pages/PortfolioAnalysisPage';
 import WorkspacePage from './pages/WorkspacePage';
 
 export function AppRoutes() {
@@ -13,7 +12,6 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<WorkspacePage />} />
       <Route path="/analysis" element={<AnalysisPage />} />
-      <Route path="/analysis/portfolio" element={<PortfolioAnalysisPage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

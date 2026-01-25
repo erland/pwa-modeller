@@ -508,10 +508,6 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
 
   return (
     <div className="workspace" aria-label="Portfolio analysis workspace">
-      <div className="workspaceHeader">
-        <h1 className="workspaceTitle">Portfolio analysis</h1>
-      </div>
-
       <div className="toolbar" aria-label="Portfolio population filters">
         <div className="toolbarGroup" style={{ minWidth: 280 }}>
           <label htmlFor="portfolio-search">Search</label>

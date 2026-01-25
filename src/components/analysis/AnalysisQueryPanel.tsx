@@ -19,7 +19,7 @@ import {
   sortElementTypesForDisplay
 } from './queryPanel/utils';
 
-export type AnalysisMode = 'related' | 'paths' | 'traceability' | 'matrix';
+export type AnalysisMode = 'related' | 'paths' | 'traceability' | 'matrix' | 'portfolio';
 
 type Props = {
   model: Model;

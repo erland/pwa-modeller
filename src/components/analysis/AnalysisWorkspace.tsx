@@ -9,6 +9,7 @@ import '../../styles/crud.css';
 import { AnalysisQueryPanel, type AnalysisMode } from './AnalysisQueryPanel';
 import { AnalysisResultTable } from './AnalysisResultTable';
 import { TraceabilityExplorer } from './TraceabilityExplorer';
+import { PortfolioAnalysisView } from './PortfolioAnalysisView';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildRelationshipMatrix, type RelationshipMatrixDirection } from '../../domain/analysis/relationshipMatrix';
 import { computeMatrixMetric } from '../../domain';
@@ -704,6 +705,15 @@ export function AnalysisWorkspace({
           >
             Matrix
           </button>
+          <button
+            type="button"
+            className={`tabButton ${mode === 'portfolio' ? 'isActive' : ''}`}
+            role="tab"
+            aria-selected={mode === 'portfolio'}
+            onClick={() => setMode('portfolio')}
+          >
+            Portfolio
+          </button>
         </div>
         <div className="rowActions">
           <button
@@ -733,6 +743,7 @@ export function AnalysisWorkspace({
         </div>
       ) : (
         <>
+{mode !== 'portfolio' ? (
           <AnalysisQueryPanel
             model={model}
             modelKind={modelKind}
@@ -787,6 +798,8 @@ export function AnalysisWorkspace({
             canRun={canRun}
             onRun={run}
           />
+          ) : null}
+
 
           {mode === 'matrix' ? (
             <>
@@ -955,6 +968,13 @@ export function AnalysisWorkspace({
                 />
               ) : null}
             </>
+          ) : mode === 'portfolio' ? (
+            <PortfolioAnalysisView
+              model={model}
+              modelKind={modelKind}
+              selection={selection}
+              onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+            />
           ) : mode === 'traceability' ? (
             traceSeedId ? (
               <TraceabilityExplorer

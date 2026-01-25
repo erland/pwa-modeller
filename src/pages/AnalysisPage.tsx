@@ -7,7 +7,6 @@ import { PropertiesPanel } from '../components/model/PropertiesPanel';
 import { noSelection, type Selection } from '../components/model/selection';
 import { AppShell } from '../components/shell/AppShell';
 import { AnalysisWorkspace } from '../components/analysis/AnalysisWorkspace';
-import { AnalysisModeBar } from '../components/analysis/AnalysisModeBar';
 import type { Model, ModelKind } from '../domain';
 import { kindFromTypeId } from '../domain';
 import { useModelStore } from '../store';
@@ -76,7 +75,6 @@ export default function AnalysisPage() {
           />
         }
       >
-        <AnalysisModeBar />
         <AnalysisWorkspace modelKind={modelKind} selection={selection} onSelect={setSelection} />
       </AppShell>
 

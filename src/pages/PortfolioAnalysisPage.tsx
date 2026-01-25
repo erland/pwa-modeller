@@ -6,7 +6,6 @@ import { ModelPropertiesDialog } from '../components/model/ModelPropertiesDialog
 import { PropertiesPanel } from '../components/model/PropertiesPanel';
 import { noSelection, type Selection } from '../components/model/selection';
 import { AppShell } from '../components/shell/AppShell';
-import { AnalysisModeBar } from '../components/analysis/AnalysisModeBar';
 import { PortfolioAnalysisView } from '../components/analysis/PortfolioAnalysisView';
 import type { Model, ModelKind } from '../domain';
 import { kindFromTypeId } from '../domain';
@@ -71,7 +70,6 @@ export default function PortfolioAnalysisPage() {
           />
         }
       >
-        <AnalysisModeBar />
         {hasModel && model ? (
           <PortfolioAnalysisView
             model={model}

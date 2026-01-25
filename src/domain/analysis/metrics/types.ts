@@ -9,7 +9,7 @@ export type MetricTarget = 'node' | 'edge' | 'matrixCell';
  *
  * Keep these stable since they may be persisted in local storage.
  */
-export type NodeMetricId = 'nodeDegree';
+export type NodeMetricId = 'nodeDegree' | 'nodeReach';
 export type MatrixMetricId = 'matrixRelationshipCount';
 export type BuiltInMetricId = NodeMetricId | MatrixMetricId;
 
@@ -26,6 +26,18 @@ export interface MetricDefinition {
 export type NodeDegreeMetricParams = {
   direction: AnalysisDirection;
   relationshipTypes?: RelationshipType[];
+  /** Optional subset of nodes to compute the metric for. If omitted, computes for all nodes. */
+  nodeIds?: string[];
+};
+
+export type NodeReachMetricParams = {
+  direction: AnalysisDirection;
+  maxDepth: number;
+  relationshipTypes?: RelationshipType[];
+  /** Optional subset of nodes to compute the metric for. If omitted, computes for all nodes. */
+  nodeIds?: string[];
+  /** Safety cap for the amount of visited nodes per start node. */
+  maxVisited?: number;
 };
 
 export type MatrixRelationshipCountMetricParams = {
@@ -37,6 +49,7 @@ export type MatrixRelationshipCountMetricParams = {
 
 export type MetricParamsById = {
   nodeDegree: NodeDegreeMetricParams;
+  nodeReach: NodeReachMetricParams;
   matrixRelationshipCount: MatrixRelationshipCountMetricParams;
 };
 

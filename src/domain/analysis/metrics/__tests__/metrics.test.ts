@@ -57,6 +57,31 @@ describe('analysis metrics', () => {
     expect(outgoingServingOnly).toMatchObject({ A: 1, B: 0, C: 0, D: 0 });
   });
 
+  test('nodeReach counts distinct reachable nodes within maxDepth', () => {
+    const model = buildSmallModel();
+    const graph = buildAnalysisGraph(model);
+
+    // Outgoing from A: depth 1 reaches B and D (undirected association), depth 2 also reaches C via B.
+    const reach2 = computeNodeMetric(graph, 'nodeReach', { direction: 'outgoing', maxDepth: 2 });
+    expect(reach2.A).toBe(3);
+
+    // From D: depth 1 reaches A, depth 2 reaches B via A.
+    expect(reach2.D).toBe(2);
+
+    // Incoming to A: only D is reachable due to undirected association.
+    const incomingReach2 = computeNodeMetric(graph, 'nodeReach', { direction: 'incoming', maxDepth: 2 });
+    expect(incomingReach2.A).toBe(1);
+
+    // Relationship type filter should affect reach.
+    const servingOnlyReach2 = computeNodeMetric(graph, 'nodeReach', {
+      direction: 'outgoing',
+      maxDepth: 3,
+      relationshipTypes: ['Serving']
+    });
+    expect(servingOnlyReach2.A).toBe(1);
+    expect(servingOnlyReach2.B).toBe(0);
+  });
+
   test('matrixRelationshipCount respects direction and treats undirected as bidirectional', () => {
     const model = buildSmallModel();
 

@@ -6,12 +6,15 @@ export type MiniGraphOptions = {
   wrapLabels: boolean;
   autoFitColumns: boolean;
   nodeOverlayMetricId: 'off' | NodeMetricId;
+  /** Used when nodeOverlayMetricId === 'nodeReach'. */
+  nodeOverlayReachDepth: 2 | 3 | 4;
 };
 
 export const defaultMiniGraphOptions: MiniGraphOptions = {
   wrapLabels: true,
   autoFitColumns: true,
-  nodeOverlayMetricId: 'off'
+  nodeOverlayMetricId: 'off',
+  nodeOverlayReachDepth: 3
 };
 
 type Props = {
@@ -54,12 +57,32 @@ export function MiniGraphOptionsToggles({ options, onChange, style, checkboxStyl
         Overlay
         <select
           aria-label="Node overlay"
-          value={options.nodeOverlayMetricId}
-          onChange={(e) => onChange({ ...options, nodeOverlayMetricId: (e.currentTarget.value as 'off' | NodeMetricId) })}
+          value={
+            options.nodeOverlayMetricId === 'nodeReach'
+              ? (`nodeReach:${options.nodeOverlayReachDepth}` as const)
+              : options.nodeOverlayMetricId
+          }
+          onChange={(e) => {
+            const v = e.currentTarget.value;
+            if (v === 'off' || v === 'nodeDegree') {
+              onChange({ ...options, nodeOverlayMetricId: v });
+              return;
+            }
+            if (v.startsWith('nodeReach:')) {
+              const depth = Number(v.split(':')[1]) as 2 | 3 | 4;
+              onChange({ ...options, nodeOverlayMetricId: 'nodeReach', nodeOverlayReachDepth: depth });
+              return;
+            }
+            // Fallback: treat unknown values as off.
+            onChange({ ...options, nodeOverlayMetricId: 'off' });
+          }}
           style={{ fontSize: 12 }}
         >
           <option value="off">Off</option>
           <option value="nodeDegree">Degree</option>
+          <option value="nodeReach:2">Reach (2)</option>
+          <option value="nodeReach:3">Reach (3)</option>
+          <option value="nodeReach:4">Reach (4)</option>
         </select>
       </label>
     </div>

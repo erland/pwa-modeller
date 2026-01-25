@@ -13,6 +13,12 @@ export const BUILT_IN_METRICS: MetricDefinition[] = [
     description: 'Number of adjacent relationships for each node (direction-aware).'
   },
   {
+    id: 'nodeReach',
+    label: 'Reach (depth N)',
+    target: 'node',
+    description: 'Number of distinct nodes reachable within N hops (direction-aware).'
+  },
+  {
     id: 'matrixRelationshipCount',
     label: 'Relationship count',
     target: 'matrixCell',

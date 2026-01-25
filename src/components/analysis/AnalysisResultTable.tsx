@@ -246,6 +246,7 @@ export function AnalysisResultTable({
             wrapLabels={graphOptions.wrapLabels}
             autoFitColumns={graphOptions.autoFitColumns}
             nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
+            nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
             overlayDirection={direction}
             overlayRelationshipTypes={relationshipTypes}
           />
@@ -392,6 +393,7 @@ export function AnalysisResultTable({
           wrapLabels={graphOptions.wrapLabels}
           autoFitColumns={graphOptions.autoFitColumns}
           nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
+          nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
           overlayDirection={direction}
           overlayRelationshipTypes={relationshipTypes}
         />

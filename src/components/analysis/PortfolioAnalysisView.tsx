@@ -60,7 +60,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     [hasLayerFacet, model, modelKind]
   );
 
-  const availableElementTypes = useMemo(() => {
+  const availableElementTypesAll = useMemo(() => {
     if (!hasElementTypeFacet) return [] as ElementType[];
     const types = collectFacetValues<ElementType>(model, modelKind, 'elementType');
     return sortElementTypesForDisplay(types);
@@ -91,6 +91,30 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
   // Prune selections when the model changes.
   const layersSorted = useMemo(() => dedupeSort(layers), [layers]);
   const typesSorted = useMemo(() => dedupeSort(types as unknown as string[]) as ElementType[], [types]);
+
+  const availableElementTypes = useMemo(() => {
+    if (!hasElementTypeFacet) return [] as ElementType[];
+    if (!hasLayerFacet || layersSorted.length === 0) return availableElementTypesAll;
+
+    // Limit type options to those that actually occur within the currently selected layers.
+    const layerRows = buildPortfolioPopulation({
+      model,
+      adapter,
+      filter: { layers: layersSorted.length ? layersSorted : undefined }
+    });
+
+    const allowed = new Set(layerRows.map((r) => r.typeKey).filter((t): t is string => !!t));
+    return availableElementTypesAll.filter((t) => allowed.has(String(t)));
+  }, [adapter, availableElementTypesAll, hasElementTypeFacet, hasLayerFacet, layersSorted, model]);
+
+  useEffect(() => {
+    // If layer selection reduces the available type set, prune any now-invalid type selections.
+    if (!hasElementTypeFacet) return;
+    if (types.length === 0) return;
+    const next = types.filter((t) => availableElementTypes.includes(t));
+    if (next.length !== types.length) setTypes(next);
+  }, [availableElementTypes, hasElementTypeFacet, setTypes, types]);
+
 
   const rows = useMemo(
     () =>

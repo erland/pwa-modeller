@@ -9,6 +9,7 @@ import '../../styles/crud.css';
 import { AnalysisQueryPanel, type AnalysisMode } from './AnalysisQueryPanel';
 import { AnalysisResultTable } from './AnalysisResultTable';
 import { TraceabilityExplorer } from './TraceabilityExplorer';
+import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 
 function selectionToElementId(sel: Selection): string | null {
   switch (sel.kind) {
@@ -26,6 +27,19 @@ function selectionToElementId(sel: Selection): string | null {
   }
 }
 
+function selectionToElementIds(sel: Selection): string[] {
+  switch (sel.kind) {
+    case 'element':
+      return [sel.elementId];
+    case 'viewNode':
+      return [sel.elementId];
+    case 'viewNodes':
+      return sel.elementIds;
+    default:
+      return [];
+  }
+}
+
 export function AnalysisWorkspace({
   modelKind,
   selection,
@@ -38,6 +52,21 @@ export function AnalysisWorkspace({
   const model = useModelStore((s) => s.model);
 
   const [mode, setMode] = useState<AnalysisMode>('related');
+
+  // -----------------------------
+  // Matrix (draft)
+  // -----------------------------
+  const [matrixRowSource, setMatrixRowSource] = useState<'facet' | 'selection'>('facet');
+  const [matrixRowElementType, setMatrixRowElementType] = useState<ElementType | ''>('');
+  const [matrixRowLayer, setMatrixRowLayer] = useState<string | ''>('');
+  const [matrixRowSelectionIds, setMatrixRowSelectionIds] = useState<string[]>([]);
+
+  const [matrixColSource, setMatrixColSource] = useState<'facet' | 'selection'>('facet');
+  const [matrixColElementType, setMatrixColElementType] = useState<ElementType | ''>('');
+  const [matrixColLayer, setMatrixColLayer] = useState<string | ''>('');
+  const [matrixColSelectionIds, setMatrixColSelectionIds] = useState<string[]>([]);
+
+  const [matrixBuildNonce, setMatrixBuildNonce] = useState<number>(0);
 
   // -----------------------------
   // Filters (draft)
@@ -78,7 +107,7 @@ export function AnalysisWorkspace({
     const picked = selectionToElementId(selection);
     if (!picked) return;
 
-    if (mode !== 'paths') {
+    if (mode !== 'paths' && mode !== 'matrix') {
       if (!draftStartId) setDraftStartId(picked);
       return;
     }
@@ -116,13 +145,71 @@ export function AnalysisWorkspace({
   const relatedResult = useAnalysisRelatedElements(activeStartId || null, relatedOpts);
   const pathsResult = useAnalysisPathsBetween(activeSourceId || null, activeTargetId || null, pathsOpts);
 
+  const selectionElementIds = useMemo(() => selectionToElementIds(selection), [selection]);
+
+  const resolveMatrixFacetIds = useMemo(() => {
+    if (!model) return { rowIds: [] as string[], colIds: [] as string[] };
+    const adapter = getAnalysisAdapter(modelKind);
+    const rowLayer = matrixRowLayer || null;
+    const colLayer = matrixColLayer || null;
+
+    const rowType = matrixRowElementType || null;
+    const colType = matrixColElementType || null;
+
+    const rowIds: string[] = [];
+    const colIds: string[] = [];
+
+    for (const el of Object.values(model.elements ?? {})) {
+      if (!el?.id) continue;
+      const facets = adapter.getNodeFacetValues(el, model);
+      const typeV = facets.elementType;
+      const layerV = facets.archimateLayer;
+
+      const matches = (
+        wantedType: string | null,
+        wantedLayer: string | null
+      ): boolean => {
+        if (wantedType) {
+          if (typeof typeV !== 'string' || typeV !== wantedType) return false;
+        }
+        if (wantedLayer) {
+          if (typeof layerV === 'string') {
+            if (layerV !== wantedLayer) return false;
+          } else if (Array.isArray(layerV)) {
+            if (!layerV.includes(wantedLayer)) return false;
+          } else {
+            return false;
+          }
+        }
+        return true;
+      };
+
+      if (matches(rowType, rowLayer)) rowIds.push(el.id);
+      if (matches(colType, colLayer)) colIds.push(el.id);
+    }
+
+    return { rowIds, colIds };
+  }, [model, modelKind, matrixRowElementType, matrixRowLayer, matrixColElementType, matrixColLayer]);
+
+  const matrixRowIds = matrixRowSource === 'selection' ? matrixRowSelectionIds : resolveMatrixFacetIds.rowIds;
+  const matrixColIds = matrixColSource === 'selection' ? matrixColSelectionIds : resolveMatrixFacetIds.colIds;
+
   const canRun = Boolean(
     model &&
-      (mode !== 'paths' ? draftStartId : draftSourceId && draftTargetId && draftSourceId !== draftTargetId)
+      (mode === 'matrix'
+        ? matrixRowIds.length > 0 && matrixColIds.length > 0
+        : mode !== 'paths'
+          ? draftStartId
+          : draftSourceId && draftTargetId && draftSourceId !== draftTargetId)
   );
 
   function run() {
     if (!model) return;
+    if (mode === 'matrix') {
+      // For Step 2 we only capture the configured query (no table rendering yet).
+      setMatrixBuildNonce((n) => n + 1);
+      return;
+    }
     if (mode !== 'paths') {
       setActiveStartId(draftStartId);
       return;
@@ -141,6 +228,14 @@ export function AnalysisWorkspace({
       setIncludeStart(false);
       setMaxPaths(10);
       setMaxPathLength(null);
+      setMatrixRowSource('facet');
+      setMatrixRowElementType('');
+      setMatrixRowLayer('');
+      setMatrixRowSelectionIds([]);
+      setMatrixColSource('facet');
+      setMatrixColElementType('');
+      setMatrixColLayer('');
+      setMatrixColSelectionIds([]);
       return;
     }
 
@@ -177,6 +272,18 @@ export function AnalysisWorkspace({
     if (which === 'source') setDraftSourceId(picked);
     if (which === 'target') setDraftTargetId(picked);
   }
+
+  const captureSelectionAsMatrixRows = () => {
+    const picked = selectionToElementIds(selection);
+    setMatrixRowSource('selection');
+    setMatrixRowSelectionIds(picked);
+  };
+
+  const captureSelectionAsMatrixCols = () => {
+    const picked = selectionToElementIds(selection);
+    setMatrixColSource('selection');
+    setMatrixColSelectionIds(picked);
+  };
 
   const openTraceabilityFrom = (elementId: string) => {
     setMode('traceability');
@@ -217,6 +324,15 @@ export function AnalysisWorkspace({
           >
             Traceability explorer
           </button>
+          <button
+            type="button"
+            className={`tabButton ${mode === 'matrix' ? 'isActive' : ''}`}
+            role="tab"
+            aria-selected={mode === 'matrix'}
+            onClick={() => setMode('matrix')}
+          >
+            Matrix
+          </button>
         </div>
         <div className="rowActions">
           <button
@@ -251,6 +367,26 @@ export function AnalysisWorkspace({
             modelKind={modelKind}
             mode={mode}
             onChangeMode={setMode}
+
+            selectionElementIds={selectionElementIds}
+            matrixRowSource={matrixRowSource}
+            onChangeMatrixRowSource={setMatrixRowSource}
+            matrixRowElementType={matrixRowElementType}
+            onChangeMatrixRowElementType={setMatrixRowElementType}
+            matrixRowLayer={matrixRowLayer}
+            onChangeMatrixRowLayer={setMatrixRowLayer}
+            matrixRowSelectionIds={matrixRowSelectionIds}
+            onCaptureMatrixRowSelection={captureSelectionAsMatrixRows}
+
+            matrixColSource={matrixColSource}
+            onChangeMatrixColSource={setMatrixColSource}
+            matrixColElementType={matrixColElementType}
+            onChangeMatrixColElementType={setMatrixColElementType}
+            matrixColLayer={matrixColLayer}
+            onChangeMatrixColLayer={setMatrixColLayer}
+            matrixColSelectionIds={matrixColSelectionIds}
+            onCaptureMatrixColSelection={captureSelectionAsMatrixCols}
+
             direction={direction}
             onChangeDirection={setDirection}
             relationshipTypes={relationshipTypes}
@@ -280,7 +416,25 @@ export function AnalysisWorkspace({
             onRun={run}
           />
 
-          {mode === 'traceability' ? (
+          {mode === 'matrix' ? (
+            <div className="crudSection" style={{ marginTop: 14 }}>
+              <div className="crudHeader">
+                <div>
+                  <p className="crudTitle">Matrix query configured</p>
+                  <p className="crudHint">
+                    Rows: <span className="mono">{matrixRowIds.length}</span>, Columns:{' '}
+                    <span className="mono">{matrixColIds.length}</span>. Click “Build matrix” after changing options.
+                  </p>
+                  <p className="crudHint" style={{ marginTop: 8 }}>
+                    Table rendering comes in Step 3.
+                  </p>
+                  <p className="crudHint" style={{ marginTop: 8 }}>
+                    Build counter: <span className="mono">{matrixBuildNonce}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : mode === 'traceability' ? (
             traceSeedId ? (
               <TraceabilityExplorer
                 model={model}

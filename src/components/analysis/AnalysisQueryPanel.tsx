@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import type {
   AnalysisDirection,
@@ -12,15 +12,42 @@ import { ElementChooserDialog } from '../model/pickers/ElementChooserDialog';
 import { FiltersPanel } from './queryPanel/FiltersPanel';
 import { QueryToolbar } from './queryPanel/QueryToolbar';
 import { useAnalysisQueryOptions } from './queryPanel/useAnalysisQueryOptions';
-import { hasAnyFilters as computeHasAnyFilters } from './queryPanel/utils';
+import {
+  collectFacetValues,
+  hasAnyFilters as computeHasAnyFilters,
+  sortElementTypesForDisplay
+} from './queryPanel/utils';
 
-export type AnalysisMode = 'related' | 'paths' | 'traceability';
+export type AnalysisMode = 'related' | 'paths' | 'traceability' | 'matrix';
 
 type Props = {
   model: Model;
   modelKind: ModelKind;
   mode: AnalysisMode;
   onChangeMode: (mode: AnalysisMode) => void;
+
+  // -----------------------------
+  // Matrix (draft)
+  // -----------------------------
+  selectionElementIds: string[];
+
+  matrixRowSource: 'facet' | 'selection';
+  onChangeMatrixRowSource: (v: 'facet' | 'selection') => void;
+  matrixRowElementType: ElementType | '';
+  onChangeMatrixRowElementType: (v: ElementType | '') => void;
+  matrixRowLayer: string | '';
+  onChangeMatrixRowLayer: (v: string | '') => void;
+  matrixRowSelectionIds: string[];
+  onCaptureMatrixRowSelection: () => void;
+
+  matrixColSource: 'facet' | 'selection';
+  onChangeMatrixColSource: (v: 'facet' | 'selection') => void;
+  matrixColElementType: ElementType | '';
+  onChangeMatrixColElementType: (v: ElementType | '') => void;
+  matrixColLayer: string | '';
+  onChangeMatrixColLayer: (v: string | '') => void;
+  matrixColSelectionIds: string[];
+  onCaptureMatrixColSelection: () => void;
 
   // -----------------------------
   // Filters (draft)
@@ -70,6 +97,23 @@ export function AnalysisQueryPanel({
   model,
   modelKind,
   mode,
+  selectionElementIds,
+  matrixRowSource,
+  onChangeMatrixRowSource,
+  matrixRowElementType,
+  onChangeMatrixRowElementType,
+  matrixRowLayer,
+  onChangeMatrixRowLayer,
+  matrixRowSelectionIds,
+  onCaptureMatrixRowSelection,
+  matrixColSource,
+  onChangeMatrixColSource,
+  matrixColElementType,
+  onChangeMatrixColElementType,
+  matrixColLayer,
+  onChangeMatrixColLayer,
+  matrixColSelectionIds,
+  onCaptureMatrixColSelection,
   direction,
   onChangeDirection,
   relationshipTypes,
@@ -134,24 +178,175 @@ export function AnalysisQueryPanel({
     maxPathLength
   });
 
+  // Matrix needs all element types (not constrained by the global layer filter).
+  const availableElementTypesAll = useMemo(() => {
+    if (!hasElementTypeFacet) return [] as ElementType[];
+    const types = collectFacetValues<ElementType>(model, modelKind, 'elementType');
+    return sortElementTypesForDisplay(types);
+  }, [hasElementTypeFacet, model, modelKind]);
+
   return (
     <section className="crudSection" aria-label="Analysis query">
-      <QueryToolbar
-        model={model}
-        modelName={modelName}
-        mode={mode}
-        draftStartId={draftStartId}
-        onChangeDraftStartId={onChangeDraftStartId}
-        draftSourceId={draftSourceId}
-        onChangeDraftSourceId={onChangeDraftSourceId}
-        draftTargetId={draftTargetId}
-        onChangeDraftTargetId={onChangeDraftTargetId}
-        onOpenChooser={(which) => setChooser({ which })}
-        canUseSelection={canUseSelection}
-        onUseSelection={onUseSelection}
-        canRun={canRun}
-        onRun={onRun}
-      />
+      {mode === 'matrix' ? (
+        <div className="crudHeader">
+          <div>
+            <p className="crudTitle">Matrix query</p>
+            <p className="crudHint">Choose row/column sets in “{modelName}” and build a relationship matrix.</p>
+          </div>
+
+          <div className="toolbar" aria-label="Matrix query toolbar">
+            <div className="toolbarGroup" style={{ minWidth: 260 }}>
+              <label>Rows</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="selectInput"
+                  value={matrixRowSource}
+                  onChange={(e) => onChangeMatrixRowSource(e.currentTarget.value as 'facet' | 'selection')}
+                  title="How to pick row elements"
+                >
+                  <option value="facet">By type/layer</option>
+                  <option value="selection">Current selection</option>
+                </select>
+                {matrixRowSource === 'facet' ? (
+                  <>
+                    <select
+                      className="selectInput"
+                      value={matrixRowElementType}
+                      onChange={(e) => onChangeMatrixRowElementType(e.currentTarget.value as ElementType | '')}
+                      title="Row element type"
+                    >
+                      <option value="">Select type…</option>
+                      {availableElementTypesAll.map((t) => (
+                        <option key={t} value={t}>
+                          {String(t)}
+                        </option>
+                      ))}
+                    </select>
+                    {hasLayerFacet ? (
+                      <select
+                        className="selectInput"
+                        value={matrixRowLayer}
+                        onChange={(e) => onChangeMatrixRowLayer(e.currentTarget.value)}
+                        title="Optional layer constraint"
+                      >
+                        <option value="">Any layer</option>
+                        {availableLayers.map((l) => (
+                          <option key={l} value={l}>
+                            {String(l)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="miniLinkButton"
+                      onClick={onCaptureMatrixRowSelection}
+                      disabled={selectionElementIds.length === 0}
+                      title="Use currently selected element(s) as rows"
+                    >
+                      Use selection
+                    </button>
+                    <span className="crudHint" style={{ margin: 0 }}>
+                      {matrixRowSelectionIds.length ? `${matrixRowSelectionIds.length} selected` : 'No rows selected'}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="toolbarGroup" style={{ minWidth: 260 }}>
+              <label>Columns</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="selectInput"
+                  value={matrixColSource}
+                  onChange={(e) => onChangeMatrixColSource(e.currentTarget.value as 'facet' | 'selection')}
+                  title="How to pick column elements"
+                >
+                  <option value="facet">By type/layer</option>
+                  <option value="selection">Current selection</option>
+                </select>
+                {matrixColSource === 'facet' ? (
+                  <>
+                    <select
+                      className="selectInput"
+                      value={matrixColElementType}
+                      onChange={(e) => onChangeMatrixColElementType(e.currentTarget.value as ElementType | '')}
+                      title="Column element type"
+                    >
+                      <option value="">Select type…</option>
+                      {availableElementTypesAll.map((t) => (
+                        <option key={t} value={t}>
+                          {String(t)}
+                        </option>
+                      ))}
+                    </select>
+                    {hasLayerFacet ? (
+                      <select
+                        className="selectInput"
+                        value={matrixColLayer}
+                        onChange={(e) => onChangeMatrixColLayer(e.currentTarget.value)}
+                        title="Optional layer constraint"
+                      >
+                        <option value="">Any layer</option>
+                        {availableLayers.map((l) => (
+                          <option key={l} value={l}>
+                            {String(l)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="miniLinkButton"
+                      onClick={onCaptureMatrixColSelection}
+                      disabled={selectionElementIds.length === 0}
+                      title="Use currently selected element(s) as columns"
+                    >
+                      Use selection
+                    </button>
+                    <span className="crudHint" style={{ margin: 0 }}>
+                      {matrixColSelectionIds.length ? `${matrixColSelectionIds.length} selected` : 'No columns selected'}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="toolbarGroup" style={{ minWidth: 0 }}>
+              <label style={{ visibility: 'hidden' }} aria-hidden="true">
+                Build
+              </label>
+              <button type="button" className="shellButton" disabled={!canRun} onClick={onRun}>
+                Build matrix
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <QueryToolbar
+          model={model}
+          modelName={modelName}
+          mode={mode}
+          draftStartId={draftStartId}
+          onChangeDraftStartId={onChangeDraftStartId}
+          draftSourceId={draftSourceId}
+          onChangeDraftSourceId={onChangeDraftSourceId}
+          draftTargetId={draftTargetId}
+          onChangeDraftTargetId={onChangeDraftTargetId}
+          onOpenChooser={(which) => setChooser({ which })}
+          canUseSelection={canUseSelection}
+          onUseSelection={onUseSelection}
+          canRun={canRun}
+          onRun={onRun}
+        />
+      )}
 
       <FiltersPanel
         mode={mode}

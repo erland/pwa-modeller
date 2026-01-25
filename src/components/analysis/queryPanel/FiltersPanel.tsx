@@ -132,7 +132,7 @@ export function FiltersPanel({
               </select>
             </div>
           </>
-        ) : (
+        ) : mode === 'matrix' ? null : (
           <>
             <div className="toolbarGroup">
               <label htmlFor="analysis-maxDepth">{mode === 'traceability' ? 'Expand depth' : 'Max depth'}</label>
@@ -215,7 +215,7 @@ export function FiltersPanel({
           </div>
         </div>
 
-        {hasLayerFacet ? (
+        {hasLayerFacet && mode !== 'matrix' ? (
           <div className="toolbarGroup" style={{ minWidth: 260 }}>
             <label>
               Layers ({layersSorted.length}/{layerSetSize})
@@ -320,6 +320,7 @@ export function FiltersPanel({
           </div>
         ) : null}
 
+        {mode !== 'matrix' ? (
         <div className="toolbarGroup" style={{ minWidth: 220 }}>
           <label>Presets</label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -340,6 +341,7 @@ export function FiltersPanel({
             Presets set filters; use “Run analysis” to refresh element selection if needed.
           </p>
         </div>
+        ) : null}
       </div>
     </details>
   );

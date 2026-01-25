@@ -40,6 +40,11 @@ function toTestIdKey(s: string): string {
   return s.replace(/[^a-zA-Z0-9_-]+/g, '_');
 }
 
+function percentRounded(numerator: number, denominator: number): number {
+  if (denominator <= 0) return 0;
+  return Math.round((numerator / denominator) * 100);
+}
+
 export function PortfolioAnalysisView({ model, modelKind, selection, onSelectElement }: Props) {
   const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
   const facetDefs = useMemo(() => adapter.getFacetDefinitions(model), [adapter, model]);
@@ -114,6 +119,20 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     }
     if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
     return { min, max };
+  }, [metricKey, rows, valueByElementId]);
+
+  const completeness = useMemo(() => {
+    const total = rows.length;
+    if (!metricKey) {
+      return { total, present: 0, missing: 0, percent: null as number | null };
+    }
+    let present = 0;
+    for (const r of rows) {
+      if (valueByElementId[r.elementId] !== undefined) present++;
+    }
+    const missing = Math.max(0, total - present);
+    const percent = percentRounded(present, total);
+    return { total, present, missing, percent };
   }, [metricKey, rows, valueByElementId]);
 
   const displayRows = useMemo(() => {
@@ -550,6 +569,39 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
             </div>
           </div>
         ) : null}
+      </div>
+
+      <div
+        aria-label="Portfolio completeness summary"
+        style={{
+          marginTop: 10,
+          padding: '8px 10px',
+          border: '1px solid var(--border-1)',
+          borderRadius: 12,
+          background: 'rgba(255,255,255,0.02)'
+        }}
+      >
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <span>
+            Population: <span className="mono" data-testid="portfolio-completeness-total">{completeness.total}</span>
+          </span>
+          {metricKey ? (
+            <>
+              <span>
+                Has <span className="mono">{metricKey}</span>:{' '}
+                <span className="mono" data-testid="portfolio-completeness-present">{completeness.present}</span>{' '}
+                (<span className="mono" data-testid="portfolio-completeness-percent">{completeness.percent}%</span>)
+              </span>
+              <span>
+                Missing: <span className="mono" data-testid="portfolio-completeness-missing">{completeness.missing}</span>
+              </span>
+            </>
+          ) : (
+            <span className="crudHint" style={{ margin: 0 }}>
+              Choose a primary metric to see completeness.
+            </span>
+          )}
+        </div>
       </div>
 
       {displayRows.length === 0 ? (

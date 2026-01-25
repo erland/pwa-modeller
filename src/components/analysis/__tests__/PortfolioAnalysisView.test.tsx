@@ -200,6 +200,36 @@ describe('PortfolioAnalysisView primary metric column', () => {
   });
 });
 
+describe('PortfolioAnalysisView completeness widget', () => {
+  test('shows population size and metric completeness when a primary metric is selected', async () => {
+    const user = userEvent.setup();
+    const model = buildModelWithCost();
+    const onSelectElement = jest.fn();
+
+    render(
+      <PortfolioAnalysisView
+        model={model}
+        modelKind="archimate"
+        selection={noSelection}
+        onSelectElement={onSelectElement}
+      />
+    );
+
+    // Always shows population.
+    expect(screen.getByTestId('portfolio-completeness-total')).toHaveTextContent('3');
+    expect(screen.getByText('Choose a primary metric to see completeness.')).toBeInTheDocument();
+
+    // Once a metric is selected, completeness numbers are shown.
+    const metricInput = screen.getByLabelText('Primary metric') as HTMLInputElement;
+    await user.clear(metricInput);
+    await user.type(metricInput, 'cost');
+
+    expect(screen.getByTestId('portfolio-completeness-present')).toHaveTextContent('2');
+    expect(screen.getByTestId('portfolio-completeness-missing')).toHaveTextContent('1');
+    expect(screen.getByTestId('portfolio-completeness-percent')).toHaveTextContent('67%');
+  });
+});
+
 describe('PortfolioAnalysisView sorting and CSV export', () => {
   test('sorts by columns and exports the current table order as CSV', async () => {
     const user = userEvent.setup();

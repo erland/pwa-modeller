@@ -394,20 +394,33 @@ export function AnalysisWorkspace({
   const [activeSourceId, setActiveSourceId] = useState<string>('');
   const [activeTargetId, setActiveTargetId] = useState<string>('');
 
+
+  // Keep "Start element" (Related/Traceability) and "Source" (Connection between two) in sync.
+  // This makes it easy to switch between views without having to re-pick the baseline element.
+  const onChangeDraftStartIdSync = useCallback((id: string) => {
+    setDraftStartId(id);
+    setDraftSourceId(id);
+  }, []);
+
+  const onChangeDraftSourceIdSync = useCallback((id: string) => {
+    setDraftSourceId(id);
+    setDraftStartId(id);
+  }, []);
+
   // If the user has an element selected and the draft is empty, prefill to reduce friction.
   useEffect(() => {
     const picked = selectionToElementId(selection);
     if (!picked) return;
 
     if (mode !== 'paths' && mode !== 'matrix') {
-      if (!draftStartId) setDraftStartId(picked);
+      if (!draftStartId) onChangeDraftStartIdSync(picked);
       return;
     }
     if (mode === 'paths') {
-      if (!draftSourceId) setDraftSourceId(picked);
+      if (!draftSourceId) onChangeDraftSourceIdSync(picked);
       else if (!draftTargetId && draftSourceId !== picked) setDraftTargetId(picked);
     }
-  }, [selection, mode, draftStartId, draftSourceId, draftTargetId]);
+  }, [selection, mode, draftStartId, draftSourceId, draftTargetId, onChangeDraftStartIdSync, onChangeDraftSourceIdSync]);
 
   const relatedOpts = useMemo(
     () => ({
@@ -568,6 +581,8 @@ export function AnalysisWorkspace({
     }
     setActiveSourceId(draftSourceId);
     setActiveTargetId(draftTargetId);
+    // Keep related/traceability baseline aligned with the chosen source.
+    setActiveStartId(draftSourceId);
   }
 
   function applyPreset(presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') {
@@ -620,8 +635,8 @@ export function AnalysisWorkspace({
   function useSelectionAs(which: 'start' | 'source' | 'target') {
     const picked = selectionToElementId(selection);
     if (!picked) return;
-    if (which === 'start') setDraftStartId(picked);
-    if (which === 'source') setDraftSourceId(picked);
+    if (which === 'start') onChangeDraftStartIdSync(picked);
+    if (which === 'source') onChangeDraftSourceIdSync(picked);
     if (which === 'target') setDraftTargetId(picked);
   }
 
@@ -788,9 +803,9 @@ export function AnalysisWorkspace({
             onChangeMaxPathLength={setMaxPathLength}
             onApplyPreset={applyPreset}
             draftStartId={draftStartId}
-            onChangeDraftStartId={setDraftStartId}
+            onChangeDraftStartId={onChangeDraftStartIdSync}
             draftSourceId={draftSourceId}
-            onChangeDraftSourceId={setDraftSourceId}
+            onChangeDraftSourceId={onChangeDraftSourceIdSync}
             draftTargetId={draftTargetId}
             onChangeDraftTargetId={setDraftTargetId}
             onUseSelection={useSelectionAs}

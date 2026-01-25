@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { CSSProperties } from 'react';
 
 import type { RelationshipMatrixResult } from '../../domain/analysis/relationshipMatrix';
 import { exportRelationshipMatrixCsv, exportRelationshipMatrixMissingLinksCsv } from './exportRelationshipMatrixCsv';
@@ -42,6 +43,7 @@ export function RelationshipMatrixTable({
     }
     return max;
   }, [cells]);
+  const cellBorderStyle: CSSProperties = { border: '1px solid var(--diagram-grid-line)' };
 
   return (
     <div className="crudSection" style={{ marginTop: 14 }}>
@@ -93,11 +95,12 @@ export function RelationshipMatrixTable({
           background: 'var(--surface-1)',
         }}
       >
-        <table className="crudTable" style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content' }}>
-          <thead>
+        <table style={{ borderCollapse: 'collapse', width: 'max-content' }}>
+                    <thead>
             <tr>
               <th
                 style={{
+                  ...cellBorderStyle,
                   position: 'sticky',
                   top: 0,
                   left: 0,
@@ -112,31 +115,63 @@ export function RelationshipMatrixTable({
                 <th
                   key={c.id}
                   style={{
+                    ...cellBorderStyle,
                     position: 'sticky',
                     top: 0,
                     zIndex: 3,
                     background: 'var(--surface-2)',
-                    minWidth: 140,
-                    maxWidth: 220,
-                    whiteSpace: 'nowrap',
+                    width: 44,
+                    minWidth: 44,
+                    maxWidth: 44,
+                    height: 180,
+                    padding: 0,
+                    verticalAlign: 'bottom',
+                    textAlign: 'center',
                   }}
                   title={c.label}
                 >
-                  {c.label}
+                  <div
+                    style={{
+                      writingMode: 'vertical-rl',
+                      transform: 'rotate(180deg)',
+                      whiteSpace: 'nowrap',
+                      padding: '10px 6px',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {c.label}
+                  </div>
                 </th>
               ))}
               <th
                 style={{
+                  ...cellBorderStyle,
                   position: 'sticky',
                   top: 0,
                   zIndex: 3,
                   background: 'var(--surface-2)',
-                  minWidth: 90,
-                  textAlign: 'right',
+                  width: 44,
+                  minWidth: 44,
+                  maxWidth: 44,
+                  height: 180,
+                  padding: 0,
+                  verticalAlign: 'bottom',
+                  textAlign: 'center',
                 }}
                 title="Row total"
               >
-                Total
+                <div
+                  style={{
+                    writingMode: 'vertical-rl',
+                    transform: 'rotate(180deg)',
+                    whiteSpace: 'nowrap',
+                    padding: '10px 6px',
+                    lineHeight: 1.1,
+                    fontWeight: 600,
+                  }}
+                >
+                  Total
+                </div>
               </th>
             </tr>
           </thead>
@@ -145,6 +180,7 @@ export function RelationshipMatrixTable({
               <tr key={r.id}>
                 <th
                   style={{
+                    ...cellBorderStyle,
                     position: 'sticky',
                     left: 0,
                     zIndex: 2,
@@ -164,6 +200,7 @@ export function RelationshipMatrixTable({
                     <td
                       key={c.id}
                       style={{
+                        ...cellBorderStyle,
                         textAlign: 'right',
                         padding: '8px 10px',
                         fontVariantNumeric: 'tabular-nums',
@@ -198,7 +235,8 @@ export function RelationshipMatrixTable({
                     </td>
                   );
                 })}
-                <td style={{ textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}>
+                <td style={{
+                  ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}>
                   {formatTotal(rowTotals[ri] ?? 0)}
                 </td>
               </tr>
@@ -206,6 +244,7 @@ export function RelationshipMatrixTable({
             <tr>
               <th
                 style={{
+                  ...cellBorderStyle,
                   position: 'sticky',
                   left: 0,
                   zIndex: 2,
@@ -218,12 +257,13 @@ export function RelationshipMatrixTable({
               {cols.map((c, ci) => (
                 <td
                   key={c.id}
-                  style={{ textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}
+                  style={{
+                        ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', opacity: 0.9 }}
                 >
                   {formatTotal(colTotals[ci] ?? 0)}
                 </td>
               ))}
-              <td style={{ textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+              <td style={{ ...cellBorderStyle, textAlign: 'right', padding: '8px 10px', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                 {formatTotal(grandTotal)}
               </td>
             </tr>

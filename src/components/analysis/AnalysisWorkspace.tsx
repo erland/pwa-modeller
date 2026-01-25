@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { AnalysisDirection, ElementType, ModelKind, RelationshipType } from '../../domain';
+import type { AnalysisDirection, ElementType, ModelKind, RelationshipType, MatrixMetricId } from '../../domain';
 import type { Selection } from '../model/selection';
 import { useModelStore, useAnalysisPathsBetween, useAnalysisRelatedElements } from '../../store';
 
@@ -11,6 +11,7 @@ import { AnalysisResultTable } from './AnalysisResultTable';
 import { TraceabilityExplorer } from './TraceabilityExplorer';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildRelationshipMatrix, type RelationshipMatrixDirection } from '../../domain/analysis/relationshipMatrix';
+import { computeMatrixMetric } from '../../domain';
 import { RelationshipMatrixTable } from './RelationshipMatrixTable';
 import { RelationshipMatrixCellDialog } from './RelationshipMatrixCellDialog';
 import {
@@ -90,6 +91,9 @@ export function AnalysisWorkspace({
   } | null>(null);
 
   const [matrixHighlightMissing, setMatrixHighlightMissing] = useState<boolean>(true);
+
+  // Matrix cell-value metric selection (Step 2): in Step 3 this also drives heatmap shading.
+  const [matrixCellMetricId, setMatrixCellMetricId] = useState<'off' | MatrixMetricId>('matrixRelationshipCount');
 
   const [matrixCellDialog, setMatrixCellDialog] = useState<{
     rowId: string;
@@ -381,6 +385,20 @@ export function AnalysisWorkspace({
       { includeSelf: false }
     );
   }, [model, matrixBuiltQuery]);
+
+  const matrixCellValues = useMemo(() => {
+    if (!model || !matrixBuiltQuery) return undefined;
+    if (matrixCellMetricId === 'off') return undefined;
+    return computeMatrixMetric(model, matrixCellMetricId, {
+      rowIds: matrixBuiltQuery.rowIds,
+      colIds: matrixBuiltQuery.colIds,
+      filters: {
+        direction: matrixBuiltQuery.direction,
+        relationshipTypes: matrixBuiltQuery.relationshipTypes.length ? matrixBuiltQuery.relationshipTypes : undefined,
+      },
+      options: { includeSelf: false },
+    }).values;
+  }, [matrixBuiltQuery, matrixCellMetricId, model]);
 
   const canRun = Boolean(
     model &&
@@ -772,6 +790,9 @@ export function AnalysisWorkspace({
                 <RelationshipMatrixTable
                   modelName={model.metadata?.name || 'model'}
                   result={matrixResult}
+                  cellMetricId={matrixCellMetricId as 'off' | 'matrixRelationshipCount'}
+                  onChangeCellMetricId={(v) => setMatrixCellMetricId(v)}
+                  cellValues={matrixCellValues}
                   highlightMissing={matrixHighlightMissing}
                   onToggleHighlightMissing={() => setMatrixHighlightMissing((v) => !v)}
                   onOpenCell={(info) => setMatrixCellDialog(info)}

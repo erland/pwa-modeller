@@ -7,6 +7,16 @@ import { exportRelationshipMatrixCsv, exportRelationshipMatrixMissingLinksCsv } 
 export interface RelationshipMatrixTableProps {
   modelName: string;
   result: RelationshipMatrixResult;
+
+  /** Which numeric metric (if any) to display in each cell. */
+  cellMetricId: 'off' | 'matrixRelationshipCount';
+  onChangeCellMetricId: (v: 'off' | 'matrixRelationshipCount') => void;
+
+  /**
+   * Optional precomputed metric values (cells[rowIndex][colIndex]).
+   * When provided, values will be used instead of result.cells[].count.
+   */
+  cellValues?: number[][];
   /** If true, visually highlight 0-count cells. */
   highlightMissing: boolean;
   onToggleHighlightMissing: () => void;
@@ -25,9 +35,17 @@ function formatTotal(n: number): string {
   return String(n);
 }
 
+function formatCellValue(n: number): string {
+  if (!Number.isFinite(n)) return '';
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
 export function RelationshipMatrixTable({
   modelName,
   result,
+  cellMetricId,
+  onChangeCellMetricId,
+  cellValues,
   highlightMissing,
   onToggleHighlightMissing,
   onOpenCell
@@ -47,12 +65,20 @@ export function RelationshipMatrixTable({
   }, [cells]);
 
 
-  const { displayRows, displayCols, displayCells, displayRowTotals, displayColTotals } = useMemo(() => {
+  const baseValues: number[][] | undefined = useMemo(() => {
+    if (cellMetricId === 'off') return undefined;
+    if (cellValues && cellValues.length) return cellValues;
+    // Fallback for count metric if caller didn't provide values.
+    return cells.map((row) => row.map((c) => c.count));
+  }, [cellMetricId, cellValues, cells]);
+
+  const { displayRows, displayCols, displayCells, displayValues, displayRowTotals, displayColTotals } = useMemo(() => {
     if (!hideEmpty) {
       return {
         displayRows: rows,
         displayCols: cols,
         displayCells: cells,
+        displayValues: baseValues,
         displayRowTotals: rowTotals,
         displayColTotals: colTotals
       };
@@ -72,9 +98,12 @@ export function RelationshipMatrixTable({
     const displayColTotals = colIdxs.map((i) => colTotals[i] ?? 0);
 
     const displayCells = rowIdxs.map((ri) => colIdxs.map((ci) => cells[ri][ci]));
+    const displayValues = baseValues
+      ? rowIdxs.map((ri) => colIdxs.map((ci) => baseValues[ri]?.[ci] ?? 0))
+      : undefined;
 
-    return { displayRows, displayCols, displayCells, displayRowTotals, displayColTotals };
-  }, [cells, colTotals, cols, hideEmpty, rowTotals, rows]);
+    return { displayRows, displayCols, displayCells, displayValues, displayRowTotals, displayColTotals };
+  }, [baseValues, cells, colTotals, cols, hideEmpty, rowTotals, rows]);
 
   const cellBorderStyle: CSSProperties = { border: '1px solid var(--diagram-grid-line)' };
 
@@ -94,6 +123,20 @@ export function RelationshipMatrixTable({
           </p>
         </div>
         <div className="crudActions" style={{ alignItems: 'center', gap: 10 }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
+            Cell values
+            <select
+              className="selectInput"
+              aria-label="Matrix cell values"
+              value={cellMetricId}
+              onChange={(e) => onChangeCellMetricId(e.currentTarget.value as 'off' | 'matrixRelationshipCount')}
+              title="Which numeric value to show in each cell"
+            >
+              <option value="off">Off</option>
+              <option value="matrixRelationshipCount">Relationship count</option>
+            </select>
+          </label>
+
           <button
             type="button"
             className="shellButton"
@@ -231,9 +274,12 @@ export function RelationshipMatrixTable({
                 >
                   {r.label}
                 </th>
-                {cols.map((c, ci) => {
+                {displayCols.map((c, ci) => {
                   const cell = displayCells[ri][ci];
                   const isMissing = cell.count === 0;
+                  const rawValue = displayValues ? (displayValues[ri]?.[ci] ?? 0) : cell.count;
+                  const valueText =
+                    cellMetricId === 'off' ? '' : rawValue ? formatCellValue(rawValue) : '';
                   return (
                     <td
                       key={c.id}
@@ -269,7 +315,7 @@ export function RelationshipMatrixTable({
                           padding: 0,
                         }}
                       >
-                        {cell.count ? formatTotal(cell.count) : ''}
+                        {valueText}
                       </button>
                     </td>
                   );

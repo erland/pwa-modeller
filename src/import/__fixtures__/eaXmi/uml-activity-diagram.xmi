@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+  <xmi:Documentation exporter="Enterprise Architect" exporterVersion="16.1" />
+
+  <!-- Fixture: UML Activity with nodes/flows and EA vendor-extension notes. -->
+  <xmi:Extension extender="Enterprise Architect">
+    <elements>
+      <element xmi:idref="N1">
+        <properties documentation="Action doc from EA extension" />
+      </element>
+      <element xmi:idref="N2">
+        <properties documentation="Decision doc beh&#246;vs" />
+      </element>
+    </elements>
+
+    <diagrams>
+      <diagram
+        xmi:id="D1"
+        name="Activity Overview"
+        diagramType="Activity"
+        package="P1"
+        ea_guid="{ACTDIA-GUID}">
+        <diagramObjects>
+          <diagramObject xmi:id="DO_A" subject="{ACT-GUID}" l="10" t="10" r="180" b="60" />
+          <diagramObject xmi:id="DO0" subject="{N0-GUID}" l="40" t="90" r="70" b="120" />
+          <diagramObject xmi:id="DO1" subject="{N1-GUID}" geometry="l=110;r=250;t=85;b=135" />
+          <diagramObject xmi:id="DO2" subject="{N2-GUID}" bounds="290,80,360,150" />
+          <diagramObject xmi:id="DO3" subject="{N3-GUID}" l="410" t="90" r="440" b="120" />
+          <diagramObject xmi:id="DO4" subject="{N4-GUID}" l="490" t="90" r="520" b="120" />
+        </diagramObjects>
+      </diagram>
+    </diagrams>
+  </xmi:Extension>
+
+  <uml:Model xmi:id="M1" name="FixtureModel">
+    <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg" />
+
+    <packagedElement xmi:type="uml:Activity" xmi:id="A1" name="DoThing" ea_guid="{ACT-GUID}" />
+    <packagedElement xmi:type="uml:InitialNode" xmi:id="N0" ea_guid="{N0-GUID}" />
+    <packagedElement xmi:type="uml:OpaqueAction" xmi:id="N1" name="Step 1" ea_guid="{N1-GUID}" />
+    <packagedElement xmi:type="uml:DecisionNode" xmi:id="N2" name="Decide" ea_guid="{N2-GUID}" />
+    <packagedElement xmi:type="uml:MergeNode" xmi:id="N3" name="Merge" ea_guid="{N3-GUID}" />
+    <packagedElement xmi:type="uml:ActivityFinalNode" xmi:id="N4" ea_guid="{N4-GUID}" />
+
+    <packagedElement xmi:type="uml:ControlFlow" xmi:id="CF1" source="N0" target="N1">
+      <ownedComment><body>Go</body></ownedComment>
+    </packagedElement>
+    <packagedElement xmi:type="uml:ControlFlow" xmi:id="CF2" source="N1" target="N2">
+      <guard><specification xmi:type="uml:OpaqueExpression" body="x &gt; 0" /></guard>
+    </packagedElement>
+    <packagedElement xmi:type="uml:ControlFlow" xmi:id="CF3" source="N2" target="N3" />
+    <packagedElement xmi:type="uml:ControlFlow" xmi:id="CF4" source="N3" target="N4" />
+  </uml:Model>
+</xmi:XMI>

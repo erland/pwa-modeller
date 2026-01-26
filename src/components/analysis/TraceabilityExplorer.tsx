@@ -338,7 +338,7 @@ export function TraceabilityExplorer({
 
         <div className="crudBody">
           <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid var(--border-1)', borderRadius: 12 }}>
-            <table className="crudTable" style={{ margin: 0 }}>
+            <table className="dataTable" style={{ margin: 0 }}>
               <thead>
                 <tr>
                   <th style={{ width: 70 }}>Depth</th>

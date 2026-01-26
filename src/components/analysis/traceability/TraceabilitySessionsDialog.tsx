@@ -69,7 +69,7 @@ export function TraceabilitySessionsDialog({
 
         {sessions.length ? (
           <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid var(--border-1)', borderRadius: 12 }}>
-            <table className="crudTable" style={{ margin: 0 }}>
+            <table className="dataTable" style={{ margin: 0 }}>
               <thead>
                 <tr>
                   <th>Session</th>

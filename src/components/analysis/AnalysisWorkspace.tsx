@@ -839,10 +839,10 @@ export function AnalysisWorkspace({
 
                   <div className="toolbar" aria-label="Matrix presets toolbar" style={{ justifyContent: 'flex-end' }}>
                     <div className="toolbarGroup" style={{ minWidth: 220 }}>
-                      <label htmlFor="matrix-preset" className="crudLabel">Preset</label>
+                      <label htmlFor="matrix-preset">Preset</label>
                       <select
                         id="matrix-preset"
-                        className="crudInput"
+                        className="selectInput"
                         value={matrixPresetId}
                         onChange={(e) => setMatrixPresetId(e.target.value)}
                       >
@@ -902,10 +902,10 @@ export function AnalysisWorkspace({
                     </div>
 
                     <div className="toolbarGroup" style={{ minWidth: 240 }}>
-                      <label htmlFor="matrix-snapshot" className="crudLabel">Snapshot</label>
+                      <label htmlFor="matrix-snapshot">Snapshot</label>
                       <select
                         id="matrix-snapshot"
-                        className="crudInput"
+                        className="selectInput"
                         value={matrixSnapshotId}
                         onChange={(e) => setMatrixSnapshotId(e.target.value)}
                       >

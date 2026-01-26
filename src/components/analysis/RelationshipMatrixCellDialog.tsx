@@ -110,7 +110,7 @@ export function RelationshipMatrixCellDialog({ isOpen, onClose, model, cell }: P
         </div>
 
         <div style={{ maxHeight: '60vh', overflow: 'auto', border: '1px solid var(--border-1)', borderRadius: 12 }}>
-          <table className="crudTable" style={{ margin: 0 }}>
+          <table className="dataTable" style={{ margin: 0 }}>
             <thead>
               <tr>
                 <th style={{ width: 220 }}>Type</th>

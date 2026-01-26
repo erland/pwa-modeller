@@ -628,9 +628,107 @@ export function AnalysisQueryPanel({
     );
   }
 
+  if (mode === 'traceability') {
+    return (
+      <AnalysisSection
+        title="Query"
+        hint={`Pick a start element in “${modelName}” and open the traceability explorer.`}
+        actions={
+          <button type="button" className="shellButton" disabled={!canRun} onClick={onRun}>
+            Run analysis
+          </button>
+        }
+      >
+        <QueryToolbar
+          variant="body"
+          model={model}
+          modelName={modelName}
+          mode={mode}
+          draftStartId={draftStartId}
+          onChangeDraftStartId={onChangeDraftStartId}
+          draftSourceId={draftSourceId}
+          onChangeDraftSourceId={onChangeDraftSourceId}
+          draftTargetId={draftTargetId}
+          onChangeDraftTargetId={onChangeDraftTargetId}
+          onOpenChooser={(which) => setChooser({ which })}
+          canUseSelection={canUseSelection}
+          onUseSelection={onUseSelection}
+          canRun={canRun}
+          onRun={onRun}
+        />
+
+        <FiltersPanel
+          mode={mode}
+          direction={direction}
+          onChangeDirection={onChangeDirection}
+          maxDepth={maxDepth}
+          onChangeMaxDepth={onChangeMaxDepth}
+          includeStart={includeStart}
+          onChangeIncludeStart={onChangeIncludeStart}
+          maxPaths={maxPaths}
+          onChangeMaxPaths={onChangeMaxPaths}
+          maxPathLength={maxPathLength}
+          onChangeMaxPathLength={onChangeMaxPathLength}
+          availableRelationshipTypes={availableRelationshipTypes}
+          relationshipTypesSorted={relationshipTypesSorted}
+          onChangeRelationshipTypes={onChangeRelationshipTypes}
+          hasLayerFacet={hasLayerFacet}
+          availableLayers={availableLayers}
+          layersSorted={layersSorted}
+          onChangeLayers={onChangeLayers}
+          hasElementTypeFacet={hasElementTypeFacet}
+          allowedElementTypes={allowedElementTypes}
+          elementTypesSorted={elementTypesSorted}
+          onChangeElementTypes={onChangeElementTypes}
+          onApplyPreset={onApplyPreset}
+          hasAnyFilters={hasAnyFilters}
+        />
+
+        <ElementChooserDialog
+          title={
+            chooser?.which === 'start'
+              ? 'Choose start element'
+              : chooser?.which === 'source'
+                ? 'Choose source element'
+                : chooser?.which === 'target'
+                  ? 'Choose target element'
+                  : 'Choose element'
+          }
+          isOpen={!!chooser}
+          model={model}
+          value={
+            chooser?.which === 'start'
+              ? draftStartId
+              : chooser?.which === 'source'
+                ? draftSourceId
+                : chooser?.which === 'target'
+                  ? draftTargetId
+                  : ''
+          }
+          onClose={() => setChooser(null)}
+          onChoose={(id) => {
+            if (chooser?.which === 'start') onChangeDraftStartId(id);
+            else if (chooser?.which === 'source') onChangeDraftSourceId(id);
+            else if (chooser?.which === 'target') onChangeDraftTargetId(id);
+            setChooser(null);
+          }}
+        />
+      </AnalysisSection>
+    );
+  }
+
   return (
-    <section className="crudSection" aria-label="Analysis query">
+    <AnalysisSection
+      title="Query"
+      hint={`Pick elements in “${modelName}” and run an analysis.`}
+      actions={
+        <button type="button" className="shellButton" disabled={!canRun} onClick={onRun}>
+          Run analysis
+        </button>
+      }
+    >
       <QueryToolbar
+        variant="body"
         model={model}
         modelName={modelName}
         mode={mode}
@@ -703,6 +801,6 @@ export function AnalysisQueryPanel({
           setChooser(null);
         }}
       />
-    </section>
+    </AnalysisSection>
   );
 }

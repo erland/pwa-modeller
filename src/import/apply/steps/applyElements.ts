@@ -126,6 +126,48 @@ export function applyElements(ctx: ApplyImportContext): void {
     return a;
   };
 
+  const rewriteUmlAttrs = (opts: { ownerId: string; ownerName?: string; attrs: unknown }): unknown => {
+    const { ownerId, ownerName, attrs } = opts;
+    if (!attrs || typeof attrs !== 'object') return attrs;
+
+    const a: any = { ...(attrs as any) };
+    const unresolvedRefs: Record<string, unknown> = {};
+
+    const rewriteField = (field: string) => {
+      if (!isStringId(a[field])) return;
+      const mapped = mappings.elements[a[field]];
+      if (mapped) a[field] = mapped;
+      else {
+        unresolvedRefs[field] = a[field];
+        delete a[field];
+      }
+    };
+
+    // Step 3 (UML Activity): normalize ownership refs.
+    rewriteField('activityId');
+
+    if (Array.isArray(a.ownedNodeRefs)) {
+      const kept: string[] = [];
+      const dropped: string[] = [];
+      for (const r of a.ownedNodeRefs as unknown[]) {
+        if (!isStringId(r)) continue;
+        const mapped = mappings.elements[r];
+        if (mapped) kept.push(mapped);
+        else dropped.push(r);
+      }
+      if (kept.length) a.ownedNodeRefs = kept;
+      else delete a.ownedNodeRefs;
+      if (dropped.length) unresolvedRefs.ownedNodeRefs = dropped;
+    }
+
+    if (Object.keys(unresolvedRefs).length) {
+      a.unresolvedRefs = { ...(a.unresolvedRefs ?? {}), ...unresolvedRefs };
+      pushWarning(report, `UML: element "${ownerName ?? ownerId}" has unresolved references in attrs (some fields cleared)`);
+    }
+
+    return a;
+  };
+
   for (const el of ir.elements ?? []) {
     if (!el?.id) continue;
 
@@ -173,6 +215,12 @@ export function applyElements(ctx: ApplyImportContext): void {
         ? sanitizeUmlClassifierAttrs((el as any).meta?.umlMembers)
         : undefined;
 
+    // UML importers may attach semantic/ownership attributes in IR `attrs`.
+    const umlAttrs =
+      inferredKind === 'uml'
+        ? rewriteUmlAttrs({ ownerId: el.id, ownerName: el.name ?? undefined, attrs: (el as any).attrs })
+        : undefined;
+
     // BPMN2 importer attaches semantic node attributes (events, gateways, etc.) in IR `attrs`.
     // Preserve them verbatim for BPMN elements.
     const bpmnAttrs =
@@ -181,11 +229,19 @@ export function applyElements(ctx: ApplyImportContext): void {
         : undefined;
 
     const mergedAttrs =
-      umlClassifierAttrs !== undefined && bpmnAttrs !== undefined
-        ? { ...(bpmnAttrs as any), ...(umlClassifierAttrs as any) }
-        : umlClassifierAttrs !== undefined
-          ? umlClassifierAttrs
-          : bpmnAttrs;
+      umlClassifierAttrs !== undefined && bpmnAttrs !== undefined && umlAttrs !== undefined
+        ? { ...(bpmnAttrs as any), ...(umlClassifierAttrs as any), ...(umlAttrs as any) }
+        : umlClassifierAttrs !== undefined && bpmnAttrs !== undefined
+          ? { ...(bpmnAttrs as any), ...(umlClassifierAttrs as any) }
+          : umlClassifierAttrs !== undefined && umlAttrs !== undefined
+            ? { ...(umlClassifierAttrs as any), ...(umlAttrs as any) }
+            : bpmnAttrs !== undefined && umlAttrs !== undefined
+              ? { ...(bpmnAttrs as any), ...(umlAttrs as any) }
+              : umlClassifierAttrs !== undefined
+                ? umlClassifierAttrs
+                : bpmnAttrs !== undefined
+                  ? bpmnAttrs
+                  : umlAttrs;
 
     const domainEl: Element = {
       ...createElement({

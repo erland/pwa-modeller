@@ -4,6 +4,7 @@ import { applyBpmnContainmentToViews } from './normalize/applyBpmnContainmentToV
 import { finalizeEaXmiMeta } from './normalize/finalizeEaXmiMeta';
 import { normalizeEaXmiElements } from './normalize/normalizeEaXmiElements';
 import { normalizeEaXmiRelationships } from './normalize/normalizeEaXmiRelationships';
+import { normalizeUmlActivityContainment } from './normalize/normalizeUmlActivityContainment';
 import {
   buildElementLookup,
   buildRelationshipLookup,
@@ -30,16 +31,19 @@ export function normalizeEaXmiImportIR(ir: IRModel | undefined, opts?: Normalize
   const folderIds = new Set((ir.folders ?? []).map((f) => (typeof f?.id === 'string' ? f.id : '')));
 
   // Step 1: normalize element & relationship payloads (trim, EA meta cleanup)
-  const elements = normalizeEaXmiElements(ir, folderIds, opts);
+  const elementsBase = normalizeEaXmiElements(ir, folderIds, opts);
   const relationships = normalizeEaXmiRelationships(ir);
 
   // Step 2: resolve EA diagram nodes/connections to imported ids.
-  const elementLookup = buildElementLookup(elements);
+  const elementLookup = buildElementLookup(elementsBase);
   const relationshipLookup = buildRelationshipLookup(relationships);
   const viewsResolved = resolveEaXmiViews(ir.views, folderIds, elementLookup, relationshipLookup, relationships, opts);
 
   // Step 3: BPMN-specific containment heuristics in views.
-  const views = applyBpmnContainmentToViews(viewsResolved, elements);
+  const views = applyBpmnContainmentToViews(viewsResolved, elementsBase);
+
+  // Step 3 (UML Activity): view-driven containment/ownership hints.
+  const elements = normalizeUmlActivityContainment({ ...ir, elements: elementsBase }, views);
 
   // Step 4: finalize model meta.
   const meta = finalizeEaXmiMeta(ir);

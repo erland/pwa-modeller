@@ -90,6 +90,12 @@ export type IRElement = {
   properties?: Record<string, string>;
   taggedValues?: IRTaggedValue[];
   externalIds?: IRExternalId[];
+
+  /**
+   * Optional element-specific attributes.
+   * Used by some importers (e.g. BPMN semantic attributes, UML ownership hints).
+   */
+  attrs?: unknown;
   meta?: Record<string, unknown>;
 };
 
@@ -112,6 +118,12 @@ export type IRRelationship = {
   properties?: Record<string, string>;
   taggedValues?: IRTaggedValue[];
   externalIds?: IRExternalId[];
+
+  /**
+   * Optional relationship-specific attributes.
+   * Used by some importers (e.g. UML association end attributes).
+   */
+  attrs?: unknown;
   meta?: Record<string, unknown>;
 };
 

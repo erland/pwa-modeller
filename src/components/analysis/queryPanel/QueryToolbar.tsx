@@ -24,6 +24,13 @@ type Props = {
 
   canRun: boolean;
   onRun: () => void;
+
+  /**
+   * Layout variant.
+   * - header: includes title/hint and the Run button (default)
+   * - body: renders only the picker controls (no header, no Run button)
+   */
+  variant?: 'header' | 'body';
 };
 
 export function QueryToolbar({
@@ -40,8 +47,61 @@ export function QueryToolbar({
   canUseSelection,
   onUseSelection,
   canRun,
-  onRun
+  onRun,
+  variant = 'header'
 }: Props) {
+  const pickerControls = (
+    <>
+      {mode !== 'paths' ? (
+        <ElementPickerRow
+          which="start"
+          label="Start element"
+          inputId="analysis-start"
+          model={model}
+          valueId={draftStartId}
+          canUseSelection={canUseSelection}
+          onUseSelection={onUseSelection}
+          onOpenChooser={onOpenChooser}
+          onClear={() => onChangeDraftStartId('')}
+        />
+      ) : (
+        <>
+          <ElementPickerRow
+            which="source"
+            label="Source"
+            inputId="analysis-source"
+            model={model}
+            valueId={draftSourceId}
+            canUseSelection={canUseSelection}
+            onUseSelection={onUseSelection}
+            onOpenChooser={onOpenChooser}
+            onClear={() => onChangeDraftSourceId('')}
+          />
+
+          <ElementPickerRow
+            which="target"
+            label="Target"
+            inputId="analysis-target"
+            model={model}
+            valueId={draftTargetId}
+            canUseSelection={canUseSelection}
+            onUseSelection={onUseSelection}
+            onOpenChooser={onOpenChooser}
+            onClear={() => onChangeDraftTargetId('')}
+          />
+        </>
+      )}
+    </>
+  );
+
+  if (variant === 'body') {
+    return (
+      <div className="toolbar" aria-label="Analysis query toolbar">
+        {pickerControls}
+      </div>
+    );
+  }
+
   return (
     <div className="crudHeader">
       <div>
@@ -50,45 +110,7 @@ export function QueryToolbar({
       </div>
 
       <div className="toolbar" aria-label="Analysis query toolbar">
-                {mode !== 'paths' ? (
-          <ElementPickerRow
-            which="start"
-            label="Start element"
-            inputId="analysis-start"
-            model={model}
-            valueId={draftStartId}
-            canUseSelection={canUseSelection}
-            onUseSelection={onUseSelection}
-            onOpenChooser={onOpenChooser}
-            onClear={() => onChangeDraftStartId('')}
-          />
-        ) : (
-          <>
-            <ElementPickerRow
-              which="source"
-              label="Source"
-              inputId="analysis-source"
-              model={model}
-              valueId={draftSourceId}
-              canUseSelection={canUseSelection}
-              onUseSelection={onUseSelection}
-              onOpenChooser={onOpenChooser}
-              onClear={() => onChangeDraftSourceId('')}
-            />
-
-            <ElementPickerRow
-              which="target"
-              label="Target"
-              inputId="analysis-target"
-              model={model}
-              valueId={draftTargetId}
-              canUseSelection={canUseSelection}
-              onUseSelection={onUseSelection}
-              onOpenChooser={onOpenChooser}
-              onClear={() => onChangeDraftTargetId('')}
-            />
-          </>
-        )}
+        {pickerControls}
 
         <div className="toolbarGroup" style={{ minWidth: 0 }}>
           <label style={{ visibility: 'hidden' }} aria-hidden="true">

@@ -15,6 +15,8 @@ import { QuickTooltip } from './QuickTooltip';
 import { loadAnalysisUiState, mergeAnalysisUiState } from './analysisUiStateStorage';
 import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
 
+import { AnalysisSection } from './layout/AnalysisSection';
+
 import '../../styles/crud.css';
 
 type Props = {
@@ -232,17 +234,15 @@ export function AnalysisResultTable({
     const startId = relatedResult?.startElementId;
 
     return (
-      <section className="crudSection" aria-label="Analysis results">
-        <div className="crudHeader">
-          <div style={{ flex: 1 }}>
-            <p className="crudTitle">Results</p>
-            <p className="crudHint">
-              {startId
-                ? `Elements related to “${nodeLabel(startId)}”.`
-                : 'Run an analysis to see results.'}
-            </p>
-          </div>
-          <div className="rowActions">
+      <AnalysisSection
+        title="Results"
+        hint={
+          startId
+            ? `Elements related to “${nodeLabel(startId)}”.`
+            : 'Run an analysis to see results.'
+        }
+        actions={
+          <>
             <button
               type="button"
               className="miniLinkButton"
@@ -266,8 +266,9 @@ export function AnalysisResultTable({
             >
               Export CSV
             </button>
-          </div>
-        </div>
+          </>
+        }
+      >
 
         {hits.length === 0 ? (
           <p className="crudHint" style={{ marginTop: 10 }}>
@@ -355,7 +356,7 @@ export function AnalysisResultTable({
           lines={tooltip?.lines ?? []}
           onClose={() => setTooltip(null)}
         />
-      </section>
+      </AnalysisSection>
     );
   }
 
@@ -366,22 +367,24 @@ export function AnalysisResultTable({
   const shortest = res?.shortestDistance;
 
   return (
-    <section className="crudSection" aria-label="Analysis results">
-      <div className="crudHeader">
-        <div style={{ flex: 1 }}>
-          <p className="crudTitle">Results</p>
-          <p className="crudHint">
+    <AnalysisSection
+      title="Results"
+      hint={
+        <>
+          <div>
             {sourceId && targetId
               ? `Connection between “${nodeLabel(sourceId)}” and “${nodeLabel(targetId)}”.`
               : 'Run an analysis to see results.'}
-          </p>
+          </div>
           {shortest !== undefined ? (
-            <p className="crudHint" style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 6 }}>
               Shortest distance: <span className="mono">{shortest}</span> hops.
-            </p>
+            </div>
           ) : null}
-        </div>
-        <div className="rowActions">
+        </>
+      }
+      actions={
+        <>
           <button
             type="button"
             className="miniLinkButton"
@@ -412,8 +415,9 @@ export function AnalysisResultTable({
               Trace from target
             </button>
           ) : null}
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {paths.length === 0 ? (
         <p className="crudHint" style={{ marginTop: 10 }}>
@@ -514,6 +518,6 @@ export function AnalysisResultTable({
         lines={tooltip?.lines ?? []}
         onClose={() => setTooltip(null)}
       />
-    </section>
+    </AnalysisSection>
   );
 }

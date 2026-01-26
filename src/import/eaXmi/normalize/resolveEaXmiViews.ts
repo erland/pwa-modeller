@@ -208,6 +208,15 @@ export function resolveEaXmiViews(
 ): IRView[] | undefined {
   if (!viewsRaw) return undefined;
 
+  const looksLikeRelationshipRef = (candidates: string[]): boolean => {
+    for (const cand of candidates) {
+      for (const tok of normalizeRefToken(cand)) {
+        if (relationshipLookup.has(tok)) return true;
+      }
+    }
+    return false;
+  };
+
   return viewsRaw.map((v) => {
     // Validate folderId (diagram owning package)
     let folderId = v.folderId;
@@ -255,6 +264,13 @@ export function resolveEaXmiViews(
       }
 
       if (!resolved) {
+        // EA sometimes includes diagram "objects" for connectors/relationships (lines) that carry a connector GUID.
+        // Those are not model elements and should not be imported as view nodes.
+        // If the reference looks like a relationship/connector, skip silently to avoid noisy "unresolved element" warnings.
+        if (candidates.length && looksLikeRelationshipRef(candidates)) {
+          continue;
+        }
+
         // Safety: avoid importing unresolved element placeholders as Notes/Labels in applyImportIR.
         if (candidates.length) {
           warn(opts, 'EA XMI Normalize: Could not resolve referenced element for a view node; skipped node.', {

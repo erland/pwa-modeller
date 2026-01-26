@@ -3,6 +3,15 @@ import type { Element, ViewNodeLayout, UmlAttribute, UmlOperation, UmlVisibility
 import { readUmlClassifierMembers } from '../../domain';
 import { readUmlNodeAttrs } from './nodeAttrs';
 
+function readShapeHint(node: ViewNodeLayout): { umlShape?: string; umlOrientation?: 'horizontal' | 'vertical' } {
+  const raw = (node as unknown as { attrs?: unknown }).attrs;
+  if (!isRecord(raw)) return {};
+  const umlShape = typeof raw.umlShape === 'string' ? raw.umlShape : undefined;
+  const o = raw.umlOrientation;
+  const umlOrientation = o === 'horizontal' || o === 'vertical' ? o : undefined;
+  return { umlShape, umlOrientation };
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
@@ -87,6 +96,7 @@ function Header({ stereotype, name, italic }: { stereotype?: string; name: strin
 export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLayout }): React.ReactNode {
   const { element, node } = args;
   const attrs = readUmlNodeAttrs(node);
+  const shapeHint = readShapeHint(node);
 
   // Node labels are semantic (element-level).
   const name = element.name || "(unnamed)";
@@ -105,6 +115,18 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
   const isActor = nodeType === "uml.actor";
   const isNote = nodeType === "uml.note";
   const isClass = nodeType === "uml.class";
+
+  // Activity diagram v1
+  const isActivity = nodeType === 'uml.activity';
+  const isAction = nodeType === 'uml.action';
+  const isInitialNode = nodeType === 'uml.initialNode';
+  const isActivityFinalNode = nodeType === 'uml.activityFinalNode';
+  const isFlowFinalNode = nodeType === 'uml.flowFinalNode';
+  const isDecisionNode = nodeType === 'uml.decisionNode';
+  const isMergeNode = nodeType === 'uml.mergeNode';
+  const isForkNode = nodeType === 'uml.forkNode';
+  const isJoinNode = nodeType === 'uml.joinNode';
+  const isObjectNode = nodeType === 'uml.objectNode';
 
   // Step 2: minimal rendering targets (import readiness)
   const isDataType = nodeType === 'uml.datatype';
@@ -148,6 +170,158 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
                           ? 'subject'
                           : undefined);
 
+  // ------------------------------
+  // Activity diagram shapes (v1)
+  // ------------------------------
+
+  if (isInitialNode) {
+    return (
+      <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div
+          style={{
+            width: '68%',
+            height: '68%',
+            borderRadius: 999,
+            background: 'rgba(0,0,0,0.88)',
+          }}
+          title={name}
+        />
+      </div>
+    );
+  }
+
+  if (isActivityFinalNode) {
+    return (
+      <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="100%" height="100%" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="6" />
+          <circle cx="50" cy="50" r="26" fill="currentColor" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (isFlowFinalNode) {
+    return (
+      <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="100%" height="100%" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="6" />
+          <line x1="30" y1="30" x2="70" y2="70" stroke="currentColor" strokeWidth="6" />
+          <line x1="70" y1="30" x2="30" y2="70" stroke="currentColor" strokeWidth="6" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (isDecisionNode || isMergeNode) {
+    // Decision/merge rendered as a diamond.
+    return (
+      <div style={{ height: '100%', width: '100%', position: 'relative', overflow: 'hidden' }}>
+        <svg width="100%" height="100%" viewBox="0 0 100 70" aria-hidden="true">
+          <polygon points="50,2 98,35 50,68 2,35" fill="rgba(255,255,255,0.92)" stroke="currentColor" strokeWidth="3" />
+        </svg>
+        {name && name !== '(unnamed)' ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              fontSize: 12,
+              fontWeight: 800,
+              textAlign: 'center',
+              padding: '0 6px',
+              maxWidth: '90%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {name}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (isForkNode || isJoinNode) {
+    const orientation = shapeHint.umlOrientation ?? 'horizontal';
+    const isVertical = orientation === 'vertical';
+    return (
+      <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div
+          style={{
+            width: isVertical ? 18 : '86%',
+            height: isVertical ? '86%' : 18,
+            borderRadius: 4,
+            background: 'rgba(0,0,0,0.88)',
+          }}
+          title={name}
+        />
+      </div>
+    );
+  }
+
+  if (isAction) {
+    // Rounded rectangle.
+    return (
+      <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            boxSizing: 'border-box',
+            border: '2px solid rgba(0,0,0,0.28)',
+            borderRadius: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '8px 10px',
+            fontSize: 13,
+            fontWeight: 800,
+            overflow: 'hidden',
+          }}
+        >
+          {name}
+        </div>
+      </div>
+    );
+  }
+
+  if (isObjectNode) {
+    return (
+      <div style={{ height: '100%', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            boxSizing: 'border-box',
+            border: '2px solid rgba(0,0,0,0.28)',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '8px 10px',
+            fontSize: 13,
+            fontWeight: 800,
+            overflow: 'hidden',
+          }}
+        >
+          {name}
+        </div>
+      </div>
+    );
+  }
+
+  if (isActivity) {
+    // Minimal container shape for v1.
+    return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ fontWeight: 800, fontSize: 13, padding: '4px 6px' }}>{name}</div>
+        {collapsed ? null : attrLines.length ? <Section>{attrLines.join('\n')}</Section> : null}
+      </div>
+    );
+  }
 
   if (isNote) {
     return (

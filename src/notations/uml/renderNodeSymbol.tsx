@@ -49,6 +49,38 @@ export function renderUmlNodeSymbol(nodeType: string): React.ReactNode {
     case 'uml.subject':
       label = 'SB';
       break;
+
+    // Activity diagram v1
+    case 'uml.activity':
+      label = 'ACT';
+      break;
+    case 'uml.action':
+      label = 'AC';
+      break;
+    case 'uml.initialNode':
+      label = '●';
+      break;
+    case 'uml.activityFinalNode':
+      label = '◎';
+      break;
+    case 'uml.flowFinalNode':
+      label = '⊗';
+      break;
+    case 'uml.decisionNode':
+      label = '◇';
+      break;
+    case 'uml.mergeNode':
+      label = '◇';
+      break;
+    case 'uml.forkNode':
+      label = '║';
+      break;
+    case 'uml.joinNode':
+      label = '║';
+      break;
+    case 'uml.objectNode':
+      label = 'OBJ';
+      break;
   }
 
   return (

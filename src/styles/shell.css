@@ -602,6 +602,34 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* ------------------------------
+   UML activity diagram node shapes
+   (rendered by UML notation in node content)
+   ------------------------------ */
+
+/* Shapes that render their own geometry: remove the generic container chrome. */
+.diagramNode--uml-initial,
+.diagramNode--uml-activityFinal,
+.diagramNode--uml-flowFinal,
+.diagramNode--uml-decision,
+.diagramNode--uml-merge,
+.diagramNode--uml-fork,
+.diagramNode--uml-join {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* Action + object nodes: slightly tighter padding to feel more "UML". */
+.diagramNode--uml-action,
+.diagramNode--uml-object,
+.diagramNode--uml-activity {
+  padding: 6px;
+  border-radius: 10px;
+}
+
 .diagramConnectorNode {
   position: absolute;
   box-sizing: border-box;

@@ -609,7 +609,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
             <label htmlFor="portfolio-groupby">Group by</label>
             <select
               id="portfolio-groupby"
-              className="textInput"
+              className="selectInput"
               value={groupBy}
               onChange={(e) => setGroupBy(e.currentTarget.value as GroupBy)}
             >
@@ -624,7 +624,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <select
                 id="portfolio-preset"
-                className="textInput"
+                className="selectInput"
                 value={selectedPresetId}
                 onChange={(e) => {
                   const nextId = e.currentTarget.value;

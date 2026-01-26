@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001" xmi:version="2.5">
+  <uml:Model xmi:id="M1" name="TestModel">
+    <packagedElement xmi:type="uml:Package" xmi:id="EAPK_P1" name="Krav">
+      <packagedElement xmi:type="uml:Class" xmi:id="EAID_ELEM1" name="A"/>
+    </packagedElement>
+  </uml:Model>
+
+  <xmi:Extension extender="Enterprise Architect">
+    <!-- EA element record for package: note the package2 (EAID_...) alias -->
+    <element xmi:idref="EAPK_P1">
+      <model package2="EAID_P1" package="EAPK_P1" ea_eleType="package" />
+    </element>
+
+    <diagrams>
+      <diagram xmi:id="D1" name="Diagram 1" >
+        <elements>
+          <element xmi:id="DO_PKG" subject="EAID_P1" geometry="l=0;r=100;t=0;b=80" />
+          <element xmi:id="DO_CLS" subject="EAID_ELEM1" geometry="l=120;r=220;t=0;b=80" />
+        </elements>
+      </diagram>
+    </diagrams>
+  </xmi:Extension>
+</xmi:XMI>

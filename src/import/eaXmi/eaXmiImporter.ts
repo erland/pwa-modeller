@@ -16,6 +16,7 @@ import { parseEaXmiAssociations } from './parseAssociations';
 import { parseEaDiagramCatalog } from './parseEaDiagramCatalog';
 import { parseEaDiagramObjects } from './parseEaDiagramObjects';
 import { parseEaDiagramConnections } from './parseEaDiagramConnections';
+import { materializeUmlPackagesFromEaXmi } from './materializeUmlPackages';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -283,7 +284,7 @@ export const eaXmiImporter: Importer<IRModel> = {
       for (const r of relsStep8) addRel(r as IRRelationship, 'uml-association');
     }
 
-    const relationships = Array.from(relById.values());
+    let relationships = Array.from(relById.values());
 
     // Step B1a: discover diagrams (views) from EA's XMI extension.
     const { views: viewsB1a } = parseEaDiagramCatalog(doc, report);
@@ -293,6 +294,12 @@ export const eaXmiImporter: Importer<IRModel> = {
 
     // Step B2b (part 1): parse diagram links/connectors (unresolved endpoints and relationship refs).
     const { views } = parseEaDiagramConnections(doc, viewsWithNodes, report);
+
+    // Step B0 (EA packages): EA often references packages using EAID_* (package2) while the UML package uses EAPK_*.
+    // Materialize uml.package elements ONLY when packages are referenced as diagram nodes or relationship endpoints.
+    const pkgMaterialized = materializeUmlPackagesFromEaXmi(doc, folders, elements, relationships, views, report);
+    const elementsWithPackages = pkgMaterialized.elements;
+    relationships = pkgMaterialized.relationships;
 
     if (folders.length === 0) {
       addWarning(
@@ -306,7 +313,7 @@ export const eaXmiImporter: Importer<IRModel> = {
 
     const ir: IRModel = {
       folders,
-      elements,
+      elements: elementsWithPackages,
       relationships,
       ...(views.length ? { views } : {}),
       meta: {

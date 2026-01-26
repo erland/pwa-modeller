@@ -72,7 +72,7 @@ function isDiagramObjectCandidate(el: Element): boolean {
     const hasSubject = !!attrAny(el, ['subject', 'subjectid', 'subject_id']);
     const geo = (attrAny(el, [...EA_BOUNDS_STR_ATTRS]) ?? '').toLowerCase();
     // Avoid capturing connector stubs (EDGE/SX/SY/…) which we handle in parseEaDiagramConnections.
-    const looksLikeBounds = geo.includes('left=') || geo.includes('top=') || geo.includes('right=') || geo.includes('bottom=');
+    const looksLikeBounds = geo.includes('left=') || geo.includes('top=') || geo.includes('right=') || geo.includes('bottom=') || geo.includes('l=') || geo.includes('t=') || geo.includes('r=') || geo.includes('b=');
     return hasSubject && looksLikeBounds;
   }
   if (ln === 'object' || ln.endsWith('object')) {

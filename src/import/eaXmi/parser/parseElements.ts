@@ -47,6 +47,14 @@ function getStereotype(el: Element): string | undefined {
       if (st) return st;
     }
   }
+  // EA often emits notes/documentation on a <properties> child (very common in Sparx EA exports).
+  for (const ch of Array.from(el.children)) {
+    if (localName(ch) === 'properties') {
+      const pd = attrAny(ch, ['documentation', 'doc', 'notes', 'note'])?.trim();
+      if (pd) return pd;
+    }
+  }
+
   return undefined;
 }
 
@@ -79,6 +87,14 @@ function extractDocumentation(el: Element): string | undefined {
     }
   }
 
+  // EA often emits notes/documentation on a <properties> child (very common in Sparx EA exports).
+  for (const ch of Array.from(el.children)) {
+    if (localName(ch) === 'properties') {
+      const pd = attrAny(ch, ['documentation', 'doc', 'notes', 'note'])?.trim();
+      if (pd) return pd;
+    }
+  }
+
   return undefined;
 }
 
@@ -95,6 +111,14 @@ function findOwningPackageFolderId(el: Element): string | undefined {
     }
     p = p.parentElement;
   }
+  // EA often emits notes/documentation on a <properties> child (very common in Sparx EA exports).
+  for (const ch of Array.from(el.children)) {
+    if (localName(ch) === 'properties') {
+      const pd = attrAny(ch, ['documentation', 'doc', 'notes', 'note'])?.trim();
+      if (pd) return pd;
+    }
+  }
+
   return undefined;
 }
 
@@ -265,6 +289,14 @@ function getBaseRefId(el: Element): string | undefined {
       if (v) return v;
     }
   }
+  // EA often emits notes/documentation on a <properties> child (very common in Sparx EA exports).
+  for (const ch of Array.from(el.children)) {
+    if (localName(ch) === 'properties') {
+      const pd = attrAny(ch, ['documentation', 'doc', 'notes', 'note'])?.trim();
+      if (pd) return pd;
+    }
+  }
+
   return undefined;
 }
 

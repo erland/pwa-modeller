@@ -41,6 +41,10 @@ function umlRelationshipStyle(type: string): RelationshipStyle {
     case 'uml.extend':
       // Use Case: <<extend>> is usually rendered as a dashed dependency.
       return { markerEnd: 'arrowOpen', line: { pattern: 'dashed' }, midLabel: '«extend»' };
+    case 'uml.controlFlow':
+      return { markerEnd: 'arrowOpen' };
+    case 'uml.objectFlow':
+      return { markerEnd: 'arrowOpen' };
     case 'uml.deployment':
       // Deployment: dashed dependency-like arrow with stereotype label.
       return { markerEnd: 'arrowOpen', line: { pattern: 'dashed' }, midLabel: '«deployment»' };

@@ -4,6 +4,7 @@ import { kindFromTypeId } from '../kindFromTypeId';
 import {
   UML_DEPLOYMENT_TARGET_TYPE_IDS_SET,
   UML_GENERALIZABLE_TYPE_IDS_SET,
+  UML_ACTIVITY_NODE_TYPE_IDS_SET,
 } from '../uml/typeGroups';
 import { makeIssue } from './issues';
 import type { ValidationIssue } from './types';
@@ -139,6 +140,30 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
           )
         );
       }
+    }
+  }
+
+  // ------------------------------
+  // Activity flows endpoint sanity
+  // ------------------------------
+  for (const rel of Object.values(model.relationships)) {
+    if (rel.type !== 'uml.controlFlow' && rel.type !== 'uml.objectFlow') continue;
+    if (!rel.sourceElementId || !rel.targetElementId) continue;
+    const sEl = model.elements[rel.sourceElementId];
+    const tEl = model.elements[rel.targetElementId];
+    if (!sEl || !tEl) continue;
+    const sType = sEl.type;
+    const tType = tEl.type;
+
+    if (!(UML_ACTIVITY_NODE_TYPE_IDS_SET.has(sType) && UML_ACTIVITY_NODE_TYPE_IDS_SET.has(tType))) {
+      issues.push(
+        makeIssue(
+          'warning',
+          `UML ${rel.type} should connect ActivityNode -> ActivityNode (got ${sType} -> ${tType}).`,
+          { kind: 'relationship', relationshipId: rel.id },
+          `uml-rel-endpoints:${rel.id}`
+        )
+      );
     }
   }
 

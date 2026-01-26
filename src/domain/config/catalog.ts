@@ -164,6 +164,16 @@ export const UML_ELEMENT_TYPES: ElementType[] = [
   'uml.usecase',
   'uml.actor',
   'uml.note',
+  'uml.activity',
+  'uml.action',
+  'uml.initialNode',
+  'uml.activityFinalNode',
+  'uml.flowFinalNode',
+  'uml.decisionNode',
+  'uml.mergeNode',
+  'uml.forkNode',
+  'uml.joinNode',
+  'uml.objectNode',
 ];
 
 export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
@@ -176,7 +186,9 @@ export const UML_RELATIONSHIP_TYPES: RelationshipType[] = [
   'uml.include',
   'uml.extend',
   'uml.communicationPath',
-  'uml.deployment'
+  'uml.deployment',
+  'uml.controlFlow',
+  'uml.objectFlow',
 ];
 
 // -------------------------
@@ -248,7 +260,17 @@ const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   'uml.subject': 'Subject (Boundary)',
   'uml.usecase': 'Use Case',
   'uml.actor': 'Actor',
-  'uml.note': 'Note'
+  'uml.note': 'Note',
+  'uml.activity': "Activity",
+  'uml.action': "Action",
+  'uml.initialNode': "Initial Node",
+  'uml.activityFinalNode': "Activity Final",
+  'uml.flowFinalNode': "Flow Final",
+  'uml.decisionNode': "Decision",
+  'uml.mergeNode': "Merge",
+  'uml.forkNode': "Fork",
+  'uml.joinNode': "Join",
+  'uml.objectNode': "Object Node",
 };
 
 const BPMN_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
@@ -305,7 +327,9 @@ const UML_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = 
   'uml.include': 'Include',
   'uml.extend': 'Extend',
   'uml.communicationPath': 'Communication Path',
-  'uml.deployment': 'Deployment'
+  'uml.deployment': 'Deployment',
+  'uml.controlFlow': "Control Flow",
+  'uml.objectFlow': "Object Flow",
 };
 
 const BPMN_RELATIONSHIP_TYPE_LABELS: Partial<Record<RelationshipType, string>> = {

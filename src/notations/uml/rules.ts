@@ -2,6 +2,7 @@ import type { RelationshipValidationMode } from '../../domain';
 
 import {
   isUmlActorType,
+  isUmlActivityNodeType,
   isUmlArtifactType,
   isUmlClassifierType,
   isUmlComponentType,
@@ -44,8 +45,15 @@ export function canCreateUmlRelationship(args: {
     return { allowed: false, reason: 'Notes cannot participate in relationships.' };
   }
 
-  // Basic class diagram rules (kept intentionally permissive for v1).
+  // Basic UML rules (kept intentionally permissive for v1).
   switch (relationshipType) {
+
+    case 'uml.controlFlow':
+    case 'uml.objectFlow':
+      // Activity diagrams: flows connect ActivityNodes (actions, control nodes, object nodes).
+      if (isUmlActivityNodeType(sourceType) && isUmlActivityNodeType(targetType)) return { allowed: true };
+      return { allowed: false, reason: 'Control/Object flow is allowed only between Activity Nodes.' };
+
     case 'uml.generalization':
       // Allow generalization between classifiers, actors, or use cases.
       if (

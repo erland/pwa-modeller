@@ -2,7 +2,7 @@ import type { Model, ViewNodeLayout, ViewRelationshipLayout } from '../../../dom
 import { ensureViewLayout, getView } from '../helpers';
 import { syncViewConnections } from './syncViewConnections';
 import { defaultBpmnNodeSize } from './defaults/bpmn';
-import { defaultUmlNodePresentationAttrs } from './defaults/uml';
+import { defaultUmlNodePresentationAttrs, defaultUmlNodeSize } from './defaults/uml';
 
 export function addElementToView(model: Model, viewId: string, elementId: string): string {
   const view = model.views[viewId];
@@ -22,10 +22,12 @@ export function addElementToView(model: Model, viewId: string, elementId: string
   const ny = 24 + Math.floor(i / cols) * 110;
 
   const isBpmn = viewWithLayout.kind === 'bpmn';
+  const isUml = viewWithLayout.kind === 'uml';
   const bpmnSize = isBpmn ? defaultBpmnNodeSize(String(element.type)) : null;
+  const umlSize = isUml ? defaultUmlNodeSize(String(element.type)) : null;
 
-  const nodeW = isBpmn && bpmnSize ? bpmnSize.width : 140;
-  const nodeH = isBpmn && bpmnSize ? bpmnSize.height : 70;
+  const nodeW = isBpmn && bpmnSize ? bpmnSize.width : isUml && umlSize ? umlSize.width : 140;
+  const nodeH = isBpmn && bpmnSize ? bpmnSize.height : isUml && umlSize ? umlSize.height : 70;
 
   const maxZ = layout.nodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
   const minZ = layout.nodes.reduce((m, n, idx) => Math.min(m, typeof n.zIndex === 'number' ? n.zIndex : idx), 0);
@@ -63,10 +65,12 @@ export function addElementToViewAt(model: Model, viewId: string, elementId: stri
   const grid = viewWithLayout.formatting?.gridSize ?? 20;
 
   const isBpmn = viewWithLayout.kind === 'bpmn';
+  const isUml = viewWithLayout.kind === 'uml';
   const bpmnSize = isBpmn ? defaultBpmnNodeSize(String(element.type)) : null;
+  const umlSize = isUml ? defaultUmlNodeSize(String(element.type)) : null;
 
-  const nodeW = isBpmn && bpmnSize ? bpmnSize.width : 140;
-  const nodeH = isBpmn && bpmnSize ? bpmnSize.height : 70;
+  const nodeW = isBpmn && bpmnSize ? bpmnSize.width : isUml && umlSize ? umlSize.width : 140;
+  const nodeH = isBpmn && bpmnSize ? bpmnSize.height : isUml && umlSize ? umlSize.height : 70;
 
   // Drop position is interpreted as the cursor position; center the node under it.
   let nx = Math.max(0, x - nodeW / 2);

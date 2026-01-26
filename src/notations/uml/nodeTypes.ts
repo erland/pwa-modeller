@@ -23,6 +23,16 @@ export const UML_NODE_TYPES = [
   'uml.usecase',
   'uml.actor',
   'uml.note',
+  'uml.activity',
+  'uml.action',
+  'uml.initialNode',
+  'uml.activityFinalNode',
+  'uml.flowFinalNode',
+  'uml.decisionNode',
+  'uml.mergeNode',
+  'uml.forkNode',
+  'uml.joinNode',
+  'uml.objectNode',
 ] as const;
 export type UmlNodeType = (typeof UML_NODE_TYPES)[number];
 
@@ -37,8 +47,29 @@ export const UML_RELATIONSHIP_TYPES = [
   'uml.extend',
   'uml.communicationPath',
   'uml.deployment',
+  'uml.controlFlow',
+  'uml.objectFlow',
 ] as const;
 export type UmlRelationshipType = (typeof UML_RELATIONSHIP_TYPES)[number];
+export const UML_ACTIVITY_NODE_TYPES = [
+  'uml.action',
+  'uml.initialNode',
+  'uml.activityFinalNode',
+  'uml.flowFinalNode',
+  'uml.decisionNode',
+  'uml.mergeNode',
+  'uml.forkNode',
+  'uml.joinNode',
+  'uml.objectNode',
+] as const;
+export type UmlActivityNodeType = (typeof UML_ACTIVITY_NODE_TYPES)[number];
+
+const UML_ACTIVITY_NODE_TYPES_SET = new Set<string>(UML_ACTIVITY_NODE_TYPES);
+
+export function isUmlActivityNodeType(t: string): t is UmlActivityNodeType {
+  return UML_ACTIVITY_NODE_TYPES_SET.has(t);
+}
+
 
 const UML_NODE_TYPES_SET = new Set<string>(UML_NODE_TYPES);
 const UML_REL_TYPES_SET = new Set<string>(UML_RELATIONSHIP_TYPES);

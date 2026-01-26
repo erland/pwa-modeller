@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import type { RelationshipMatrixResult } from '../../domain/analysis/relationshipMatrix';
 import type { MatrixMetricId } from '../../domain/analysis/metrics';
 import { exportRelationshipMatrixCsv, exportRelationshipMatrixMissingLinksCsv } from './exportRelationshipMatrixCsv';
+import { AnalysisSection } from './layout/AnalysisSection';
 
 export interface RelationshipMatrixTableProps {
   modelName: string;
@@ -167,27 +168,25 @@ export function RelationshipMatrixTable({
 
   const cellBorderStyle: CSSProperties = { border: '1px solid var(--diagram-grid-line)' };
 
-  return (
-    <div className="crudSection">
-      <div className="crudHeader">
-        <div>
-          <p className="crudTitle">Relationship matrix</p>
-          <p className="crudHint">
-            Rows: <span className="mono">{rows.length}</span>, Columns: <span className="mono">{cols.length}</span>, Total
-            links: <span className="mono">{formatTotal(grandTotal)}</span>
-            {cellMetricId !== 'off' ? (
-              <>
-                , Total value: <span className="mono">{formatCellValue(metricTotals.grandTotal)}</span>
-              </>
-            ) : null}
-            {maxCellCount > 0 ? (
-              <>
-                , Max cell: <span className="mono">{formatTotal(maxCellCount)}</span>
-              </>
-            ) : null}
-          </p>
-        </div>
-        <div className="crudActions" style={{ alignItems: 'center', gap: 10 }}>
+  const hint = (
+    <>
+      Relationship matrix. Rows: <span className="mono">{rows.length}</span>, Columns: <span className="mono">{cols.length}</span>, Total
+      links: <span className="mono">{formatTotal(grandTotal)}</span>
+      {cellMetricId !== 'off' ? (
+        <>
+          , Total value: <span className="mono">{formatCellValue(metricTotals.grandTotal)}</span>
+        </>
+      ) : null}
+      {maxCellCount > 0 ? (
+        <>
+          , Max cell: <span className="mono">{formatTotal(maxCellCount)}</span>
+        </>
+      ) : null}
+    </>
+  );
+
+  const actions = (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, opacity: 0.9 }}>
             Preset
             <select
@@ -337,9 +336,12 @@ export function RelationshipMatrixTable({
             <input type="checkbox" checked={hideEmpty} onChange={() => onChangeHideEmpty(!hideEmpty)} />
             Hide empty rows/columns
           </label>
-        </div>
-      </div>
 
+        </div>
+  );
+
+  return (
+    <AnalysisSection title="Results" hint={hint} actions={actions}>
       <div
         style={{
           marginTop: 12,
@@ -539,6 +541,6 @@ export function RelationshipMatrixTable({
           </tbody>
         </table>
       </div>
-    </div>
+    </AnalysisSection>
   );
 }

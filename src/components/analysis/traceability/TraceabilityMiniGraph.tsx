@@ -27,6 +27,12 @@ type Props = {
   wrapLabels?: boolean;
   autoFitColumns?: boolean;
 
+  /**
+   * If false, renders only the graph (no surrounding AnalysisSection).
+   * Useful when the caller wants to place graph actions in a higher-level Results header.
+   */
+  wrapInSection?: boolean;
+
   headerControls?: ReactNode;
 };
 
@@ -42,6 +48,7 @@ export function TraceabilityMiniGraph({
   onTogglePin,
   wrapLabels = true,
   autoFitColumns = true,
+  wrapInSection = true,
   headerControls
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
@@ -186,26 +193,28 @@ export function TraceabilityMiniGraph({
     return Object.values(edgesById).map((e) => ({ id: e.id, from: e.from, to: e.to, hidden: e.hidden }));
   }, [edgesById]);
 
+  const graph = (
+    <MiniColumnGraph
+      nodes={graphNodes}
+      edges={graphEdges}
+      selectedNodeId={selection.selectedNodeId}
+      selectedEdgeId={selection.selectedEdgeId}
+      onSelectNode={onSelectNode}
+      onSelectEdge={onSelectEdge}
+      getNodeTooltip={elementTooltip}
+      getEdgeTooltip={edgeTooltip}
+      renderNodeControls={renderInlineControls}
+      wrapLabels={wrapLabels}
+      autoFitColumns={autoFitColumns}
+      ariaLabel="Traceability mini graph"
+    />
+  );
+
+  if (!wrapInSection) return graph;
+
   return (
-    <AnalysisSection
-      title="Traceability graph"
-      hint="Click nodes/edges to select. Use the controls here to expand."
-      actions={headerControls}
-    >
-      <MiniColumnGraph
-        nodes={graphNodes}
-        edges={graphEdges}
-        selectedNodeId={selection.selectedNodeId}
-        selectedEdgeId={selection.selectedEdgeId}
-        onSelectNode={onSelectNode}
-        onSelectEdge={onSelectEdge}
-        getNodeTooltip={elementTooltip}
-        getEdgeTooltip={edgeTooltip}
-        renderNodeControls={renderInlineControls}
-        wrapLabels={wrapLabels}
-        autoFitColumns={autoFitColumns}
-        ariaLabel="Traceability mini graph"
-      />
+    <AnalysisSection title="Traceability graph" hint="Click nodes/edges to select." actions={headerControls}>
+      {graph}
     </AnalysisSection>
   );
 }

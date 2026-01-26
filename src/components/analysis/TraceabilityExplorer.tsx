@@ -185,6 +185,78 @@ export function TraceabilityExplorer({
     </div>
   );
 
+  const resultsActions = (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        className="miniLinkButton"
+        onClick={() => runExpand('incoming')}
+        disabled={!canExpand}
+        aria-label="Expand upstream"
+        title="Expand upstream"
+      >
+        ←
+      </button>
+      <button
+        type="button"
+        className="miniLinkButton"
+        onClick={() => runExpand('outgoing')}
+        disabled={!canExpand}
+        aria-label="Expand downstream"
+        title="Expand downstream"
+      >
+        →
+      </button>
+      <button
+        type="button"
+        className="miniLinkButton"
+        onClick={() => runExpand('both')}
+        disabled={!canExpand}
+        aria-label="Expand both directions"
+        title="Expand both directions"
+      >
+        ⇄
+      </button>
+
+      <span aria-hidden="true" style={{ opacity: 0.4, padding: '0 2px' }}>
+        |
+      </span>
+
+      <button
+        type="button"
+        className="miniLinkButton"
+        onClick={() => dispatch({ type: 'collapseNode', nodeId: selectedNodeId })}
+        disabled={!canExpand}
+        aria-label="Collapse"
+        title="Collapse"
+      >
+        Collapse
+      </button>
+
+      <button
+        type="button"
+        className="miniLinkButton"
+        onClick={() => dispatch({ type: 'togglePin', nodeId: selectedNodeId })}
+        disabled={!canExpand}
+        aria-label={state.nodesById[selectedNodeId]?.pinned ? 'Unpin' : 'Pin'}
+        title={state.nodesById[selectedNodeId]?.pinned ? 'Unpin' : 'Pin'}
+        style={{ fontWeight: state.nodesById[selectedNodeId]?.pinned ? 700 : 400 }}
+      >
+        📌
+      </button>
+
+      <button
+        type="button"
+        className="miniLinkButton"
+        onClick={() => dispatch({ type: 'reset', seedIds: [seedId], options: { filters: state.filters } })}
+        aria-label="Reset"
+        title="Reset"
+      >
+        Reset
+      </button>
+    </div>
+  );
+
   return (
     <div>
       <AnalysisSection
@@ -206,99 +278,35 @@ export function TraceabilityExplorer({
         </p>
       </AnalysisSection>
 
-      <TraceabilityMiniGraph
-        wrapLabels={true}
-        autoFitColumns={true}
-        headerControls={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => runExpand('incoming')}
-              disabled={!canExpand}
-              aria-label="Expand upstream"
-              title="Expand upstream"
-            >
-              ←
-            </button>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => runExpand('outgoing')}
-              disabled={!canExpand}
-              aria-label="Expand downstream"
-              title="Expand downstream"
-            >
-              →
-            </button>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => runExpand('both')}
-              disabled={!canExpand}
-              aria-label="Expand both directions"
-              title="Expand both directions"
-            >
-              ⇄
-            </button>
-
-            <span aria-hidden="true" style={{ opacity: 0.4, padding: '0 2px' }}>
-              |
-            </span>
-
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => dispatch({ type: 'collapseNode', nodeId: selectedNodeId })}
-              disabled={!canExpand}
-              aria-label="Collapse"
-              title="Collapse"
-            >
-              Collapse
-            </button>
-
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => dispatch({ type: 'togglePin', nodeId: selectedNodeId })}
-              disabled={!canExpand}
-              aria-label={state.nodesById[selectedNodeId]?.pinned ? 'Unpin' : 'Pin'}
-              title={state.nodesById[selectedNodeId]?.pinned ? 'Unpin' : 'Pin'}
-              style={{ fontWeight: state.nodesById[selectedNodeId]?.pinned ? 700 : 400 }}
-            >
-              📌
-            </button>
-
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => dispatch({ type: 'reset', seedIds: [seedId], options: { filters: state.filters } })}
-              aria-label="Reset"
-              title="Reset"
-            >
-              Reset
-            </button>
-          </div>
-        }
-        model={model}
-        modelKind={modelKind}
-        nodesById={state.nodesById}
-        edgesById={state.edgesById}
-        selection={state.selection}
-        onSelectNode={(id) => {
-          selectNode(id);
-          if (!autoExpand) return;
-          if (!model.elements[id]) return;
-          if (state.pendingByNodeId[id]) return;
-          runExpand(undefined, id);
-        }}
-        onSelectEdge={(id) => selectEdge(id)}
-        onExpandNode={(id, dir) => {
-          selectNode(id);
-          runExpand(dir, id);
-        }}
-        onTogglePin={(id) => dispatch({ type: 'togglePin', nodeId: id })}
-      />
+      <AnalysisSection
+        title="Results"
+        hint="Traceability graph. Click nodes/edges to select. Expand using the header actions (or the per-node controls)."
+        actions={resultsActions}
+      >
+        <TraceabilityMiniGraph
+          wrapLabels={true}
+          autoFitColumns={true}
+          wrapInSection={false}
+          model={model}
+          modelKind={modelKind}
+          nodesById={state.nodesById}
+          edgesById={state.edgesById}
+          selection={state.selection}
+          onSelectNode={(id) => {
+            selectNode(id);
+            if (!autoExpand) return;
+            if (!model.elements[id]) return;
+            if (state.pendingByNodeId[id]) return;
+            runExpand(undefined, id);
+          }}
+          onSelectEdge={(id) => selectEdge(id)}
+          onExpandNode={(id, dir) => {
+            selectNode(id);
+            runExpand(dir, id);
+          }}
+          onTogglePin={(id) => dispatch({ type: 'togglePin', nodeId: id })}
+        />
+      </AnalysisSection>
 
 
       <TraceabilitySettingsDialog

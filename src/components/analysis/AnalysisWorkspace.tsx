@@ -785,6 +785,32 @@ export function AnalysisWorkspace({
             onCaptureMatrixColSelection={captureSelectionAsMatrixCols}
             onSwapMatrixAxes={swapMatrixAxes}
 
+            matrixResolvedRowCount={matrixRowIds.length}
+            matrixResolvedColCount={matrixColIds.length}
+            matrixBuildNonce={matrixBuildNonce}
+            matrixHasBuilt={Boolean(matrixBuiltQuery)}
+            matrixPresets={matrixPresets}
+            matrixPresetId={matrixPresetId}
+            onChangeMatrixPresetId={setMatrixPresetId}
+            onSaveMatrixPreset={saveCurrentMatrixPreset}
+            onApplyMatrixPreset={() => {
+              const p = matrixPresets.find((x) => x.id === matrixPresetId);
+              if (p) applyMatrixUiQuery(p.query);
+            }}
+            onDeleteMatrixPreset={deleteSelectedMatrixPreset}
+
+            matrixSnapshots={matrixSnapshots}
+            matrixSnapshotId={matrixSnapshotId}
+            onChangeMatrixSnapshotId={setMatrixSnapshotId}
+            canSaveMatrixSnapshot={Boolean(matrixResult)}
+            onSaveMatrixSnapshot={saveMatrixSnapshot}
+            onRestoreMatrixSnapshot={() => restoreMatrixSnapshot(matrixSnapshotId)}
+            onDeleteMatrixSnapshot={() => {
+              const id = matrixSnapshotId;
+              setMatrixSnapshotId('');
+              if (id) deleteMatrixSnapshot(id);
+            }}
+
             direction={direction}
             onChangeDirection={setDirection}
             relationshipTypes={relationshipTypes}
@@ -818,137 +844,6 @@ export function AnalysisWorkspace({
 
           {mode === 'matrix' ? (
             <>
-              <div className="crudSection">
-                <div className="crudHeader">
-                  <div>
-                    <p className="crudTitle">Matrix query</p>
-                    <p className="crudHint">
-                      Rows: <span className="mono">{matrixRowIds.length}</span>, Columns: <span className="mono">{matrixColIds.length}</span>.
-                      Click “Build matrix” to compute the table.
-                    </p>
-                    {matrixBuiltQuery ? (
-                      <p className="crudHint" style={{ marginTop: 8 }}>
-                        Last build: <span className="mono">{matrixBuildNonce}</span>
-                      </p>
-                    ) : (
-                      <p className="crudHint" style={{ marginTop: 8 }}>
-                        No matrix built yet.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="toolbar" aria-label="Matrix presets toolbar" style={{ justifyContent: 'flex-end' }}>
-                    <div className="toolbarGroup" style={{ minWidth: 220 }}>
-                      <label htmlFor="matrix-preset">Preset</label>
-                      <select
-                        id="matrix-preset"
-                        className="selectInput"
-                        value={matrixPresetId}
-                        onChange={(e) => setMatrixPresetId(e.target.value)}
-                      >
-                        <option value="">(none)</option>
-                        {matrixPresets.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="toolbarGroup">
-                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Actions</label>
-                      <button type="button" className="shellButton" onClick={saveCurrentMatrixPreset}>
-                        Save preset
-                      </button>
-                    </div>
-
-                    <div className="toolbarGroup">
-                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Apply</label>
-                      <button
-                        type="button"
-                        className="shellButton"
-                        disabled={!matrixPresetId}
-                        onClick={() => {
-                          const p = matrixPresets.find((x) => x.id === matrixPresetId);
-                          if (p) applyMatrixUiQuery(p.query);
-                        }}
-                      >
-                        Apply
-                      </button>
-                    </div>
-
-                    <div className="toolbarGroup">
-                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Delete</label>
-                      <button
-                        type="button"
-                        className="shellButton"
-                        disabled={!matrixPresetId}
-                        onClick={deleteSelectedMatrixPreset}
-                      >
-                        Delete
-                      </button>
-                    </div>
-
-                    <div className="toolbarGroup">
-                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Snapshot</label>
-                      <button
-                        type="button"
-                        className="shellButton"
-                        disabled={!matrixResult}
-                        onClick={saveMatrixSnapshot}
-                      >
-                        Save snapshot
-                      </button>
-                    </div>
-
-                    <div className="toolbarGroup" style={{ minWidth: 240 }}>
-                      <label htmlFor="matrix-snapshot">Snapshot</label>
-                      <select
-                        id="matrix-snapshot"
-                        className="selectInput"
-                        value={matrixSnapshotId}
-                        onChange={(e) => setMatrixSnapshotId(e.target.value)}
-                      >
-                        <option value="">(none)</option>
-                        {matrixSnapshots.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="toolbarGroup">
-                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Restore</label>
-                      <button
-                        type="button"
-                        className="shellButton"
-                        disabled={!matrixSnapshotId}
-                        onClick={() => restoreMatrixSnapshot(matrixSnapshotId)}
-                      >
-                        Restore
-                      </button>
-                    </div>
-
-                    <div className="toolbarGroup">
-                      <label style={{ visibility: 'hidden' }} aria-hidden="true">Delete snapshot</label>
-                      <button
-                        type="button"
-                        className="shellButton"
-                        disabled={!matrixSnapshotId}
-                        onClick={() => {
-                          const id = matrixSnapshotId;
-                          setMatrixSnapshotId('');
-                          deleteMatrixSnapshot(id);
-                        }}
-                      >
-                        Delete snapshot
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {matrixResult ? (
                 <RelationshipMatrixTable
                   modelName={model.metadata?.name || 'model'}

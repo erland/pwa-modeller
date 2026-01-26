@@ -13,6 +13,7 @@ import { FiltersPanel } from './queryPanel/FiltersPanel';
 import { QueryToolbar } from './queryPanel/QueryToolbar';
 import { useAnalysisQueryOptions } from './queryPanel/useAnalysisQueryOptions';
 import { AnalysisSection } from './layout/AnalysisSection';
+import type { MatrixQueryPreset, MatrixQuerySnapshot } from './matrixPresetsStorage';
 import {
   collectFacetValues,
   collectFacetValuesConstrained,
@@ -52,6 +53,27 @@ type Props = {
   onCaptureMatrixColSelection: () => void;
 
   onSwapMatrixAxes: () => void;
+
+  // Matrix query UI extras (presets/snapshots + status)
+  matrixResolvedRowCount: number;
+  matrixResolvedColCount: number;
+  matrixHasBuilt: boolean;
+  matrixBuildNonce: number;
+
+  matrixPresets: MatrixQueryPreset[];
+  matrixPresetId: string;
+  onChangeMatrixPresetId: (id: string) => void;
+  onSaveMatrixPreset: () => void;
+  onApplyMatrixPreset: () => void;
+  onDeleteMatrixPreset: () => void;
+
+  matrixSnapshots: MatrixQuerySnapshot[];
+  matrixSnapshotId: string;
+  onChangeMatrixSnapshotId: (id: string) => void;
+  canSaveMatrixSnapshot: boolean;
+  onSaveMatrixSnapshot: () => void;
+  onRestoreMatrixSnapshot: () => void;
+  onDeleteMatrixSnapshot: () => void;
 
   // -----------------------------
   // Filters (draft)
@@ -119,6 +141,23 @@ export function AnalysisQueryPanel({
   matrixColSelectionIds,
   onCaptureMatrixColSelection,
   onSwapMatrixAxes,
+  matrixResolvedRowCount,
+  matrixResolvedColCount,
+  matrixHasBuilt,
+  matrixBuildNonce,
+  matrixPresets,
+  matrixPresetId,
+  onChangeMatrixPresetId,
+  onSaveMatrixPreset,
+  onApplyMatrixPreset,
+  onDeleteMatrixPreset,
+  matrixSnapshots,
+  matrixSnapshotId,
+  onChangeMatrixSnapshotId,
+  canSaveMatrixSnapshot,
+  onSaveMatrixSnapshot,
+  onRestoreMatrixSnapshot,
+  onDeleteMatrixSnapshot,
   direction,
   onChangeDirection,
   relationshipTypes,
@@ -302,204 +341,311 @@ export function AnalysisQueryPanel({
     );
   }
 
-  return (
-    <section className="crudSection" aria-label="Analysis query">
-      {mode === 'matrix' ? (
-        <div className="crudHeader">
-          <div>
-            <p className="crudTitle">Matrix query</p>
-            <p className="crudHint">Choose row/column sets in “{modelName}” and build a relationship matrix.</p>
+  if (mode === 'matrix') {
+    return (
+      <AnalysisSection
+        title="Query"
+        hint={
+          <>
+            Choose row/column sets in “{modelName}” and build a relationship matrix. Rows:{' '}
+            <span className="mono">{matrixResolvedRowCount}</span>, Columns:{' '}
+            <span className="mono">{matrixResolvedColCount}</span>.{' '}
+            {matrixHasBuilt ? (
+              <>Last build: <span className="mono">{matrixBuildNonce}</span>.</>
+            ) : (
+              <>No matrix built yet.</>
+            )}
+          </>
+        }
+        actions={
+          <button type="button" className="shellButton" disabled={!canRun} onClick={onRun}>
+            Build matrix
+          </button>
+        }
+      >
+        <div className="toolbar" aria-label="Matrix query toolbar">
+          <div className="toolbarGroup" style={{ minWidth: 260 }}>
+            <label>Rows</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                className="selectInput"
+                value={matrixRowSource}
+                onChange={(e) => onChangeMatrixRowSource(e.currentTarget.value as 'facet' | 'selection')}
+                title="How to pick row elements"
+              >
+                <option value="facet">By type/layer</option>
+                <option value="selection">Current selection</option>
+              </select>
+              {matrixRowSource === 'facet' ? (
+                <>
+                  {hasLayerFacet ? (
+                    <select
+                      className="selectInput"
+                      value={matrixRowLayer}
+                      onChange={(e) => {
+                        const nextLayer = e.currentTarget.value;
+                        onChangeMatrixRowLayer(nextLayer);
+                        // If the layer constraint makes the currently selected type invalid, clear it.
+                        if (
+                          nextLayer &&
+                          matrixRowElementType &&
+                          !availableElementTypesByLayer.get(nextLayer)?.includes(matrixRowElementType)
+                        ) {
+                          onChangeMatrixRowElementType('');
+                        }
+                      }}
+                      title="Optional layer constraint"
+                    >
+                      <option value="">Any layer</option>
+                      {availableLayers.map((l) => (
+                        <option key={l} value={l}>
+                          {String(l)}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                  <select
+                    className="selectInput"
+                    value={matrixRowElementType}
+                    onChange={(e) => onChangeMatrixRowElementType(e.currentTarget.value as ElementType | '')}
+                    title="Row element type"
+                  >
+                    <option value="">Select type…</option>
+                    {availableRowElementTypes.map((t) => (
+                      <option key={t} value={t}>
+                        {String(t)}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="miniLinkButton"
+                    onClick={onCaptureMatrixRowSelection}
+                    disabled={selectionElementIds.length === 0}
+                    title="Use currently selected element(s) as rows"
+                  >
+                    Use selection
+                  </button>
+                  <span className="crudHint" style={{ margin: 0 }}>
+                    {matrixRowSelectionIds.length ? `${matrixRowSelectionIds.length} selected` : 'No rows selected'}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="toolbar" aria-label="Matrix query toolbar">
-            <div className="toolbarGroup" style={{ minWidth: 260 }}>
-              <label>Rows</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <select
-                  className="selectInput"
-                  value={matrixRowSource}
-                  onChange={(e) => onChangeMatrixRowSource(e.currentTarget.value as 'facet' | 'selection')}
-                  title="How to pick row elements"
-                >
-                  <option value="facet">By type/layer</option>
-                  <option value="selection">Current selection</option>
-                </select>
-                {matrixRowSource === 'facet' ? (
-                  <>
-                    {hasLayerFacet ? (
-                      <select
-                        className="selectInput"
-                        value={matrixRowLayer}
-                        onChange={(e) => {
-                          const nextLayer = e.currentTarget.value;
-                          onChangeMatrixRowLayer(nextLayer);
-                          // If the layer constraint makes the currently selected type invalid, clear it.
-                          if (
-                            nextLayer &&
-                            matrixRowElementType &&
-                            !availableElementTypesByLayer.get(nextLayer)?.includes(matrixRowElementType)
-                          ) {
-                            onChangeMatrixRowElementType('');
-                          }
-                        }}
-                        title="Optional layer constraint"
-                      >
-                        <option value="">Any layer</option>
-                        {availableLayers.map((l) => (
-                          <option key={l} value={l}>
-                            {String(l)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : null}
-                    <select
-                      className="selectInput"
-                      value={matrixRowElementType}
-                      onChange={(e) => onChangeMatrixRowElementType(e.currentTarget.value as ElementType | '')}
-                      title="Row element type"
-                    >
-                      <option value="">Select type…</option>
-                      {availableRowElementTypes.map((t) => (
-                        <option key={t} value={t}>
-                          {String(t)}
-                        </option>
-                      ))}
-                    </select>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="miniLinkButton"
-                      onClick={onCaptureMatrixRowSelection}
-                      disabled={selectionElementIds.length === 0}
-                      title="Use currently selected element(s) as rows"
-                    >
-                      Use selection
-                    </button>
-                    <span className="crudHint" style={{ margin: 0 }}>
-                      {matrixRowSelectionIds.length ? `${matrixRowSelectionIds.length} selected` : 'No rows selected'}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
+          <div className="toolbarGroup" style={{ minWidth: 0 }}>
+            <label style={{ visibility: 'hidden' }} aria-hidden="true">
+              Swap
+            </label>
+            <button type="button" className="shellButton" onClick={onSwapMatrixAxes} title="Swap row and column selections">
+              ⇄ Swap
+            </button>
+          </div>
 
-            <div className="toolbarGroup" style={{ minWidth: 0 }}>
-              <label style={{ visibility: 'hidden' }} aria-hidden="true">
-                Swap
-              </label>
-              <button
-                type="button"
-                className="shellButton"
-                onClick={onSwapMatrixAxes}
-                title="Swap row and column selections"
+          <div className="toolbarGroup" style={{ minWidth: 260 }}>
+            <label>Columns</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                className="selectInput"
+                value={matrixColSource}
+                onChange={(e) => onChangeMatrixColSource(e.currentTarget.value as 'facet' | 'selection')}
+                title="How to pick column elements"
               >
-                ⇄ Swap
-              </button>
-            </div>
-
-            <div className="toolbarGroup" style={{ minWidth: 260 }}>
-              <label>Columns</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <select
-                  className="selectInput"
-                  value={matrixColSource}
-                  onChange={(e) => onChangeMatrixColSource(e.currentTarget.value as 'facet' | 'selection')}
-                  title="How to pick column elements"
-                >
-                  <option value="facet">By type/layer</option>
-                  <option value="selection">Current selection</option>
-                </select>
-                {matrixColSource === 'facet' ? (
-                  <>
-                    {hasLayerFacet ? (
-                      <select
-                        className="selectInput"
-                        value={matrixColLayer}
-                        onChange={(e) => {
-                          const nextLayer = e.currentTarget.value;
-                          onChangeMatrixColLayer(nextLayer);
-                          // If the layer constraint makes the currently selected type invalid, clear it.
-                          if (
-                            nextLayer &&
-                            matrixColElementType &&
-                            !availableElementTypesByLayer.get(nextLayer)?.includes(matrixColElementType)
-                          ) {
-                            onChangeMatrixColElementType('');
-                          }
-                        }}
-                        title="Optional layer constraint"
-                      >
-                        <option value="">Any layer</option>
-                        {availableLayers.map((l) => (
-                          <option key={l} value={l}>
-                            {String(l)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : null}
+                <option value="facet">By type/layer</option>
+                <option value="selection">Current selection</option>
+              </select>
+              {matrixColSource === 'facet' ? (
+                <>
+                  {hasLayerFacet ? (
                     <select
                       className="selectInput"
-                      value={matrixColElementType}
-                      onChange={(e) => onChangeMatrixColElementType(e.currentTarget.value as ElementType | '')}
-                      title="Column element type"
+                      value={matrixColLayer}
+                      onChange={(e) => {
+                        const nextLayer = e.currentTarget.value;
+                        onChangeMatrixColLayer(nextLayer);
+                        // If the layer constraint makes the currently selected type invalid, clear it.
+                        if (
+                          nextLayer &&
+                          matrixColElementType &&
+                          !availableElementTypesByLayer.get(nextLayer)?.includes(matrixColElementType)
+                        ) {
+                          onChangeMatrixColElementType('');
+                        }
+                      }}
+                      title="Optional layer constraint"
                     >
-                      <option value="">Select type…</option>
-                      {availableColElementTypes.map((t) => (
-                        <option key={t} value={t}>
-                          {String(t)}
+                      <option value="">Any layer</option>
+                      {availableLayers.map((l) => (
+                        <option key={l} value={l}>
+                          {String(l)}
                         </option>
                       ))}
                     </select>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="miniLinkButton"
-                      onClick={onCaptureMatrixColSelection}
-                      disabled={selectionElementIds.length === 0}
-                      title="Use currently selected element(s) as columns"
-                    >
-                      Use selection
-                    </button>
-                    <span className="crudHint" style={{ margin: 0 }}>
-                      {matrixColSelectionIds.length ? `${matrixColSelectionIds.length} selected` : 'No columns selected'}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="toolbarGroup" style={{ minWidth: 0 }}>
-              <label style={{ visibility: 'hidden' }} aria-hidden="true">
-                Build
-              </label>
-              <button type="button" className="shellButton" disabled={!canRun} onClick={onRun}>
-                Build matrix
-              </button>
+                  ) : null}
+                  <select
+                    className="selectInput"
+                    value={matrixColElementType}
+                    onChange={(e) => onChangeMatrixColElementType(e.currentTarget.value as ElementType | '')}
+                    title="Column element type"
+                  >
+                    <option value="">Select type…</option>
+                    {availableColElementTypes.map((t) => (
+                      <option key={t} value={t}>
+                        {String(t)}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="miniLinkButton"
+                    onClick={onCaptureMatrixColSelection}
+                    disabled={selectionElementIds.length === 0}
+                    title="Use currently selected element(s) as columns"
+                  >
+                    Use selection
+                  </button>
+                  <span className="crudHint" style={{ margin: 0 }}>
+                    {matrixColSelectionIds.length ? `${matrixColSelectionIds.length} selected` : 'No columns selected'}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
-      ) : (
-        <QueryToolbar
-          model={model}
-          modelName={modelName}
+
+        <div className="toolbar" aria-label="Matrix presets toolbar" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
+          <div className="toolbarGroup" style={{ minWidth: 220 }}>
+            <label htmlFor="matrix-preset">Preset</label>
+            <select
+              id="matrix-preset"
+              className="selectInput"
+              value={matrixPresetId}
+              onChange={(e) => onChangeMatrixPresetId(e.target.value)}
+            >
+              <option value="">(none)</option>
+              {matrixPresets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="toolbarGroup">
+            <label style={{ visibility: 'hidden' }} aria-hidden="true">Actions</label>
+            <button type="button" className="shellButton" onClick={onSaveMatrixPreset}>
+              Save preset
+            </button>
+          </div>
+
+          <div className="toolbarGroup">
+            <label style={{ visibility: 'hidden' }} aria-hidden="true">Apply</label>
+            <button type="button" className="shellButton" disabled={!matrixPresetId} onClick={onApplyMatrixPreset}>
+              Apply
+            </button>
+          </div>
+
+          <div className="toolbarGroup">
+            <label style={{ visibility: 'hidden' }} aria-hidden="true">Delete</label>
+            <button type="button" className="shellButton" disabled={!matrixPresetId} onClick={onDeleteMatrixPreset}>
+              Delete
+            </button>
+          </div>
+
+          <div className="toolbarGroup">
+            <label style={{ visibility: 'hidden' }} aria-hidden="true">Snapshot</label>
+            <button type="button" className="shellButton" disabled={!canSaveMatrixSnapshot} onClick={onSaveMatrixSnapshot}>
+              Save snapshot
+            </button>
+          </div>
+
+          <div className="toolbarGroup" style={{ minWidth: 240 }}>
+            <label htmlFor="matrix-snapshot">Snapshot</label>
+            <select
+              id="matrix-snapshot"
+              className="selectInput"
+              value={matrixSnapshotId}
+              onChange={(e) => onChangeMatrixSnapshotId(e.target.value)}
+            >
+              <option value="">(none)</option>
+              {matrixSnapshots.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="toolbarGroup">
+            <label style={{ visibility: 'hidden' }} aria-hidden="true">Restore</label>
+            <button type="button" className="shellButton" disabled={!matrixSnapshotId} onClick={onRestoreMatrixSnapshot}>
+              Restore
+            </button>
+          </div>
+
+          <div className="toolbarGroup">
+            <label style={{ visibility: 'hidden' }} aria-hidden="true">Delete snapshot</label>
+            <button type="button" className="shellButton" disabled={!matrixSnapshotId} onClick={onDeleteMatrixSnapshot}>
+              Delete snapshot
+            </button>
+          </div>
+        </div>
+
+        <FiltersPanel
           mode={mode}
-          draftStartId={draftStartId}
-          onChangeDraftStartId={onChangeDraftStartId}
-          draftSourceId={draftSourceId}
-          onChangeDraftSourceId={onChangeDraftSourceId}
-          draftTargetId={draftTargetId}
-          onChangeDraftTargetId={onChangeDraftTargetId}
-          onOpenChooser={(which) => setChooser({ which })}
-          canUseSelection={canUseSelection}
-          onUseSelection={onUseSelection}
-          canRun={canRun}
-          onRun={onRun}
+          direction={direction}
+          onChangeDirection={onChangeDirection}
+          maxDepth={maxDepth}
+          onChangeMaxDepth={onChangeMaxDepth}
+          includeStart={includeStart}
+          onChangeIncludeStart={onChangeIncludeStart}
+          maxPaths={maxPaths}
+          onChangeMaxPaths={onChangeMaxPaths}
+          maxPathLength={maxPathLength}
+          onChangeMaxPathLength={onChangeMaxPathLength}
+          availableRelationshipTypes={availableRelationshipTypes}
+          relationshipTypesSorted={relationshipTypesSorted}
+          onChangeRelationshipTypes={onChangeRelationshipTypes}
+          hasLayerFacet={hasLayerFacet}
+          availableLayers={availableLayers}
+          layersSorted={layersSorted}
+          onChangeLayers={onChangeLayers}
+          hasElementTypeFacet={hasElementTypeFacet}
+          allowedElementTypes={allowedElementTypes}
+          elementTypesSorted={elementTypesSorted}
+          onChangeElementTypes={onChangeElementTypes}
+          onApplyPreset={onApplyPreset}
+          hasAnyFilters={hasAnyFilters}
         />
-      )}
+      </AnalysisSection>
+    );
+  }
+
+  return (
+    <section className="crudSection" aria-label="Analysis query">
+      <QueryToolbar
+        model={model}
+        modelName={modelName}
+        mode={mode}
+        draftStartId={draftStartId}
+        onChangeDraftStartId={onChangeDraftStartId}
+        draftSourceId={draftSourceId}
+        onChangeDraftSourceId={onChangeDraftSourceId}
+        draftTargetId={draftTargetId}
+        onChangeDraftTargetId={onChangeDraftTargetId}
+        onOpenChooser={(which) => setChooser({ which })}
+        canUseSelection={canUseSelection}
+        onUseSelection={onUseSelection}
+        canRun={canRun}
+        onRun={onRun}
+      />
 
       <FiltersPanel
         mode={mode}

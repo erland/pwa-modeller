@@ -18,6 +18,44 @@ import { getXmiId, getXmiType } from '../xmi';
 const EA_GUID_ATTRS = ['ea_guid', 'ea:guid', 'guid'] as const;
 const STEREOTYPE_ATTRS = ['stereotype', 'stereotypes', 'xmi:stereotype'] as const;
 
+
+function decodeNumericEntities(input: string): string {
+  // EA may emit strings like "beh&#246;vs" (numeric entities) inside attributes.
+  // Decode numeric entities to proper Unicode.
+  return input
+    .replace(/&#x([0-9a-fA-F]+);/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_m, num) => String.fromCharCode(parseInt(num, 10)));
+}
+
+function extractEaExtensionDocumentation(extEl: Element): string | undefined {
+  // EA vendor-extension record example: <element xmi:idref="IDREF"><properties documentation="TEXT"/></element>
+  for (const ch of Array.from(extEl.children)) {
+    if (localName(ch) === 'properties') {
+      const pd = attrAny(ch, ['documentation', 'doc', 'notes', 'note'])?.trim();
+      if (pd) return decodeNumericEntities(pd);
+    }
+  }
+  return undefined;
+}
+
+function buildEaExtensionDocumentationIndex(doc: Document): Map<string, string> {
+  const out = new Map<string, string>();
+  const all = doc.getElementsByTagName('*');
+  for (let i = 0; i < all.length; i++) {
+    const el = all.item(i);
+    if (!el) continue;
+    if (!isInsideXmiExtension(el)) continue;
+    if (localName(el) !== 'element') continue;
+
+    const idref = attrAny(el, ['xmi:idref', 'idref'])?.trim();
+    if (!idref) continue;
+
+    const docText = extractEaExtensionDocumentation(el);
+    if (docText) out.set(idref, docText);
+  }
+  return out;
+}
+
 // Written by parsePackages.ts when a package lacks xmi:id.
 const SYNTH_FOLDER_ID_ATTR = 'data-import-folder-id';
 // Internal marker for elements that lack xmi:id (useful for later relationship parsing).
@@ -58,7 +96,7 @@ function getStereotype(el: Element): string | undefined {
   return undefined;
 }
 
-function extractDocumentation(el: Element): string | undefined {
+function extractDocumentation(el: Element, eaExtDocsById?: Map<string, string>): string | undefined {
   // Common UML structure: <ownedComment><body>…</body></ownedComment>
   for (const ch of Array.from(el.children)) {
     const ln = localName(ch);
@@ -92,6 +130,16 @@ function extractDocumentation(el: Element): string | undefined {
     if (localName(ch) === 'properties') {
       const pd = attrAny(ch, ['documentation', 'doc', 'notes', 'note'])?.trim();
       if (pd) return pd;
+    }
+  }
+
+
+  // EA may store notes in vendor extensions keyed by xmi:idref.
+  if (eaExtDocsById) {
+    const xmiId = getXmiId(el);
+    if (xmiId) {
+      const extDoc = eaExtDocsById.get(xmiId);
+      if (extDoc) return extDoc;
     }
   }
 
@@ -169,6 +217,7 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
   let synthCounter = 0;
 
   const idIndex = buildXmiIdIndex(doc);
+  const eaExtDocsById = buildEaExtensionDocumentationIndex(doc);
 
   const all = doc.getElementsByTagName('*');
   for (let i = 0; i < all.length; i++) {
@@ -208,7 +257,7 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
 
     // Comments/notes often store their text in <body>.
     let name = nameAttr;
-    const docText = extractDocumentation(el);
+    const docText = extractDocumentation(el, eaExtDocsById);
     if (!name) {
       if (qualifiedType === 'uml.note' && docText) {
         name = docText.split(/\r?\n/)[0]!.slice(0, 60).trim() || 'Note';
@@ -313,6 +362,7 @@ export function parseEaXmiArchiMateProfileElementsToElements(doc: Document, repo
   let synthCounter = 0;
 
   const idIndex = buildXmiIdIndex(doc);
+  const eaExtDocsById = buildEaExtensionDocumentationIndex(doc);
 
   const all = doc.getElementsByTagName('*');
   for (let i = 0; i < all.length; i++) {
@@ -355,7 +405,7 @@ export function parseEaXmiArchiMateProfileElementsToElements(doc: Document, repo
     seen.add(id);
 
     let name = (attr(el, 'name') ?? '').trim();
-    let documentation = extractDocumentation(el);
+    let documentation = extractDocumentation(el, eaExtDocsById);
     let folderId = findOwningPackageFolderId(el);
 
     // If this is a stereotype application, pull missing details from the base element.
@@ -422,6 +472,7 @@ export function parseEaXmiBpmnProfileElementsToElements(doc: Document, report: I
   let synthCounter = 0;
 
   const idIndex = buildXmiIdIndex(doc);
+  const eaExtDocsById = buildEaExtensionDocumentationIndex(doc);
 
   const all = doc.getElementsByTagName('*');
   for (let i = 0; i < all.length; i++) {
@@ -464,7 +515,7 @@ export function parseEaXmiBpmnProfileElementsToElements(doc: Document, report: I
     seen.add(id);
 
     let name = (attr(el, 'name') ?? '').trim();
-    let documentation = extractDocumentation(el);
+    let documentation = extractDocumentation(el, eaExtDocsById);
     let folderId = findOwningPackageFolderId(el);
 
     // If this is a stereotype application, pull missing details from the base element.

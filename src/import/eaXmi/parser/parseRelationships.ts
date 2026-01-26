@@ -263,6 +263,57 @@ function resolveEndpointId(el: Element, keys: string[]): string | undefined {
   return undefined;
 }
 
+function coerceTrimmedString(v: string | null | undefined): string | undefined {
+  const s = (v ?? '').trim();
+  return s.length ? s : undefined;
+}
+
+/**
+ * Best-effort extraction of UML ActivityEdge guard text.
+ *
+ * Typical UML/XMI forms:
+ * - <guard><specification xmi:type="uml:OpaqueExpression" body="x > 0" /></guard>
+ * - <guard><specification><body>…</body></specification></guard>
+ * - EA extensions may store a guard-like value as an attribute.
+ */
+function extractUmlGuardText(edgeEl: Element): string | undefined {
+  // Attribute form (rare but cheap to check)
+  const attrGuard = coerceTrimmedString(attrAny(edgeEl, ['guard', 'Guard']));
+  if (attrGuard) return attrGuard;
+
+  // EA sometimes puts additional metadata on a <properties> child.
+  for (const ch of Array.from(edgeEl.children)) {
+    if (localName(ch) !== 'properties') continue;
+    const g = coerceTrimmedString(attrAny(ch, ['guard', 'Guard', 'condition', 'Condition']));
+    if (g) return g;
+  }
+
+  // UML canonical child form
+  for (const guardEl of Array.from(edgeEl.children)) {
+    if (localName(guardEl) !== 'guard') continue;
+
+    // <guard xmi:idref="…"/> doesn't help here.
+    // Look for a nested specification/body.
+    for (const spec of Array.from(guardEl.getElementsByTagName('*'))) {
+      const ln = localName(spec);
+      if (ln !== 'specification' && ln !== 'body') continue;
+
+      const bodyAttr = coerceTrimmedString(attrAny(spec, ['body']));
+      if (bodyAttr) return bodyAttr;
+
+      if (ln === 'body') {
+        const txt = coerceTrimmedString(spec.textContent ?? undefined);
+        if (txt) return txt;
+      }
+    }
+
+    const guardText = coerceTrimmedString(guardEl.textContent ?? undefined);
+    if (guardText) return guardText;
+  }
+
+  return undefined;
+}
+
 /**
  * Step 3 (EA XMI ArchiMate): Parse EA's ArchiMate profile tags into IR relationships.
  */
@@ -590,6 +641,11 @@ export function parseEaXmiRelationships(doc: Document, report: ImportReport): Pa
 
         const taggedValues = [...(stereotype ? [{ key: 'stereotype', value: stereotype }] : [])];
 
+        // Step 5 (UML Activity properties): capture guard text for ControlFlow/ObjectFlow when present.
+        const guardText =
+          metaclass === 'ControlFlow' || metaclass === 'ObjectFlow' ? extractUmlGuardText(el) : undefined;
+        const relAttrs = guardText ? ({ guard: guardText } as Record<string, unknown>) : undefined;
+
         relationships.push({
           id,
           type: qualifiedType,
@@ -597,6 +653,7 @@ export function parseEaXmiRelationships(doc: Document, report: ImportReport): Pa
           targetId: tgt,
           name,
           documentation: docText,
+          ...(relAttrs ? { attrs: relAttrs } : {}),
           ...(externalIds.length ? { externalIds } : {}),
           ...(taggedValues.length ? { taggedValues } : {}),
           meta: {

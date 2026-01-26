@@ -276,6 +276,19 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
         ? parseEaXmiClassifierMembers(el, idIndex, report)
         : undefined;
 
+    // Step 5 (UML Activity properties): preserve the original UML meta-class
+    // for Actions so the UI can show (and optionally edit) the action kind.
+    // Keep this minimal and non-breaking for other element types.
+    const actionKindAttrs =
+      qualifiedType === 'uml.action'
+        ? (() => {
+            const mc = (candidate.metaclass ?? '').trim();
+            // Only store non-generic kinds; plain "Action" is treated as the default.
+            if (!mc || mc === 'Action') return undefined;
+            return { actionKind: mc } as Record<string, unknown>;
+          })()
+        : undefined;
+
     const externalIds = [
       // Preserve xmi:id explicitly even though we also use it as IR id.
       ...(getXmiId(el) ? [{ system: 'xmi', id: getXmiId(el)!, kind: 'xmi-id' }] : []),
@@ -294,6 +307,7 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
       ...(folderId ? { folderId } : {}),
       ...(externalIds.length ? { externalIds } : {}),
       ...(taggedValues.length ? { taggedValues } : {}),
+      ...(actionKindAttrs ? { attrs: actionKindAttrs } : {}),
       meta: {
         ...(candidate.xmiType ? { xmiType: candidate.xmiType } : {}),
         metaclass: candidate.metaclass,

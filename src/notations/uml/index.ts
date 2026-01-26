@@ -14,6 +14,7 @@ import { renderUmlNodeContent } from './renderNodeContent';
 import { UmlRelationshipProperties } from '../../components/model/properties/uml/UmlRelationshipProperties';
 import { UmlClassifierMembersSection } from '../../components/model/properties/uml/UmlClassifierMembersSection';
 import { UmlStereotypeSection } from '../../components/model/properties/uml/UmlStereotypeSection';
+import { UmlActivitySection } from '../../components/model/properties/uml/UmlActivitySection';
 
 type UmlRelAttrs = {
   /** Optional navigability for associations (v1: boolean directed). */
@@ -114,10 +115,15 @@ export const umlNotation: Notation = {
 
   getRelationshipTypeOptions: () => getRelationshipTypeOptionsForKind('uml'),
 
-  getElementPropertySections: ({ element, actions }) => {
+  getElementPropertySections: ({ model, element, actions, onSelect }) => {
     if (typeof element.type !== "string" || !element.type.startsWith("uml.")) return [];
 
-    const sections = [
+    type Section = { key: string; content: React.ReactNode };
+
+    // NOTE: We intentionally widen `content` to ReactNode; different sections have
+    // different prop types (some need `model`, some don't), and React's
+    // `FunctionComponentElement<P>` is invariant in `P`.
+    const sections: Section[] = [
       {
         key: "uml.stereotype",
         content: React.createElement(UmlStereotypeSection, { element, actions }),
@@ -132,6 +138,12 @@ export const umlNotation: Notation = {
         content: React.createElement(UmlClassifierMembersSection, { element, actions }),
       });
     }
+
+    // UML Activity (element-level) metadata: action kind, containment.
+    sections.push({
+      key: "uml.activity",
+      content: React.createElement(UmlActivitySection, { model, element, actions, onSelect }),
+    });
 
     return sections;
   },

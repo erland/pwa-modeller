@@ -4,6 +4,7 @@ import type { ModelActions } from './actions';
 import type { Selection } from '../selection';
 import { ElementProperties } from './ElementProperties';
 import { readUmlNodeAttrs } from '../../../notations/uml/nodeAttrs';
+import { UML_ACTIVITY_NODE_TYPE_IDS_SET } from '../../../domain/uml/typeGroups';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -109,9 +110,10 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
             const isInterface = nodeType === 'uml.interface';
             const isClass = nodeType === 'uml.class';
             const isClassifier = isClass || isInterface;
+            const isActivityNode = UML_ACTIVITY_NODE_TYPE_IDS_SET.has(nodeType) || nodeType === 'uml.activity';
 
             const attrLabel = isNote ? 'Text' : isEnum ? 'Literals' : isPackage ? 'Body' : 'Attributes';
-            const showOperationsText = !isNote && !isPackage && !isClassifier;
+            const showOperationsText = !isNote && !isPackage && !isClassifier && !isActivityNode;
 
             const collapsed = uml.collapsed ?? false;
             const showAttributes = uml.showAttributes ?? true;
@@ -122,9 +124,31 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
               actions.updateViewNodeLayout(view.id, element.id, { attrs: pruneAttrs(next) });
             };
 
+            const isForkJoin = nodeType === 'uml.forkNode' || nodeType === 'uml.joinNode';
+            const currentOrientation = base.umlOrientation === 'vertical' ? 'vertical' : 'horizontal';
+
             return (
               <div className="propertiesGrid">
 
+                {isForkJoin ? (
+                  <div className="propertiesRow">
+                    <div className="propertiesKey">Orientation</div>
+                    <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                      <select
+                        className="selectInput"
+                        aria-label="UML fork/join orientation"
+                        value={currentOrientation}
+                        onChange={(e) => setAttrs({ umlOrientation: e.target.value === 'vertical' ? 'vertical' : 'horizontal' })}
+                      >
+                        <option value="horizontal">Horizontal</option>
+                        <option value="vertical">Vertical</option>
+                      </select>
+                      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                        View-local formatting for Fork/Join nodes.
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 {isClassifier ? (
                   <>
@@ -175,7 +199,7 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
                   </>
                 ) : null}
 
-                {!isClassifier ? (
+                {!isClassifier && !isActivityNode ? (
                   <div className="propertiesRow">
                     <div className="propertiesKey">{attrLabel}</div>
                     <div className="propertiesValue" style={{ fontWeight: 400 }}>
@@ -187,6 +211,26 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
                         value={uml.attributesText ?? ''}
                         onChange={(e) => setAttrs({ attributesText: asMultilineOrUndef(e.target.value) })}
                       />
+                    </div>
+                  </div>
+                ) : null}
+
+                {isActivityNode && (nodeType === 'uml.forkNode' || nodeType === 'uml.joinNode') ? (
+                  <div className="propertiesRow">
+                    <div className="propertiesKey">Orientation</div>
+                    <div className="propertiesValue" style={{ fontWeight: 400 }}>
+                      <select
+                        className="selectInput"
+                        aria-label="UML activity bar orientation"
+                        value={(base.umlOrientation as string) === 'vertical' ? 'vertical' : 'horizontal'}
+                        onChange={(e) => setAttrs({ umlOrientation: e.target.value })}
+                      >
+                        <option value="horizontal">Horizontal</option>
+                        <option value="vertical">Vertical</option>
+                      </select>
+                      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                        Stored per view; affects only this diagram.
+                      </div>
                     </div>
                   </div>
                 ) : null}

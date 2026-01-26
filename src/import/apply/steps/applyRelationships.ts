@@ -85,11 +85,23 @@ export function applyRelationships(ctx: ApplyImportContext): void {
           ? resolved.type
           : ('Unknown' as RelationshipType);
 
-    const umlAttrs =
+    const umlAttrsFromMeta =
       rel.meta && typeof rel.meta === 'object' && 'umlAttrs' in (rel.meta as Record<string, unknown>)
         ? (rel.meta as Record<string, unknown>).umlAttrs
         : undefined;
-    const umlSanitized = umlAttrs !== undefined ? sanitizeRelationshipAttrs(type, umlAttrs) : undefined;
+
+    // Step 5 (UML Activity properties): allow importers to provide
+    // general UML relationship attributes via IR `attrs` (e.g. guard on ControlFlow).
+    const umlAttrsFromIr = inferredKind === 'uml' ? (rel as any).attrs : undefined;
+
+    const umlMergedAttrs =
+      umlAttrsFromMeta !== undefined && umlAttrsFromIr !== undefined
+        ? ({ ...(umlAttrsFromIr as any), ...(umlAttrsFromMeta as any) } as Record<string, unknown>)
+        : umlAttrsFromMeta !== undefined
+          ? umlAttrsFromMeta
+          : umlAttrsFromIr;
+
+    const umlSanitized = umlMergedAttrs !== undefined ? sanitizeRelationshipAttrs(type, umlMergedAttrs) : undefined;
 
     // BPMN2 importer attaches relationship semantics (e.g. conditionExpression, messageRef) in IR `attrs`.
     const bpmnAttrs = inferredKind === 'bpmn' ? rewriteBpmnRelAttrs({ ownerRelId: rel.id, attrs: (rel as any).attrs }) : undefined;

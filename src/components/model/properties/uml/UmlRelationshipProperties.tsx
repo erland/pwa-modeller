@@ -94,6 +94,8 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
   const umlTargetNavigable = typeof attrsObj.targetNavigable === 'boolean' ? (attrsObj.targetNavigable as boolean) : false;
   const isDirected = typeof attrsObj.isDirected === 'boolean' ? (attrsObj.isDirected as boolean) : false;
 
+  const umlGuard = typeof attrsObj.guard === 'string' ? (attrsObj.guard as string) : undefined;
+
   const updateAttrs = (patch: Record<string, unknown>): void => {
     actions.updateRelationship(rel.id, { attrs: pruneAttrs({ ...attrsObj, ...patch }) });
   };
@@ -106,6 +108,24 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
 
   const notationRows = (
     <>
+      {rel.type === 'uml.controlFlow' || rel.type === 'uml.objectFlow' ? (
+        <div className="propertiesRow">
+          <div className="propertiesKey">Guard</div>
+          <div className="propertiesValue" style={{ fontWeight: 400 }}>
+            <input
+              className="textInput"
+              aria-label="UML flow guard"
+              placeholder="(optional)"
+              value={umlGuard ?? ''}
+              onChange={(e) => updateAttrs({ guard: asTrimmedOrUndef(e.target.value) })}
+            />
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+              Optional condition/guard expression for the flow.
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="propertiesRow">
         <div className="propertiesKey">Stereotype</div>
         <div className="propertiesValue" style={{ fontWeight: 400 }}>

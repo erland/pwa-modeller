@@ -40,6 +40,10 @@ function normalizeMetaClassFromLocalName(ln: string): string | undefined {
       return 'Include';
     case 'extend':
       return 'Extend';
+    case 'controlflow':
+      return 'ControlFlow';
+    case 'objectflow':
+      return 'ObjectFlow';
     default:
       return undefined;
   }
@@ -60,6 +64,20 @@ function getStereotype(el: Element): string | undefined {
     if (localName(ch) === 'properties') {
       const st = attrAny(ch, [...STEREOTYPE_ATTRS])?.trim();
       if (st) return st;
+    }
+  }
+  return undefined;
+}
+
+function getEaTypeHint(el: Element): string | undefined {
+  // EA sometimes stores connector type hints as <properties ea_type="ControlFlow" …/>.
+  const direct = attrAny(el, ['ea_type', 'ea:ea_type', 'type'])?.trim();
+  if (direct) return direct;
+
+  for (const ch of Array.from(el.children)) {
+    if (localName(ch) === 'properties') {
+      const v = attrAny(ch, ['ea_type', 'ea:ea_type', 'type'])?.trim();
+      if (v) return v;
     }
   }
   return undefined;
@@ -149,6 +167,18 @@ function parseEndpointsForMetaclass(el: Element, metaclass: string): { sources: 
     case 'Dependency':
     case 'Realization':
     case 'InterfaceRealization': {
+      return {
+        sources: resolveRefIds(el, 'client'),
+        targets: resolveRefIds(el, 'supplier'),
+      };
+    }
+    case 'ControlFlow':
+    case 'ObjectFlow': {
+      // UML ActivityEdge endpoints are usually exported as source/target.
+      const sources = resolveRefIds(el, 'source');
+      const targets = resolveRefIds(el, 'target');
+      if (sources.length || targets.length) return { sources, targets };
+      // Some exports may fall back to client/supplier.
       return {
         sources: resolveRefIds(el, 'client'),
         targets: resolveRefIds(el, 'supplier'),
@@ -464,7 +494,12 @@ export function parseEaXmiRelationships(doc: Document, report: ImportReport): Pa
     if (!el) continue;
 
     const xmiType = getXmiType(el);
-    const metaclass = metaClassFromXmiType(xmiType) ?? normalizeMetaClassFromLocalName(localName(el));
+    let metaclass = metaClassFromXmiType(xmiType) ?? normalizeMetaClassFromLocalName(localName(el));
+    const eaTypeHint = getEaTypeHint(el);
+    if (eaTypeHint) {
+      const hint = eaTypeHint.trim();
+      if (hint === 'ControlFlow' || hint === 'ObjectFlow') metaclass = hint;
+    }
     if (!metaclass) continue;
 
     // Only handle Step-7 relationship kinds.
@@ -474,7 +509,9 @@ export function parseEaXmiRelationships(doc: Document, report: ImportReport): Pa
       metaclass !== 'InterfaceRealization' &&
       metaclass !== 'Dependency' &&
       metaclass !== 'Include' &&
-      metaclass !== 'Extend'
+      metaclass !== 'Extend' &&
+      metaclass !== 'ControlFlow' &&
+      metaclass !== 'ObjectFlow'
     ) {
       continue;
     }

@@ -76,4 +76,44 @@ describe('eaXmi classifier parsing', () => {
     const { elements } = parseEaXmiClassifiersToElements(doc, report);
     expect(elements).toEqual([]);
   });
+
+  test('parses UML Activity elements into IR elements', () => {
+    const xml = `
+      <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+        <uml:Model xmi:id="M1" name="Model">
+          <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
+            <packagedElement xmi:type="uml:Activity" xmi:id="A1" name="DoThing" />
+            <packagedElement xmi:type="uml:InitialNode" xmi:id="N0" />
+            <packagedElement xmi:type="uml:OpaqueAction" xmi:id="N1" name="Step 1">
+              <ownedComment><body>Doc A</body></ownedComment>
+            </packagedElement>
+            <packagedElement xmi:type="uml:DecisionNode" xmi:id="N2" name="Decide" />
+            <packagedElement xmi:type="uml:ActivityFinalNode" xmi:id="N3" />
+          </packagedElement>
+        </uml:Model>
+      </xmi:XMI>
+    `;
+
+    const doc = parseXml(xml);
+    const report = createImportReport('ea-xmi-uml');
+    parseEaXmiPackageHierarchyToFolders(doc, report);
+
+    const { elements } = parseEaXmiClassifiersToElements(doc, report);
+    const byId = new Map(elements.map((e) => [e.id, e]));
+
+    expect(byId.get('A1')?.type).toBe('uml.activity');
+    expect(byId.get('N0')?.type).toBe('uml.initialNode');
+    expect(byId.get('N1')?.type).toBe('uml.action');
+    expect(byId.get('N2')?.type).toBe('uml.decisionNode');
+    expect(byId.get('N3')?.type).toBe('uml.activityFinalNode');
+    expect(byId.get('N1')?.documentation).toBe('Doc A');
+
+    // All elements in this test are inside P1.
+    for (const el of elements) {
+      expect(el.folderId).toBe('P1');
+    }
+
+    expect(report.warnings).toEqual([]);
+  });
+
 });

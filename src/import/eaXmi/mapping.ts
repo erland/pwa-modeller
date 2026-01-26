@@ -39,6 +39,22 @@ export const EA_XMI_UML_ELEMENT_TYPE_MAP: Readonly<Record<string, QualifiedEleme
   UseCase: 'uml.usecase',
   Comment: 'uml.note',
   Note: 'uml.note',
+  Activity: 'uml.activity',
+  Action: 'uml.action',
+  OpaqueAction: 'uml.action',
+  CallBehaviorAction: 'uml.action',
+  CallOperationAction: 'uml.action',
+  CallAction: 'uml.action',
+  CallOperation: 'uml.action',
+  CallBehavior: 'uml.action',
+  InitialNode: 'uml.initialNode',
+  ActivityFinalNode: 'uml.activityFinalNode',
+  FlowFinalNode: 'uml.flowFinalNode',
+  DecisionNode: 'uml.decisionNode',
+  MergeNode: 'uml.mergeNode',
+  ForkNode: 'uml.forkNode',
+  JoinNode: 'uml.joinNode',
+  ObjectNode: 'uml.objectNode',
 };
 
 /**
@@ -58,6 +74,8 @@ export const EA_XMI_UML_REL_TYPE_MAP: Readonly<Record<string, QualifiedRelations
   Extend: 'uml.extend',
   Deployment: 'uml.deployment',
   CommunicationPath: 'uml.communicationPath',
+  ControlFlow: 'uml.controlFlow',
+  ObjectFlow: 'uml.objectFlow',
 };
 
 export interface InferUmlElementTypeArgs {

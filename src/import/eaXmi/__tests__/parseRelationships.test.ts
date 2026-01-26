@@ -88,4 +88,37 @@ describe('eaXmi relationship parsing (step 7)', () => {
     expect(new Set(relationships.map((r) => r.id)).size).toBe(4);
     expect(relationships.every((r) => r.type === 'uml.dependency')).toBe(true);
   });
+
+  test('parses ControlFlow/ObjectFlow between Activity nodes', () => {
+    const xml = `
+      <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+        <uml:Model xmi:id="M1" name="Model">
+          <packagedElement xmi:type="uml:Activity" xmi:id="A1" name="Act" />
+          <packagedElement xmi:type="uml:InitialNode" xmi:id="N0" />
+          <packagedElement xmi:type="uml:OpaqueAction" xmi:id="N1" name="Step 1" />
+          <packagedElement xmi:type="uml:ObjectNode" xmi:id="O1" name="Obj" />
+          <packagedElement xmi:type="uml:ControlFlow" xmi:id="CF1" source="N0" target="N1">
+            <ownedComment><body>Go</body></ownedComment>
+          </packagedElement>
+          <packagedElement xmi:type="uml:ObjectFlow" xmi:id="OF1" source="N1" target="O1" />
+        </uml:Model>
+      </xmi:XMI>
+    `;
+    const doc = parseXml(xml);
+    const report = createImportReport('ea-xmi-uml');
+    const { relationships } = parseEaXmiRelationships(doc, report);
+
+    const byId = new Map(relationships.map((r) => [r.id, r]));
+    expect(byId.get('CF1')?.type).toBe('uml.controlFlow');
+    expect(byId.get('CF1')?.sourceId).toBe('N0');
+    expect(byId.get('CF1')?.targetId).toBe('N1');
+    expect(byId.get('CF1')?.documentation).toBe('Go');
+
+    expect(byId.get('OF1')?.type).toBe('uml.objectFlow');
+    expect(byId.get('OF1')?.sourceId).toBe('N1');
+    expect(byId.get('OF1')?.targetId).toBe('O1');
+
+    expect(report.warnings).toEqual([]);
+  });
+
 });

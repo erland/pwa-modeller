@@ -186,7 +186,7 @@ export function TraceabilityMiniGraph({
   }, [edgesById]);
 
   return (
-    <div className="crudSection" style={{ marginTop: 14 }}>
+    <div className="crudSection">
       <div className="crudHeader" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <p className="crudTitle">Traceability graph</p>

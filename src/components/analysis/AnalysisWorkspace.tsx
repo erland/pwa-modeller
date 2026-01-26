@@ -748,7 +748,7 @@ export function AnalysisWorkspace({
       </div>
 
       {!model ? (
-        <div className="crudSection" style={{ marginTop: 14 }}>
+        <div className="crudSection">
           <div className="crudHeader">
             <div>
               <p className="crudTitle">No model loaded</p>
@@ -818,7 +818,7 @@ export function AnalysisWorkspace({
 
           {mode === 'matrix' ? (
             <>
-              <div className="crudSection" style={{ marginTop: 14 }}>
+              <div className="crudSection">
                 <div className="crudHeader">
                   <div>
                     <p className="crudTitle">Matrix query</p>
@@ -1005,7 +1005,7 @@ export function AnalysisWorkspace({
                 onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
               />
             ) : (
-              <div className="crudSection" style={{ marginTop: 14 }}>
+              <div className="crudSection">
                 <div className="crudHeader">
                   <div>
                     <p className="crudTitle">No start element</p>

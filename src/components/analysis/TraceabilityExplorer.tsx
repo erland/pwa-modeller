@@ -174,7 +174,7 @@ export function TraceabilityExplorer({
   };
 
   return (
-    <div style={{ marginTop: 14 }}>
+    <div>
       <div className="crudSection">
         <div className="crudHeader">
           <div>
@@ -328,7 +328,7 @@ export function TraceabilityExplorer({
         onLoad={doLoadSession}
         onDelete={doDeleteSession}
       />
-      <div className="crudSection" style={{ marginTop: 14 }}>
+      <div className="crudSection">
         <div className="crudHeader">
           <div>
             <p className="crudTitle">Nodes</p>

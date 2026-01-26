@@ -168,7 +168,7 @@ export function RelationshipMatrixTable({
   const cellBorderStyle: CSSProperties = { border: '1px solid var(--diagram-grid-line)' };
 
   return (
-    <div className="crudSection" style={{ marginTop: 14 }}>
+    <div className="crudSection">
       <div className="crudHeader">
         <div>
           <p className="crudTitle">Relationship matrix</p>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { AnalysisHeaderActions } from './AnalysisHeaderActions';
 
 export type AnalysisSectionProps = {
   title?: ReactNode;
@@ -41,7 +42,7 @@ export function AnalysisSection({
             {title ? <div className="crudTitle">{title}</div> : null}
             {hint ? <div className="crudHint">{hint}</div> : null}
           </div>
-          {actions ? <div className="rowActions">{actions}</div> : null}
+          {actions ? <AnalysisHeaderActions>{actions}</AnalysisHeaderActions> : null}
         </div>
       ) : null}
       {children}

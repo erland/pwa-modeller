@@ -12,6 +12,7 @@ import { TraceabilityMiniGraph } from './traceability/TraceabilityMiniGraph';
 import { defaultMiniGraphOptions } from './MiniGraphOptions';
 import { TraceabilitySettingsDialog } from './traceability/TraceabilitySettingsDialog';
 import { TraceabilitySessionsDialog } from './traceability/TraceabilitySessionsDialog';
+import { AnalysisSection } from './layout/AnalysisSection';
 
 import {
   deleteTraceabilitySession,
@@ -173,51 +174,42 @@ export function TraceabilityExplorer({
     refreshSessions();
   };
 
+  const headerActions = (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <button type="button" className="miniLinkButton" onClick={() => setIsSettingsOpen(true)} aria-label="Traceability settings">
+        ⚙︎ Settings
+      </button>
+      <button type="button" className="miniLinkButton" onClick={() => setIsSessionsOpen(true)} aria-label="Traceability sessions">
+        Sessions
+      </button>
+    </div>
+  );
+
   return (
     <div>
-      <div className="crudSection">
-        <div className="crudHeader">
-          <div>
-            <p className="crudTitle">Traceability explorer</p>
-            <p className="crudHint">Interactively expand upstream/downstream relationships from a seed element.</p>
-          </div>
-
-          <div className="toolbar" aria-label="Traceability explorer toolbar">
-            <div className="toolbarGroup" style={{ minWidth: 240 }}>
-              <label>Selected</label>
-              <div className="mono" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedName}>
-                {selectedName}
-              </div>
-            </div>
-
-
-
-
-            <div className="toolbarGroup">
-              <label>Options</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <button type="button" className="miniLinkButton" onClick={() => setIsSettingsOpen(true)} aria-label="Traceability settings">
-                  ⚙︎ Settings
-                </button>
-                <button type="button" className="miniLinkButton" onClick={() => setIsSessionsOpen(true)} aria-label="Traceability sessions">
-                  Sessions
-                </button>
-              </div>
+      <AnalysisSection
+        title="Traceability explorer"
+        hint="Interactively expand upstream/downstream relationships from a seed element."
+        actions={headerActions}
+      >
+        <div className="toolbar" aria-label="Traceability explorer toolbar">
+          <div className="toolbarGroup" style={{ minWidth: 240 }}>
+            <label>Selected</label>
+            <div className="mono" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedName}>
+              {selectedName}
             </div>
           </div>
         </div>
 
-        <div className="crudBody">
-          <p className="crudHint" style={{ marginTop: 0 }}>
-            Tip: set filters in the Query panel above, press <span className="mono">Run analysis</span>, then expand from nodes in the graph.
-          </p>
-        </div>
-      </div>
+        <p className="crudHint" style={{ marginTop: 0 }}>
+          Tip: set filters in the Query panel above, press <span className="mono">Run analysis</span>, then expand from nodes in the graph.
+        </p>
+      </AnalysisSection>
 
       <TraceabilityMiniGraph
         wrapLabels={true}
         autoFitColumns={true}
-                headerControls={
+        headerControls={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               type="button"
@@ -328,55 +320,46 @@ export function TraceabilityExplorer({
         onLoad={doLoadSession}
         onDelete={doDeleteSession}
       />
-      <div className="crudSection">
-        <div className="crudHeader">
-          <div>
-            <p className="crudTitle">Nodes</p>
-            <p className="crudHint">A simple list of discovered elements (v1).</p>
-          </div>
+      <AnalysisSection title="Nodes" hint="A simple list of discovered elements (v1).">
+        <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid var(--border-1)', borderRadius: 12 }}>
+          <table className="dataTable" style={{ margin: 0 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 70 }}>Depth</th>
+                <th>Element</th>
+                <th style={{ width: 120 }}>Pinned</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.values(state.nodesById)
+                .filter((n) => !n.hidden)
+                .sort((a, b) => {
+                  if (a.depth !== b.depth) return a.depth - b.depth;
+                  const an = adapter.getNodeLabel(model.elements[a.id], model);
+                  const bn = adapter.getNodeLabel(model.elements[b.id], model);
+                  return an.localeCompare(bn);
+                })
+                .map((n) => (
+                  <tr
+                    key={n.id}
+                    className={state.selection.selectedNodeId === n.id ? 'isSelected' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => selectNode(n.id)}
+                  >
+                    <td className="mono">{n.depth}</td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{adapter.getNodeLabel(model.elements[n.id], model)}</div>
+                      <div className="crudHint mono" style={{ margin: 0 }}>
+                        {n.id}
+                      </div>
+                    </td>
+                    <td>{n.pinned ? 'Yes' : ''}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
         </div>
-
-        <div className="crudBody">
-          <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid var(--border-1)', borderRadius: 12 }}>
-            <table className="dataTable" style={{ margin: 0 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 70 }}>Depth</th>
-                  <th>Element</th>
-                  <th style={{ width: 120 }}>Pinned</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.values(state.nodesById)
-                  .filter((n) => !n.hidden)
-                  .sort((a, b) => {
-                    if (a.depth !== b.depth) return a.depth - b.depth;
-                    const an = adapter.getNodeLabel(model.elements[a.id], model);
-                    const bn = adapter.getNodeLabel(model.elements[b.id], model);
-                    return an.localeCompare(bn);
-                  })
-                  .map((n) => (
-                    <tr
-                      key={n.id}
-                      className={state.selection.selectedNodeId === n.id ? 'isSelected' : ''}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => selectNode(n.id)}
-                    >
-                      <td className="mono">{n.depth}</td>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{adapter.getNodeLabel(model.elements[n.id], model)}</div>
-                        <div className="crudHint mono" style={{ margin: 0 }}>
-                          {n.id}
-                        </div>
-                      </td>
-                      <td>{n.pinned ? 'Yes' : ''}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      </AnalysisSection>
     </div>
   );
 }

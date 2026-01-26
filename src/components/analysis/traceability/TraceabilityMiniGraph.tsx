@@ -11,6 +11,7 @@ import { useElementBgVar } from '../../diagram/hooks/useElementBgVar';
 
 import type { MiniColumnGraphTooltip } from '../MiniColumnGraph';
 import { MiniColumnGraph } from '../MiniColumnGraph';
+import { AnalysisSection } from '../layout/AnalysisSection';
 
 type Props = {
   model: Model;
@@ -186,15 +187,11 @@ export function TraceabilityMiniGraph({
   }, [edgesById]);
 
   return (
-    <div className="crudSection">
-      <div className="crudHeader" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <p className="crudTitle">Traceability graph</p>
-          <p className="crudHint">Click nodes/edges to select. Use the controls here to expand.</p>
-        </div>
-        {headerControls ? <div>{headerControls}</div> : null}
-      </div>
-
+    <AnalysisSection
+      title="Traceability graph"
+      hint="Click nodes/edges to select. Use the controls here to expand."
+      actions={headerControls}
+    >
       <MiniColumnGraph
         nodes={graphNodes}
         edges={graphEdges}
@@ -209,6 +206,6 @@ export function TraceabilityMiniGraph({
         autoFitColumns={autoFitColumns}
         ariaLabel="Traceability mini graph"
       />
-    </div>
+    </AnalysisSection>
   );
 }

@@ -77,12 +77,38 @@ function isHumanReadableTypeToken(s: string | undefined | null): boolean {
   const v = (s ?? '').trim();
   if (!v) return false;
   if (v.length > 120) return false;
+  // HREFs are handled explicitly elsewhere; treat them as non-human-readable here.
   if (v.includes('://')) return false;
   // Never treat UML/XMI metaclass tokens as datatypes.
   // These commonly leak in from xmi:type attributes (e.g. 'uml:Property').
   if (v.startsWith('uml:') || v.startsWith('xmi:')) return false;
   if (looksLikeInternalId(v)) return false;
   return true;
+}
+
+function tryResolvePrimitiveTypeNameFromHref(href: string): string | undefined {
+  const s = href.trim();
+  if (!s) return undefined;
+  if (!s.includes('://')) return undefined;
+
+  // Common patterns:
+  // - http://schema.omg.org/spec/UML/2.1/String
+  // - http://schema.omg.org/spec/UML/2.1/Types.xmi#String
+  // - …#Integer
+  const afterHash = s.includes('#') ? s.split('#').pop() : undefined;
+  const tail = afterHash && afterHash.trim() ? afterHash.trim() : s.split('/').filter(Boolean).pop();
+  const token = (tail ?? '').trim();
+  if (!token) return undefined;
+
+  // Avoid returning UML metaclasses from the profile (e.g. 'Property', 'Class').
+  // Those are types of UML elements, not datatypes.
+  // NOTE: This is intentionally conservative; expand later if needed.
+  const FORBIDDEN = new Set(['Property', 'Class', 'Association', 'Dependency', 'Activity', 'Artifact', 'Generalization']);
+  if (FORBIDDEN.has(token)) return undefined;
+
+  // Primitive-ish tokens we want to surface (String, Boolean, Integer, …)
+  if (!isHumanReadableTypeToken(token)) return undefined;
+  return token;
 }
 
 function tryResolveTypeNameFromElementContext(attributeEl: Element): string | undefined {
@@ -129,6 +155,11 @@ function resolveTypeName(
 ): string | undefined {
   const ref = (typeRef ?? '').trim();
   if (!ref) return undefined;
+
+  // If it's an href URL, try to extract a primitive type name.
+  // This is common in EA exports for UML primitive types.
+  const primitiveFromHref = tryResolvePrimitiveTypeNameFromHref(ref);
+  if (primitiveFromHref) return primitiveFromHref;
 
   // If it's an href, try fragment.
   const hrefId = resolveHrefId(ref);
@@ -184,7 +215,11 @@ function readMultiplicity(el: Element): EaXmiUmlMultiplicity | undefined {
   const upper = (upperEl ? attrAny(upperEl, ['value', 'body']) : null);
 
   const lowerS = (lower ?? '').trim();
-  const upperS = (upper ?? '').trim();
+  let upperS = (upper ?? '').trim();
+
+  // EA uses -1 for UML's "unlimited" upper bound.
+  // We store it as '*' for display friendliness.
+  if (upperS === '-1') upperS = '*';
 
   if (!lowerS && !upperS) return undefined;
 

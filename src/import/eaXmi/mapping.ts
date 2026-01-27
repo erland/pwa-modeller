@@ -24,6 +24,7 @@ import {
  */
 export const EA_XMI_UML_ELEMENT_TYPE_MAP: Readonly<Record<string, QualifiedElementType>> = {
   Class: 'uml.class',
+  AssociationClass: 'uml.associationClass',
   Interface: 'uml.interface',
   Enumeration: 'uml.enum',
   Enum: 'uml.enum',

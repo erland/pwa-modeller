@@ -27,6 +27,21 @@ function visibilityLabel(v: UmlVisibility): string {
   }
 }
 
+function isClearlyWrongDatatype(typeName: string | undefined, metaclass: string | undefined): boolean {
+  const t = (typeName ?? '').trim();
+  if (!t) return false;
+  if (t.startsWith('uml:') || t.startsWith('xmi:')) return true;
+  if (metaclass && t === metaclass) return true;
+  return false;
+}
+
+function displayDataTypeName(a: UmlAttribute): string {
+  const raw = (a.dataTypeName ?? '').trim();
+  if (!raw) return '';
+  if (isClearlyWrongDatatype(raw, a.metaclass)) return '';
+  return raw;
+}
+
 function formatParams(params?: UmlParameter[]): string {
   const list = (params ?? [])
     .map((p) => {
@@ -69,7 +84,7 @@ function formatMultiplicity(m?: { lower?: string; upper?: string }): string {
 function formatAttributeInline(a: UmlAttribute): string {
   const name = (a.name || '').trim();
   if (!name) return '';
-  const type = String(a.dataTypeName ?? '').trim();
+  const type = displayDataTypeName(a);
   const head = type ? `${name}: ${type}` : name;
   return `${head}${formatMultiplicity(a.multiplicity)}`;
 }
@@ -142,7 +157,7 @@ function UmlAttributesEditor({
             className="textInput"
             aria-label={`UML attribute type ${idx + 1}`}
             placeholder="type"
-            value={a.dataTypeName ?? ''}
+            value={displayDataTypeName(a)}
             onChange={(e) => {
               const v = e.target.value;
               const next = attributes.map((x, i) => (i === idx ? { ...x, dataTypeName: v || undefined } : x));

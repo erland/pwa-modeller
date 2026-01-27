@@ -37,12 +37,28 @@ function visibilitySymbol(v?: UmlVisibility): string {
   }
 }
 
+function isClearlyWrongDatatype(typeName: string | undefined, metaclass: string | undefined): boolean {
+  const t = (typeName ?? '').trim();
+  if (!t) return false;
+  // EA can leak metaclass tokens like "uml:Property" into datatype fields; never display those.
+  if (t.startsWith('uml:') || t.startsWith('xmi:')) return true;
+  if (metaclass && t === metaclass) return true;
+  return false;
+}
+
+function displayDataTypeName(a: UmlAttribute): string {
+  const raw = (a.dataTypeName ?? '').trim();
+  if (!raw) return '';
+  if (isClearlyWrongDatatype(raw, a.metaclass)) return '';
+  return raw;
+}
+
 function formatAttribute(a: UmlAttribute): string {
   const sym = visibilitySymbol(a.visibility);
   const head = sym ? `${sym} ${a.name}` : a.name;
 
-  const type = (a.dataTypeName ?? '') ? String(a.dataTypeName ?? '') : '';
-  const typePart = type.trim().length ? `: ${type.trim()}` : '';
+  const type = displayDataTypeName(a);
+  const typePart = type ? `: ${type}` : '';
 
   const m = a.multiplicity;
   const lower = m?.lower?.trim() ?? '';

@@ -150,6 +150,7 @@ export const RELATIONSHIP_TYPES: RelationshipType[] = [
 
 export const UML_ELEMENT_TYPES: ElementType[] = [
   'uml.class',
+  'uml.associationClass',
   'uml.interface',
   'uml.enum',
   'uml.package',
@@ -247,6 +248,7 @@ export type TypeOption<TId extends string = string> = { id: TId; label: string }
 
 const UML_ELEMENT_TYPE_LABELS: Partial<Record<ElementType, string>> = {
   'uml.class': 'Class',
+  'uml.associationClass': 'Association Class',
   'uml.interface': 'Interface',
   'uml.enum': 'Enum',
   'uml.package': 'Package',

@@ -108,7 +108,7 @@ export function ViewNodeProperties({ model, viewId, elementId, actions, elementF
             const isPackage = nodeType === 'uml.package';
             const isEnum = nodeType === 'uml.enum';
             const isInterface = nodeType === 'uml.interface';
-            const isClass = nodeType === 'uml.class';
+            const isClass = nodeType === 'uml.class' || nodeType === 'uml.associationClass';
             const isClassifier = isClass || isInterface;
             const isActivityNode = UML_ACTIVITY_NODE_TYPE_IDS_SET.has(nodeType) || nodeType === 'uml.activity';
 

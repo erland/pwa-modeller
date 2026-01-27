@@ -7,6 +7,9 @@ export function renderUmlNodeSymbol(nodeType: string): React.ReactNode {
     case 'uml.class':
       label = 'C';
       break;
+    case 'uml.associationClass':
+      label = 'ACLS';
+      break;
     case 'uml.interface':
       label = 'I';
       break;

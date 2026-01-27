@@ -42,7 +42,7 @@ export const VIEWPOINTS: Viewpoint[] = [
     id: 'uml-class',
     name: 'UML Class Diagram',
     description: 'UML class diagram (v1).',
-    allowedElementTypes: ['uml.class', 'uml.interface', 'uml.datatype', 'uml.primitiveType', 'uml.enum', 'uml.package', 'uml.note'],
+    allowedElementTypes: ['uml.class', 'uml.associationClass', 'uml.interface', 'uml.datatype', 'uml.primitiveType', 'uml.enum', 'uml.package', 'uml.note'],
     allowedRelationshipTypes: [
       'uml.association',
       'uml.aggregation',

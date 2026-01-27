@@ -114,7 +114,8 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
   const isUseCase = nodeType === "uml.usecase";
   const isActor = nodeType === "uml.actor";
   const isNote = nodeType === "uml.note";
-  const isClass = nodeType === "uml.class";
+  const isClass = nodeType === "uml.class" || nodeType === "uml.associationClass";
+  const isAssociationClass = nodeType === 'uml.associationClass';
 
   // Activity diagram v1
   const isActivity = nodeType === 'uml.activity';
@@ -148,27 +149,30 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
     elementStereo ??
     (isInterface
       ? 'interface'
-      : isEnum
-        ? 'enumeration'
-        : isPackage
-          ? 'package'
-          : isComponent
-            ? 'component'
-            : isArtifact
-              ? 'artifact'
-              : isDataType
-                ? 'datatype'
-                : isPrimitiveType
-                  ? 'primitive'
-                  : isNode
-                    ? 'node'
-                    : isDevice
-                      ? 'device'
-                      : isExecutionEnvironment
-                        ? 'execution environment'
-                        : isSubject
-                          ? 'subject'
-                          : undefined);
+      : isAssociationClass
+        ? 'associationClass'
+        : isEnum
+          ? 'enumeration'
+          : isPackage
+            ? 'package'
+            : isComponent
+              ? 'component'
+              : isArtifact
+                ? 'artifact'
+                : isDataType
+                  ? 'datatype'
+                  : isPrimitiveType
+                    ? 'primitive'
+                    : isNode
+                      ? 'node'
+                      : isDevice
+                        ? 'device'
+                        : isExecutionEnvironment
+                          ? 'execution environment'
+                          : isSubject
+                            ? 'subject'
+                            : undefined);
+
 
   // ------------------------------
   // Activity diagram shapes (v1)

@@ -362,7 +362,7 @@ export function sanitizeModelUmlClassifierMembers(model: Model): Model {
   for (const id of Object.keys(model.elements)) {
     const el = model.elements[id] as any;
     const t = typeof el?.type === 'string' ? el.type : '';
-    if (t !== 'uml.class' && t !== 'uml.interface' && t !== 'uml.datatype') continue;
+    if (t !== 'uml.class' && t !== 'uml.associationClass' && t !== 'uml.interface' && t !== 'uml.datatype') continue;
     if (!Object.prototype.hasOwnProperty.call(el, 'attrs')) continue;
 
     const s = sanitizeUmlClassifierAttrs(el.attrs);

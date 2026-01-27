@@ -9,6 +9,7 @@ import {
 
 export const UML_NODE_TYPES = [
   'uml.class',
+  'uml.associationClass',
   'uml.interface',
   'uml.enum',
   'uml.package',

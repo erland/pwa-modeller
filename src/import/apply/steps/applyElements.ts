@@ -211,7 +211,7 @@ export function applyElements(ctx: ApplyImportContext): void {
     // Step 6 (EA XMI UML): classifier members land in element.attrs.
     // Importers attach them in IR meta as `umlMembers`.
     const umlClassifierAttrs =
-      inferredKind === 'uml' && (type === 'uml.class' || type === 'uml.interface' || type === 'uml.datatype')
+      inferredKind === 'uml' && (type === 'uml.class' || type === 'uml.associationClass' || type === 'uml.interface' || type === 'uml.datatype')
         ? sanitizeUmlClassifierAttrs((el as any).meta?.umlMembers)
         : undefined;
 

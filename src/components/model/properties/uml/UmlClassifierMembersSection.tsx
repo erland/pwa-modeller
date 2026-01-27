@@ -331,7 +331,7 @@ type Props = {
 };
 
 export function UmlClassifierMembersSection({ element: el, actions }: Props) {
-  const isClassifier = el.type === 'uml.class' || el.type === 'uml.interface' || el.type === 'uml.datatype';
+  const isClassifier = el.type === 'uml.class' || el.type === 'uml.associationClass' || el.type === 'uml.interface' || el.type === 'uml.datatype';
   // NOTE: Hooks must never be called conditionally. Keep all hooks above the early return.
   // Also memoize derived members to avoid creating new array references every render
   // (which can otherwise cause effects to loop when dialogs are open).

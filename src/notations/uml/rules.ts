@@ -45,6 +45,8 @@ export function canCreateUmlRelationship(args: {
     return { allowed: false, reason: 'Notes cannot participate in relationships.' };
   }
 
+  const isClassLike = (t: string) => t === 'uml.class' || t === 'uml.associationClass';
+
   // Basic UML rules (kept intentionally permissive for v1).
   switch (relationshipType) {
 
@@ -70,7 +72,7 @@ export function canCreateUmlRelationship(args: {
 
     case 'uml.realization':
       // Realization: commonly Class->Interface or Component->Interface.
-      if (!( (sourceType === 'uml.class' || isUmlComponentType(sourceType)) && targetType === 'uml.interface')) {
+      if (!(((isClassLike(sourceType)) || isUmlComponentType(sourceType)) && targetType === 'uml.interface')) {
         return { allowed: false, reason: 'Realization is allowed from Class/Component to Interface.' };
       }
       return { allowed: true };
@@ -78,10 +80,10 @@ export function canCreateUmlRelationship(args: {
     case 'uml.aggregation':
     case 'uml.composition':
       // Whole/part: keep it between classes/enums.
-      if (sourceType !== 'uml.class') {
+      if (!isClassLike(sourceType)) {
         return { allowed: false, reason: 'Aggregation/Composition source should be a Class.' };
       }
-      if (!(targetType === 'uml.class' || targetType === 'uml.enum')) {
+      if (!(isClassLike(targetType) || targetType === 'uml.enum')) {
         return { allowed: false, reason: 'Aggregation/Composition target should be a Class or Enum.' };
       }
       return { allowed: true };

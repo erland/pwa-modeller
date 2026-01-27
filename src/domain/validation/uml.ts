@@ -54,6 +54,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
   // Relationship endpoint sanity (selected UML relationships)
   // ------------------------------
   const UML_DEPLOYMENT_TARGET_TYPES = UML_DEPLOYMENT_TARGET_TYPE_IDS_SET;
+  const isClassLike = (t: string) => t === 'uml.class' || t === 'uml.associationClass';
 
   for (const rel of Object.values(model.relationships)) {
     const kind = rel.kind ?? kindFromTypeId(rel.type);
@@ -80,7 +81,7 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
     }
 
     if (rel.type === 'uml.realization') {
-      if (!((sType === 'uml.class' || sType === 'uml.component') && tType === 'uml.interface')) {
+      if (!(((isClassLike(sType)) || sType === 'uml.component') && tType === 'uml.interface')) {
         issues.push(
           makeIssue(
             'warning',

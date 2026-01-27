@@ -102,7 +102,7 @@ export function createElement(input: CreateElementInput): Element {
   const attrs =
     input.attrs !== undefined
       ? input.attrs
-      : kind === 'uml' && (input.type === 'uml.class' || input.type === 'uml.interface' || input.type === 'uml.datatype')
+      : kind === 'uml' && (input.type === 'uml.class' || input.type === 'uml.associationClass' || input.type === 'uml.interface' || input.type === 'uml.datatype')
         ? { attributes: [], operations: [] }
         : kind === 'bpmn'
           ? defaultBpmnAttrs(String(input.type))

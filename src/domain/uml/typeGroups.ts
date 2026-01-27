@@ -14,6 +14,7 @@ export type UmlDeploymentTargetTypeId = (typeof UML_DEPLOYMENT_TARGET_TYPE_IDS)[
 
 export const UML_CLASSIFIER_TYPE_IDS = [
   'uml.class',
+  'uml.associationClass',
   'uml.interface',
   'uml.enum',
   'uml.datatype',

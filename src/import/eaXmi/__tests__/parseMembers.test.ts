@@ -55,7 +55,7 @@ describe('eaXmi classifier member parsing', () => {
     ]);
   });
 
-  test('parses EA <attributes><attribute xmi:idref="..."/> wrapper by resolving the referenced uml:Property', () => {
+  test('parses EA <attributes><attribute xmi:idref="…"/> wrapper by resolving the referenced uml:Property', () => {
     const xml = `
       <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
         <uml:Model xmi:id="M1" name="MyModel">
@@ -101,7 +101,7 @@ describe('eaXmi classifier member parsing', () => {
     ]);
   });
 
-  test('falls back to EA <properties type="..."/> when typeRef cannot be resolved from the XMI id index', () => {
+  test('falls back to EA <properties type="…"/> when typeRef cannot be resolved from the XMI id index', () => {
     const xml = `
       <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
         <uml:Model xmi:id="M1" name="MyModel">
@@ -318,4 +318,124 @@ describe('eaXmi classifier member parsing', () => {
     expect(a.dataTypeRef).toBeUndefined();
     expect(a.dataTypeName).toBeUndefined();
   });
+  describe('minimal extracts from real EA XMI', () => {
+    const NS = `xmlns:xmi="http://schema.omg.org/spec/XMI/2.1" xmlns:uml="http://schema.omg.org/spec/UML/2.1"`;
+
+    test('ownedAttribute with <type xmi:idref="EAID…"> resolves datatype name and multiplicity', () => {
+      const xml = `
+        <xmi:XMI ${NS}>
+          <uml:Model xmi:id="M1" name="MyModel">
+            <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
+              <packagedElement xmi:type="uml:DataType" xmi:id="EAID_AB99B558_44A6_4a5c_8E90_0F11916D874D" name="Adress" />
+              <packagedElement xmi:type="uml:Class" xmi:id="C1" name="Testklass">
+                <ownedAttribute xmi:type="uml:Property" xmi:id="EAID_B974B104_F03B_4ec9_8333_26F16F4C07D1" name="Giltig frn och med datum" visibility="public">
+                  <lowerValue xmi:type="uml:LiteralInteger" xmi:id="LI1" value="1" />
+                  <upperValue xmi:type="uml:LiteralInteger" xmi:id="LI2" value="1" />
+                  <type xmi:idref="EAID_AB99B558_44A6_4a5c_8E90_0F11916D874D" />
+                </ownedAttribute>
+              </packagedElement>
+            </packagedElement>
+          </uml:Model>
+        </xmi:XMI>
+      `;
+
+      const doc = parseXml(xml);
+      const report = createImportReport('ea-xmi-uml');
+      parseEaXmiPackageHierarchyToFolders(doc, report);
+      const { elements } = parseEaXmiClassifiersToElements(doc, report);
+
+      const c1 = elements.find((e) => e.id === 'C1');
+      const members = (c1?.meta as any)?.umlMembers;
+
+      expect(members.attributes).toEqual([
+        {
+          name: 'Giltig frn och med datum',
+          metaclass: 'uml:Property',
+          dataTypeRef: 'EAID_AB99B558_44A6_4a5c_8E90_0F11916D874D',
+          dataTypeName: 'Adress',
+          multiplicity: { lower: '1', upper: '1' },
+          visibility: 'public',
+        },
+      ]);
+    });
+
+    test('EA wrapper <attributes><attribute xmi:idref="EAID…"/> resolves referenced uml:Property element', () => {
+      const xml = `
+        <xmi:XMI ${NS}>
+          <uml:Model xmi:id="M1" name="MyModel">
+            <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
+              <packagedElement xmi:type="uml:DataType" xmi:id="EAID_AB99B558_44A6_4a5c_8E90_0F11916D874D" name="Adress" />
+
+              <packagedElement xmi:type="uml:Class" xmi:id="C1" name="Testklass">
+                <attributes>
+                  <attribute xmi:idref="EAID_B974B104_F03B_4ec9_8333_26F16F4C07D1" />
+                </attributes>
+              </packagedElement>
+
+              <!-- Referenced property may exist elsewhere in the document -->
+              <packagedElement xmi:type="uml:Property" xmi:id="EAID_B974B104_F03B_4ec9_8333_26F16F4C07D1" name="Giltig frn och med datum" visibility="public">
+                <type xmi:idref="EAID_AB99B558_44A6_4a5c_8E90_0F11916D874D" />
+                <lowerValue value="1" />
+                <upperValue value="1" />
+              </packagedElement>
+            </packagedElement>
+          </uml:Model>
+        </xmi:XMI>
+      `;
+
+      const doc = parseXml(xml);
+      const report = createImportReport('ea-xmi-uml');
+      parseEaXmiPackageHierarchyToFolders(doc, report);
+      const { elements } = parseEaXmiClassifiersToElements(doc, report);
+
+      const c1 = elements.find((e) => e.id === 'C1');
+      const members = (c1?.meta as any)?.umlMembers;
+
+      expect(members.attributes).toEqual([
+        {
+          name: 'Giltig frn och med datum',
+          metaclass: 'uml:Property',
+          dataTypeRef: 'EAID_AB99B558_44A6_4a5c_8E90_0F11916D874D',
+          dataTypeName: 'Adress',
+          multiplicity: { lower: '1', upper: '1' },
+          visibility: 'public',
+        },
+      ]);
+    });
+
+    test('primitive <type href="http://schema.omg.org/spec/UML/2.1/String"/> resolves to String', () => {
+      const xml = `
+        <xmi:XMI ${NS}>
+          <uml:Model xmi:id="M1" name="MyModel">
+            <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
+              <packagedElement xmi:type="uml:Class" xmi:id="C1" name="Testklass">
+                <ownedAttribute xmi:type="uml:Property" xmi:id="A1" name="Namn" visibility="public">
+                  <type href="http://schema.omg.org/spec/UML/2.1/String" />
+                </ownedAttribute>
+              </packagedElement>
+            </packagedElement>
+          </uml:Model>
+        </xmi:XMI>
+      `;
+
+      const doc = parseXml(xml);
+      const report = createImportReport('ea-xmi-uml');
+      parseEaXmiPackageHierarchyToFolders(doc, report);
+      const { elements } = parseEaXmiClassifiersToElements(doc, report);
+
+      const c1 = elements.find((e) => e.id === 'C1');
+      const members = (c1?.meta as any)?.umlMembers;
+
+      expect(members.attributes).toEqual([
+        {
+          name: 'Namn',
+          metaclass: 'uml:Property',
+          dataTypeRef: 'http://schema.omg.org/spec/UML/2.1/String',
+          dataTypeName: 'String',
+          visibility: 'public',
+        },
+      ]);
+    });
+  });
+
 });

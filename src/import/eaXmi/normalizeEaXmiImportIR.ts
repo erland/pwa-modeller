@@ -5,6 +5,7 @@ import { finalizeEaXmiMeta } from './normalize/finalizeEaXmiMeta';
 import { normalizeEaXmiElements } from './normalize/normalizeEaXmiElements';
 import { normalizeEaXmiRelationships } from './normalize/normalizeEaXmiRelationships';
 import { normalizeUmlActivityContainment } from './normalize/normalizeUmlActivityContainment';
+import { normalizeUmlAssociationClassLinks } from './normalize/normalizeUmlAssociationClassLinks';
 import {
   buildElementLookup,
   buildRelationshipLookup,
@@ -45,14 +46,19 @@ export function normalizeEaXmiImportIR(ir: IRModel | undefined, opts?: Normalize
   // Step 3 (UML Activity): view-driven containment/ownership hints.
   const elements = normalizeUmlActivityContainment({ ...ir, elements: elementsBase }, views);
 
+  // Step 3.5 (UML AssociationClass): stable links between box + line.
+  const linked = normalizeUmlAssociationClassLinks(elements, relationships, opts);
+  const elementsLinked = linked.elements;
+  const relationshipsLinked = linked.relationships;
+
   // Step 4: finalize model meta.
   const meta = finalizeEaXmiMeta(ir);
 
   return {
     ...ir,
     folders: ir.folders ?? [],
-    elements,
-    relationships,
+    elements: elementsLinked,
+    relationships: relationshipsLinked,
     ...(views !== undefined ? { views } : {}),
     meta
   };

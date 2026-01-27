@@ -1,7 +1,8 @@
-import type { Relationship } from '../../../domain';
 import { createEmptyModel } from '../../../domain';
+import type { Element, Relationship } from '../../../domain';
 import type { IRModel } from '../../framework/ir';
 
+const addedElements: Element[] = [];
 const addedRelationships: Relationship[] = [];
 
 const mockStore = {
@@ -14,7 +15,8 @@ const mockStore = {
   hydrate: jest.fn(),
   createFolder: jest.fn(() => 'folder_import'),
   updateFolder: jest.fn(),
-  addElement: jest.fn((el: any) => {
+  addElement: jest.fn((el: Element) => {
+    addedElements.push(el);
     if (mockStore._state.model) mockStore._state.model.elements[el.id] = el;
   }),
   updateElement: jest.fn((elementId: string, patch: any) => {
@@ -44,54 +46,48 @@ const mockStore = {
 
 jest.mock('../../../store', () => ({ modelStore: mockStore }));
 
-describe('applyImportIR UML relationship attrs passthrough', () => {
+describe('applyImportIR UML AssociationClass links', () => {
   beforeEach(() => {
+    addedElements.length = 0;
     addedRelationships.length = 0;
     mockStore.newModel.mockClear();
+    mockStore.addElement.mockClear();
     mockStore.addRelationship.mockClear();
-    mockStore.getState.mockClear();
+    mockStore.updateElement.mockClear();
+    mockStore.updateRelationship.mockClear();
   });
 
-  test('imports meta.umlAttrs as relationship.attrs (sanitized) for UML types', async () => {
+  test('rewrites mutual box/line linkage from IR ids to internal ids', async () => {
     const { applyImportIR } = await import('../applyImportIR');
 
     const ir: IRModel = {
       folders: [],
       elements: [
-        { id: 'c1', type: 'uml.class', name: 'A' },
-        { id: 'c2', type: 'uml.class', name: 'B' }
+        { id: 'C1', type: 'uml.class', name: 'A' },
+        { id: 'C2', type: 'uml.class', name: 'B' },
+        { id: 'A1', type: 'uml.associationClass', name: 'AssocClass', attrs: { associationRelationshipId: 'A1__association' } }
       ],
       relationships: [
         {
-          id: 'r1',
+          id: 'A1__association',
           type: 'uml.association',
-          sourceId: 'c1',
-          targetId: 'c2',
-          meta: {
-            umlAttrs: {
-              sourceRole: 'a',
-              targetRole: 'b',
-              sourceMultiplicity: '0..*',
-              targetMultiplicity: '1',
-              sourceNavigable: true,
-              targetNavigable: false
-            }
-          }
+          sourceId: 'C1',
+          targetId: 'C2',
+          attrs: { associationClassElementId: 'A1' }
         }
       ]
     };
 
-    applyImportIR(ir, undefined, { sourceSystem: 'ea-xmi-uml' });
+    const result = applyImportIR(ir, undefined, { sourceSystem: 'ea-xmi-uml' });
 
-    expect(addedRelationships).toHaveLength(1);
-    expect(addedRelationships[0]!.type).toBe('uml.association');
-    expect(addedRelationships[0]!.attrs).toMatchObject({
-      sourceRole: 'a',
-      targetRole: 'b',
-      sourceMultiplicity: '0..*',
-      targetMultiplicity: '1',
-      sourceNavigable: true,
-      targetNavigable: false
-    });
+    const internalA1 = result.mappings.elements['A1'];
+    const internalRel = result.mappings.relationships['A1__association'];
+
+    expect(internalA1).toBeTruthy();
+    expect(internalRel).toBeTruthy();
+
+    const model = mockStore._state.model;
+    expect(model.elements[internalA1]!.attrs).toMatchObject({ associationRelationshipId: internalRel });
+    expect(model.relationships[internalRel]!.attrs).toMatchObject({ associationClassElementId: internalA1 });
   });
 });

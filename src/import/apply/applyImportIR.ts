@@ -10,6 +10,7 @@ import { inferModelKind, getRootFolderId } from './applyImportHelpers';
 import { applyFolders } from './steps/applyFolders';
 import { applyElements } from './steps/applyElements';
 import { applyRelationships } from './steps/applyRelationships';
+import { linkUmlAssociationClasses } from './steps/linkUmlAssociationClasses';
 import { applyViews } from './steps/applyViews';
 import { scanAndMergeUnknownTypes } from './steps/scanUnknownTypes';
 
@@ -80,6 +81,7 @@ export function applyImportIR(ir: IRModel, baseReport?: ImportReport, options?: 
   applyFolders(ctx);
   applyElements(ctx);
   applyRelationships(ctx);
+  linkUmlAssociationClasses(ctx);
   applyViews(ctx);
 
   // 3) Scan for unknown types (format-agnostic)

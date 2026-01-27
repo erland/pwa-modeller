@@ -18,7 +18,21 @@ const mockStore = {
     addedElements.push(el);
     if (mockStore._state.model) mockStore._state.model.elements[el.id] = el;
   }),
+  updateElement: jest.fn((elementId: string, patch: any) => {
+    const m = mockStore._state.model;
+    if (!m) return;
+    const current = m.elements[elementId];
+    if (!current) return;
+    m.elements[elementId] = { ...current, ...patch };
+  }),
   addRelationship: jest.fn(),
+  updateRelationship: jest.fn((relationshipId: string, patch: any) => {
+    const m = mockStore._state.model;
+    if (!m) return;
+    const current = m.relationships[relationshipId];
+    if (!current) return;
+    m.relationships[relationshipId] = { ...current, ...patch };
+  }),
   addView: jest.fn(),
   addElementToView: jest.fn(),
   updateViewNodeLayout: jest.fn(),

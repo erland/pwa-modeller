@@ -10,6 +10,10 @@ export function applyRelationships(ctx: ApplyImportContext): void {
 
   const isStringId = (x: unknown): x is string => typeof x === 'string' && x.trim().length > 0;
 
+  const isRecord = (v: unknown): v is Record<string, unknown> => {
+    return typeof v === 'object' && v !== null && !Array.isArray(v);
+  };
+
   const mapBpmnElementRefStrict = (opts: {
     ownerRelId: string;
     field: string;
@@ -92,7 +96,20 @@ export function applyRelationships(ctx: ApplyImportContext): void {
 
     // Step 5 (UML Activity properties): allow importers to provide
     // general UML relationship attributes via IR `attrs` (e.g. guard on ControlFlow).
-    const umlAttrsFromIr = inferredKind === 'uml' ? (rel as any).attrs : undefined;
+    let umlAttrsFromIr = inferredKind === 'uml' ? (rel as any).attrs : undefined;
+
+    // Step 4 (AssociationClass links): rewrite IR element refs -> internal ids.
+    if (inferredKind === 'uml' && isRecord(umlAttrsFromIr)) {
+      const raw = (umlAttrsFromIr as any).associationClassElementId;
+      if (typeof raw === 'string' && raw.trim().length) {
+        const mapped = mappings.elements[raw.trim()];
+        if (mapped) {
+          umlAttrsFromIr = { ...(umlAttrsFromIr as any), associationClassElementId: mapped };
+        } else {
+          pushWarning(report, `UML: relationship "${rel.id}" has unresolved associationClassElementId="${raw}" (kept as-is)`);
+        }
+      }
+    }
 
     const umlMergedAttrs =
       umlAttrsFromMeta !== undefined && umlAttrsFromIr !== undefined

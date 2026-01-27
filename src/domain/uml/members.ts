@@ -7,9 +7,25 @@ export type UmlParameter = {
   type?: string;
 };
 
+export type UmlMultiplicity = {
+  lower?: string;
+  upper?: string;
+};
+
 export type UmlAttribute = {
   name: string;
+  /**
+   * Attribute datatype display string (legacy).
+   *
+   * Note: this historically stores the rendered datatype name.
+   */
   type?: string;
+  /** Raw XMI reference id for the datatype (if available). */
+  typeRef?: string;
+  /** Resolved datatype name (if available). */
+  typeName?: string;
+  /** Multiplicity for the attribute (if available). */
+  multiplicity?: UmlMultiplicity;
   visibility?: UmlVisibility;
   isStatic?: boolean;
   defaultValue?: string;
@@ -48,6 +64,17 @@ function trimString(v: unknown): string {
 function optString(v: unknown): string | undefined {
   const s = trimString(v);
   return s.length ? s : undefined;
+}
+
+function coerceMultiplicity(raw: unknown): UmlMultiplicity | undefined {
+  if (!isRecord(raw)) return undefined;
+  const lower = optString(raw.lower);
+  const upper = optString(raw.upper);
+  if (!lower && !upper) return undefined;
+  const out: UmlMultiplicity = {};
+  if (lower) out.lower = lower;
+  if (upper) out.upper = upper;
+  return out;
 }
 
 export function asUmlVisibility(v: unknown): UmlVisibility | undefined {
@@ -99,6 +126,9 @@ export function coerceUmlClassifierMembersFromAttrs(
       attributes.push({
         name,
         type: optString(a.type),
+        typeRef: optString((a as Record<string, unknown>).typeRef),
+        typeName: optString((a as Record<string, unknown>).typeName),
+        multiplicity: coerceMultiplicity((a as Record<string, unknown>).multiplicity),
         visibility: asUmlVisibility(a.visibility),
         isStatic: typeof a.isStatic === 'boolean' ? a.isStatic : undefined,
         defaultValue: optString(a.defaultValue),
@@ -152,6 +182,18 @@ export function sanitizeUmlClassifierMembersFromAttrs(rawAttrs: unknown): UmlCla
     const out: UmlAttribute = { name };
     const type = a.type?.trim();
     if (type) out.type = type;
+    const typeRef = a.typeRef?.trim();
+    if (typeRef) out.typeRef = typeRef;
+    const typeName = a.typeName?.trim();
+    if (typeName) out.typeName = typeName;
+    const lower = a.multiplicity?.lower?.trim();
+    const upper = a.multiplicity?.upper?.trim();
+    if (lower || upper) {
+      const m: UmlMultiplicity = {};
+      if (lower) m.lower = lower;
+      if (upper) m.upper = upper;
+      out.multiplicity = m;
+    }
     if (a.visibility) out.visibility = a.visibility;
     if (typeof a.isStatic === 'boolean') out.isStatic = a.isStatic;
     const dv = a.defaultValue?.trim();

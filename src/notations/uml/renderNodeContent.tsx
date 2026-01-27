@@ -150,7 +150,7 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
     (isInterface
       ? 'interface'
       : isAssociationClass
-        ? 'associationClass'
+        ? 'AssociationClass'
         : isEnum
           ? 'enumeration'
           : isPackage

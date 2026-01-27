@@ -24,6 +24,16 @@ function mkClassElement(attrs?: unknown): Element {
   };
 }
 
+function mkAssociationClassElement(attrs?: unknown): Element {
+  return {
+    id: 'e1',
+    kind: 'uml',
+    type: 'uml.associationClass',
+    name: 'Enrollment',
+    attrs,
+  };
+}
+
 describe('renderUmlNodeContent (semantic members + view flags)', () => {
   test('renders class members from element attrs (ignores node text fields)', () => {
     const element = mkClassElement({
@@ -70,5 +80,20 @@ describe('renderUmlNodeContent (semantic members + view flags)', () => {
     const nodeCollapsed = mkNode({ showAttributes: true, showOperations: true, collapsed: true });
     render(<div>{renderUmlNodeContent({ element, node: nodeCollapsed })}</div>);
     expect(screen.queryByText('save()')).not.toBeInTheDocument();
+  });
+
+  test('renders association class as a class-like box with an AssociationClass marker', () => {
+    const element = mkAssociationClassElement({
+      attributes: [{ name: 'since', type: 'date' }],
+    });
+
+    const node = mkNode({ showAttributes: true, showOperations: false, collapsed: false });
+    render(<div>{renderUmlNodeContent({ element, node })}</div>);
+
+    // Header marker + name
+    expect(screen.getByText('«AssociationClass»')).toBeInTheDocument();
+    expect(screen.getByText('Enrollment')).toBeInTheDocument();
+    // Members still render like a class
+    expect(screen.getByText('since: date')).toBeInTheDocument();
   });
 });

@@ -288,4 +288,34 @@ describe('eaXmi classifier member parsing', () => {
       },
     ]);
   });
+
+  test('does not treat UML metaclass tokens (uml:Property) as attribute datatypes', () => {
+    const xml = `
+      <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+        <uml:Model xmi:id="M1" name="MyModel">
+          <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
+            <packagedElement xmi:type="uml:Class" xmi:id="C1" name="A">
+              <!-- No datatype info; only metaclass present on the attribute element. -->
+              <ownedAttribute xmi:type="uml:Property" xmi:id="A1" name="foo" />
+            </packagedElement>
+          </packagedElement>
+        </uml:Model>
+      </xmi:XMI>
+    `;
+
+    const doc = parseXml(xml);
+    const report = createImportReport('ea-xmi-uml');
+    parseEaXmiPackageHierarchyToFolders(doc, report);
+    const { elements } = parseEaXmiClassifiersToElements(doc, report);
+
+    const c1 = elements.find((e) => e.id === 'C1');
+    const members = (c1?.meta as any)?.umlMembers;
+    expect(members?.attributes?.length).toBe(1);
+
+    const a = members.attributes[0];
+    expect(a.metaclass).toBe('uml:Property');
+    // Datatype fields should be absent rather than being polluted with the metaclass token.
+    expect(a.dataTypeRef).toBeUndefined();
+    expect(a.dataTypeName).toBeUndefined();
+  });
 });

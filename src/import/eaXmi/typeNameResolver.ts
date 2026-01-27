@@ -88,13 +88,24 @@ export type TypeResolution = {
   name?: string;
 };
 
+function isClearlyWrongDatatypeToken(token: string | undefined | null, metaclass?: string): boolean {
+  const v = (token ?? '').trim();
+  if (!v) return true;
+  if (v.startsWith('uml:') || v.startsWith('xmi:')) return true;
+  if (metaclass && v === metaclass) return true;
+  return false;
+}
+
 export function createTypeNameResolver(index: Map<string, Element>, idToName?: Map<string, string>) {
   const cache = new Map<string, string | undefined>();
 
-  const resolveFromRef = (rawRef: string, contextEl?: Element): string | undefined => {
+  const resolveFromRef = (rawRef: string, contextEl?: Element, metaclass?: string): string | undefined => {
     const ref = rawRef.trim();
     if (!ref) return undefined;
     if (ref.startsWith('uml:') || ref.startsWith('xmi:')) return undefined;
+
+    // Never accept the metaclass token as a datatype.
+    if (metaclass && ref === metaclass) return undefined;
 
     if (cache.has(ref)) return cache.get(ref);
 
@@ -112,7 +123,7 @@ export function createTypeNameResolver(index: Map<string, Element>, idToName?: M
         resolved = n || undefined;
       }
 
-if (!resolved && contextEl) {
+      if (!resolved && contextEl) {
         resolved = tryResolveTypeNameFromElementContext(contextEl);
       }
 
@@ -121,22 +132,25 @@ if (!resolved && contextEl) {
       }
     }
 
+    // Hard guardrail: never return uml:* tokens or the metaclass as datatype.
+    if (isClearlyWrongDatatypeToken(resolved, metaclass)) resolved = undefined;
+
     cache.set(ref, resolved);
     return resolved;
   };
 
-  const readTypeRefFromElement = (el: Element): string | undefined => {
+  const readTypeRefFromElement = (el: Element, metaclass?: string): string | undefined => {
     const direct = attr(el, 'type');
     if (direct && direct.trim()) {
       const v = direct.trim();
       // Guard against xmi:type leakage.
-      if (!v.startsWith('uml:') && !v.startsWith('xmi:')) return v;
+      if (!v.startsWith('uml:') && !v.startsWith('xmi:') && (!metaclass || v !== metaclass)) return v;
     }
 
     const typeChild = childByLocalName(el, 'type');
     if (typeChild) {
       const idref = getXmiIdRef(typeChild);
-      if (idref) return idref;
+      if (idref && (!metaclass || idref !== metaclass)) return idref;
 
       const href = attrAny(typeChild, ['href']);
       if (href && href.trim()) return href.trim();
@@ -145,10 +159,14 @@ if (!resolved && contextEl) {
     return undefined;
   };
 
-  const resolveFromElement = (el: Element): TypeResolution => {
-    const ref = readTypeRefFromElement(el);
-    const name = ref ? resolveFromRef(ref, el) : undefined;
-    return { ref: ref ?? undefined, name };
+  const resolveFromElement = (el: Element, metaclass?: string): TypeResolution => {
+    const ref = readTypeRefFromElement(el, metaclass);
+    const name = ref ? resolveFromRef(ref, el, metaclass) : undefined;
+
+    // Final safety: never emit obviously-wrong refs/names.
+    const safeRef = isClearlyWrongDatatypeToken(ref, metaclass) ? undefined : ref;
+    const safeName = isClearlyWrongDatatypeToken(name, metaclass) ? undefined : name;
+    return { ref: safeRef ?? undefined, name: safeName ?? undefined };
   };
 
   return {

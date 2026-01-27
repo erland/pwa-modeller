@@ -116,7 +116,8 @@ function parseAttributeLikeElement(
 
   const vis = asVisibility(attr(attributeEl, 'visibility'));
   const isStatic = parseBool(attrAny(attributeEl, ['isStatic', 'static']));
-  const type = resolver.resolveFromElement(attributeEl);
+  // Prevent historical bug where the UML metaclass (uml:Property) was mistakenly treated as datatype.
+  const type = resolver.resolveFromElement(attributeEl, 'uml:Property');
   const multiplicity = readMultiplicity(attributeEl);
   const defaultValue = readDefaultValue(attributeEl);
 
@@ -193,7 +194,8 @@ function parseOwnedOperations(
     const pEls = childrenByLocalName(o, 'ownedparameter');
     for (const p of pEls) {
       const dir = (attr(p, 'direction') ?? '').trim();
-      const typeName = resolver.resolveFromElement(p).name;
+      // Defensive: never treat the UML metaclass token as a datatype.
+      const typeName = resolver.resolveFromElement(p, 'uml:Parameter').name;
 
       if (dir === 'return') {
         if (typeName) returnType = typeName;

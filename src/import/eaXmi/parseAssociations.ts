@@ -188,14 +188,38 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
   const seenIds = new Set<string>();
   let synthCounter = 0;
 
+  // Extra lookup used for AssociationClass: EA may represent one or both ends as
+  // ownedAttributes on participating classifiers with an `association="<assocId>"` reference.
+  const associationIdToPropertyEls = new Map<string, Element[]>();
+  {
+    const allForIndex = doc.getElementsByTagName('*');
+    for (let i = 0; i < allForIndex.length; i++) {
+      const e = allForIndex.item(i);
+      if (!e) continue;
+      const assoc = (attrAny(e, ['association', 'Association']) ?? '').trim();
+      if (!assoc) continue;
+      // Only keep elements that look like properties (most often ownedAttribute).
+      const xmiType = (getXmiType(e) ?? '').toLowerCase();
+      const ln = localName(e);
+      const looksLikeProperty = xmiType === 'uml:property' || ln === 'ownedattribute' || ln === 'ownedend';
+      if (!looksLikeProperty) continue;
+
+      const arr = associationIdToPropertyEls.get(assoc) ?? [];
+      arr.push(e);
+      associationIdToPropertyEls.set(assoc, arr);
+    }
+  }
+
   const all = doc.getElementsByTagName('*');
   for (let i = 0; i < all.length; i++) {
     const el = all.item(i);
     if (!el) continue;
 
     const xmiType = getXmiType(el);
-    const isAssociation = (xmiType ?? '').toLowerCase() === 'uml:association' || localName(el) === 'association';
-    if (!isAssociation) continue;
+    const xmiTypeLower = (xmiType ?? '').toLowerCase();
+    const isAssociation = xmiTypeLower === 'uml:association' || localName(el) === 'association';
+    const isAssociationClass = xmiTypeLower === 'uml:associationclass';
+    if (!isAssociation && !isAssociationClass) continue;
 
     const navigableOwnedEnds = parseNavigableOwnedEnds(el);
 
@@ -207,9 +231,31 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
       if (endEl) ends.push(endEl);
     }
 
+    // Also support child form: <memberEnd xmi:idref="…"/> or <memberEnd href="…#id"/>.
+    for (const ch of Array.from(el.children)) {
+      if (localName(ch) !== 'memberend') continue;
+      const idref = getXmiIdRef(ch);
+      const href = attrAny(ch, ['href']);
+      const frag = resolveHrefId(href);
+      const endId = idref ?? frag;
+      if (!endId) continue;
+      const endEl = resolveById(index, endId);
+      if (endEl) ends.push(endEl);
+    }
+
     // Also include direct ownedEnd children.
     for (const ch of Array.from(el.children)) {
       if (localName(ch) === 'ownedend') ends.push(ch);
+    }
+
+    // AssociationClass fallback: if memberEnd/ownedEnd does not yield enough ends,
+    // try to find ends via ownedAttributes that reference this association id.
+    if (isAssociationClass) {
+      const assocId = getXmiId(el) ?? getXmiIdRef(el);
+      if (assocId) {
+        const byAssoc = associationIdToPropertyEls.get(assocId) ?? [];
+        for (const p of byAssoc) ends.push(p);
+      }
     }
 
     // Normalize: unique by end id, keep first occurrence.
@@ -248,6 +294,10 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
       synthCounter++;
       id = `eaAssoc_synth_${synthCounter}`;
     }
+    // Avoid potential element-id collisions for AssociationClass by namespacing the relationship id.
+    if (isAssociationClass) {
+      id = `${id}__association`;
+    }
     if (seenIds.has(id)) {
       report.warnings.push(`EA XMI: Duplicate association id "${id}" encountered; skipping.`);
       continue;
@@ -281,7 +331,7 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
       ...(taggedValues.length ? { taggedValues } : {}),
       meta: {
         ...(xmiType ? { xmiType } : {}),
-        metaclass: 'Association',
+        metaclass: isAssociationClass ? 'AssociationClass' : 'Association',
         umlAttrs: {
           ...(endA.role ? { sourceRole: endA.role } : {}),
           ...(endB.role ? { targetRole: endB.role } : {}),

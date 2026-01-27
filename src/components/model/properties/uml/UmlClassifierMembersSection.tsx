@@ -69,7 +69,7 @@ function formatMultiplicity(m?: { lower?: string; upper?: string }): string {
 function formatAttributeInline(a: UmlAttribute): string {
   const name = (a.name || '').trim();
   if (!name) return '';
-  const type = String(a.typeName ?? a.type ?? '').trim();
+  const type = String(a.dataTypeName ?? '').trim();
   const head = type ? `${name}: ${type}` : name;
   return `${head}${formatMultiplicity(a.multiplicity)}`;
 }
@@ -142,10 +142,10 @@ function UmlAttributesEditor({
             className="textInput"
             aria-label={`UML attribute type ${idx + 1}`}
             placeholder="type"
-            value={a.type ?? ''}
+            value={a.dataTypeName ?? ''}
             onChange={(e) => {
               const v = e.target.value;
-              const next = attributes.map((x, i) => (i === idx ? { ...x, type: v || undefined } : x));
+              const next = attributes.map((x, i) => (i === idx ? { ...x, dataTypeName: v || undefined } : x));
               onChange(next);
             }}
             style={{ width: 160 }}

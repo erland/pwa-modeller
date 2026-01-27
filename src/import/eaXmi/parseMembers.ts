@@ -17,9 +17,12 @@ export type EaXmiUmlMultiplicity = {
 
 export type EaXmiUmlAttribute = {
   name: string;
-  type?: string;
-  typeRef?: string;
-  typeName?: string;
+  /** UML metaclass for this attribute (typically 'uml:Property'). */
+  metaclass?: string;
+  /** Raw XMI reference id for the datatype/classifier (if available). */
+  dataTypeRef?: string;
+  /** Resolved datatype/classifier name (if available). */
+  dataTypeName?: string;
   multiplicity?: EaXmiUmlMultiplicity;
   visibility?: 'public' | 'private' | 'protected' | 'package';
   isStatic?: boolean;
@@ -214,11 +217,10 @@ function parseAttributeLikeElement(
   const defaultValue = readDefaultValue(attributeEl);
 
   const outAttr: EaXmiUmlAttribute = { name };
-  if (typeRef) outAttr.typeRef = typeRef;
-  if (typeName) {
-    outAttr.type = typeName; // legacy
-    outAttr.typeName = typeName;
-  }
+  // Step 6 refactor: keep datatype fields explicit.
+  outAttr.metaclass = 'uml:Property';
+  if (typeRef) outAttr.dataTypeRef = typeRef;
+  if (typeName) outAttr.dataTypeName = typeName;
   if (multiplicity) outAttr.multiplicity = multiplicity;
   if (vis) outAttr.visibility = vis;
   if (typeof isStatic === 'boolean' && isStatic) outAttr.isStatic = true;

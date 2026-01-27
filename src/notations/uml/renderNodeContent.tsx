@@ -41,7 +41,7 @@ function formatAttribute(a: UmlAttribute): string {
   const sym = visibilitySymbol(a.visibility);
   const head = sym ? `${sym} ${a.name}` : a.name;
 
-  const type = (a.typeName ?? a.type) ? String(a.typeName ?? a.type) : '';
+  const type = (a.dataTypeName ?? '') ? String(a.dataTypeName ?? '') : '';
   const typePart = type.trim().length ? `: ${type.trim()}` : '';
 
   const m = a.multiplicity;

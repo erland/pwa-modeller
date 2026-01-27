@@ -23,7 +23,8 @@ describe('migrations v9 -> v10 (BPMN attr normalization)', () => {
     model.elements[dataStore.id] = dataStore;
 
     const migrated = migrateModel(model as any) as any;
-    expect(migrated.schemaVersion).toBe(10);
+    // Migration runner applies all migrations up to the latest schema.
+    expect(migrated.schemaVersion).toBe(11);
 
     // Message keeps only message attrs
     expect(migrated.elements[msg.id].attrs).toEqual({ itemRef: 'Item_1' });
@@ -72,7 +73,8 @@ describe('migrations v9 -> v10 (BPMN attr normalization)', () => {
     model.relationships[assoc.id] = assoc;
 
     const migrated = runMigrations(model as any).model as any;
-    expect(migrated.schemaVersion).toBe(10);
+    // Migration runner applies all migrations up to the latest schema.
+    expect(migrated.schemaVersion).toBe(11);
 
     expect(migrated.relationships[seq.id].attrs).toEqual({ conditionExpression: '${x}' });
     expect(migrated.relationships[msgFlow.id].attrs).toEqual({ messageRef: 'Msg_2' });

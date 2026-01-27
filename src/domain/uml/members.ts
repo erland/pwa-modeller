@@ -14,16 +14,14 @@ export type UmlMultiplicity = {
 
 export type UmlAttribute = {
   name: string;
-  /**
-   * Attribute datatype display string (legacy).
-   *
-   * Note: this historically stores the rendered datatype name.
-   */
-  type?: string;
-  /** Raw XMI reference id for the datatype (if available). */
-  typeRef?: string;
-  /** Resolved datatype name (if available). */
-  typeName?: string;
+  /** UML metaclass for this attribute (typically 'uml:Property'). */
+  metaclass?: string;
+
+  /** Raw XMI reference id for the datatype/classifier (if available). */
+  dataTypeRef?: string;
+  /** Resolved datatype/classifier name (if available). */
+  dataTypeName?: string;
+
   /** Multiplicity for the attribute (if available). */
   multiplicity?: UmlMultiplicity;
   visibility?: UmlVisibility;
@@ -64,6 +62,14 @@ function trimString(v: unknown): string {
 function optString(v: unknown): string | undefined {
   const s = trimString(v);
   return s.length ? s : undefined;
+}
+
+function looksLikeUmlMetaclassToken(v: string | undefined): boolean {
+  const s = (v ?? '').trim();
+  if (!s) return false;
+  // We keep this intentionally narrow. For Step 6 we only treat obvious UML metaclass strings
+  // as metaclass tokens (e.g. 'uml:Property').
+  return s.startsWith('uml:');
 }
 
 function coerceMultiplicity(raw: unknown): UmlMultiplicity | undefined {
@@ -123,11 +129,23 @@ export function coerceUmlClassifierMembersFromAttrs(
       if (!isRecord(a)) continue;
       const name = trimString(a.name);
       if (!options.includeEmptyNames && !name) continue;
+
+      const rawAny = a as Record<string, unknown>;
+
+      // Backward compatibility: previous schema used type/typeRef/typeName.
+      const legacyType = optString(rawAny.type);
+      const legacyTypeRef = optString(rawAny.typeRef);
+      const legacyTypeName = optString(rawAny.typeName);
+
+      const metaclass = optString(rawAny.metaclass) ?? (looksLikeUmlMetaclassToken(legacyType) ? legacyType : undefined);
+      const dataTypeRef = optString(rawAny.dataTypeRef) ?? legacyTypeRef;
+      const dataTypeName = optString(rawAny.dataTypeName) ?? legacyTypeName ?? (!looksLikeUmlMetaclassToken(legacyType) ? legacyType : undefined);
+
       attributes.push({
         name,
-        type: optString(a.type),
-        typeRef: optString((a as Record<string, unknown>).typeRef),
-        typeName: optString((a as Record<string, unknown>).typeName),
+        metaclass,
+        dataTypeRef,
+        dataTypeName,
         multiplicity: coerceMultiplicity((a as Record<string, unknown>).multiplicity),
         visibility: asUmlVisibility(a.visibility),
         isStatic: typeof a.isStatic === 'boolean' ? a.isStatic : undefined,
@@ -180,12 +198,16 @@ export function sanitizeUmlClassifierMembersFromAttrs(rawAttrs: unknown): UmlCla
     const name = a.name.trim();
     if (!name) continue;
     const out: UmlAttribute = { name };
-    const type = a.type?.trim();
-    if (type) out.type = type;
-    const typeRef = a.typeRef?.trim();
-    if (typeRef) out.typeRef = typeRef;
-    const typeName = a.typeName?.trim();
-    if (typeName) out.typeName = typeName;
+
+    const metaclass = a.metaclass?.trim();
+    if (metaclass) out.metaclass = metaclass;
+
+    const dtRef = a.dataTypeRef?.trim();
+    if (dtRef) out.dataTypeRef = dtRef;
+
+    const dtName = a.dataTypeName?.trim();
+    if (dtName) out.dataTypeName = dtName;
+
     const lower = a.multiplicity?.lower?.trim();
     const upper = a.multiplicity?.upper?.trim();
     if (lower || upper) {

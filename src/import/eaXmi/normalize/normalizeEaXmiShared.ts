@@ -57,8 +57,33 @@ export function normalizeUmlMembers(raw: unknown): unknown {
       const ar = a as Record<string, unknown>;
       const name = trimOrUndef(ar.name) ?? '';
       const out: Record<string, unknown> = { name };
-      const type = trimOrUndef(ar.type);
-      if (type) out.type = type;
+      // Step 6 refactor: keep explicit datatype fields.
+      // Backward compatibility: previous payloads used type/typeRef/typeName.
+      const legacyType = trimOrUndef(ar.type);
+      const legacyTypeRef = trimOrUndef((ar as any).typeRef);
+      const legacyTypeName = trimOrUndef((ar as any).typeName);
+
+      const metaclass = trimOrUndef((ar as any).metaclass) ?? (legacyType?.startsWith('uml:') ? legacyType : undefined);
+      if (metaclass) out.metaclass = metaclass;
+
+      const dataTypeRef = trimOrUndef((ar as any).dataTypeRef) ?? legacyTypeRef;
+      if (dataTypeRef) out.dataTypeRef = dataTypeRef;
+
+      const dataTypeName = trimOrUndef((ar as any).dataTypeName) ?? legacyTypeName ?? (legacyType && !legacyType.startsWith('uml:') ? legacyType : undefined);
+      if (dataTypeName) out.dataTypeName = dataTypeName;
+
+      // Multiplicity
+      const multRaw = (ar as any).multiplicity;
+      if (multRaw && typeof multRaw === 'object') {
+        const lower = trimOrUndef((multRaw as any).lower);
+        const upper = trimOrUndef((multRaw as any).upper);
+        if (lower || upper) {
+          const m: Record<string, unknown> = {};
+          if (lower) m.lower = lower;
+          if (upper) m.upper = upper;
+          out.multiplicity = m;
+        }
+      }
       const vis = trimOrUndef(ar.visibility);
       if (vis) out.visibility = vis;
       const isStatic = normalizeBool(ar.isStatic);

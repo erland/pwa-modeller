@@ -356,6 +356,71 @@ function migrateV9ToV10(model: Model): Model {
   return model;
 }
 
+/**
+ * v10 -> v11 migration:
+ * - UML classifier attribute cleanup: rename/de-overload attribute datatype fields
+ *   - type      -> dataTypeName (legacy)
+ *   - typeName  -> dataTypeName
+ *   - typeRef   -> dataTypeRef
+ *   - (optional) metaclass remains as-is (or inferred from legacy type='uml:*')
+ */
+function migrateV10ToV11(model: Model): Model {
+  for (const eid of Object.keys(model.elements)) {
+    const el: any = model.elements[eid] as any;
+    const t = typeof el.type === 'string' ? el.type : '';
+    if (!t.startsWith('uml.')) continue;
+    if (!isRecord(el.attrs)) continue;
+
+    const attrs: any = el.attrs as any;
+    if (!Array.isArray(attrs.attributes)) continue;
+
+    const nextAttributes = attrs.attributes.map((a: unknown) => {
+      if (!isRecord(a)) return a;
+      const ar: any = { ...(a as any) };
+
+      const legacyType = typeof ar.type === 'string' ? ar.type.trim() : undefined;
+      const legacyTypeRef = typeof ar.typeRef === 'string' ? ar.typeRef.trim() : undefined;
+      const legacyTypeName = typeof ar.typeName === 'string' ? ar.typeName.trim() : undefined;
+
+      const metaclass =
+        typeof ar.metaclass === 'string'
+          ? ar.metaclass.trim()
+          : legacyType && legacyType.startsWith('uml:')
+            ? legacyType
+            : undefined;
+
+      const dataTypeRef = typeof ar.dataTypeRef === 'string' ? ar.dataTypeRef.trim() : legacyTypeRef;
+
+      const dataTypeName =
+        typeof ar.dataTypeName === 'string'
+          ? ar.dataTypeName.trim()
+          : legacyTypeName ?? (legacyType && !legacyType.startsWith('uml:') ? legacyType : undefined);
+
+      // Drop legacy keys
+      delete ar.type;
+      delete ar.typeRef;
+      delete ar.typeName;
+
+      // Normalize new keys
+      if (metaclass && metaclass.trim()) ar.metaclass = metaclass.trim();
+      else delete ar.metaclass;
+
+      if (dataTypeRef && dataTypeRef.trim()) ar.dataTypeRef = dataTypeRef.trim();
+      else delete ar.dataTypeRef;
+
+      if (dataTypeName && dataTypeName.trim()) ar.dataTypeName = dataTypeName.trim();
+      else delete ar.dataTypeName;
+
+      return ar;
+    });
+
+    model.elements[eid] = { ...el, attrs: { ...attrs, attributes: nextAttributes } };
+  }
+
+  model.schemaVersion = 11;
+  return model;
+}
+
 
 export type MigrationResult = {
   model: Model;
@@ -417,6 +482,12 @@ export function runMigrations(model: Model): MigrationResult {
   if (v < 10) {
     model = migrateV9ToV10(model);
     notes.push('migrate v9 -> v10');
+  }
+
+  v = getSchemaVersion(model);
+  if (v < 11) {
+    model = migrateV10ToV11(model);
+    notes.push('migrate v10 -> v11');
   }
 
   return { model, migratedFromVersion, notes };

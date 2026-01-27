@@ -38,12 +38,12 @@ describe('eaXmi classifier member parsing', () => {
     const members = (c1?.meta as any)?.umlMembers;
     expect(members).toBeDefined();
 
-        expect(members.attributes).toEqual([
+    expect(members.attributes).toEqual([
       {
         name: 'foo',
-        type: 'String',
-        typeRef: 'T1',
-        typeName: 'String',
+        metaclass: 'uml:Property',
+        dataTypeRef: 'T1',
+        dataTypeName: 'String',
         multiplicity: { lower: '0', upper: '1' },
         visibility: 'private',
         defaultValue: '42',
@@ -92,9 +92,9 @@ describe('eaXmi classifier member parsing', () => {
     expect(members.attributes).toEqual([
       {
         name: 'foo',
-        type: 'String',
-        typeRef: 'T1',
-        typeName: 'String',
+        metaclass: 'uml:Property',
+        dataTypeRef: 'T1',
+        dataTypeName: 'String',
         multiplicity: { lower: '0', upper: '1' },
         visibility: 'private',
       },
@@ -132,9 +132,9 @@ describe('eaXmi classifier member parsing', () => {
     expect(members.attributes).toEqual([
       {
         name: 'foo',
-        type: 'String',
-        typeRef: 'EAID_MISSING_TYPE',
-        typeName: 'String',
+        metaclass: 'uml:Property',
+        dataTypeRef: 'EAID_MISSING_TYPE',
+        dataTypeName: 'String',
         multiplicity: { lower: '0', upper: '*' },
         visibility: 'private',
       },
@@ -171,7 +171,8 @@ describe('eaXmi classifier member parsing', () => {
     expect(members.attributes).toEqual([
       {
         name: 'foo',
-        typeRef: 'EAID_MISSING_TYPE',
+        metaclass: 'uml:Property',
+        dataTypeRef: 'EAID_MISSING_TYPE',
         visibility: 'private',
       },
     ]);

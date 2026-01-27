@@ -326,6 +326,7 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     // v8 introduces view.connections (per-view relationship instances).
     // v9 introduces view.kind (diagram notation).
     // v10 normalizes BPMN attrs for non-activity containers and global defs.
-    schemaVersion: 10
+    // v11 renames UML attribute datatype fields (type/typeName/typeRef -> dataTypeName/dataTypeRef).
+    schemaVersion: 11
   };
 }

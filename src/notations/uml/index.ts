@@ -15,6 +15,7 @@ import { UmlRelationshipProperties } from '../../components/model/properties/uml
 import { UmlClassifierMembersSection } from '../../components/model/properties/uml/UmlClassifierMembersSection';
 import { UmlStereotypeSection } from '../../components/model/properties/uml/UmlStereotypeSection';
 import { UmlActivitySection } from '../../components/model/properties/uml/UmlActivitySection';
+import { UmlAssociationClassLinkSection } from '../../components/model/properties/uml/UmlAssociationClassLinkSection';
 
 type UmlRelAttrs = {
   /** Optional navigability for associations (v1: boolean directed). */
@@ -132,10 +133,17 @@ export const umlNotation: Notation = {
 
     // Class/Interface members are semantic and stored on the element.
     // (View-local toggles for showing/hiding compartments live on the node.)
-    if (element.type === "uml.class" || element.type === "uml.interface") {
+    if (element.type === "uml.class" || element.type === "uml.interface" || element.type === 'uml.associationClass') {
       sections.push({
         key: "uml.classifier.members",
         content: React.createElement(UmlClassifierMembersSection, { element, actions }),
+      });
+    }
+
+    if (element.type === 'uml.associationClass') {
+      sections.push({
+        key: 'uml.associationClass.link',
+        content: React.createElement(UmlAssociationClassLinkSection, { model, element, actions, onSelect }),
       });
     }
 

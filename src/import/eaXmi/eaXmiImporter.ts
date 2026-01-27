@@ -200,7 +200,15 @@ export const eaXmiImporter: Importer<IRModel> = {
     });
 
     // Step 1 (ArchiMate): EA connector stereotypes -> relationships (preferred for ArchiMate)
-    const { relationships: relsArchimateConnectors } = parseEaXmiArchiMateConnectorRelationships(doc, report);
+    // Provide element type map so the connector parser can resolve cross-notation edge cases
+    // (e.g. ArchiMate_Realisation used between UML elements).
+    const elementTypeById: Record<string, string> = {};
+    for (const e of elements) {
+      if (typeof e?.id === 'string' && typeof (e as any).type === 'string') {
+        elementTypeById[e.id] = (e as any).type;
+      }
+    }
+    const { relationships: relsArchimateConnectors } = parseEaXmiArchiMateConnectorRelationships(doc, report, { elementTypeById });
 
     // Step 1C (UML): EA connector block -> UML relationships (associations, deps, etc.)
     const { relationships: relsUmlConnectors } = parseEaXmiUmlConnectorRelationships(doc, report);

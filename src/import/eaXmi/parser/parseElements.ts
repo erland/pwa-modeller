@@ -11,7 +11,7 @@ import {
   inferArchimateRelationshipTypeFromEaProfileTagLocalName,
   inferUmlQualifiedElementTypeFromEaClassifier,
 } from '../mapping';
-import { buildXmiIdIndex } from '../resolve';
+import { buildXmiIdIndex, buildXmiIdToNameIndex } from '../resolve';
 import { parseEaXmiClassifierMembers } from '../parseMembers';
 import { createTypeNameResolver } from '../typeNameResolver';
 import { getXmiId, getXmiType } from '../xmi';
@@ -218,8 +218,9 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
   let synthCounter = 0;
 
   const idIndex = buildXmiIdIndex(doc);
+  const idToName = buildXmiIdToNameIndex(doc, idIndex);
   // Document-wide cache for resolving datatype names by xmi:idref or href.
-  const typeNameResolver = createTypeNameResolver(idIndex);
+  const typeNameResolver = createTypeNameResolver(idIndex, idToName);
   const eaExtDocsById = buildEaExtensionDocumentationIndex(doc);
 
   const all = doc.getElementsByTagName('*');

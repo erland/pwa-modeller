@@ -88,7 +88,7 @@ export type TypeResolution = {
   name?: string;
 };
 
-export function createTypeNameResolver(index: Map<string, Element>) {
+export function createTypeNameResolver(index: Map<string, Element>, idToName?: Map<string, string>) {
   const cache = new Map<string, string | undefined>();
 
   const resolveFromRef = (rawRef: string, contextEl?: Element): string | undefined => {
@@ -108,11 +108,11 @@ export function createTypeNameResolver(index: Map<string, Element>) {
       const id = hrefId ?? ref;
       const target = resolveById(index, id);
       if (target) {
-        const n = (attr(target, 'name') ?? '').trim();
+        const n = (idToName?.get(id) ?? attr(target, 'name') ?? '').trim();
         resolved = n || undefined;
       }
 
-      if (!resolved && contextEl) {
+if (!resolved && contextEl) {
         resolved = tryResolveTypeNameFromElementContext(contextEl);
       }
 

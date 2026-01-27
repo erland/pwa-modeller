@@ -1,5 +1,5 @@
 import { parseXml } from '../../framework/xml';
-import { buildXmiIdIndex, parseIdRefList, resolveById, resolveHrefId } from '../resolve';
+import { buildXmiIdIndex, buildXmiIdToNameIndex, parseIdRefList, resolveById, resolveHrefId } from '../resolve';
 
 describe('eaXmi reference utilities', () => {
   test('buildXmiIdIndex indexes xmi:id and id', () => {
@@ -18,6 +18,26 @@ describe('eaXmi reference utilities', () => {
     expect(index.get('M1')?.tagName).toBeTruthy();
     expect(index.get('C1')?.getAttribute('name')).toBe('Class1');
     expect(index.get('C2')?.getAttribute('name')).toBe('Class2');
+  });
+
+  test('buildXmiIdToNameIndex indexes names for common UML type elements', () => {
+    const xml = `
+      <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+        <uml:Model xmi:id="M1" name="Model">
+          <packagedElement xmi:type="uml:Class" xmi:id="C1" name="Person" />
+          <packagedElement xmi:type="uml:DataType" xmi:id="DT1">
+            <properties name="Money" />
+          </packagedElement>
+        </uml:Model>
+      </xmi:XMI>
+    `;
+  
+    const doc = parseXml(xml);
+    const idIndex = buildXmiIdIndex(doc);
+    const idToName = buildXmiIdToNameIndex(doc, idIndex);
+  
+    expect(idToName.get('C1')).toBe('Person');
+    expect(idToName.get('DT1')).toBe('Money');
   });
 
   test('resolveById resolves a simple id', () => {

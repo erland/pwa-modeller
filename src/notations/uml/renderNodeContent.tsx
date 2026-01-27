@@ -37,13 +37,19 @@ function visibilitySymbol(v?: UmlVisibility): string {
   }
 }
 
-
-
-
 function formatAttribute(a: UmlAttribute): string {
   const sym = visibilitySymbol(a.visibility);
   const head = sym ? `${sym} ${a.name}` : a.name;
-  return a.type ? `${head}: ${a.type}` : head;
+
+  const type = (a.typeName ?? a.type) ? String(a.typeName ?? a.type) : '';
+  const typePart = type.trim().length ? `: ${type.trim()}` : '';
+
+  const m = a.multiplicity;
+  const lower = m?.lower?.trim() ?? '';
+  const upper = m?.upper?.trim() ?? '';
+  const multPart = lower || upper ? ` [${lower}..${upper}]` : '';
+
+  return `${head}${typePart}${multPart}`;
 }
 
 function formatOperation(o: UmlOperation): string {

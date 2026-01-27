@@ -60,6 +60,20 @@ function parseParams(text: string): UmlParameter[] {
   return out;
 }
 
+function formatMultiplicity(m?: { lower?: string; upper?: string }): string {
+  const lower = (m?.lower ?? '').trim();
+  const upper = (m?.upper ?? '').trim();
+  return lower || upper ? ` [${lower}..${upper}]` : '';
+}
+
+function formatAttributeInline(a: UmlAttribute): string {
+  const name = (a.name || '').trim();
+  if (!name) return '';
+  const type = String(a.typeName ?? a.type ?? '').trim();
+  const head = type ? `${name}: ${type}` : name;
+  return `${head}${formatMultiplicity(a.multiplicity)}`;
+}
+
 function NamesInline({ names, maxInline = 4 }: { names: string[]; maxInline?: number }) {
   const inline = useMemo(() => names.slice(0, Math.max(0, maxInline)), [names, maxInline]);
   const overflowCount = Math.max(0, names.length - inline.length);
@@ -361,7 +375,7 @@ export function UmlClassifierMembersSection({ element: el, actions }: Props) {
     [actions, base, el.id, isClassifier]
   );
 
-  const attrNames = useMemo(() => attributes.map((a) => a.name.trim()).filter(Boolean), [attributes]);
+  const attrNames = useMemo(() => attributes.map(formatAttributeInline).filter(Boolean), [attributes]);
   const opNames = useMemo(() => operations.map((o) => o.name.trim()).filter(Boolean), [operations]);
 
   const [isAttrsOpen, setIsAttrsOpen] = useState(false);

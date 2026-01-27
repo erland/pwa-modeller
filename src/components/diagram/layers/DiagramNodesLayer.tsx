@@ -74,7 +74,7 @@ export function DiagramNodesLayer({
   };
 
   return (
-    <>
+    <div className="diagramNodesLayer">
       {nodes.map((n) => {
         if (n.elementId) {
           const el = model.elements[n.elementId];
@@ -151,6 +151,6 @@ export function DiagramNodesLayer({
 
         return null;
       })}
-    </>
+    </div>
   );
 }

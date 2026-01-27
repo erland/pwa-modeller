@@ -529,9 +529,17 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* Dedicated stacking layers so connectors can always be rendered above nodes. */
+.diagramNodesLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
 .diagramRelationships {
   position: absolute;
   inset: 0;
+  z-index: 2;
   /* Don't block node interactions in empty space; hit targets opt-in per relationship. */
   pointer-events: none;
 }

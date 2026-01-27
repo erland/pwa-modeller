@@ -218,21 +218,6 @@ export function DiagramCanvasView({
                     }}
                   />
                 ) : null}
-                <DiagramRelationshipsLayer
-                  model={model}
-                  notation={notation}
-                  viewId={activeViewId ?? undefined}
-                  gridSize={activeView?.formatting?.gridSize}
-                  nodes={nodes}
-                  connectionRenderItems={connectionRenderItems}
-                  surfaceWidthModel={surfaceWidthModel}
-                  surfaceHeightModel={surfaceHeightModel}
-                  selection={selection}
-                  linkDrag={rel.linkDrag}
-                  groupBoxDraft={groupBoxDraft}
-                  onSelect={onSelect}
-                />
-
                 <DiagramNodesLayer
                   model={model}
                   activeView={activeView}
@@ -246,6 +231,26 @@ export function DiagramCanvasView({
                   onHoverAsRelationshipTarget={rel.hoverAsRelationshipTarget}
                   onStartLinkDrag={rel.startLinkDrag}
                   getElementBgVar={getElementBgVar}
+                />
+
+                {/*
+                  Relationships are rendered as a dedicated overlay layer so they are always visible.
+                  (Individual hit targets opt-in to pointer events; the empty SVG surface does not
+                  block node interaction.)
+                */}
+                <DiagramRelationshipsLayer
+                  model={model}
+                  notation={notation}
+                  viewId={activeViewId ?? undefined}
+                  gridSize={activeView?.formatting?.gridSize}
+                  nodes={nodes}
+                  connectionRenderItems={connectionRenderItems}
+                  surfaceWidthModel={surfaceWidthModel}
+                  surfaceHeightModel={surfaceHeightModel}
+                  selection={selection}
+                  linkDrag={rel.linkDrag}
+                  groupBoxDraft={groupBoxDraft}
+                  onSelect={onSelect}
                 />
               </div>
             </div>

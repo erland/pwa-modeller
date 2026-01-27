@@ -3,6 +3,7 @@ import type { View, ViewNodeLayout, ViewObject, ViewObjectType, ViewRelationship
 import { createId, createView, createViewObject } from '../../../domain';
 import { modelStore } from '../../../store';
 import { pushWarning, resolveViewpointId, toExternalIds, toTaggedValues } from '../applyImportHelpers';
+import { fixViewZOrder } from '../postprocess/fixViewZOrder';
 
 export function applyViews(ctx: ApplyImportContext): void {
   const { ir, sourceSystem, report, inferredViewKind, rootFolderId, mappings } = ctx;
@@ -138,5 +139,19 @@ export function applyViews(ctx: ApplyImportContext): void {
         pushWarning(report, `Failed to apply relationship routing in view "${v.name}": ${(e as Error).message}`);
       }
     }
+
+// Post-process: normalize node z-order to avoid large containers covering smaller nodes after import.
+try {
+  const latestModel = modelStore.getState().model;
+  const latestView = latestModel?.views[internalId];
+  if (latestModel && latestView?.layout?.nodes?.length) {
+    const fixedNodes = fixViewZOrder(latestModel, latestView);
+    const existingRels = latestView.layout?.relationships ?? [];
+    modelStore.updateView(internalId, { layout: { nodes: fixedNodes, relationships: existingRels } });
+  }
+} catch (e) {
+  pushWarning(report, `Failed to normalize z-order in view "${v.name}": ${(e as Error).message}`);
+}
+
   }
 }

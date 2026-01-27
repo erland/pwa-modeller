@@ -81,6 +81,17 @@ function formatMultiplicity(m?: { lower?: string; upper?: string }): string {
   return lower || upper ? ` [${lower}..${upper}]` : '';
 }
 
+function withMultiplicity(a: UmlAttribute, nextLowerRaw: string, nextUpperRaw: string): UmlAttribute {
+  const lower = nextLowerRaw.trim();
+  const upper = nextUpperRaw.trim();
+  const next = {
+    lower: lower || undefined,
+    upper: upper || undefined,
+  };
+  const hasAny = !!next.lower || !!next.upper;
+  return { ...a, multiplicity: hasAny ? next : undefined };
+}
+
 function formatAttributeInline(a: UmlAttribute): string {
   const name = (a.name || '').trim();
   if (!name) return '';
@@ -164,6 +175,36 @@ function UmlAttributesEditor({
               onChange(next);
             }}
             style={{ width: 160 }}
+          />
+
+          <input
+            className="textInput"
+            aria-label={`UML attribute multiplicity lower ${idx + 1}`}
+            placeholder="lower"
+            value={a.multiplicity?.lower ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              const next = attributes.map((x, i) =>
+                i === idx ? withMultiplicity(x, v, x.multiplicity?.upper ?? '') : x,
+              );
+              onChange(next);
+            }}
+            style={{ width: 70 }}
+          />
+
+          <input
+            className="textInput"
+            aria-label={`UML attribute multiplicity upper ${idx + 1}`}
+            placeholder="upper"
+            value={a.multiplicity?.upper ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              const next = attributes.map((x, i) =>
+                i === idx ? withMultiplicity(x, x.multiplicity?.lower ?? '', v) : x,
+              );
+              onChange(next);
+            }}
+            style={{ width: 70 }}
           />
 
           <input

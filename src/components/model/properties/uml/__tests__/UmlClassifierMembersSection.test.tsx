@@ -47,6 +47,38 @@ describe('UmlClassifierMembersSection', () => {
     });
   });
 
+  it('edits attribute multiplicity in the attributes dialog and commits to element.attrs', () => {
+    const updateElement = jest.fn();
+    const el: Element = {
+      id: 'c_mul',
+      name: 'Order',
+      type: 'uml.class',
+      attrs: { attributes: [], operations: [] },
+    } as Element;
+
+    const actions = makeActions({ updateElement });
+    render(<UmlClassifierMembersSection element={el} actions={actions} />);
+
+    fireEvent.click(screen.getByLabelText('Edit UML attributes'));
+    fireEvent.click(screen.getByText('Add attribute'));
+
+    const lower = screen.getByLabelText('UML attribute multiplicity lower 1') as HTMLInputElement;
+    const upper = screen.getByLabelText('UML attribute multiplicity upper 1') as HTMLInputElement;
+    fireEvent.change(lower, { target: { value: '0' } });
+    fireEvent.change(upper, { target: { value: '*' } });
+
+    fireEvent.click(screen.getByText('Apply'));
+
+    expect(updateElement).toHaveBeenCalled();
+    const lastCall = updateElement.mock.calls[updateElement.mock.calls.length - 1];
+    expect(lastCall[0]).toBe('c_mul');
+    expect(lastCall[1]).toMatchObject({
+      attrs: {
+        attributes: [{ multiplicity: { lower: '0', upper: '*' } }],
+      },
+    });
+  });
+
   it('updates operation return type and commits to element.attrs', () => {
     const updateElement = jest.fn();
     const el: Element = {

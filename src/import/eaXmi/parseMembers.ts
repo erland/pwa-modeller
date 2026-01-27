@@ -10,9 +10,17 @@ export type EaXmiUmlParameter = {
   type?: string;
 };
 
+export type EaXmiUmlMultiplicity = {
+  lower?: string;
+  upper?: string;
+};
+
 export type EaXmiUmlAttribute = {
   name: string;
   type?: string;
+  typeRef?: string;
+  typeName?: string;
+  multiplicity?: EaXmiUmlMultiplicity;
   visibility?: 'public' | 'private' | 'protected' | 'package';
   isStatic?: boolean;
   defaultValue?: string;
@@ -91,6 +99,24 @@ function readTypeRef(el: Element): string | undefined {
   return undefined;
 }
 
+function readMultiplicity(el: Element): EaXmiUmlMultiplicity | undefined {
+  const lowerEl = childByLocalName(el, 'lowervalue');
+  const upperEl = childByLocalName(el, 'uppervalue');
+
+  const lower = (lowerEl ? attrAny(lowerEl, ['value', 'body']) : null);
+  const upper = (upperEl ? attrAny(upperEl, ['value', 'body']) : null);
+
+  const lowerS = (lower ?? '').trim();
+  const upperS = (upper ?? '').trim();
+
+  if (!lowerS && !upperS) return undefined;
+
+  const out: EaXmiUmlMultiplicity = {};
+  if (lowerS) out.lower = lowerS;
+  if (upperS) out.upper = upperS;
+  return out;
+}
+
 function readDefaultValue(el: Element): string | undefined {
   const dv = childByLocalName(el, 'defaultvalue');
   if (!dv) return undefined;
@@ -118,11 +144,18 @@ function parseOwnedAttributes(
     if (!name) continue;
     const vis = asVisibility(attr(a, 'visibility'));
     const isStatic = parseBool(attrAny(a, ['isStatic', 'static']));
-    const typeName = resolveTypeName(index, readTypeRef(a));
+    const typeRef = readTypeRef(a);
+    const typeName = resolveTypeName(index, typeRef);
+    const multiplicity = readMultiplicity(a);
     const defaultValue = readDefaultValue(a);
 
     const outAttr: EaXmiUmlAttribute = { name };
-    if (typeName) outAttr.type = typeName;
+    if (typeRef) outAttr.typeRef = typeRef;
+    if (typeName) {
+      outAttr.type = typeName; // legacy
+      outAttr.typeName = typeName;
+    }
+    if (multiplicity) outAttr.multiplicity = multiplicity;
     if (vis) outAttr.visibility = vis;
     if (typeof isStatic === 'boolean' && isStatic) outAttr.isStatic = true;
     if (defaultValue) outAttr.defaultValue = defaultValue;

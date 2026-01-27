@@ -11,7 +11,10 @@ describe('eaXmi classifier member parsing', () => {
           <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
             <packagedElement xmi:type="uml:PrimitiveType" xmi:id="T1" name="String" />
             <packagedElement xmi:type="uml:Class" xmi:id="C1" name="A">
-              <ownedAttribute xmi:id="A1" name="foo" visibility="private" type="T1">
+              <ownedAttribute xmi:id="A1" name="foo" visibility="private">
+                <type xmi:idref="T1" />
+                <lowerValue value="0" />
+                <upperValue value="1" />
                 <defaultValue value="42" />
               </ownedAttribute>
               <ownedOperation xmi:id="O1" name="bar" visibility="public">
@@ -35,8 +38,16 @@ describe('eaXmi classifier member parsing', () => {
     const members = (c1?.meta as any)?.umlMembers;
     expect(members).toBeDefined();
 
-    expect(members.attributes).toEqual([
-      { name: 'foo', type: 'String', visibility: 'private', defaultValue: '42' },
+        expect(members.attributes).toEqual([
+      {
+        name: 'foo',
+        type: 'String',
+        typeRef: 'T1',
+        typeName: 'String',
+        multiplicity: { lower: '0', upper: '1' },
+        visibility: 'private',
+        defaultValue: '42',
+      },
     ]);
 
     expect(members.operations).toEqual([

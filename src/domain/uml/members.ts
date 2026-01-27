@@ -72,6 +72,16 @@ function looksLikeUmlMetaclassToken(v: string | undefined): boolean {
   return s.startsWith('uml:');
 }
 
+function looksLikeClearlyWrongDatatypeToken(v: string | undefined, metaclass?: string): boolean {
+  const s = (v ?? '').trim();
+  if (!s) return false;
+  // Datatype names/refs should not be UML/XMI metaclass-ish tokens.
+  if (s.startsWith('uml:') || s.startsWith('xmi:')) return true;
+  const mc = (metaclass ?? '').trim();
+  if (mc && s === mc) return true;
+  return false;
+}
+
 function coerceMultiplicity(raw: unknown): UmlMultiplicity | undefined {
   if (!isRecord(raw)) return undefined;
   const lower = optString(raw.lower);
@@ -138,8 +148,16 @@ export function coerceUmlClassifierMembersFromAttrs(
       const legacyTypeName = optString(rawAny.typeName);
 
       const metaclass = optString(rawAny.metaclass) ?? (looksLikeUmlMetaclassToken(legacyType) ? legacyType : undefined);
-      const dataTypeRef = optString(rawAny.dataTypeRef) ?? legacyTypeRef;
-      const dataTypeName = optString(rawAny.dataTypeName) ?? legacyTypeName ?? (!looksLikeUmlMetaclassToken(legacyType) ? legacyType : undefined);
+      let dataTypeRef = optString(rawAny.dataTypeRef) ?? legacyTypeRef;
+      let dataTypeName =
+        optString(rawAny.dataTypeName) ??
+        legacyTypeName ??
+        (!looksLikeUmlMetaclassToken(legacyType) ? legacyType : undefined);
+
+      // A3: Guard against already-imported / legacy-bad models where the metaclass leaks into datatype fields.
+      // We keep the metaclass but drop obviously wrong datatype tokens.
+      if (looksLikeClearlyWrongDatatypeToken(dataTypeRef, metaclass)) dataTypeRef = undefined;
+      if (looksLikeClearlyWrongDatatypeToken(dataTypeName, metaclass)) dataTypeName = undefined;
 
       attributes.push({
         name,
@@ -203,10 +221,10 @@ export function sanitizeUmlClassifierMembersFromAttrs(rawAttrs: unknown): UmlCla
     if (metaclass) out.metaclass = metaclass;
 
     const dtRef = a.dataTypeRef?.trim();
-    if (dtRef) out.dataTypeRef = dtRef;
+    if (dtRef && !looksLikeClearlyWrongDatatypeToken(dtRef, metaclass)) out.dataTypeRef = dtRef;
 
     const dtName = a.dataTypeName?.trim();
-    if (dtName) out.dataTypeName = dtName;
+    if (dtName && !looksLikeClearlyWrongDatatypeToken(dtName, metaclass)) out.dataTypeName = dtName;
 
     const lower = a.multiplicity?.lower?.trim();
     const upper = a.multiplicity?.upper?.trim();

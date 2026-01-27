@@ -95,4 +95,69 @@ describe('EA XMI UML import (fixtures)', () => {
     const includes = res.ir.relationships.filter((r) => r.type === 'uml.include');
     expect(includes.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('imports an AssociationClass fixture and materializes an uml.association relationship with stable IR links', async () => {
+    const xml = readFixture('uml-associationclass.xmi');
+    const file = new File([xml], 'uml-associationclass.xmi', { type: 'application/xml' });
+
+    const res = await importModel(file);
+
+    expect(res.importerId).toBe('ea-xmi-uml');
+    expect(res.format).toBe('ea-xmi-uml');
+
+    const ac = res.ir.elements.find((e) => e.id === 'ac1');
+    expect(ac).toBeTruthy();
+    expect(ac?.type).toBe('uml.associationClass');
+
+    // The parser namespaces the AssociationClass relationship id to avoid collisions.
+    const rel = res.ir.relationships.find((r) => r.id === 'ac1__association');
+    expect(rel).toBeTruthy();
+    expect(rel?.type).toBe('uml.association');
+    expect((rel as any)?.meta?.metaclass).toBe('AssociationClass');
+
+    // Endpoints should connect Person <-> Company (direction depends on parse order).
+    const endpoints = new Set([rel?.sourceId, rel?.targetId]);
+    expect(endpoints.has('cPerson')).toBe(true);
+    expect(endpoints.has('cCompany')).toBe(true);
+
+    // Normalize pass should link the box and the line using IR ids.
+    expect((ac as any)?.attrs?.associationRelationshipId).toBe('ac1__association');
+    expect((rel as any)?.attrs?.associationClassElementId).toBe('ac1');
+  });
+
+  it('applies AssociationClass fixture and rewrites box/line links to internal ids', async () => {
+    const xml = readFixture('uml-associationclass.xmi');
+    const file = new File([xml], 'uml-associationclass.xmi', { type: 'application/xml' });
+
+    const res = await importModel(file);
+    const applied = applyImportIR(res.ir, res.report, { sourceSystem: 'ea-xmi-uml' });
+
+    expect(applied.modelId).toBeTruthy();
+
+    const model = modelStore.getState().model;
+    expect(model).not.toBeNull();
+
+    const els = Object.values(model!.elements);
+    const assocClass = els.find((e) => e.type === 'uml.associationClass' && e.name === 'EmploymentContract');
+    expect(assocClass).toBeTruthy();
+
+    const relId = (assocClass as any)?.attrs?.associationRelationshipId;
+    expect(typeof relId).toBe('string');
+    expect((relId as string).length).toBeGreaterThan(0);
+
+    const rel = model!.relationships[relId as string];
+    expect(rel).toBeTruthy();
+    expect(rel.type).toBe('uml.association');
+    expect((rel as any)?.attrs?.associationClassElementId).toBe((assocClass as any).id);
+
+    // Relationship endpoints should point at the internal Person/Company elements.
+    const person = els.find((e) => e.type === 'uml.class' && e.name === 'Person');
+    const company = els.find((e) => e.type === 'uml.class' && e.name === 'Company');
+    expect(person).toBeTruthy();
+    expect(company).toBeTruthy();
+
+    const internalEndpoints = new Set([rel.sourceElementId, rel.targetElementId]);
+    expect(internalEndpoints.has((person as any).id)).toBe(true);
+    expect(internalEndpoints.has((company as any).id)).toBe(true);
+  });
 });

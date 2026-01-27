@@ -78,6 +78,9 @@ function isHumanReadableTypeToken(s: string | undefined | null): boolean {
   if (!v) return false;
   if (v.length > 120) return false;
   if (v.includes('://')) return false;
+  // Never treat UML/XMI metaclass tokens as datatypes.
+  // These commonly leak in from xmi:type attributes (e.g. 'uml:Property').
+  if (v.startsWith('uml:') || v.startsWith('xmi:')) return false;
   if (looksLikeInternalId(v)) return false;
   return true;
 }
@@ -154,7 +157,12 @@ function resolveTypeName(
 function readTypeRef(el: Element): string | undefined {
   // Common: type="_id" on ownedAttribute/ownedParameter.
   const direct = attr(el, 'type');
-  if (direct && direct.trim()) return direct.trim();
+  // Some XML helpers resolve by localName and will pick up xmi:type here.
+  // If that happens, we MUST ignore it (metaclass is not a datatype ref).
+  if (direct && direct.trim()) {
+    const v = direct.trim();
+    if (!v.startsWith('uml:') && !v.startsWith('xmi:')) return v;
+  }
 
   // Alternative: <type xmi:idref="_id" />
   const t = childByLocalName(el, 'type');

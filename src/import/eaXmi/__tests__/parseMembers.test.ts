@@ -100,4 +100,80 @@ describe('eaXmi classifier member parsing', () => {
       },
     ]);
   });
+
+  test('falls back to EA <properties type="..."/> when typeRef cannot be resolved from the XMI id index', () => {
+    const xml = `
+      <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+        <uml:Model xmi:id="M1" name="MyModel">
+          <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
+            <packagedElement xmi:type="uml:Class" xmi:id="C1" name="A">
+              <ownedAttribute xmi:id="A1" name="foo" visibility="private" type="EAID_MISSING_TYPE">
+                <properties type="String" />
+                <lowerValue value="0" />
+                <upperValue value="*" />
+              </ownedAttribute>
+            </packagedElement>
+          </packagedElement>
+        </uml:Model>
+      </xmi:XMI>
+    `;
+
+    const doc = parseXml(xml);
+    const report = createImportReport('ea-xmi-uml');
+    parseEaXmiPackageHierarchyToFolders(doc, report);
+    const { elements } = parseEaXmiClassifiersToElements(doc, report);
+
+    const c1 = elements.find((e) => e.id === 'C1');
+    expect(c1?.type).toBe('uml.class');
+
+    const members = (c1?.meta as any)?.umlMembers;
+    expect(members).toBeDefined();
+
+    expect(members.attributes).toEqual([
+      {
+        name: 'foo',
+        type: 'String',
+        typeRef: 'EAID_MISSING_TYPE',
+        typeName: 'String',
+        multiplicity: { lower: '0', upper: '*' },
+        visibility: 'private',
+      },
+    ]);
+  });
+
+  test('does not crash when attribute typeRef cannot be resolved and no fallback is available', () => {
+    const xml = `
+      <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+        <uml:Model xmi:id="M1" name="MyModel">
+          <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
+            <packagedElement xmi:type="uml:Class" xmi:id="C1" name="A">
+              <ownedAttribute xmi:id="A1" name="foo" visibility="private">
+                <type xmi:idref="EAID_MISSING_TYPE" />
+              </ownedAttribute>
+            </packagedElement>
+          </packagedElement>
+        </uml:Model>
+      </xmi:XMI>
+    `;
+
+    const doc = parseXml(xml);
+    const report = createImportReport('ea-xmi-uml');
+    parseEaXmiPackageHierarchyToFolders(doc, report);
+    const { elements } = parseEaXmiClassifiersToElements(doc, report);
+
+    const c1 = elements.find((e) => e.id === 'C1');
+    expect(c1?.type).toBe('uml.class');
+
+    const members = (c1?.meta as any)?.umlMembers;
+    expect(members).toBeDefined();
+
+    // We keep typeRef, but do not guess a typeName for internal ids without a clear hint.
+    expect(members.attributes).toEqual([
+      {
+        name: 'foo',
+        typeRef: 'EAID_MISSING_TYPE',
+        visibility: 'private',
+      },
+    ]);
+  });
 });

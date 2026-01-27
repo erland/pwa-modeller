@@ -60,7 +60,67 @@ function asVisibility(v: string | null | undefined): 'public' | 'private' | 'pro
   }
 }
 
-function resolveTypeName(index: Map<string, Element>, typeRef: string | undefined | null): string | undefined {
+function looksLikeInternalId(id: string): boolean {
+  return (
+    id.startsWith('_') ||
+    id.startsWith('EAID_') ||
+    id.startsWith('EAPK_') ||
+    id.startsWith('eaEl_synth_') ||
+    id.startsWith('EAGen_')
+  );
+}
+
+function isHumanReadableTypeToken(s: string | undefined | null): boolean {
+  const v = (s ?? '').trim();
+  if (!v) return false;
+  if (v.length > 120) return false;
+  if (v.includes('://')) return false;
+  if (looksLikeInternalId(v)) return false;
+  return true;
+}
+
+function tryResolveTypeNameFromElementContext(attributeEl: Element): string | undefined {
+  // EA sometimes puts the human-readable datatype on a nested <properties> element.
+  // Example (varies by export profile):
+  // <ownedAttribute … type="EAID_…">
+  //   <properties type="String" />
+  // </ownedAttribute>
+  const props = childByLocalName(attributeEl, 'properties');
+  if (props) {
+    const t = attrAny(props, ['type', 'datatype', 'dataType', 'typename', 'typeName', 'classifier', 'classifierName']);
+    if (isHumanReadableTypeToken(t)) return (t ?? '').trim();
+  }
+
+  // Another common pattern: <type name="String" … />
+  const typeChild = childByLocalName(attributeEl, 'type');
+  if (typeChild) {
+    const n = attrAny(typeChild, ['name', 'type', 'typename', 'typeName']);
+    if (isHumanReadableTypeToken(n)) return (n ?? '').trim();
+  }
+
+  // Heuristic: scan for tagged-value like structures.
+  // We keep this conservative and only accept obvious keys.
+  const KEY_CANDIDATES = new Set(['type', 'datatype', 'datatypename', 'typename', 'classifier', 'classifiername']);
+  const all = attributeEl.getElementsByTagName('*');
+  for (let i = 0; i < all.length; i++) {
+    const el = all.item(i);
+    if (!el) continue;
+
+    const key = (attrAny(el, ['tag', 'name', 'key']) ?? '').trim().toLowerCase();
+    if (!key || !KEY_CANDIDATES.has(key)) continue;
+
+    const val = attrAny(el, ['value', 'val', 'body', 'text']) ?? el.textContent;
+    if (isHumanReadableTypeToken(val)) return (val ?? '').trim();
+  }
+
+  return undefined;
+}
+
+function resolveTypeName(
+  index: Map<string, Element>,
+  typeRef: string | undefined | null,
+  contextEl?: Element,
+): string | undefined {
   const ref = (typeRef ?? '').trim();
   if (!ref) return undefined;
 
@@ -74,11 +134,17 @@ function resolveTypeName(index: Map<string, Element>, typeRef: string | undefine
     if (name) return name;
   }
 
-  // Fallback: sometimes "type" is already a human-readable token.
+  // If resolution failed, attempt a conservative fallback using the local element context.
+  // This helps for EA exports where the referenced type classifier isn't present in the XMI,
+  // but a human-readable type token exists nearby (e.g. in a <properties> node).
+  if (contextEl) {
+    const ctxType = tryResolveTypeNameFromElementContext(contextEl);
+    if (ctxType) return ctxType;
+  }
+
+  // Fallback: sometimes "type" is already a human-readable token (e.g. "String").
   // Be conservative: avoid returning obvious internal ids.
-  const looksInternal = id.startsWith('_') || id.startsWith('EAID_') || id.startsWith('EAPK_') || id.startsWith('eaEl_synth_');
-  if (looksInternal) return undefined;
-  if (id.length > 80) return undefined;
+  if (!isHumanReadableTypeToken(id)) return undefined;
   return id;
 }
 
@@ -143,7 +209,7 @@ function parseAttributeLikeElement(
   const vis = asVisibility(attr(attributeEl, 'visibility'));
   const isStatic = parseBool(attrAny(attributeEl, ['isStatic', 'static']));
   const typeRef = readTypeRef(attributeEl);
-  const typeName = resolveTypeName(index, typeRef);
+  const typeName = resolveTypeName(index, typeRef, attributeEl);
   const multiplicity = readMultiplicity(attributeEl);
   const defaultValue = readDefaultValue(attributeEl);
 
@@ -220,7 +286,7 @@ function parseOwnedOperations(
     const pEls = childrenByLocalName(o, 'ownedparameter');
     for (const p of pEls) {
       const dir = (attr(p, 'direction') ?? '').trim();
-      const typeName = resolveTypeName(index, readTypeRef(p));
+      const typeName = resolveTypeName(index, readTypeRef(p), p);
 
       if (dir === 'return') {
         if (typeName) returnType = typeName;

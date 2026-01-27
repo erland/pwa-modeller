@@ -1,8 +1,9 @@
 import type { ImportReport } from '../importReport';
 
 import { attr, attrAny, childByLocalName, childrenByLocalName, localName } from '../framework/xml';
-import { resolveById, resolveHrefId } from './resolve';
+import { resolveById } from './resolve';
 import { getXmiId, getXmiIdRef } from './xmi';
+import { createTypeNameResolver } from './typeNameResolver';
 
 // Keep the shape compatible with src/domain/uml/members.ts
 export type EaXmiUmlParameter = {
@@ -63,149 +64,10 @@ function asVisibility(v: string | null | undefined): 'public' | 'private' | 'pro
   }
 }
 
-function looksLikeInternalId(id: string): boolean {
-  return (
-    id.startsWith('_') ||
-    id.startsWith('EAID_') ||
-    id.startsWith('EAPK_') ||
-    id.startsWith('eaEl_synth_') ||
-    id.startsWith('EAGen_')
-  );
-}
+// Type name resolution is implemented in a dedicated resolver so it can be shared
+// across UML attribute and operation parsing while keeping caching document-wide.
 
-function isHumanReadableTypeToken(s: string | undefined | null): boolean {
-  const v = (s ?? '').trim();
-  if (!v) return false;
-  if (v.length > 120) return false;
-  // HREFs are handled explicitly elsewhere; treat them as non-human-readable here.
-  if (v.includes('://')) return false;
-  // Never treat UML/XMI metaclass tokens as datatypes.
-  // These commonly leak in from xmi:type attributes (e.g. 'uml:Property').
-  if (v.startsWith('uml:') || v.startsWith('xmi:')) return false;
-  if (looksLikeInternalId(v)) return false;
-  return true;
-}
-
-function tryResolvePrimitiveTypeNameFromHref(href: string): string | undefined {
-  const s = href.trim();
-  if (!s) return undefined;
-  if (!s.includes('://')) return undefined;
-
-  // Common patterns:
-  // - http://schema.omg.org/spec/UML/2.1/String
-  // - http://schema.omg.org/spec/UML/2.1/Types.xmi#String
-  // - …#Integer
-  const afterHash = s.includes('#') ? s.split('#').pop() : undefined;
-  const tail = afterHash && afterHash.trim() ? afterHash.trim() : s.split('/').filter(Boolean).pop();
-  const token = (tail ?? '').trim();
-  if (!token) return undefined;
-
-  // Avoid returning UML metaclasses from the profile (e.g. 'Property', 'Class').
-  // Those are types of UML elements, not datatypes.
-  // NOTE: This is intentionally conservative; expand later if needed.
-  const FORBIDDEN = new Set(['Property', 'Class', 'Association', 'Dependency', 'Activity', 'Artifact', 'Generalization']);
-  if (FORBIDDEN.has(token)) return undefined;
-
-  // Primitive-ish tokens we want to surface (String, Boolean, Integer, …)
-  if (!isHumanReadableTypeToken(token)) return undefined;
-  return token;
-}
-
-function tryResolveTypeNameFromElementContext(attributeEl: Element): string | undefined {
-  // EA sometimes puts the human-readable datatype on a nested <properties> element.
-  // Example (varies by export profile):
-  // <ownedAttribute … type="EAID_…">
-  //   <properties type="String" />
-  // </ownedAttribute>
-  const props = childByLocalName(attributeEl, 'properties');
-  if (props) {
-    const t = attrAny(props, ['type', 'datatype', 'dataType', 'typename', 'typeName', 'classifier', 'classifierName']);
-    if (isHumanReadableTypeToken(t)) return (t ?? '').trim();
-  }
-
-  // Another common pattern: <type name="String" … />
-  const typeChild = childByLocalName(attributeEl, 'type');
-  if (typeChild) {
-    const n = attrAny(typeChild, ['name', 'type', 'typename', 'typeName']);
-    if (isHumanReadableTypeToken(n)) return (n ?? '').trim();
-  }
-
-  // Heuristic: scan for tagged-value like structures.
-  // We keep this conservative and only accept obvious keys.
-  const KEY_CANDIDATES = new Set(['type', 'datatype', 'datatypename', 'typename', 'classifier', 'classifiername']);
-  const all = attributeEl.getElementsByTagName('*');
-  for (let i = 0; i < all.length; i++) {
-    const el = all.item(i);
-    if (!el) continue;
-
-    const key = (attrAny(el, ['tag', 'name', 'key']) ?? '').trim().toLowerCase();
-    if (!key || !KEY_CANDIDATES.has(key)) continue;
-
-    const val = attrAny(el, ['value', 'val', 'body', 'text']) ?? el.textContent;
-    if (isHumanReadableTypeToken(val)) return (val ?? '').trim();
-  }
-
-  return undefined;
-}
-
-function resolveTypeName(
-  index: Map<string, Element>,
-  typeRef: string | undefined | null,
-  contextEl?: Element,
-): string | undefined {
-  const ref = (typeRef ?? '').trim();
-  if (!ref) return undefined;
-
-  // If it's an href URL, try to extract a primitive type name.
-  // This is common in EA exports for UML primitive types.
-  const primitiveFromHref = tryResolvePrimitiveTypeNameFromHref(ref);
-  if (primitiveFromHref) return primitiveFromHref;
-
-  // If it's an href, try fragment.
-  const hrefId = resolveHrefId(ref);
-  const id = hrefId ?? ref;
-
-  const target = resolveById(index, id);
-  if (target) {
-    const name = (attr(target, 'name') ?? '').trim();
-    if (name) return name;
-  }
-
-  // If resolution failed, attempt a conservative fallback using the local element context.
-  // This helps for EA exports where the referenced type classifier isn't present in the XMI,
-  // but a human-readable type token exists nearby (e.g. in a <properties> node).
-  if (contextEl) {
-    const ctxType = tryResolveTypeNameFromElementContext(contextEl);
-    if (ctxType) return ctxType;
-  }
-
-  // Fallback: sometimes "type" is already a human-readable token (e.g. "String").
-  // Be conservative: avoid returning obvious internal ids.
-  if (!isHumanReadableTypeToken(id)) return undefined;
-  return id;
-}
-
-function readTypeRef(el: Element): string | undefined {
-  // Common: type="_id" on ownedAttribute/ownedParameter.
-  const direct = attr(el, 'type');
-  // Some XML helpers resolve by localName and will pick up xmi:type here.
-  // If that happens, we MUST ignore it (metaclass is not a datatype ref).
-  if (direct && direct.trim()) {
-    const v = direct.trim();
-    if (!v.startsWith('uml:') && !v.startsWith('xmi:')) return v;
-  }
-
-  // Alternative: <type xmi:idref="_id" />
-  const t = childByLocalName(el, 'type');
-  if (t) {
-    const idref = getXmiIdRef(t);
-    if (idref) return idref;
-    const href = attrAny(t, ['href']);
-    if (href && href.trim()) return href.trim();
-  }
-
-  return undefined;
-}
+type TypeNameResolver = ReturnType<typeof createTypeNameResolver>;
 
 function readMultiplicity(el: Element): EaXmiUmlMultiplicity | undefined {
   const lowerEl = childByLocalName(el, 'lowervalue');
@@ -246,7 +108,7 @@ function readDefaultValue(el: Element): string | undefined {
 
 function parseAttributeLikeElement(
   attributeEl: Element,
-  index: Map<string, Element>,
+  resolver: TypeNameResolver,
 ): EaXmiUmlAttribute | undefined {
   // Attribute elements might be <ownedAttribute> or referenced nodes elsewhere (e.g. uml:Property).
   const name = (attr(attributeEl, 'name') ?? '').trim();
@@ -254,16 +116,15 @@ function parseAttributeLikeElement(
 
   const vis = asVisibility(attr(attributeEl, 'visibility'));
   const isStatic = parseBool(attrAny(attributeEl, ['isStatic', 'static']));
-  const typeRef = readTypeRef(attributeEl);
-  const typeName = resolveTypeName(index, typeRef, attributeEl);
+  const type = resolver.resolveFromElement(attributeEl);
   const multiplicity = readMultiplicity(attributeEl);
   const defaultValue = readDefaultValue(attributeEl);
 
   const outAttr: EaXmiUmlAttribute = { name };
   // Step 6 refactor: keep datatype fields explicit.
   outAttr.metaclass = 'uml:Property';
-  if (typeRef) outAttr.dataTypeRef = typeRef;
-  if (typeName) outAttr.dataTypeName = typeName;
+  if (type.ref) outAttr.dataTypeRef = type.ref;
+  if (type.name) outAttr.dataTypeName = type.name;
   if (multiplicity) outAttr.multiplicity = multiplicity;
   if (vis) outAttr.visibility = vis;
   if (typeof isStatic === 'boolean' && isStatic) outAttr.isStatic = true;
@@ -274,6 +135,7 @@ function parseAttributeLikeElement(
 function parseOwnedAttributes(
   classifierEl: Element,
   index: Map<string, Element>,
+  resolver: TypeNameResolver,
 ): EaXmiUmlAttribute[] {
   const out: EaXmiUmlAttribute[] = [];
   const seenIds = new Set<string>();
@@ -283,7 +145,7 @@ function parseOwnedAttributes(
     const id = getXmiId(a);
     if (id) seenIds.add(id);
 
-    const parsed = parseAttributeLikeElement(a, index);
+    const parsed = parseAttributeLikeElement(a, resolver);
     if (parsed) out.push(parsed);
   }
 
@@ -304,7 +166,7 @@ function parseOwnedAttributes(
       if (!resolved) continue;
 
       seenIds.add(idref);
-      const parsed = parseAttributeLikeElement(resolved, index);
+      const parsed = parseAttributeLikeElement(resolved, resolver);
       if (parsed) out.push(parsed);
     }
   }
@@ -314,7 +176,7 @@ function parseOwnedAttributes(
 
 function parseOwnedOperations(
   classifierEl: Element,
-  index: Map<string, Element>,
+  resolver: TypeNameResolver,
 ): EaXmiUmlOperation[] {
   const out: EaXmiUmlOperation[] = [];
   const opEls = childrenByLocalName(classifierEl, 'ownedoperation');
@@ -331,7 +193,7 @@ function parseOwnedOperations(
     const pEls = childrenByLocalName(o, 'ownedparameter');
     for (const p of pEls) {
       const dir = (attr(p, 'direction') ?? '').trim();
-      const typeName = resolveTypeName(index, readTypeRef(p), p);
+      const typeName = resolver.resolveFromElement(p).name;
 
       if (dir === 'return') {
         if (typeName) returnType = typeName;
@@ -364,6 +226,7 @@ export function parseEaXmiClassifierMembers(
   classifierEl: Element,
   index: Map<string, Element>,
   report: ImportReport,
+  resolver?: TypeNameResolver,
 ): EaXmiUmlClassifierMembers {
   // Defensive check: ensure we're on something that looks like a classifier.
   const ln = localName(classifierEl);
@@ -371,8 +234,9 @@ export function parseEaXmiClassifierMembers(
     report.warnings.push('EA XMI: parseEaXmiClassifierMembers called with element that has no localName.');
   }
 
-  const attributes = parseOwnedAttributes(classifierEl, index);
-  const operations = parseOwnedOperations(classifierEl, index);
+  const r = resolver ?? createTypeNameResolver(index);
+  const attributes = parseOwnedAttributes(classifierEl, index, r);
+  const operations = parseOwnedOperations(classifierEl, r);
 
   return { attributes, operations };
 }

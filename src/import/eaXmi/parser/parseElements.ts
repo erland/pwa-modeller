@@ -13,6 +13,7 @@ import {
 } from '../mapping';
 import { buildXmiIdIndex } from '../resolve';
 import { parseEaXmiClassifierMembers } from '../parseMembers';
+import { createTypeNameResolver } from '../typeNameResolver';
 import { getXmiId, getXmiType } from '../xmi';
 
 const EA_GUID_ATTRS = ['ea_guid', 'ea:guid', 'guid'] as const;
@@ -217,6 +218,8 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
   let synthCounter = 0;
 
   const idIndex = buildXmiIdIndex(doc);
+  // Document-wide cache for resolving datatype names by xmi:idref or href.
+  const typeNameResolver = createTypeNameResolver(idIndex);
   const eaExtDocsById = buildEaExtensionDocumentationIndex(doc);
 
   const all = doc.getElementsByTagName('*');
@@ -273,7 +276,7 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
     // Step 6: Classifier members (attributes/operations/params)
     const members =
       qualifiedType === 'uml.class' || qualifiedType === 'uml.interface' || qualifiedType === 'uml.datatype'
-        ? parseEaXmiClassifierMembers(el, idIndex, report)
+        ? parseEaXmiClassifierMembers(el, idIndex, report, typeNameResolver)
         : undefined;
 
     // Step 5 (UML Activity properties): preserve the original UML meta-class

@@ -2,7 +2,7 @@ import type { ImportReport } from '../importReport';
 
 import { attr, attrAny, childByLocalName, childrenByLocalName, localName } from '../framework/xml';
 import { resolveById, resolveHrefId } from './resolve';
-import { getXmiIdRef } from './xmi';
+import { getXmiId, getXmiIdRef } from './xmi';
 
 // Keep the shape compatible with src/domain/uml/members.ts
 export type EaXmiUmlParameter = {
@@ -132,35 +132,72 @@ function readDefaultValue(el: Element): string | undefined {
   return t || undefined;
 }
 
+function parseAttributeLikeElement(
+  attributeEl: Element,
+  index: Map<string, Element>,
+): EaXmiUmlAttribute | undefined {
+  // Attribute elements might be <ownedAttribute> or referenced nodes elsewhere (e.g. uml:Property).
+  const name = (attr(attributeEl, 'name') ?? '').trim();
+  if (!name) return undefined;
+
+  const vis = asVisibility(attr(attributeEl, 'visibility'));
+  const isStatic = parseBool(attrAny(attributeEl, ['isStatic', 'static']));
+  const typeRef = readTypeRef(attributeEl);
+  const typeName = resolveTypeName(index, typeRef);
+  const multiplicity = readMultiplicity(attributeEl);
+  const defaultValue = readDefaultValue(attributeEl);
+
+  const outAttr: EaXmiUmlAttribute = { name };
+  if (typeRef) outAttr.typeRef = typeRef;
+  if (typeName) {
+    outAttr.type = typeName; // legacy
+    outAttr.typeName = typeName;
+  }
+  if (multiplicity) outAttr.multiplicity = multiplicity;
+  if (vis) outAttr.visibility = vis;
+  if (typeof isStatic === 'boolean' && isStatic) outAttr.isStatic = true;
+  if (defaultValue) outAttr.defaultValue = defaultValue;
+  return outAttr;
+}
+
 function parseOwnedAttributes(
   classifierEl: Element,
   index: Map<string, Element>,
 ): EaXmiUmlAttribute[] {
   const out: EaXmiUmlAttribute[] = [];
+  const seenIds = new Set<string>();
+
   const attrsEls = childrenByLocalName(classifierEl, 'ownedattribute');
   for (const a of attrsEls) {
-    // OwnedAttribute elements might include association ends etc.; we still import basic name/type.
-    const name = (attr(a, 'name') ?? '').trim();
-    if (!name) continue;
-    const vis = asVisibility(attr(a, 'visibility'));
-    const isStatic = parseBool(attrAny(a, ['isStatic', 'static']));
-    const typeRef = readTypeRef(a);
-    const typeName = resolveTypeName(index, typeRef);
-    const multiplicity = readMultiplicity(a);
-    const defaultValue = readDefaultValue(a);
+    const id = getXmiId(a);
+    if (id) seenIds.add(id);
 
-    const outAttr: EaXmiUmlAttribute = { name };
-    if (typeRef) outAttr.typeRef = typeRef;
-    if (typeName) {
-      outAttr.type = typeName; // legacy
-      outAttr.typeName = typeName;
-    }
-    if (multiplicity) outAttr.multiplicity = multiplicity;
-    if (vis) outAttr.visibility = vis;
-    if (typeof isStatic === 'boolean' && isStatic) outAttr.isStatic = true;
-    if (defaultValue) outAttr.defaultValue = defaultValue;
-    out.push(outAttr);
+    const parsed = parseAttributeLikeElement(a, index);
+    if (parsed) out.push(parsed);
   }
+
+  // Sparx EA sometimes uses a wrapper structure:
+  // <attributes>
+  //   <attribute xmi:idref="…" />
+  // </attributes>
+  // where the actual uml:Property node exists elsewhere in the document.
+  const wrappers = childrenByLocalName(classifierEl, 'attributes');
+  for (const wrapper of wrappers) {
+    const refs = childrenByLocalName(wrapper, 'attribute');
+    for (const refEl of refs) {
+      const idref = getXmiIdRef(refEl);
+      if (!idref) continue;
+      if (seenIds.has(idref)) continue;
+
+      const resolved = resolveById(index, idref);
+      if (!resolved) continue;
+
+      seenIds.add(idref);
+      const parsed = parseAttributeLikeElement(resolved, index);
+      if (parsed) out.push(parsed);
+    }
+  }
+
   return out;
 }
 

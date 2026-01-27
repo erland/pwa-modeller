@@ -125,6 +125,13 @@ export function parseEaXmiArchiMateConnectorRelationships(doc: Document, report:
       const eaTypeRaw = (propsEl ? attrAny(propsEl, ['ea_type', 'eaType', 'type']) : undefined)?.trim();
 
       const inferred = stereotypeRaw ? inferArchimateRelationshipTypeFromEaProfileTagLocalName(stereotypeRaw) : undefined;
+
+      // Only treat connectors as ArchiMate when the stereotype clearly indicates ArchiMate.
+      // Otherwise (e.g. plain UML connectors with ea_type="Association"), skip here and let UML connector parsing handle it.
+      if (!stereotypeRaw || !stereotypeRaw.toLowerCase().startsWith('archimate_')) {
+        continue;
+      }
+
       const type = inferred ?? 'Unknown';
       if (!inferred) {
         report.warnings.push(

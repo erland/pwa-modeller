@@ -12,11 +12,13 @@ import {
 } from './parseElements';
 import { parseEaXmiArchiMateProfileRelationships, parseEaXmiBpmnProfileRelationships, parseEaXmiRelationships } from './parseRelationships';
 import { parseEaXmiArchiMateConnectorRelationships } from './parseEaConnectorsArchiMateRelationships';
+import { parseEaXmiUmlConnectorRelationships } from './parseEaConnectorsUmlRelationships';
 import { parseEaXmiAssociations } from './parseAssociations';
 import { parseEaDiagramCatalog } from './parseEaDiagramCatalog';
 import { parseEaDiagramObjects } from './parseEaDiagramObjects';
 import { parseEaDiagramConnections } from './parseEaDiagramConnections';
-import { materializeUmlPackagesFromEaXmi } from './materializeUmlPackages';
+import { parseEaXmiLinksRelationships } from './parseEaXmiLinksRelationships';
+import { buildEaPackageIdAliasesJson, materializeUmlPackagesFromEaXmi } from './materializeUmlPackages';
 
 function detectEaXmiUmlFromText(text: string): boolean {
   if (!text) return false;
@@ -168,8 +170,40 @@ export const eaXmiImporter: Importer<IRModel> = {
     }
     const elements = Array.from(elById.values());
 
+    // Step B1a: discover diagrams (views) from EA's XMI extension.
+    // We do this early because some export files are "mixed" (contain ArchiMate/BPMN stereotypes alongside UML diagrams).
+    // In those cases we must NOT suppress raw UML relationship imports, otherwise UML diagrams lose their connectors.
+    const { views: viewsB1a } = parseEaDiagramCatalog(doc, report);
+
+    const hasUmlViews = (viewsB1a ?? []).some((v) => {
+      const t = (v.viewpoint ?? v.meta?.eaDiagramType ?? '').toString().trim().toLowerCase();
+      if (!t) return false;
+      if (t.includes('archimate') || t.includes('bpmn')) return false;
+      if (t.includes('uml')) return true;
+      // Common UML diagram type labels in EA (best-effort)
+      return [
+        'class',
+        'activity',
+        'sequence',
+        'use case',
+        'usecase',
+        'state',
+        'component',
+        'deployment',
+        'package',
+        'object',
+        'communication',
+        'composite',
+        'interaction',
+        'timing'
+      ].some((k) => t.includes(k));
+    });
+
     // Step 1 (ArchiMate): EA connector stereotypes -> relationships (preferred for ArchiMate)
     const { relationships: relsArchimateConnectors } = parseEaXmiArchiMateConnectorRelationships(doc, report);
+
+    // Step 1C (UML): EA connector block -> UML relationships (associations, deps, etc.)
+    const { relationships: relsUmlConnectors } = parseEaXmiUmlConnectorRelationships(doc, report);
 
     // Step 3 (ArchiMate): profile relationship tags -> relationships
     const { relationships: relsArchimateProfile } = parseEaXmiArchiMateProfileRelationships(doc, report);
@@ -177,6 +211,10 @@ export const eaXmiImporter: Importer<IRModel> = {
 
     // Step 5B (BPMN): profile relationship tags -> relationships
     const { relationships: relsBpmn } = parseEaXmiBpmnProfileRelationships(doc, report);
+
+    // Step 6.5: EA <links> blocks (InformationFlow, NoteLink, etc.)
+    // These are frequently used by EA to represent connectors in older exports.
+    const { relationships: relsUmlLinks } = parseEaXmiLinksRelationships(doc, report);
 
     // Step 7: UML relationships (generalization/realization/dependency/include/extend)
     const { relationships: relsStep7 } = parseEaXmiRelationships(doc, report);
@@ -199,7 +237,9 @@ export const eaXmiImporter: Importer<IRModel> = {
       bpmnElements.some((e) => (e.type ?? '').toString().startsWith('bpmn.')) ||
       relsBpmn.some((r) => (r.type ?? '').toString().startsWith('bpmn.'));
 
-    const suppressUmlRelationships = looksLikeArchiMate || looksLikeBpmn;
+    // Only suppress raw UML relationships in *pure* ArchiMate/BPMN exports.
+    // If the file contains UML diagrams, keep UML relationships even if some ArchiMate/BPMN stereotypes exist.
+    const suppressUmlRelationships = (looksLikeArchiMate || looksLikeBpmn) && !hasUmlViews;
 
     const relSignature = (r: IRRelationship): string => {
       const name = (r.name ?? '').toString().trim().toLowerCase();
@@ -280,14 +320,13 @@ export const eaXmiImporter: Importer<IRModel> = {
     for (const r of relsBpmn) addRel(r as IRRelationship, 'bpmn-profile');
 
     if (!suppressUmlRelationships) {
+      for (const r of relsUmlConnectors) addRel(r as IRRelationship, 'uml-connector');
+      for (const r of relsUmlLinks) addRel(r as IRRelationship, 'uml-links');
       for (const r of relsStep7) addRel(r as IRRelationship, 'uml');
       for (const r of relsStep8) addRel(r as IRRelationship, 'uml-association');
     }
 
     let relationships = Array.from(relById.values());
-
-    // Step B1a: discover diagrams (views) from EA's XMI extension.
-    const { views: viewsB1a } = parseEaDiagramCatalog(doc, report);
 
     // Step B1b: attach diagram objects + geometry as unresolved view nodes.
     const { views: viewsWithNodes } = parseEaDiagramObjects(doc, viewsB1a, report);
@@ -309,6 +348,8 @@ export const eaXmiImporter: Importer<IRModel> = {
       );
     }
 
+    const packageIdAliases = buildEaPackageIdAliasesJson(doc);
+
     const modelName = modelEl?.getAttribute('name')?.trim();
 
     const ir: IRModel = {
@@ -320,6 +361,7 @@ export const eaXmiImporter: Importer<IRModel> = {
         format: 'ea-xmi-uml',
         tool: 'Sparx Enterprise Architect',
         ...(modelName ? { modelName } : {}),
+        ...(Object.keys(packageIdAliases).length ? { eaPackageIdAliases: packageIdAliases } : {}),
         importedAtIso: new Date().toISOString(),
         sourceSystem: 'sparx-ea'
       }

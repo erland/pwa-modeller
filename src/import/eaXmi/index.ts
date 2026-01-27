@@ -12,6 +12,7 @@ export * from './parseAssociations';
 export * from './parseEaDiagramCatalog';
 export * from './parseEaDiagramObjects';
 export * from './parseEaDiagramConnections';
+export * from './parseEaXmiLinksRelationships';
 export * from './materializeUmlPackages';
 export * from './normalizeEaXmiImportIR';
 export * from './techFingerprint';

@@ -4,8 +4,10 @@ import { applyBpmnContainmentToViews } from './normalize/applyBpmnContainmentToV
 import { finalizeEaXmiMeta } from './normalize/finalizeEaXmiMeta';
 import { normalizeEaXmiElements } from './normalize/normalizeEaXmiElements';
 import { normalizeEaXmiRelationships } from './normalize/normalizeEaXmiRelationships';
+import { normalizeEaXmiPackages } from './normalize/normalizeEaXmiPackages';
 import { normalizeUmlActivityContainment } from './normalize/normalizeUmlActivityContainment';
 import { normalizeUmlAssociationClassLinks } from './normalize/normalizeUmlAssociationClassLinks';
+import { materializeViewRelationshipStubs } from './normalize/materializeViewRelationshipStubs';
 import {
   buildElementLookup,
   buildRelationshipLookup,
@@ -31,9 +33,18 @@ export function normalizeEaXmiImportIR(ir: IRModel | undefined, opts?: Normalize
 
   const folderIds = new Set((ir.folders ?? []).map((f) => (typeof f?.id === 'string' ? f.id : '')));
 
+  // Step 0: EA package id aliasing (package2 EAID_* ↔ XMI EAPK_*) + package element materialization.
+  // This MUST happen before view resolution and before generic normalizeImportIR drops relationships for missing endpoints.
+  const withPackages = normalizeEaXmiPackages(ir, folderIds, opts);
+
   // Step 1: normalize element & relationship payloads (trim, EA meta cleanup)
-  const elementsBase = normalizeEaXmiElements(ir, folderIds, opts);
-  const relationships = normalizeEaXmiRelationships(ir);
+  const elementsBase = normalizeEaXmiElements({ ...ir, elements: withPackages.elements }, folderIds, opts);
+  let relationships = normalizeEaXmiRelationships({ ...ir, relationships: withPackages.relationships });
+
+  // Step 1.5: Safety net for older EA exports where some connectors only exist as diagram records.
+  // We only create stubs when a diagram connector references a relationship id that is missing from
+  // the imported relationship set and we can resolve both endpoints.
+  relationships = materializeViewRelationshipStubs(ir.views, elementsBase, relationships, opts);
 
   // Step 2: resolve EA diagram nodes/connections to imported ids.
   const elementLookup = buildElementLookup(elementsBase);

@@ -50,7 +50,6 @@ export function normalizeUmlAssociationClassLinks(
   if (!associationClassElementIds.size) return { elements, relationships };
 
   // 1) Identify association relationships that correspond to AssociationClass.
-  const relationshipIds = new Set(relationships.map((r) => r.id));
   const assocClassIdToRelId = new Map<string, string>();
 
   for (const r of relationships) {
@@ -70,19 +69,45 @@ export function normalizeUmlAssociationClassLinks(
     }
   }
 
+
+  // Prefer explicit link provided by EA connector parsing:
+  // relationship.attrs.associationClassElementId = <associationClassElementIRId>
+  // (This helps match diagram connector references, which usually point at the EA connector id.)
+  for (const r of relationships) {
+    const relId = typeof r?.id === 'string' ? r.id : '';
+    if (!relId) continue;
+    const attrs = (r as any).attrs;
+    const assocId = trimId(isRecord(attrs) ? (attrs as any).associationClassElementId : undefined);
+    if (!assocId) continue;
+    if (!associationClassElementIds.has(assocId)) continue;
+    assocClassIdToRelId.set(assocId, relId);
+  }
+
   if (!assocClassIdToRelId.size) return { elements, relationships };
 
+
   // 2) Apply relationship.attrs.associationClassElementId
-  const nextRelationships: IRRelationship[] = relationships.map((r) => {
+  // - For parser-produced AssociationClass relationships (<assocId>__association), ensure the back-link exists.
+  // - For EA connector-derived relationships, ensure the associationClassElementId is set (or normalized).
+  const relIdToAssocId = new Map<string, string>();
+  for (const [assocId, relId] of assocClassIdToRelId.entries()) {
+    relIdToAssocId.set(relId, assocId);
+  }
+
+  const nextRelationshipsBase: IRRelationship[] = relationships.map((r) => {
     const relId = typeof r?.id === 'string' ? r.id : '';
     if (!relId) return r;
-    if (!relId.endsWith(ASSOC_REL_SUFFIX)) return r;
 
-    const assocClassId = relId.slice(0, -ASSOC_REL_SUFFIX.length);
-    if (!associationClassElementIds.has(assocClassId)) return r;
+    const assocFromSuffix = relId.endsWith(ASSOC_REL_SUFFIX) ? relId.slice(0, -ASSOC_REL_SUFFIX.length) : undefined;
+    const assocFromMap = relIdToAssocId.get(relId);
+    const assocClassId =
+      (assocFromSuffix && associationClassElementIds.has(assocFromSuffix) ? assocFromSuffix : undefined) ??
+      (assocFromMap && associationClassElementIds.has(assocFromMap) ? assocFromMap : undefined);
+
+    if (!assocClassId) return r;
 
     const current = r as any;
-    const aId = trimId((current.attrs as any)?.associationClassElementId);
+    const aId = trimId(isRecord(current.attrs) ? (current.attrs as any).associationClassElementId : undefined);
     if (aId === assocClassId) return r;
 
     return {
@@ -91,12 +116,32 @@ export function normalizeUmlAssociationClassLinks(
     };
   });
 
+  // If we have a connector-derived relationship for an AssociationClass, drop the synthetic
+  // <assocId>__association relationship to avoid duplicates and to better match diagram connector refs.
+  const connectorAssocIds = new Set(
+    Array.from(assocClassIdToRelId.entries())
+      .filter(([, relId]) => typeof relId === 'string' && !relId.endsWith(ASSOC_REL_SUFFIX))
+      .map(([assocId]) => assocId)
+  );
+
+  const nextRelationships: IRRelationship[] = connectorAssocIds.size
+    ? nextRelationshipsBase.filter((r) => {
+        const rid = typeof r?.id === 'string' ? r.id : '';
+        if (!rid) return true;
+        if (!rid.endsWith(ASSOC_REL_SUFFIX)) return true;
+        const baseId = rid.slice(0, -ASSOC_REL_SUFFIX.length);
+        return !connectorAssocIds.has(baseId);
+      })
+    : nextRelationshipsBase;
+
+  const relationshipIdsNormalized = new Set(nextRelationships.map((r) => r.id));
+
   // 3) Apply element.attrs.associationRelationshipId
   const nextElements: IRElement[] = elements.map((e) => {
     if (e.type !== 'uml.associationClass') return e;
     const relId = assocClassIdToRelId.get(e.id);
     if (!relId) return e;
-    if (!relationshipIds.has(relId)) return e;
+    if (!relationshipIdsNormalized.has(relId)) return e;
 
     const current = e as any;
     const existing = trimId((current.attrs as any)?.associationRelationshipId);

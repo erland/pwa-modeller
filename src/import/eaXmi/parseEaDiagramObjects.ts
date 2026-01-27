@@ -71,9 +71,27 @@ function isDiagramObjectCandidate(el: Element): boolean {
   if (ln === 'element') {
     const hasSubject = !!attrAny(el, ['subject', 'subjectid', 'subject_id']);
     const geo = (attrAny(el, [...EA_BOUNDS_STR_ATTRS]) ?? '').toLowerCase();
-    // Avoid capturing connector stubs (EDGE/SX/SY/…) which we handle in parseEaDiagramConnections.
-    const looksLikeBounds = geo.includes('left=') || geo.includes('top=') || geo.includes('right=') || geo.includes('bottom=') || geo.includes('l=') || geo.includes('t=') || geo.includes('r=') || geo.includes('b=');
-    return hasSubject && looksLikeBounds;
+    const style = (attrAny(el, ['style']) ?? '').toString().toLowerCase();
+
+    // EA encodes connectors as <element subject="EAID_…" geometry="EDGE=…;SX=…;…" style="…SOID=…;EOID=…;…">
+    // Those MUST be handled by parseEaDiagramConnections (not as view nodes).
+    const looksLikeLinkGeo =
+      geo.includes('edge=') || geo.includes('sx=') || geo.includes('sy=') || geo.includes('ex=') || geo.includes('ey=');
+    const hasLinkEndpoints = style.includes('soid=') && style.includes('eoid=');
+
+    // Only treat as a node when it looks like a placed rectangle/bounds.
+    const looksLikeBounds =
+      geo.includes('left=') ||
+      geo.includes('top=') ||
+      geo.includes('right=') ||
+      geo.includes('bottom=') ||
+      geo.includes('l=') ||
+      geo.includes('t=') ||
+      geo.includes('r=') ||
+      geo.includes('b=');
+
+    if (hasSubject && looksLikeBounds && !(looksLikeLinkGeo || hasLinkEndpoints)) return true;
+    return false;
   }
   if (ln === 'object' || ln.endsWith('object')) {
     // Avoid capturing unrelated UML/XMI "ownedAttribute" etc.

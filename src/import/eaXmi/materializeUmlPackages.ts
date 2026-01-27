@@ -10,6 +10,26 @@ type EaPackageIdAliases = {
   /** Reverse map: XMI idref (EAPK_…) -> EA repository-style id (EAID_…) */
   xmiIdToEaid: Map<string, string>;
 };
+export type EaPackageIdAliasesJson = {
+  /** Maps EA's repository-style package id (EAID_…) -> XMI idref (EAPK_…) */
+  eaidToXmiId: Record<string, string>;
+  /** Reverse map: XMI idref (EAPK_…) -> EA repository-style id (EAID_…) */
+  xmiIdToEaid: Record<string, string>;
+};
+
+function toRecord(m: Map<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of m.entries()) out[k] = v;
+  return out;
+}
+
+/** Build a JSON-serializable alias map for EA package ids (package2 EAID_* ↔ XMI EAPK_*). */
+export function buildEaPackageIdAliasesJson(doc: Document): EaPackageIdAliasesJson {
+  const aliases = buildEaPackageIdAliases(doc);
+  return { eaidToXmiId: toRecord(aliases.eaidToXmiId), xmiIdToEaid: toRecord(aliases.xmiIdToEaid) };
+}
+
+
 
 function isInsideXmiExtension(el: Element): boolean {
   let p: Element | null = el.parentElement;

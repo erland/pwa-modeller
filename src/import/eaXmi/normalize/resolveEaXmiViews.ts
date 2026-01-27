@@ -296,9 +296,36 @@ export function resolveEaXmiViews(
       });
     }
 
-    const nodeToElement = new Map<string, IRId>();
+    // Map diagram-object ids (including DUIDs/externalIds) to resolved element ids.
+    const nodeKeyToElement = new Map<string, IRId>();
+    const addNodeKey = (key: string, elId: IRId): void => {
+      for (const v of normalizeRefToken(key)) nodeKeyToElement.set(v, elId);
+    };
+
     for (const n of nextNodes) {
-      if (n?.id && n.elementId) nodeToElement.set(n.id, n.elementId);
+      if (!n?.elementId) continue;
+      if (n.id) addNodeKey(n.id, n.elementId);
+      for (const ex of n.externalIds ?? []) {
+        if (ex?.id) addNodeKey(ex.id, n.elementId);
+      }
+    }
+
+    // Some EA connector endpoints reference diagram-object ids (DUIDs) whose element reference is stored
+    // on the diagram object record rather than on the connection record. Build a best-effort nodeKey -> refCandidates map
+    // so we can still resolve endpoints by looking up the referenced element.
+    const nodeKeyToRefCandidates = new Map<string, string[]>();
+    const addNodeRefKey = (key: string, cands: string[]): void => {
+      for (const v of normalizeRefToken(key)) nodeKeyToRefCandidates.set(v, cands);
+    };
+
+    for (const n of nextNodes) {
+      const refRaw = getRefRaw(n);
+      const cands = candidateRefValues(refRaw);
+      if (!cands.length) continue;
+      if (n.id) addNodeRefKey(n.id, cands);
+      for (const ex of n.externalIds ?? []) {
+        if (ex?.id) addNodeRefKey(ex.id, cands);
+      }
     }
 
     const nextConnections: IRViewConnection[] = [];
@@ -317,8 +344,20 @@ export function resolveEaXmiViews(
       const resolveEndpoint = (cands: string[]): { elementId?: IRId; nodeId?: string; used?: string } => {
         for (const cand of cands) {
           for (const tok of normalizeRefToken(cand)) {
-            const byNode = nodeToElement.get(tok);
+            const byNode = nodeKeyToElement.get(tok);
             if (byNode) return { elementId: byNode, nodeId: tok, used: cand };
+
+            // Fallback: endpoint token might be a diagram-object id. Try to resolve via that object's stored ref.
+            const nodeCands = nodeKeyToRefCandidates.get(tok);
+            if (nodeCands?.length) {
+              for (const nc of nodeCands) {
+                for (const nt of normalizeRefToken(nc)) {
+                  const hit = elementLookup.get(nt);
+                  if (hit) return { elementId: hit, nodeId: tok, used: cand };
+                }
+              }
+            }
+
             const byEl = elementLookup.get(tok);
             if (byEl) return { elementId: byEl, used: cand };
           }

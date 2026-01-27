@@ -177,4 +177,39 @@ describe('eaXmi classifier member parsing', () => {
       },
     ]);
   });
+
+  test('does not treat xmi:type="uml:Property" as an attribute datatype (guards against uml:* leakage)', () => {
+    const xml = `
+      <xmi:XMI xmlns:xmi="http://www.omg.org/XMI" xmlns:uml="http://www.omg.org/spec/UML/20131001">
+        <uml:Model xmi:id="M1" name="MyModel">
+          <packagedElement xmi:type="uml:Package" xmi:id="P1" name="Pkg">
+            <packagedElement xmi:type="uml:Class" xmi:id="C1" name="A">
+              <!-- EA often marks ownedAttribute with xmi:type=uml:Property. This is NOT the datatype. -->
+              <ownedAttribute xmi:type="uml:Property" xmi:id="A1" name="foo" visibility="private" />
+            </packagedElement>
+          </packagedElement>
+        </uml:Model>
+      </xmi:XMI>
+    `;
+
+    const doc = parseXml(xml);
+    const report = createImportReport('ea-xmi-uml');
+    parseEaXmiPackageHierarchyToFolders(doc, report);
+    const { elements } = parseEaXmiClassifiersToElements(doc, report);
+
+    const c1 = elements.find((e) => e.id === 'C1');
+    expect(c1?.type).toBe('uml.class');
+
+    const members = (c1?.meta as any)?.umlMembers;
+    expect(members).toBeDefined();
+
+    // Ensure we never end up persisting 'uml:Property' as a datatype.
+    expect(members.attributes).toEqual([
+      {
+        name: 'foo',
+        metaclass: 'uml:Property',
+        visibility: 'private',
+      },
+    ]);
+  });
 });

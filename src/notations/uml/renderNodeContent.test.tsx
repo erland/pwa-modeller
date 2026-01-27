@@ -96,4 +96,25 @@ describe('renderUmlNodeContent (semantic members + view flags)', () => {
     // Members still render like a class
     expect(screen.getByText('since: date')).toBeInTheDocument();
   });
+
+  test('hides obviously-wrong UML metaclass tokens leaked into datatype fields', () => {
+    const element = mkClassElement({
+      attributes: [
+        {
+          name: 'id',
+          metaclass: 'uml:Property',
+          dataTypeName: 'uml:Property',
+          visibility: 'private',
+        },
+      ],
+      operations: [],
+    });
+
+    const node = mkNode({ showAttributes: true, showOperations: false, collapsed: false });
+    render(<div>{renderUmlNodeContent({ element, node })}</div>);
+
+    // We still show the attribute, but the invalid datatype must not be displayed.
+    expect(screen.getByText('- id')).toBeInTheDocument();
+    expect(screen.queryByText(/uml:Property/)).not.toBeInTheDocument();
+  });
 });

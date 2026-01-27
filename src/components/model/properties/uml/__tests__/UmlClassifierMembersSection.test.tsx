@@ -104,4 +104,29 @@ describe('UmlClassifierMembersSection', () => {
       },
     });
   });
+
+  it('does not display uml:* metaclass tokens as attribute datatypes (UI guard)', () => {
+    const updateElement = jest.fn();
+    const el: Element = {
+      id: 'c3',
+      name: 'Customer',
+      type: 'uml.class',
+      attrs: {
+        attributes: [{ name: 'id', metaclass: 'uml:Property', dataTypeName: 'uml:Property' }],
+        operations: [],
+      },
+    } as Element;
+
+    const actions = makeActions({ updateElement });
+    render(<UmlClassifierMembersSection element={el} actions={actions} />);
+
+    // Inline list should show only the name (no bogus datatype)
+    expect(screen.getByText('id')).toBeInTheDocument();
+    expect(screen.queryByText(/uml:Property/)).not.toBeInTheDocument();
+
+    // Dialog should also hide the bogus datatype
+    fireEvent.click(screen.getByLabelText('Edit UML attributes'));
+    const typeInput = screen.getByLabelText('UML attribute type 1') as HTMLInputElement;
+    expect(typeInput.value).toBe('');
+  });
 });

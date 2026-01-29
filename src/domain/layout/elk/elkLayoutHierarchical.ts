@@ -9,7 +9,13 @@ type ElkNode = {
   x?: number;
   y?: number;
   children?: ElkNode[];
+  ports?: ElkPort[];
   edges?: ElkEdge[];
+  layoutOptions?: Record<string, string>;
+};
+
+type ElkPort = {
+  id: string;
   layoutOptions?: Record<string, string>;
 };
 
@@ -19,6 +25,19 @@ type ElkEdge = {
   targets: string[];
   layoutOptions?: Record<string, string>;
 };
+
+function sideToElk(side: 'N' | 'E' | 'S' | 'W'): 'NORTH' | 'EAST' | 'SOUTH' | 'WEST' {
+  switch (side) {
+    case 'N':
+      return 'NORTH';
+    case 'E':
+      return 'EAST';
+    case 'S':
+      return 'SOUTH';
+    case 'W':
+      return 'WEST';
+  }
+}
 
 type ElkApi = {
   layout: (graph: ElkNode) => Promise<ElkNode>;
@@ -84,7 +103,23 @@ export async function elkLayoutHierarchical(input: LayoutInput, options: AutoLay
             },
             children: childIds.sort((a, b) => a.localeCompare(b)).map(buildNode),
           }
-        : {}),
+        : {
+            ...(n?.ports?.length
+              ? {
+                  layoutOptions: { 'elk.portConstraints': 'FIXED_SIDE' },
+                  ports: n.ports.map((p) => ({
+                    id: p.id,
+                    ...(p.side
+                      ? {
+                          layoutOptions: {
+                            'elk.port.side': sideToElk(p.side),
+                          },
+                        }
+                      : {}),
+                  })),
+                }
+              : {}),
+          }),
     };
   };
 
@@ -104,8 +139,8 @@ export async function elkLayoutHierarchical(input: LayoutInput, options: AutoLay
     children: topLevelIds.sort((a, b) => a.localeCompare(b)).map(buildNode),
     edges: edges.map((e, i) => ({
       id: `e${i}`,
-      sources: [e.sourceId],
-      targets: [e.targetId],
+      sources: [e.sourcePortId ?? e.sourceId],
+      targets: [e.targetPortId ?? e.targetId],
       layoutOptions: e.weight != null ? { 'elk.layered.priority': String(e.weight) } : undefined,
     })),
   };

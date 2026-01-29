@@ -8,7 +8,13 @@ type ElkNode = {
   x?: number;
   y?: number;
   children?: ElkNode[];
+  ports?: ElkPort[];
   edges?: ElkEdge[];
+  layoutOptions?: Record<string, string>;
+};
+
+type ElkPort = {
+  id: string;
   layoutOptions?: Record<string, string>;
 };
 
@@ -24,6 +30,19 @@ type ElkEdge = {
   targets: string[];
   layoutOptions?: Record<string, string>;
 };
+
+function sideToElk(side: 'N' | 'E' | 'S' | 'W'): 'NORTH' | 'EAST' | 'SOUTH' | 'WEST' {
+  switch (side) {
+    case 'N':
+      return 'NORTH';
+    case 'E':
+      return 'EAST';
+    case 'S':
+      return 'SOUTH';
+    case 'W':
+      return 'WEST';
+  }
+}
 
 function directionToElk(direction: LayoutDirection | undefined): 'RIGHT' | 'DOWN' {
   return direction === 'DOWN' ? 'DOWN' : 'RIGHT';
@@ -71,11 +90,27 @@ export async function elkLayout(input: LayoutInput, options: AutoLayoutOptions =
       id: n.id,
       width: n.width,
       height: n.height,
+      ...(n.ports?.length
+        ? {
+            // Encourage ELK to respect our port side hints.
+            layoutOptions: { 'elk.portConstraints': 'FIXED_SIDE' },
+            ports: n.ports.map((p) => ({
+              id: p.id,
+              ...(p.side
+                ? {
+                    layoutOptions: {
+                      'elk.port.side': sideToElk(p.side),
+                    },
+                  }
+                : {}),
+            })),
+          }
+        : {}),
     })),
     edges: edges.map((e, i) => ({
       id: `e${i}`,
-      sources: [e.sourceId],
-      targets: [e.targetId],
+      sources: [e.sourcePortId ?? e.sourceId],
+      targets: [e.targetPortId ?? e.targetId],
       layoutOptions: e.weight != null ? { 'elk.layered.priority': String(e.weight) } : undefined,
     })),
   };

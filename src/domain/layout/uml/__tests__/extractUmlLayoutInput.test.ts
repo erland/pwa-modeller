@@ -67,7 +67,9 @@ describe('extractUmlLayoutInput', () => {
       sourceId: b.id,
       targetId: a.id,
       weight: 5,
-      kind: 'uml.generalization'
+      kind: 'uml.generalization',
+      sourcePortId: `${b.id}:N`,
+      targetPortId: `${a.id}:S`
     });
   });
 

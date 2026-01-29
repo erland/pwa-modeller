@@ -6,6 +6,31 @@ const DEFAULTS = {
   connector: { width: 26, height: 26 }
 };
 
+const PORT_ID = {
+  N: (nodeId: string) => `${nodeId}:N`,
+  E: (nodeId: string) => `${nodeId}:E`,
+  S: (nodeId: string) => `${nodeId}:S`,
+  W: (nodeId: string) => `${nodeId}:W`
+} as const;
+
+function addDefaultPorts(node: LayoutNodeInput): void {
+  node.ports = [
+    { id: PORT_ID.N(node.id), side: 'N' },
+    { id: PORT_ID.E(node.id), side: 'E' },
+    { id: PORT_ID.S(node.id), side: 'S' },
+    { id: PORT_ID.W(node.id), side: 'W' }
+  ];
+}
+
+function edgePortHints(kind: string | undefined): { sourceSide?: 'N' | 'E' | 'S' | 'W'; targetSide?: 'N' | 'E' | 'S' | 'W' } {
+  const k = (kind ?? '').toLowerCase();
+  // Keep inheritance-like edges visually vertical (child -> parent).
+  if (k.includes('generalization') || k.includes('realization')) return { sourceSide: 'N', targetSide: 'S' };
+  // Containment-ish relationships read nicely left-to-right.
+  if (k.includes('composition') || k.includes('aggregation')) return { sourceSide: 'E', targetSide: 'W' };
+  return {};
+}
+
 type BBox = { x: number; y: number; width: number; height: number };
 
 function bboxContains(outer: BBox, inner: BBox, margin = 10): boolean {
@@ -67,7 +92,16 @@ function edgesFromConnections(model: Model, view: View, nodeIdSet: Set<string>):
 
     const relType = model.relationships[c.relationshipId]?.type;
     const weight = edgeWeightForUmlRelationshipType(relType);
-    out.push({ id, sourceId, targetId, weight, ...(relType ? { kind: relType } : {}) });
+    const hints = edgePortHints(relType);
+    out.push({
+      id,
+      sourceId,
+      targetId,
+      weight,
+      ...(relType ? { kind: relType } : {}),
+      ...(hints.sourceSide ? { sourcePortId: PORT_ID[hints.sourceSide](sourceId) } : {}),
+      ...(hints.targetSide ? { targetPortId: PORT_ID[hints.targetSide](targetId) } : {})
+    });
   }
   return out;
 }
@@ -87,7 +121,16 @@ function edgesFromLegacyLayout(model: Model, view: View, nodeIdSet: Set<string>)
     if (seen.has(id)) continue;
     seen.add(id);
     const weight = edgeWeightForUmlRelationshipType(rel.type);
-    out.push({ id, sourceId: ep.sourceId, targetId: ep.targetId, weight, kind: rel.type });
+    const hints = edgePortHints(rel.type);
+    out.push({
+      id,
+      sourceId: ep.sourceId,
+      targetId: ep.targetId,
+      weight,
+      kind: rel.type,
+      ...(hints.sourceSide ? { sourcePortId: PORT_ID[hints.sourceSide](ep.sourceId) } : {}),
+      ...(hints.targetSide ? { targetPortId: PORT_ID[hints.targetSide](ep.targetId) } : {})
+    });
   }
   return out;
 }
@@ -164,15 +207,19 @@ export function extractUmlLayoutInput(
     }
   }
 
-  const allNodes: LayoutNodeInput[] = rawInfos.map((n) => ({
-    id: n.id,
-    width: n.bbox.width,
-    height: n.bbox.height,
-    ...(n.kind ? { kind: n.kind } : {}),
-    ...(n.label ? { label: n.label } : {}),
-    ...(n.locked ? { locked: true } : {}),
-    ...(parentById.has(n.id) ? { parentId: parentById.get(n.id) } : {})
-  }));
+  const allNodes: LayoutNodeInput[] = rawInfos.map((n) => {
+    const node: LayoutNodeInput = {
+      id: n.id,
+      width: n.bbox.width,
+      height: n.bbox.height,
+      ...(n.kind ? { kind: n.kind } : {}),
+      ...(n.label ? { label: n.label } : {}),
+      ...(n.locked ? { locked: true } : {}),
+      ...(parentById.has(n.id) ? { parentId: parentById.get(n.id) } : {})
+    };
+    addDefaultPorts(node);
+    return node;
+  });
 
   const wantedNodeIds =
     options.scope === 'selection' && Array.isArray(selectionNodeIds) && selectionNodeIds.length > 0

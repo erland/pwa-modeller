@@ -37,6 +37,34 @@ const DEFAULTS = {
   connector: { width: 26, height: 26 }
 };
 
+const PORT_ID = {
+  N: (nodeId: string) => `${nodeId}:N`,
+  E: (nodeId: string) => `${nodeId}:E`,
+  S: (nodeId: string) => `${nodeId}:S`,
+  W: (nodeId: string) => `${nodeId}:W`
+} as const;
+
+function addDefaultPorts(node: LayoutNodeInput): void {
+  // A simple 4-side port model gives ELK enough signal to improve routing/ordering.
+  node.ports = [
+    { id: PORT_ID.N(node.id), side: 'N' },
+    { id: PORT_ID.E(node.id), side: 'E' },
+    { id: PORT_ID.S(node.id), side: 'S' },
+    { id: PORT_ID.W(node.id), side: 'W' }
+  ];
+}
+
+function edgePortHints(kind: string | undefined): { sourceSide?: 'N' | 'E' | 'S' | 'W'; targetSide?: 'N' | 'E' | 'S' | 'W' } {
+  const k = (kind ?? '').toLowerCase();
+  // Sequence flows typically read left-to-right.
+  if (k.includes('sequence')) return { sourceSide: 'E', targetSide: 'W' };
+  // Message flows are often shown vertically to reduce crossings.
+  if (k.includes('message')) return { sourceSide: 'S', targetSide: 'N' };
+  // Generic flows (but not message) lean horizontal.
+  if (k.includes('flow') && !k.includes('message')) return { sourceSide: 'E', targetSide: 'W' };
+  return {};
+}
+
 function nodeIdFromLayoutNode(n: ViewNodeLayout): string | null {
   if (typeof n.elementId === 'string' && n.elementId.length > 0) return n.elementId;
   if (typeof n.connectorId === 'string' && n.connectorId.length > 0) return n.connectorId;
@@ -73,7 +101,16 @@ function edgesFromConnections(model: Model, view: View, nodeIdSet: Set<string>):
     seen.add(id);
 
     const relType = model.relationships[c.relationshipId]?.type;
-    out.push({ id, sourceId, targetId, weight: 1, ...(relType ? { kind: relType } : {}) });
+    const hints = edgePortHints(relType);
+    out.push({
+      id,
+      sourceId,
+      targetId,
+      weight: 1,
+      ...(relType ? { kind: relType } : {}),
+      ...(hints.sourceSide ? { sourcePortId: PORT_ID[hints.sourceSide](sourceId) } : {}),
+      ...(hints.targetSide ? { targetPortId: PORT_ID[hints.targetSide](targetId) } : {})
+    });
   }
   return out;
 }
@@ -92,7 +129,16 @@ function edgesFromLegacyLayout(model: Model, view: View, nodeIdSet: Set<string>)
     const id = r.relationshipId;
     if (seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, sourceId: ep.sourceId, targetId: ep.targetId, weight: 1, kind: rel.type });
+    const hints = edgePortHints(rel.type);
+    out.push({
+      id,
+      sourceId: ep.sourceId,
+      targetId: ep.targetId,
+      weight: 1,
+      kind: rel.type,
+      ...(hints.sourceSide ? { sourcePortId: PORT_ID[hints.sourceSide](ep.sourceId) } : {}),
+      ...(hints.targetSide ? { targetPortId: PORT_ID[hints.targetSide](ep.targetId) } : {})
+    });
   }
   return out;
 }
@@ -132,14 +178,16 @@ export function extractBpmnLayoutInput(
     const el = n.elementId ? model.elements[n.elementId] : undefined;
     const conn = n.connectorId ? model.connectors?.[n.connectorId] : undefined;
 
-    allNodes.push({
+    const node: LayoutNodeInput = {
       id,
       width,
       height,
       ...(el ? { kind: el.type, label: el.name } : {}),
       ...(conn?.name ? { label: conn.name } : {}),
       ...(options.respectLocked && n.locked ? { locked: true } : {})
-    });
+    };
+    addDefaultPorts(node);
+    allNodes.push(node);
   }
 
   // ------------------------------

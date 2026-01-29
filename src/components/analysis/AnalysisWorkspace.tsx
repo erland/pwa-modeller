@@ -153,7 +153,7 @@ export function AnalysisWorkspace({
   // -----------------------------
   // Matrix workspace state (draft + persisted UI options + presets/snapshots)
   // -----------------------------
-  const matrix = useMatrixWorkspaceState({
+  const matrixWorkspace = useMatrixWorkspaceState({
     model,
     modelId,
     modelKind,
@@ -161,6 +161,8 @@ export function AnalysisWorkspace({
     relationshipTypes,
     selectionElementIds,
   });
+
+  const matrix = matrixWorkspace.legacy;
 
   const [matrixCellDialog, setMatrixCellDialog] = useState<{
     rowId: string;

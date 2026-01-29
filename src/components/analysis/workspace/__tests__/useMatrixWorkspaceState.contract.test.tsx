@@ -36,23 +36,23 @@ describe('useMatrixWorkspaceState contract', () => {
       })
     );
 
-    await waitFor(() => expect(result.current.rowSource).toBe('facet'));
+    await waitFor(() => expect(result.current.legacy.rowSource).toBe('facet'));
 
-    expect(result.current.colSource).toBe('facet');
-    expect(result.current.rowIds).toEqual(['A', 'B']);
-    expect(result.current.colIds).toEqual(['A', 'B']);
-    expect(result.current.canBuild).toBe(true);
+    expect(result.current.legacy.colSource).toBe('facet');
+    expect(result.current.legacy.rowIds).toEqual(['A', 'B']);
+    expect(result.current.legacy.colIds).toEqual(['A', 'B']);
+    expect(result.current.legacy.canBuild).toBe(true);
 
-    expect(result.current.builtQuery).toBeNull();
-    expect(result.current.buildNonce).toBe(0);
+    expect(result.current.legacy.builtQuery).toBeNull();
+    expect(result.current.legacy.buildNonce).toBe(0);
 
-    expect(result.current.uiQuery.direction).toBe('outgoing');
-    expect(result.current.uiQuery.relationshipTypes).toEqual(['Serving', 'Flow']);
+    expect(result.current.legacy.uiQuery.direction).toBe('outgoing');
+    expect(result.current.legacy.uiQuery.relationshipTypes).toEqual(['Serving', 'Flow']);
 
-    expect(result.current.cellMetricId).toBe('matrixRelationshipCount');
-    expect(result.current.heatmapEnabled).toBe(false);
-    expect(result.current.hideEmpty).toBe(false);
-    expect(result.current.highlightMissing).toBe(true);
+    expect(result.current.legacy.cellMetricId).toBe('matrixRelationshipCount');
+    expect(result.current.legacy.heatmapEnabled).toBe(false);
+    expect(result.current.legacy.hideEmpty).toBe(false);
+    expect(result.current.legacy.highlightMissing).toBe(true);
   });
 
   test('build produces builtQuery with correct direction mapping', async () => {
@@ -69,20 +69,20 @@ describe('useMatrixWorkspaceState contract', () => {
       })
     );
 
-    await waitFor(() => expect(result.current.canBuild).toBe(true));
+    await waitFor(() => expect(result.current.legacy.canBuild).toBe(true));
 
     act(() => {
-      result.current.build();
+      result.current.legacy.build();
     });
 
-    expect(result.current.builtQuery).not.toBeNull();
-    expect(result.current.buildNonce).toBe(1);
+    expect(result.current.legacy.builtQuery).not.toBeNull();
+    expect(result.current.legacy.buildNonce).toBe(1);
 
     // incoming maps to colToRow
-    expect(result.current.builtQuery?.direction).toBe('colToRow');
-    expect(result.current.builtQuery?.relationshipTypes).toEqual(['Serving']);
-    expect(result.current.builtQuery?.rowIds).toEqual(['A', 'B']);
-    expect(result.current.builtQuery?.colIds).toEqual(['A', 'B']);
+    expect(result.current.legacy.builtQuery?.direction).toBe('colToRow');
+    expect(result.current.legacy.builtQuery?.relationshipTypes).toEqual(['Serving']);
+    expect(result.current.legacy.builtQuery?.rowIds).toEqual(['A', 'B']);
+    expect(result.current.legacy.builtQuery?.colIds).toEqual(['A', 'B']);
   });
 
   test('swapAxes swaps axis draft fields and resulting id lists', async () => {
@@ -99,40 +99,40 @@ describe('useMatrixWorkspaceState contract', () => {
       })
     );
 
-    await waitFor(() => expect(result.current.canBuild).toBe(true));
+    await waitFor(() => expect(result.current.legacy.canBuild).toBe(true));
 
     act(() => {
-      result.current.setRowSource('selection');
-      result.current.setRowElementType('BusinessActor');
-      result.current.setRowLayer('Business');
-      result.current.setRowSelectionIds(['A']);
+      result.current.legacy.setRowSource('selection');
+      result.current.legacy.setRowElementType('BusinessActor');
+      result.current.legacy.setRowLayer('Business');
+      result.current.legacy.setRowSelectionIds(['A']);
 
-      result.current.setColSource('facet');
-      result.current.setColElementType('ApplicationComponent');
-      result.current.setColLayer('Application');
-      result.current.setColSelectionIds(['B']);
+      result.current.legacy.setColSource('facet');
+      result.current.legacy.setColElementType('ApplicationComponent');
+      result.current.legacy.setColLayer('Application');
+      result.current.legacy.setColSelectionIds(['B']);
     });
 
     act(() => {
-      result.current.swapAxes();
+      result.current.legacy.swapAxes();
     });
 
-    expect(result.current.rowSource).toBe('facet');
-    expect(result.current.colSource).toBe('selection');
+    expect(result.current.legacy.rowSource).toBe('facet');
+    expect(result.current.legacy.colSource).toBe('selection');
 
-    expect(result.current.rowElementType).toBe('ApplicationComponent');
-    expect(result.current.colElementType).toBe('BusinessActor');
+    expect(result.current.legacy.rowElementType).toBe('ApplicationComponent');
+    expect(result.current.legacy.colElementType).toBe('BusinessActor');
 
-    expect(result.current.rowLayer).toBe('Application');
-    expect(result.current.colLayer).toBe('Business');
+    expect(result.current.legacy.rowLayer).toBe('Application');
+    expect(result.current.legacy.colLayer).toBe('Business');
 
-    expect(result.current.rowSelectionIds).toEqual(['B']);
-    expect(result.current.colSelectionIds).toEqual(['A']);
+    expect(result.current.legacy.rowSelectionIds).toEqual(['B']);
+    expect(result.current.legacy.colSelectionIds).toEqual(['A']);
 
     // row facet now matches only ApplicationComponent (B)
-    expect(result.current.rowIds).toEqual(['B']);
+    expect(result.current.legacy.rowIds).toEqual(['B']);
     // col selection now uses selected ids (A)
-    expect(result.current.colIds).toEqual(['A']);
+    expect(result.current.legacy.colIds).toEqual(['A']);
   });
 
   test('resetDraft resets axes and clears selected preset and snapshot ids', async () => {
@@ -149,38 +149,38 @@ describe('useMatrixWorkspaceState contract', () => {
       })
     );
 
-    await waitFor(() => expect(result.current.rowSource).toBe('facet'));
+    await waitFor(() => expect(result.current.legacy.rowSource).toBe('facet'));
 
     act(() => {
-      result.current.setRowSource('selection');
-      result.current.setRowSelectionIds(['A', 'B']);
-      result.current.setColSource('selection');
-      result.current.setColSelectionIds(['B']);
+      result.current.legacy.setRowSource('selection');
+      result.current.legacy.setRowSelectionIds(['A', 'B']);
+      result.current.legacy.setColSource('selection');
+      result.current.legacy.setColSelectionIds(['B']);
 
-      result.current.setPresetId('preset_test');
-      result.current.setSnapshotId('snapshot_test');
+      result.current.legacy.setPresetId('preset_test');
+      result.current.legacy.setSnapshotId('snapshot_test');
     });
 
-    await waitFor(() => expect(result.current.presetId).toBe('preset_test'));
-    await waitFor(() => expect(result.current.snapshotId).toBe('snapshot_test'));
+    await waitFor(() => expect(result.current.legacy.presetId).toBe('preset_test'));
+    await waitFor(() => expect(result.current.legacy.snapshotId).toBe('snapshot_test'));
 
     act(() => {
-      result.current.resetDraft();
+      result.current.legacy.resetDraft();
     });
 
-    expect(result.current.rowSource).toBe('facet');
-    expect(result.current.colSource).toBe('facet');
+    expect(result.current.legacy.rowSource).toBe('facet');
+    expect(result.current.legacy.colSource).toBe('facet');
 
-    expect(result.current.rowElementType).toBe('');
-    expect(result.current.colElementType).toBe('');
+    expect(result.current.legacy.rowElementType).toBe('');
+    expect(result.current.legacy.colElementType).toBe('');
 
-    expect(result.current.rowLayer).toBe('');
-    expect(result.current.colLayer).toBe('');
+    expect(result.current.legacy.rowLayer).toBe('');
+    expect(result.current.legacy.colLayer).toBe('');
 
-    expect(result.current.rowSelectionIds).toEqual([]);
-    expect(result.current.colSelectionIds).toEqual([]);
+    expect(result.current.legacy.rowSelectionIds).toEqual([]);
+    expect(result.current.legacy.colSelectionIds).toEqual([]);
 
-    expect(result.current.presetId).toBe('');
-    expect(result.current.snapshotId).toBe('');
+    expect(result.current.legacy.presetId).toBe('');
+    expect(result.current.legacy.snapshotId).toBe('');
   });
 });

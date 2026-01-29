@@ -330,7 +330,7 @@ export function useMatrixWorkspaceState({
     axes.setColSelectionIds([...nextColSelectionIds]);
   }, [axes]);
 
-  return {
+  const legacy = {
     // Axes state
     rowSource: axes.rowSource,
     setRowSource: axes.setRowSource,
@@ -409,5 +409,94 @@ export function useMatrixWorkspaceState({
 
     applySelectedPreset,
     applySelectedSnapshot,
-  };
+  } as const;
+
+  const state = {
+    axes: {
+      rowSource: axes.rowSource,
+      rowElementType: axes.rowElementType,
+      rowLayer: axes.rowLayer,
+      rowSelectionIds: axes.rowSelectionIds,
+      colSource: axes.colSource,
+      colElementType: axes.colElementType,
+      colLayer: axes.colLayer,
+      colSelectionIds: axes.colSelectionIds,
+      rowIds: axes.rowIds,
+      colIds: axes.colIds,
+    },
+    preferences: {
+      highlightMissing: prefs.highlightMissing,
+      heatmapEnabled: prefs.heatmapEnabled,
+      hideEmpty: prefs.hideEmpty,
+      cellMetricId: prefs.cellMetricId,
+      weightPresets: prefs.weightPresets,
+      weightPresetId: prefs.weightPresetId,
+      weightsByRelationshipType: prefs.weightsByRelationshipType,
+    },
+    presets: {
+      presets: presetsState.presets,
+      presetId: presetsState.presetId,
+      snapshots: presetsState.snapshots,
+      snapshotId: presetsState.snapshotId,
+    },
+    build: {
+      buildNonce,
+      builtQuery,
+    },
+    uiQuery,
+  } as const;
+
+  const actions = {
+    axes: {
+      setRowSource: axes.setRowSource,
+      setRowElementType: axes.setRowElementType,
+      setRowLayer: axes.setRowLayer,
+      setRowSelectionIds: axes.setRowSelectionIds,
+      setColSource: axes.setColSource,
+      setColElementType: axes.setColElementType,
+      setColLayer: axes.setColLayer,
+      setColSelectionIds: axes.setColSelectionIds,
+      swapAxes,
+      resetDraft,
+      captureSelectionAsRows,
+      captureSelectionAsCols,
+    },
+    build: {
+      build,
+    },
+    preferences: {
+      setHighlightMissing: prefs.setHighlightMissing,
+      onToggleHighlightMissing: () => prefs.setHighlightMissing((v) => !v),
+      setHeatmapEnabled: prefs.setHeatmapEnabled,
+      setHideEmpty: prefs.setHideEmpty,
+      setCellMetricId: prefs.setCellMetricId,
+      setWeightPresetId: prefs.setWeightPresetId,
+      setWeightsByRelationshipType: prefs.setWeightsByRelationshipType,
+      onChangeRelationshipTypeWeight,
+      applyWeightPreset,
+    },
+    presets: {
+      setPresetId: presetsState.setPresetId,
+      saveCurrentPreset,
+      deleteSelectedPreset,
+      applySelectedPreset,
+      setSnapshotId: presetsState.setSnapshotId,
+      saveSnapshot,
+      deleteSnapshot,
+      restoreSnapshot,
+      applySelectedSnapshot,
+      applyUiQuery,
+    },
+  } as const;
+
+  const derived = {
+    canBuild,
+    result,
+    cellValues,
+    relationshipTypesForWeights,
+    selectedPreset,
+    selectedSnapshot,
+  } as const;
+
+  return { state, actions, derived, legacy } as const;
 }

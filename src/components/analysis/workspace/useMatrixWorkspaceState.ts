@@ -62,87 +62,6 @@ export function useMatrixWorkspaceState({
     savedQueries.setSnapshotId('');
   }, [draft, savedQueries]);
 
-  const legacy = {
-    // Axes state
-    rowSource: axes.rowSource,
-    setRowSource: axes.setRowSource,
-    rowElementType: axes.rowElementType,
-    setRowElementType: axes.setRowElementType,
-    rowLayer: axes.rowLayer,
-    setRowLayer: axes.setRowLayer,
-    rowSelectionIds: axes.rowSelectionIds,
-    setRowSelectionIds: axes.setRowSelectionIds,
-
-    colSource: axes.colSource,
-    setColSource: axes.setColSource,
-    colElementType: axes.colElementType,
-    setColElementType: axes.setColElementType,
-    colLayer: axes.colLayer,
-    setColLayer: axes.setColLayer,
-    colSelectionIds: axes.colSelectionIds,
-    setColSelectionIds: axes.setColSelectionIds,
-
-    rowIds: axes.rowIds,
-    colIds: axes.colIds,
-    swapAxes: axes.swapAxes,
-
-    resetDraft,
-    captureSelectionAsRows: axes.captureSelectionAsRows,
-    captureSelectionAsCols: axes.captureSelectionAsCols,
-
-    // Build + results
-    buildNonce: draft.buildNonce,
-    builtQuery: draft.builtQuery,
-    build: draft.build,
-    canBuild: draft.canBuild,
-    result,
-    cellValues,
-    relationshipTypesForWeights,
-
-    // Preferences
-    highlightMissing: draft.prefs.highlightMissing,
-    setHighlightMissing: draft.prefs.setHighlightMissing,
-    onToggleHighlightMissing: () => draft.prefs.setHighlightMissing((v) => !v),
-
-    heatmapEnabled: draft.prefs.heatmapEnabled,
-    setHeatmapEnabled: draft.prefs.setHeatmapEnabled,
-
-    hideEmpty: draft.prefs.hideEmpty,
-    setHideEmpty: draft.prefs.setHideEmpty,
-
-    cellMetricId: draft.prefs.cellMetricId,
-    setCellMetricId: draft.prefs.setCellMetricId,
-
-    weightPresets: draft.prefs.weightPresets,
-    weightPresetId: draft.prefs.weightPresetId,
-    setWeightPresetId: draft.prefs.setWeightPresetId,
-    weightsByRelationshipType: draft.prefs.weightsByRelationshipType,
-    setWeightsByRelationshipType: draft.prefs.setWeightsByRelationshipType,
-    onChangeRelationshipTypeWeight: draft.onChangeRelationshipTypeWeight,
-
-    // Presets/snapshots
-    presets: savedQueries.presets,
-    presetId: savedQueries.presetId,
-    setPresetId: savedQueries.setPresetId,
-    snapshots: savedQueries.snapshots,
-    snapshotId: savedQueries.snapshotId,
-    setSnapshotId: savedQueries.setSnapshotId,
-
-    uiQuery: draft.uiQuery,
-    applyUiQuery: draft.applyUiQuery,
-    restoreSnapshot: savedQueries.restoreSnapshot,
-    deleteSnapshot: savedQueries.deleteSnapshot,
-    applyWeightPreset: draft.applyWeightPreset,
-
-    saveCurrentPreset: savedQueries.saveCurrentPreset,
-    deleteSelectedPreset: savedQueries.deleteSelectedPreset,
-
-    saveSnapshot: savedQueries.saveSnapshot,
-
-    applySelectedPreset: savedQueries.applySelectedPreset,
-    applySelectedSnapshot: savedQueries.applySelectedSnapshot,
-  } as const;
-
   const state = {
     axes: {
       rowSource: axes.rowSource,
@@ -231,5 +150,5 @@ export function useMatrixWorkspaceState({
     isDraftDirty: draft.isDraftDirty,
   } as const;
 
-  return { state, actions, derived, legacy } as const;
+  return { state, actions, derived } as const;
 }

@@ -162,7 +162,9 @@ export function AnalysisWorkspace({
     selectionElementIds,
   });
 
-  const matrix = matrixWorkspace.legacy;
+  const matrixState = matrixWorkspace.state;
+  const matrixActions = matrixWorkspace.actions;
+  const matrixDerived = matrixWorkspace.derived;
 
   const [matrixCellDialog, setMatrixCellDialog] = useState<{
     rowId: string;
@@ -175,7 +177,7 @@ export function AnalysisWorkspace({
   const canRun = Boolean(
     model &&
       (mode === 'matrix'
-        ? matrix.rowIds.length > 0 && matrix.colIds.length > 0
+        ? matrixState.axes.rowIds.length > 0 && matrixState.axes.colIds.length > 0
         : mode !== 'paths'
           ? draftStartId
           : draftSourceId && draftTargetId && draftSourceId !== draftTargetId)
@@ -184,7 +186,7 @@ export function AnalysisWorkspace({
   function run() {
     if (!model) return;
     if (mode === 'matrix') {
-      matrix.build();
+      matrixActions.build.build();
       return;
     }
     if (mode !== 'paths') {
@@ -207,7 +209,7 @@ export function AnalysisWorkspace({
       setIncludeStart(false);
       setMaxPaths(10);
       setMaxPathLength(null);
-      matrix.resetDraft();
+      matrixActions.axes.resetDraft();
       return;
     }
 
@@ -253,42 +255,7 @@ export function AnalysisWorkspace({
 
   const traceSeedId = activeStartId || draftStartId || selectionToElementId(selection) || '';
 
-  const matrixUiQuery = useMemo(() => ({
-    rowSource: matrix.rowSource,
-    rowElementType: matrix.rowElementType,
-    rowLayer: matrix.rowLayer,
-    rowSelectionIds: [...matrix.rowSelectionIds],
-    colSource: matrix.colSource,
-    colElementType: matrix.colElementType,
-    colLayer: matrix.colLayer,
-    colSelectionIds: [...matrix.colSelectionIds],
-    direction,
-    relationshipTypes: [...relationshipTypes],
-
-    cellMetricId: matrix.cellMetricId,
-    heatmapEnabled: matrix.heatmapEnabled,
-    hideEmpty: matrix.hideEmpty,
-    highlightMissing: matrix.highlightMissing,
-    weightPresetId: matrix.weightPresetId,
-    weightsByRelationshipType: matrix.weightsByRelationshipType,
-  }), [
-    direction,
-    matrix.cellMetricId,
-    matrix.colElementType,
-    matrix.colLayer,
-    matrix.colSelectionIds,
-    matrix.colSource,
-    matrix.heatmapEnabled,
-    matrix.hideEmpty,
-    matrix.highlightMissing,
-    matrix.rowElementType,
-    matrix.rowLayer,
-    matrix.rowSelectionIds,
-    matrix.rowSource,
-    matrix.weightPresetId,
-    matrix.weightsByRelationshipType,
-    relationshipTypes
-  ]);
+  const matrixUiQuery = matrixState.uiQuery;
 
   return (
     <div className="workspace" aria-label="Analysis workspace">
@@ -320,56 +287,56 @@ export function AnalysisWorkspace({
               mode={mode}
               onChangeMode={setMode}
               selectionElementIds={selectionElementIds}
-              matrixRowSource={matrix.rowSource}
-              onChangeMatrixRowSource={matrix.setRowSource}
-              matrixRowElementType={matrix.rowElementType}
-              onChangeMatrixRowElementType={matrix.setRowElementType}
-              matrixRowLayer={matrix.rowLayer}
-              onChangeMatrixRowLayer={matrix.setRowLayer}
-              matrixRowSelectionIds={matrix.rowSelectionIds}
-              onCaptureMatrixRowSelection={matrix.captureSelectionAsRows}
-              matrixColSource={matrix.colSource}
-              onChangeMatrixColSource={matrix.setColSource}
-              matrixColElementType={matrix.colElementType}
-              onChangeMatrixColElementType={matrix.setColElementType}
-              matrixColLayer={matrix.colLayer}
-              onChangeMatrixColLayer={matrix.setColLayer}
-              matrixColSelectionIds={matrix.colSelectionIds}
-              onCaptureMatrixColSelection={matrix.captureSelectionAsCols}
-              onSwapMatrixAxes={matrix.swapAxes}
-              matrixResolvedRowCount={matrix.rowIds.length}
-              matrixResolvedColCount={matrix.colIds.length}
-              matrixBuildNonce={matrix.buildNonce}
-              matrixHasBuilt={Boolean(matrix.builtQuery)}
-              matrixPresets={matrix.presets}
-              matrixPresetId={matrix.presetId}
-              onChangeMatrixPresetId={matrix.setPresetId}
-              onSaveMatrixPreset={() => matrix.saveCurrentPreset(matrixUiQuery)}
+              matrixRowSource={matrixState.axes.rowSource}
+              onChangeMatrixRowSource={matrixActions.axes.setRowSource}
+              matrixRowElementType={matrixState.axes.rowElementType}
+              onChangeMatrixRowElementType={matrixActions.axes.setRowElementType}
+              matrixRowLayer={matrixState.axes.rowLayer}
+              onChangeMatrixRowLayer={matrixActions.axes.setRowLayer}
+              matrixRowSelectionIds={matrixState.axes.rowSelectionIds}
+              onCaptureMatrixRowSelection={matrixActions.axes.captureSelectionAsRows}
+              matrixColSource={matrixState.axes.colSource}
+              onChangeMatrixColSource={matrixActions.axes.setColSource}
+              matrixColElementType={matrixState.axes.colElementType}
+              onChangeMatrixColElementType={matrixActions.axes.setColElementType}
+              matrixColLayer={matrixState.axes.colLayer}
+              onChangeMatrixColLayer={matrixActions.axes.setColLayer}
+              matrixColSelectionIds={matrixState.axes.colSelectionIds}
+              onCaptureMatrixColSelection={matrixActions.axes.captureSelectionAsCols}
+              onSwapMatrixAxes={matrixActions.axes.swapAxes}
+              matrixResolvedRowCount={matrixState.axes.rowIds.length}
+              matrixResolvedColCount={matrixState.axes.colIds.length}
+              matrixBuildNonce={matrixState.build.buildNonce}
+              matrixHasBuilt={Boolean(matrixState.build.builtQuery)}
+              matrixPresets={matrixState.presets.presets}
+              matrixPresetId={matrixState.presets.presetId}
+              onChangeMatrixPresetId={matrixActions.presets.setPresetId}
+              onSaveMatrixPreset={() => matrixActions.presets.saveCurrentPreset(matrixUiQuery)}
               onApplyMatrixPreset={() => {
-                const p = matrix.presets.find((x) => x.id === matrix.presetId);
+                const p = matrixState.presets.presets.find((x) => x.id === matrixState.presets.presetId);
                 if (!p) return;
-                matrix.applyUiQuery(p.query);
+                matrixActions.presets.applyUiQuery(p.query);
                 setDirection(p.query.direction);
                 setRelationshipTypes([...p.query.relationshipTypes]);
               }}
-              onDeleteMatrixPreset={matrix.deleteSelectedPreset}
-              matrixSnapshots={matrix.snapshots}
-              matrixSnapshotId={matrix.snapshotId}
-              onChangeMatrixSnapshotId={matrix.setSnapshotId}
-              canSaveMatrixSnapshot={Boolean(matrix.result)}
-              onSaveMatrixSnapshot={() => matrix.saveSnapshot(matrixUiQuery)}
+              onDeleteMatrixPreset={matrixActions.presets.deleteSelectedPreset}
+              matrixSnapshots={matrixState.presets.snapshots}
+              matrixSnapshotId={matrixState.presets.snapshotId}
+              onChangeMatrixSnapshotId={matrixActions.presets.setSnapshotId}
+              canSaveMatrixSnapshot={Boolean(matrixDerived.result)}
+              onSaveMatrixSnapshot={() => matrixActions.presets.saveSnapshot(matrixUiQuery)}
               onRestoreMatrixSnapshot={() => {
-                const snap = matrix.snapshots.find((s) => s.id === matrix.snapshotId);
+                const snap = matrixState.presets.snapshots.find((s) => s.id === matrixState.presets.snapshotId);
                 if (!snap) return;
-                matrix.applyUiQuery(snap.uiQuery);
+                matrixActions.presets.applyUiQuery(snap.uiQuery);
                 setDirection(snap.uiQuery.direction);
                 setRelationshipTypes([...snap.uiQuery.relationshipTypes]);
-                matrix.restoreSnapshot(matrix.snapshotId);
+                matrixActions.presets.restoreSnapshot(matrixState.presets.snapshotId);
               }}
               onDeleteMatrixSnapshot={() => {
-                const id = matrix.snapshotId;
-                matrix.setSnapshotId('');
-                if (id) matrix.deleteSnapshot(id);
+                const id = matrixState.presets.snapshotId;
+                matrixActions.presets.setSnapshotId('');
+                if (id) matrixActions.presets.deleteSnapshot(id);
               }}
               direction={direction}
               onChangeDirection={setDirection}
@@ -403,32 +370,32 @@ export function AnalysisWorkspace({
 
           {mode === 'matrix' ? (
             <>
-              {matrix.result ? (
+              {matrixDerived.result ? (
                 <RelationshipMatrixTable
                   modelName={model.metadata?.name || 'model'}
-                  result={matrix.result}
-                  cellMetricId={matrix.cellMetricId}
-                  onChangeCellMetricId={matrix.setCellMetricId}
-                  weightsByRelationshipType={matrix.weightsByRelationshipType}
+                  result={matrixDerived.result}
+                  cellMetricId={matrixState.preferences.cellMetricId}
+                  onChangeCellMetricId={matrixActions.preferences.setCellMetricId}
+                  weightsByRelationshipType={matrixState.preferences.weightsByRelationshipType}
                   onChangeRelationshipTypeWeight={(relationshipType, weight) =>
-                    matrix.setWeightsByRelationshipType((prev) => ({ ...prev, [relationshipType]: weight }))
+                    matrixActions.preferences.setWeightsByRelationshipType((prev) => ({ ...prev, [relationshipType]: weight }))
                   }
-                  weightPresets={matrix.weightPresets}
-                  weightPresetId={matrix.weightPresetId}
-                  onChangeWeightPresetId={(presetId) => matrix.applyWeightPreset(presetId)}
-                  relationshipTypesForWeights={matrix.relationshipTypesForWeights}
-                  cellValues={matrix.cellValues}
-                  highlightMissing={matrix.highlightMissing}
-                  onToggleHighlightMissing={() => matrix.setHighlightMissing((v) => !v)}
-                  heatmapEnabled={matrix.heatmapEnabled}
-                  onChangeHeatmapEnabled={matrix.setHeatmapEnabled}
-                  hideEmpty={matrix.hideEmpty}
-                  onChangeHideEmpty={matrix.setHideEmpty}
+                  weightPresets={matrixState.preferences.weightPresets}
+                  weightPresetId={matrixState.preferences.weightPresetId}
+                  onChangeWeightPresetId={(presetId) => matrixActions.preferences.applyWeightPreset(presetId)}
+                  relationshipTypesForWeights={matrixDerived.relationshipTypesForWeights}
+                  cellValues={matrixDerived.cellValues}
+                  highlightMissing={matrixState.preferences.highlightMissing}
+                  onToggleHighlightMissing={() => matrixActions.preferences.onToggleHighlightMissing()}
+                  heatmapEnabled={matrixState.preferences.heatmapEnabled}
+                  onChangeHeatmapEnabled={matrixActions.preferences.setHeatmapEnabled}
+                  hideEmpty={matrixState.preferences.hideEmpty}
+                  onChangeHideEmpty={matrixActions.preferences.setHideEmpty}
                   onOpenCell={(info) => setMatrixCellDialog(info)}
                 />
               ) : null}
 
-              {matrix.result && matrixCellDialog ? (
+              {matrixDerived.result && matrixCellDialog ? (
                 <RelationshipMatrixCellDialog
                   isOpen={Boolean(matrixCellDialog)}
                   onClose={() => setMatrixCellDialog(null)}

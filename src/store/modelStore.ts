@@ -14,7 +14,7 @@ import type {
   ViewConnectionRouteKind,
 } from '../domain';
 import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode } from '../domain/layout/types';
-import { extractArchiMateLayoutInput, fitArchiMateBoxToText } from '../domain/layout/archimate';
+import { extractLayoutInputForView, fitArchiMateBoxToText } from '../domain/layout';
 import { nudgeOverlaps, snapToGrid } from '../domain/layout/post';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
 import {
@@ -481,11 +481,8 @@ export class ModelStore {
 
     const view = current.views[viewId];
     if (!view) throw new Error(`View not found: ${viewId}`);
-    if (view.kind !== 'archimate') {
-      throw new Error(`Auto layout is currently only supported for ArchiMate views (got: ${view.kind})`);
-    }
 
-    const input = extractArchiMateLayoutInput(current, viewId, options, selectionNodeIds);
+    const input = extractLayoutInputForView(current, viewId, options, selectionNodeIds);
     if (input.nodes.length === 0) return;
 
     // Lazy-load ELK so it doesn't get pulled into the main bundle until the user runs auto-layout.

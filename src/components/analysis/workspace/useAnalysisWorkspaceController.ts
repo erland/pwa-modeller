@@ -5,6 +5,7 @@ import type { Selection } from '../../model/selection';
 import { useAnalysisPathsBetween, useAnalysisRelatedElements, useModelStore } from '../../../store';
 
 import type { AnalysisMode } from '../AnalysisQueryPanel';
+import type { AnalysisQueryPanelActions, AnalysisQueryPanelMeta, AnalysisQueryPanelState } from '../AnalysisQueryPanel';
 import { useMatrixWorkspaceState } from './useMatrixWorkspaceState';
 
 import {
@@ -15,14 +16,6 @@ import {
   selectionToElementId,
   selectionToElementIds,
 } from './analysisWorkspaceUtils';
-
-export type MatrixCellDialogInfo = {
-  rowId: string;
-  rowLabel: string;
-  colId: string;
-  colLabel: string;
-  relationshipIds: string[];
-};
 
 export function useAnalysisWorkspaceController({
   modelKind,
@@ -82,20 +75,21 @@ export function useAnalysisWorkspaceController({
     setDraftStartId(id);
   }, []);
 
+  const selectedElementId = useMemo(() => selectionToElementId(selection), [selection]);
+
   // If the user has an element selected and the draft is empty, prefill to reduce friction.
   useEffect(() => {
-    const picked = selectionToElementId(selection);
-    if (!picked) return;
+    if (!selectedElementId) return;
 
     if (mode !== 'paths' && mode !== 'matrix') {
-      if (!draftStartId) onChangeDraftStartIdSync(picked);
+      if (!draftStartId) onChangeDraftStartIdSync(selectedElementId);
       return;
     }
     if (mode === 'paths') {
-      if (!draftSourceId) onChangeDraftSourceIdSync(picked);
-      else if (!draftTargetId && draftSourceId !== picked) setDraftTargetId(picked);
+      if (!draftSourceId) onChangeDraftSourceIdSync(selectedElementId);
+      else if (!draftTargetId && draftSourceId !== selectedElementId) setDraftTargetId(selectedElementId);
     }
-  }, [selection, mode, draftStartId, draftSourceId, draftTargetId, onChangeDraftStartIdSync, onChangeDraftSourceIdSync]);
+  }, [mode, draftStartId, draftSourceId, draftTargetId, onChangeDraftStartIdSync, onChangeDraftSourceIdSync, selectedElementId]);
 
   const relatedOpts = useMemo(
     () =>
@@ -144,8 +138,6 @@ export function useAnalysisWorkspaceController({
   const matrixState = matrixWorkspace.state;
   const matrixActions = matrixWorkspace.actions;
   const matrixDerived = matrixWorkspace.derived;
-
-  const [matrixCellDialog, setMatrixCellDialog] = useState<MatrixCellDialogInfo | null>(null);
 
   const canRun = computeCanRun({
     modelPresent: Boolean(model),
@@ -218,13 +210,12 @@ export function useAnalysisWorkspaceController({
 
   const useSelectionAs = useCallback(
     (which: 'start' | 'source' | 'target') => {
-      const picked = selectionToElementId(selection);
-      if (!picked) return;
-      if (which === 'start') onChangeDraftStartIdSync(picked);
-      if (which === 'source') onChangeDraftSourceIdSync(picked);
-      if (which === 'target') setDraftTargetId(picked);
+      if (!selectedElementId) return;
+      if (which === 'start') onChangeDraftStartIdSync(selectedElementId);
+      if (which === 'source') onChangeDraftSourceIdSync(selectedElementId);
+      if (which === 'target') setDraftTargetId(selectedElementId);
     },
-    [onChangeDraftSourceIdSync, onChangeDraftStartIdSync, selection]
+    [onChangeDraftSourceIdSync, onChangeDraftStartIdSync, selectedElementId]
   );
 
   const openTraceabilityFrom = useCallback((elementId: string) => {
@@ -238,11 +229,193 @@ export function useAnalysisWorkspaceController({
     [activeStartId, draftStartId, selection]
   );
 
-  const canOpenTraceability = Boolean(selectionToElementId(selection));
+  const canOpenTraceability = Boolean(selectedElementId);
   const openTraceabilityFromSelection = useCallback(() => {
-    const picked = selectionToElementId(selection);
-    if (picked) openTraceabilityFrom(picked);
-  }, [openTraceabilityFrom, selection]);
+    if (selectedElementId) openTraceabilityFrom(selectedElementId);
+  }, [openTraceabilityFrom, selectedElementId]);
+
+  // -----------------------------
+  // Query-panel adapters (reduce glue in AnalysisWorkspace)
+  // -----------------------------
+  const matrixUiQuery = matrixState.uiQuery;
+
+  const applySelectedMatrixPreset = useCallback(() => {
+    const p = matrixState.presets.presets.find((x) => x.id === matrixState.presets.presetId);
+    if (!p) return;
+    matrixActions.presets.applyUiQuery(p.query);
+    setDirection(p.query.direction);
+    setRelationshipTypes([...p.query.relationshipTypes]);
+  }, [matrixActions.presets, matrixState.presets.presetId, matrixState.presets.presets]);
+
+  const restoreSelectedMatrixSnapshot = useCallback(() => {
+    const snap = matrixState.presets.snapshots.find((s) => s.id === matrixState.presets.snapshotId);
+    if (!snap) return;
+    matrixActions.presets.applyUiQuery(snap.uiQuery);
+    setDirection(snap.uiQuery.direction);
+    setRelationshipTypes([...snap.uiQuery.relationshipTypes]);
+    matrixActions.presets.restoreSnapshot(matrixState.presets.snapshotId);
+  }, [matrixActions.presets, matrixState.presets.snapshotId, matrixState.presets.snapshots]);
+
+  const deleteSelectedMatrixSnapshot = useCallback(() => {
+    const id = matrixState.presets.snapshotId;
+    matrixActions.presets.setSnapshotId('');
+    if (id) matrixActions.presets.deleteSnapshot(id);
+  }, [matrixActions.presets, matrixState.presets.snapshotId]);
+
+  const queryPanelState: AnalysisQueryPanelState = useMemo(
+    () => ({
+      mode,
+      selectionElementIds,
+      draft: {
+        startId: draftStartId,
+        sourceId: draftSourceId,
+        targetId: draftTargetId,
+      },
+      filters: {
+        direction,
+        relationshipTypes,
+        layers,
+        elementTypes,
+        maxDepth,
+        includeStart,
+        maxPaths,
+        maxPathLength,
+      },
+      matrix: {
+        rowSource: matrixState.axes.rowSource,
+        rowElementType: matrixState.axes.rowElementType,
+        rowLayer: matrixState.axes.rowLayer,
+        rowSelectionIds: matrixState.axes.rowSelectionIds,
+
+        colSource: matrixState.axes.colSource,
+        colElementType: matrixState.axes.colElementType,
+        colLayer: matrixState.axes.colLayer,
+        colSelectionIds: matrixState.axes.colSelectionIds,
+
+        resolvedRowCount: matrixState.axes.rowIds.length,
+        resolvedColCount: matrixState.axes.colIds.length,
+        hasBuilt: Boolean(matrixState.build.builtQuery),
+        buildNonce: matrixState.build.buildNonce,
+
+        presets: matrixState.presets.presets,
+        presetId: matrixState.presets.presetId,
+
+        snapshots: matrixState.presets.snapshots,
+        snapshotId: matrixState.presets.snapshotId,
+        canSaveSnapshot: Boolean(matrixDerived.result),
+      },
+    }),
+    [
+      direction,
+      draftSourceId,
+      draftStartId,
+      draftTargetId,
+      elementTypes,
+      includeStart,
+      layers,
+      matrixDerived.result,
+      matrixState.axes.colElementType,
+      matrixState.axes.colIds.length,
+      matrixState.axes.colLayer,
+      matrixState.axes.colSelectionIds,
+      matrixState.axes.colSource,
+      matrixState.axes.rowElementType,
+      matrixState.axes.rowIds.length,
+      matrixState.axes.rowLayer,
+      matrixState.axes.rowSelectionIds,
+      matrixState.axes.rowSource,
+      matrixState.build.builtQuery,
+      matrixState.build.buildNonce,
+      matrixState.presets.presetId,
+      matrixState.presets.presets,
+      matrixState.presets.snapshotId,
+      matrixState.presets.snapshots,
+      maxDepth,
+      maxPathLength,
+      maxPaths,
+      mode,
+      relationshipTypes,
+      selectionElementIds,
+    ]
+  );
+
+  const queryPanelActions: AnalysisQueryPanelActions = useMemo(
+    () => ({
+      setMode,
+      run,
+      draft: {
+        setStartId: onChangeDraftStartIdSync,
+        setSourceId: onChangeDraftSourceIdSync,
+        setTargetId: setDraftTargetId,
+        useSelection: useSelectionAs,
+      },
+      filters: {
+        setDirection,
+        setRelationshipTypes,
+        setLayers,
+        setElementTypes,
+        setMaxDepth,
+        setIncludeStart,
+        setMaxPaths,
+        setMaxPathLength,
+        applyPreset,
+      },
+      matrix: {
+        setRowSource: matrixActions.axes.setRowSource,
+        setRowElementType: matrixActions.axes.setRowElementType,
+        setRowLayer: matrixActions.axes.setRowLayer,
+        setRowSelectionIds: matrixActions.axes.setRowSelectionIds,
+        captureRowSelection: matrixActions.axes.captureSelectionAsRows,
+
+        setColSource: matrixActions.axes.setColSource,
+        setColElementType: matrixActions.axes.setColElementType,
+        setColLayer: matrixActions.axes.setColLayer,
+        setColSelectionIds: matrixActions.axes.setColSelectionIds,
+        captureColSelection: matrixActions.axes.captureSelectionAsCols,
+
+        swapAxes: matrixActions.axes.swapAxes,
+
+        setPresetId: matrixActions.presets.setPresetId,
+        savePreset: () => matrixActions.presets.saveCurrentPreset(matrixUiQuery),
+        applySelectedPreset: applySelectedMatrixPreset,
+        deleteSelectedPreset: matrixActions.presets.deleteSelectedPreset,
+
+        setSnapshotId: matrixActions.presets.setSnapshotId,
+        saveSnapshot: () => matrixActions.presets.saveSnapshot(matrixUiQuery),
+        restoreSelectedSnapshot: restoreSelectedMatrixSnapshot,
+        deleteSelectedSnapshot: deleteSelectedMatrixSnapshot,
+      },
+    }),
+    [
+      applyPreset,
+      applySelectedMatrixPreset,
+      deleteSelectedMatrixSnapshot,
+      matrixActions.axes,
+      matrixActions.presets,
+      matrixUiQuery,
+      onChangeDraftSourceIdSync,
+      onChangeDraftStartIdSync,
+      restoreSelectedMatrixSnapshot,
+      run,
+      setElementTypes,
+      setIncludeStart,
+      setLayers,
+      setMaxDepth,
+      setMaxPathLength,
+      setMaxPaths,
+      setMode,
+      setRelationshipTypes,
+      useSelectionAs,
+    ]
+  );
+
+  const queryPanelMeta: AnalysisQueryPanelMeta = useMemo(
+    () => ({
+      canRun,
+      canUseSelection: canOpenTraceability,
+    }),
+    [canOpenTraceability, canRun]
+  );
 
   return {
     state: {
@@ -260,8 +433,6 @@ export function useAnalysisWorkspaceController({
       draftStartId,
       draftSourceId,
       draftTargetId,
-      matrixCellDialog,
-      matrixState,
     },
     actions: {
       setMode,
@@ -280,8 +451,6 @@ export function useAnalysisWorkspaceController({
       applyPreset,
       useSelectionAs,
       openTraceabilityFrom,
-      setMatrixCellDialog,
-      matrixActions,
     },
     derived: {
       selectionElementIds,
@@ -291,8 +460,17 @@ export function useAnalysisWorkspaceController({
       relatedResult,
       pathsResult,
       traceSeedId,
-      matrixDerived,
-      matrixUiQuery: matrixState.uiQuery,
+      matrix: {
+        state: matrixState,
+        actions: matrixActions,
+        derived: matrixDerived,
+        uiQuery: matrixUiQuery,
+      },
+      queryPanel: {
+        state: queryPanelState,
+        actions: queryPanelActions,
+        meta: queryPanelMeta,
+      },
     },
   } as const;
 }

@@ -30,47 +30,21 @@ export function AnalysisWorkspace({
     layers,
     elementTypes,
     maxDepth,
-    includeStart,
-    maxPaths,
-    maxPathLength,
-    draftStartId,
-    draftSourceId,
-    draftTargetId,
-    matrixCellDialog,
-    matrixState,
   } = state;
 
   const {
     setMode,
-    setDirection,
-    setRelationshipTypes,
-    setLayers,
-    setElementTypes,
-    setMaxDepth,
-    setIncludeStart,
-    setMaxPaths,
-    setMaxPathLength,
-    onChangeDraftStartId,
-    onChangeDraftSourceId,
-    onChangeDraftTargetId,
-    run,
-    applyPreset,
-    useSelectionAs,
     openTraceabilityFrom,
-    setMatrixCellDialog,
-    matrixActions,
   } = actions;
 
   const {
-    selectionElementIds,
-    canRun,
     canOpenTraceability,
     openTraceabilityFromSelection,
     relatedResult,
     pathsResult,
     traceSeedId,
-    matrixDerived,
-    matrixUiQuery,
+    matrix,
+    queryPanel,
   } = derived;
 
   return (
@@ -97,127 +71,18 @@ export function AnalysisWorkspace({
             <AnalysisQueryPanel
               model={model}
               modelKind={modelKind}
-              state={{
-                mode,
-                selectionElementIds,
-                draft: {
-                  startId: draftStartId,
-                  sourceId: draftSourceId,
-                  targetId: draftTargetId,
-                },
-                filters: {
-                  direction,
-                  relationshipTypes,
-                  layers,
-                  elementTypes,
-                  maxDepth,
-                  includeStart,
-                  maxPaths,
-                  maxPathLength,
-                },
-                matrix: {
-                  rowSource: matrixState.axes.rowSource,
-                  rowElementType: matrixState.axes.rowElementType,
-                  rowLayer: matrixState.axes.rowLayer,
-                  rowSelectionIds: matrixState.axes.rowSelectionIds,
-
-                  colSource: matrixState.axes.colSource,
-                  colElementType: matrixState.axes.colElementType,
-                  colLayer: matrixState.axes.colLayer,
-                  colSelectionIds: matrixState.axes.colSelectionIds,
-
-                  resolvedRowCount: matrixState.axes.rowIds.length,
-                  resolvedColCount: matrixState.axes.colIds.length,
-                  hasBuilt: Boolean(matrixState.build.builtQuery),
-                  buildNonce: matrixState.build.buildNonce,
-
-                  presets: matrixState.presets.presets,
-                  presetId: matrixState.presets.presetId,
-
-                  snapshots: matrixState.presets.snapshots,
-                  snapshotId: matrixState.presets.snapshotId,
-                  canSaveSnapshot: Boolean(matrixDerived.result),
-                },
-              }}
-              actions={{
-                setMode,
-                run,
-                draft: {
-                  setStartId: onChangeDraftStartId,
-                  setSourceId: onChangeDraftSourceId,
-                  setTargetId: onChangeDraftTargetId,
-                  useSelection: useSelectionAs,
-                },
-                filters: {
-                  setDirection,
-                  setRelationshipTypes,
-                  setLayers,
-                  setElementTypes,
-                  setMaxDepth,
-                  setIncludeStart,
-                  setMaxPaths,
-                  setMaxPathLength,
-                  applyPreset,
-                },
-                matrix: {
-                  setRowSource: matrixActions.axes.setRowSource,
-                  setRowElementType: matrixActions.axes.setRowElementType,
-                  setRowLayer: matrixActions.axes.setRowLayer,
-                  setRowSelectionIds: matrixActions.axes.setRowSelectionIds,
-                  captureRowSelection: matrixActions.axes.captureSelectionAsRows,
-
-                  setColSource: matrixActions.axes.setColSource,
-                  setColElementType: matrixActions.axes.setColElementType,
-                  setColLayer: matrixActions.axes.setColLayer,
-                  setColSelectionIds: matrixActions.axes.setColSelectionIds,
-                  captureColSelection: matrixActions.axes.captureSelectionAsCols,
-
-                  swapAxes: matrixActions.axes.swapAxes,
-
-                  setPresetId: matrixActions.presets.setPresetId,
-                  savePreset: () => matrixActions.presets.saveCurrentPreset(matrixUiQuery),
-                  applySelectedPreset: () => {
-                    const p = matrixState.presets.presets.find((x) => x.id === matrixState.presets.presetId);
-                    if (!p) return;
-                    matrixActions.presets.applyUiQuery(p.query);
-                    setDirection(p.query.direction);
-                    setRelationshipTypes([...p.query.relationshipTypes]);
-                  },
-                  deleteSelectedPreset: matrixActions.presets.deleteSelectedPreset,
-
-                  setSnapshotId: matrixActions.presets.setSnapshotId,
-                  saveSnapshot: () => matrixActions.presets.saveSnapshot(matrixUiQuery),
-                  restoreSelectedSnapshot: () => {
-                    const snap = matrixState.presets.snapshots.find((s) => s.id === matrixState.presets.snapshotId);
-                    if (!snap) return;
-                    matrixActions.presets.applyUiQuery(snap.uiQuery);
-                    setDirection(snap.uiQuery.direction);
-                    setRelationshipTypes([...snap.uiQuery.relationshipTypes]);
-                    matrixActions.presets.restoreSnapshot(matrixState.presets.snapshotId);
-                  },
-                  deleteSelectedSnapshot: () => {
-                    const id = matrixState.presets.snapshotId;
-                    matrixActions.presets.setSnapshotId('');
-                    if (id) matrixActions.presets.deleteSnapshot(id);
-                  },
-                },
-              }}
-              meta={{
-                canRun,
-                canUseSelection: canOpenTraceability,
-              }}
+              state={queryPanel.state}
+              actions={queryPanel.actions}
+              meta={queryPanel.meta}
             />
           ) : null}
 
           {mode === 'matrix' ? (
             <MatrixModeView
               model={model}
-              matrixState={matrixState}
-              matrixActions={matrixActions}
-              matrixDerived={matrixDerived}
-              matrixCellDialog={matrixCellDialog}
-              onOpenCell={(info) => setMatrixCellDialog(info)}
-              onCloseCellDialog={() => setMatrixCellDialog(null)}
+              matrixState={matrix.state}
+              matrixActions={matrix.actions}
+              matrixDerived={matrix.derived}
             />
           ) : mode === 'portfolio' ? (
             <PortfolioModeView

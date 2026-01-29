@@ -1,5 +1,6 @@
 import type { Model, MatrixMetricId } from '../../../domain';
 import type { Dispatch, SetStateAction } from 'react';
+import { useState } from 'react';
 
 import type { MatrixWorkspaceCellDialogInfo } from '../workspace/useMatrixWorkspaceState';
 
@@ -38,9 +39,6 @@ export type MatrixModeViewProps = {
     cellValues: any;
     relationshipTypesForWeights: string[];
   };
-  matrixCellDialog: MatrixWorkspaceCellDialogInfo | null;
-  onOpenCell: (info: MatrixWorkspaceCellDialogInfo) => void;
-  onCloseCellDialog: () => void;
 };
 
 export function MatrixModeView({
@@ -48,10 +46,9 @@ export function MatrixModeView({
   matrixState,
   matrixActions,
   matrixDerived,
-  matrixCellDialog,
-  onOpenCell,
-  onCloseCellDialog,
 }: MatrixModeViewProps) {
+  const [matrixCellDialog, setMatrixCellDialog] = useState<MatrixWorkspaceCellDialogInfo | null>(null);
+
   if (!matrixDerived.result) return null;
 
   return (
@@ -79,13 +76,13 @@ export function MatrixModeView({
         onChangeHeatmapEnabled={(v) => matrixActions.preferences.setHeatmapEnabled(v)}
         hideEmpty={matrixState.preferences.hideEmpty}
         onChangeHideEmpty={(v) => matrixActions.preferences.setHideEmpty(v)}
-        onOpenCell={onOpenCell}
+        onOpenCell={(info) => setMatrixCellDialog(info)}
       />
 
       {matrixCellDialog ? (
         <RelationshipMatrixCellDialog
           isOpen={Boolean(matrixCellDialog)}
-          onClose={onCloseCellDialog}
+          onClose={() => setMatrixCellDialog(null)}
           model={model}
           cell={matrixCellDialog}
         />

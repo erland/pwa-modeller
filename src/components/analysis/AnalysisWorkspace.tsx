@@ -97,87 +97,115 @@ export function AnalysisWorkspace({
             <AnalysisQueryPanel
               model={model}
               modelKind={modelKind}
-              mode={mode}
-              onChangeMode={setMode}
-              selectionElementIds={selectionElementIds}
-              matrixRowSource={matrixState.axes.rowSource}
-              onChangeMatrixRowSource={matrixActions.axes.setRowSource}
-              matrixRowElementType={matrixState.axes.rowElementType}
-              onChangeMatrixRowElementType={matrixActions.axes.setRowElementType}
-              matrixRowLayer={matrixState.axes.rowLayer}
-              onChangeMatrixRowLayer={matrixActions.axes.setRowLayer}
-              matrixRowSelectionIds={matrixState.axes.rowSelectionIds}
-              onCaptureMatrixRowSelection={matrixActions.axes.captureSelectionAsRows}
-              matrixColSource={matrixState.axes.colSource}
-              onChangeMatrixColSource={matrixActions.axes.setColSource}
-              matrixColElementType={matrixState.axes.colElementType}
-              onChangeMatrixColElementType={matrixActions.axes.setColElementType}
-              matrixColLayer={matrixState.axes.colLayer}
-              onChangeMatrixColLayer={matrixActions.axes.setColLayer}
-              matrixColSelectionIds={matrixState.axes.colSelectionIds}
-              onCaptureMatrixColSelection={matrixActions.axes.captureSelectionAsCols}
-              onSwapMatrixAxes={matrixActions.axes.swapAxes}
-              matrixResolvedRowCount={matrixState.axes.rowIds.length}
-              matrixResolvedColCount={matrixState.axes.colIds.length}
-              matrixBuildNonce={matrixState.build.buildNonce}
-              matrixHasBuilt={Boolean(matrixState.build.builtQuery)}
-              matrixPresets={matrixState.presets.presets}
-              matrixPresetId={matrixState.presets.presetId}
-              onChangeMatrixPresetId={matrixActions.presets.setPresetId}
-              onSaveMatrixPreset={() => matrixActions.presets.saveCurrentPreset(matrixUiQuery)}
-              onApplyMatrixPreset={() => {
-                const p = matrixState.presets.presets.find((x) => x.id === matrixState.presets.presetId);
-                if (!p) return;
-                matrixActions.presets.applyUiQuery(p.query);
-                setDirection(p.query.direction);
-                setRelationshipTypes([...p.query.relationshipTypes]);
+              state={{
+                mode,
+                selectionElementIds,
+                draft: {
+                  startId: draftStartId,
+                  sourceId: draftSourceId,
+                  targetId: draftTargetId,
+                },
+                filters: {
+                  direction,
+                  relationshipTypes,
+                  layers,
+                  elementTypes,
+                  maxDepth,
+                  includeStart,
+                  maxPaths,
+                  maxPathLength,
+                },
+                matrix: {
+                  rowSource: matrixState.axes.rowSource,
+                  rowElementType: matrixState.axes.rowElementType,
+                  rowLayer: matrixState.axes.rowLayer,
+                  rowSelectionIds: matrixState.axes.rowSelectionIds,
+
+                  colSource: matrixState.axes.colSource,
+                  colElementType: matrixState.axes.colElementType,
+                  colLayer: matrixState.axes.colLayer,
+                  colSelectionIds: matrixState.axes.colSelectionIds,
+
+                  resolvedRowCount: matrixState.axes.rowIds.length,
+                  resolvedColCount: matrixState.axes.colIds.length,
+                  hasBuilt: Boolean(matrixState.build.builtQuery),
+                  buildNonce: matrixState.build.buildNonce,
+
+                  presets: matrixState.presets.presets,
+                  presetId: matrixState.presets.presetId,
+
+                  snapshots: matrixState.presets.snapshots,
+                  snapshotId: matrixState.presets.snapshotId,
+                  canSaveSnapshot: Boolean(matrixDerived.result),
+                },
               }}
-              onDeleteMatrixPreset={matrixActions.presets.deleteSelectedPreset}
-              matrixSnapshots={matrixState.presets.snapshots}
-              matrixSnapshotId={matrixState.presets.snapshotId}
-              onChangeMatrixSnapshotId={matrixActions.presets.setSnapshotId}
-              canSaveMatrixSnapshot={Boolean(matrixDerived.result)}
-              onSaveMatrixSnapshot={() => matrixActions.presets.saveSnapshot(matrixUiQuery)}
-              onRestoreMatrixSnapshot={() => {
-                const snap = matrixState.presets.snapshots.find((s) => s.id === matrixState.presets.snapshotId);
-                if (!snap) return;
-                matrixActions.presets.applyUiQuery(snap.uiQuery);
-                setDirection(snap.uiQuery.direction);
-                setRelationshipTypes([...snap.uiQuery.relationshipTypes]);
-                matrixActions.presets.restoreSnapshot(matrixState.presets.snapshotId);
+              actions={{
+                setMode,
+                run,
+                draft: {
+                  setStartId: onChangeDraftStartId,
+                  setSourceId: onChangeDraftSourceId,
+                  setTargetId: onChangeDraftTargetId,
+                  useSelection: useSelectionAs,
+                },
+                filters: {
+                  setDirection,
+                  setRelationshipTypes,
+                  setLayers,
+                  setElementTypes,
+                  setMaxDepth,
+                  setIncludeStart,
+                  setMaxPaths,
+                  setMaxPathLength,
+                  applyPreset,
+                },
+                matrix: {
+                  setRowSource: matrixActions.axes.setRowSource,
+                  setRowElementType: matrixActions.axes.setRowElementType,
+                  setRowLayer: matrixActions.axes.setRowLayer,
+                  setRowSelectionIds: matrixActions.axes.setRowSelectionIds,
+                  captureRowSelection: matrixActions.axes.captureSelectionAsRows,
+
+                  setColSource: matrixActions.axes.setColSource,
+                  setColElementType: matrixActions.axes.setColElementType,
+                  setColLayer: matrixActions.axes.setColLayer,
+                  setColSelectionIds: matrixActions.axes.setColSelectionIds,
+                  captureColSelection: matrixActions.axes.captureSelectionAsCols,
+
+                  swapAxes: matrixActions.axes.swapAxes,
+
+                  setPresetId: matrixActions.presets.setPresetId,
+                  savePreset: () => matrixActions.presets.saveCurrentPreset(matrixUiQuery),
+                  applySelectedPreset: () => {
+                    const p = matrixState.presets.presets.find((x) => x.id === matrixState.presets.presetId);
+                    if (!p) return;
+                    matrixActions.presets.applyUiQuery(p.query);
+                    setDirection(p.query.direction);
+                    setRelationshipTypes([...p.query.relationshipTypes]);
+                  },
+                  deleteSelectedPreset: matrixActions.presets.deleteSelectedPreset,
+
+                  setSnapshotId: matrixActions.presets.setSnapshotId,
+                  saveSnapshot: () => matrixActions.presets.saveSnapshot(matrixUiQuery),
+                  restoreSelectedSnapshot: () => {
+                    const snap = matrixState.presets.snapshots.find((s) => s.id === matrixState.presets.snapshotId);
+                    if (!snap) return;
+                    matrixActions.presets.applyUiQuery(snap.uiQuery);
+                    setDirection(snap.uiQuery.direction);
+                    setRelationshipTypes([...snap.uiQuery.relationshipTypes]);
+                    matrixActions.presets.restoreSnapshot(matrixState.presets.snapshotId);
+                  },
+                  deleteSelectedSnapshot: () => {
+                    const id = matrixState.presets.snapshotId;
+                    matrixActions.presets.setSnapshotId('');
+                    if (id) matrixActions.presets.deleteSnapshot(id);
+                  },
+                },
               }}
-              onDeleteMatrixSnapshot={() => {
-                const id = matrixState.presets.snapshotId;
-                matrixActions.presets.setSnapshotId('');
-                if (id) matrixActions.presets.deleteSnapshot(id);
+              meta={{
+                canRun,
+                canUseSelection: canOpenTraceability,
               }}
-              direction={direction}
-              onChangeDirection={setDirection}
-              relationshipTypes={relationshipTypes}
-              onChangeRelationshipTypes={setRelationshipTypes}
-              layers={layers}
-              onChangeLayers={setLayers}
-              elementTypes={elementTypes}
-              onChangeElementTypes={setElementTypes}
-              maxDepth={maxDepth}
-              onChangeMaxDepth={setMaxDepth}
-              includeStart={includeStart}
-              onChangeIncludeStart={setIncludeStart}
-              maxPaths={maxPaths}
-              onChangeMaxPaths={setMaxPaths}
-              maxPathLength={maxPathLength}
-              onChangeMaxPathLength={setMaxPathLength}
-              onApplyPreset={applyPreset}
-              draftStartId={draftStartId}
-              onChangeDraftStartId={onChangeDraftStartId}
-              draftSourceId={draftSourceId}
-              onChangeDraftSourceId={onChangeDraftSourceId}
-              draftTargetId={draftTargetId}
-              onChangeDraftTargetId={onChangeDraftTargetId}
-              onUseSelection={useSelectionAs}
-              canUseSelection={canOpenTraceability}
-              canRun={canRun}
-              onRun={run}
             />
           ) : null}
 

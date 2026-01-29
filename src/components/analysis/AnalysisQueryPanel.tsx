@@ -18,169 +18,144 @@ import { hasAnyFilters as computeHasAnyFilters } from './queryPanel/utils';
 
 export type AnalysisMode = 'related' | 'paths' | 'traceability' | 'matrix' | 'portfolio';
 
+export type AnalysisQueryPanelState = {
+  mode: AnalysisMode;
+  selectionElementIds: string[];
+
+  draft: {
+    startId: string;
+    sourceId: string;
+    targetId: string;
+  };
+
+  filters: {
+    direction: AnalysisDirection;
+    relationshipTypes: RelationshipType[];
+    layers: string[];
+    elementTypes: ElementType[];
+    maxDepth: number;
+    includeStart: boolean;
+    maxPaths: number;
+    maxPathLength: number | null;
+  };
+
+  matrix: {
+    rowSource: 'facet' | 'selection';
+    rowElementType: ElementType | '';
+    rowLayer: string | '';
+    rowSelectionIds: string[];
+
+    colSource: 'facet' | 'selection';
+    colElementType: ElementType | '';
+    colLayer: string | '';
+    colSelectionIds: string[];
+
+    resolvedRowCount: number;
+    resolvedColCount: number;
+    hasBuilt: boolean;
+    buildNonce: number;
+
+    presets: MatrixQueryPreset[];
+    presetId: string;
+
+    snapshots: MatrixQuerySnapshot[];
+    snapshotId: string;
+    canSaveSnapshot: boolean;
+  };
+};
+
+export type AnalysisQueryPanelActions = {
+  setMode: (mode: AnalysisMode) => void;
+
+  draft: {
+    setStartId: (id: string) => void;
+    setSourceId: (id: string) => void;
+    setTargetId: (id: string) => void;
+    useSelection: (which: 'start' | 'source' | 'target') => void;
+  };
+
+  filters: {
+    setDirection: (dir: AnalysisDirection) => void;
+    setRelationshipTypes: (types: RelationshipType[]) => void;
+    setLayers: (layers: string[]) => void;
+    setElementTypes: (types: ElementType[]) => void;
+    setMaxDepth: (n: number) => void;
+    setIncludeStart: (v: boolean) => void;
+    setMaxPaths: (n: number) => void;
+    setMaxPathLength: (n: number | null) => void;
+    applyPreset: (presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') => void;
+  };
+
+  matrix: {
+    setRowSource: (v: 'facet' | 'selection') => void;
+    setRowElementType: (v: ElementType | '') => void;
+    setRowLayer: (v: string | '') => void;
+    setRowSelectionIds: (ids: string[]) => void;
+    captureRowSelection: () => void;
+
+    setColSource: (v: 'facet' | 'selection') => void;
+    setColElementType: (v: ElementType | '') => void;
+    setColLayer: (v: string | '') => void;
+    setColSelectionIds: (ids: string[]) => void;
+    captureColSelection: () => void;
+
+    swapAxes: () => void;
+
+    setPresetId: (id: string) => void;
+    savePreset: () => void;
+    applySelectedPreset: () => void;
+    deleteSelectedPreset: () => void;
+
+    setSnapshotId: (id: string) => void;
+    saveSnapshot: () => void;
+    restoreSelectedSnapshot: () => void;
+    deleteSelectedSnapshot: () => void;
+  };
+
+  run: () => void;
+};
+
+export type AnalysisQueryPanelMeta = {
+  canUseSelection: boolean;
+  canRun: boolean;
+};
+
 type Props = {
   model: Model;
   modelKind: ModelKind;
-  mode: AnalysisMode;
-  onChangeMode: (mode: AnalysisMode) => void;
-
-  // -----------------------------
-  // Matrix (draft)
-  // -----------------------------
-  selectionElementIds: string[];
-
-  matrixRowSource: 'facet' | 'selection';
-  onChangeMatrixRowSource: (v: 'facet' | 'selection') => void;
-  matrixRowElementType: ElementType | '';
-  onChangeMatrixRowElementType: (v: ElementType | '') => void;
-  matrixRowLayer: string | '';
-  onChangeMatrixRowLayer: (v: string | '') => void;
-  matrixRowSelectionIds: string[];
-  onCaptureMatrixRowSelection: () => void;
-
-  matrixColSource: 'facet' | 'selection';
-  onChangeMatrixColSource: (v: 'facet' | 'selection') => void;
-  matrixColElementType: ElementType | '';
-  onChangeMatrixColElementType: (v: ElementType | '') => void;
-  matrixColLayer: string | '';
-  onChangeMatrixColLayer: (v: string | '') => void;
-  matrixColSelectionIds: string[];
-  onCaptureMatrixColSelection: () => void;
-
-  onSwapMatrixAxes: () => void;
-
-  // Matrix query UI extras (presets/snapshots + status)
-  matrixResolvedRowCount: number;
-  matrixResolvedColCount: number;
-  matrixHasBuilt: boolean;
-  matrixBuildNonce: number;
-
-  matrixPresets: MatrixQueryPreset[];
-  matrixPresetId: string;
-  onChangeMatrixPresetId: (id: string) => void;
-  onSaveMatrixPreset: () => void;
-  onApplyMatrixPreset: () => void;
-  onDeleteMatrixPreset: () => void;
-
-  matrixSnapshots: MatrixQuerySnapshot[];
-  matrixSnapshotId: string;
-  onChangeMatrixSnapshotId: (id: string) => void;
-  canSaveMatrixSnapshot: boolean;
-  onSaveMatrixSnapshot: () => void;
-  onRestoreMatrixSnapshot: () => void;
-  onDeleteMatrixSnapshot: () => void;
-
-  // -----------------------------
-  // Filters (draft)
-  // -----------------------------
-  direction: AnalysisDirection;
-  onChangeDirection: (dir: AnalysisDirection) => void;
-  relationshipTypes: RelationshipType[];
-  onChangeRelationshipTypes: (types: RelationshipType[]) => void;
-  layers: string[];
-  onChangeLayers: (layers: string[]) => void;
-
-  // Related-only (refine within selected layers)
-  elementTypes: ElementType[];
-  onChangeElementTypes: (types: ElementType[]) => void;
-
-  // Related-only
-  maxDepth: number;
-  onChangeMaxDepth: (n: number) => void;
-  includeStart: boolean;
-  onChangeIncludeStart: (v: boolean) => void;
-
-  // Paths-only
-  maxPaths: number;
-  onChangeMaxPaths: (n: number) => void;
-  maxPathLength: number | null;
-  onChangeMaxPathLength: (n: number | null) => void;
-
-  onApplyPreset: (presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') => void;
-
-  draftStartId: string;
-  onChangeDraftStartId: (id: string) => void;
-
-  draftSourceId: string;
-  onChangeDraftSourceId: (id: string) => void;
-
-  draftTargetId: string;
-  onChangeDraftTargetId: (id: string) => void;
-
-  canUseSelection: boolean;
-  onUseSelection: (which: 'start' | 'source' | 'target') => void;
-
-  canRun: boolean;
-  onRun: () => void;
+  state: AnalysisQueryPanelState;
+  actions: AnalysisQueryPanelActions;
+  meta: AnalysisQueryPanelMeta;
 };
 
 export function AnalysisQueryPanel({
   model,
   modelKind,
-  mode,
-  selectionElementIds,
-  matrixRowSource,
-  onChangeMatrixRowSource,
-  matrixRowElementType,
-  onChangeMatrixRowElementType,
-  matrixRowLayer,
-  onChangeMatrixRowLayer,
-  matrixRowSelectionIds,
-  onCaptureMatrixRowSelection,
-  matrixColSource,
-  onChangeMatrixColSource,
-  matrixColElementType,
-  onChangeMatrixColElementType,
-  matrixColLayer,
-  onChangeMatrixColLayer,
-  matrixColSelectionIds,
-  onCaptureMatrixColSelection,
-  onSwapMatrixAxes,
-  matrixResolvedRowCount,
-  matrixResolvedColCount,
-  matrixHasBuilt,
-  matrixBuildNonce,
-  matrixPresets,
-  matrixPresetId,
-  onChangeMatrixPresetId,
-  onSaveMatrixPreset,
-  onApplyMatrixPreset,
-  onDeleteMatrixPreset,
-  matrixSnapshots,
-  matrixSnapshotId,
-  onChangeMatrixSnapshotId,
-  canSaveMatrixSnapshot,
-  onSaveMatrixSnapshot,
-  onRestoreMatrixSnapshot,
-  onDeleteMatrixSnapshot,
-  direction,
-  onChangeDirection,
-  relationshipTypes,
-  onChangeRelationshipTypes,
-  layers,
-  onChangeLayers,
-  elementTypes,
-  onChangeElementTypes,
-  maxDepth,
-  onChangeMaxDepth,
-  includeStart,
-  onChangeIncludeStart,
-  maxPaths,
-  onChangeMaxPaths,
-  maxPathLength,
-  onChangeMaxPathLength,
-  onApplyPreset,
-  draftStartId,
-  onChangeDraftStartId,
-  draftSourceId,
-  onChangeDraftSourceId,
-  draftTargetId,
-  onChangeDraftTargetId,
-  canUseSelection,
-  onUseSelection,
-  canRun,
-  onRun
+  state,
+  actions,
+  meta
 }: Props) {
+  const { mode, selectionElementIds, draft, filters, matrix } = state;
+  const { canRun, canUseSelection } = meta;
+
+  const {
+    run: onRun,
+    draft: draftActions,
+    filters: filterActions,
+    matrix: matrixActions
+  } = actions;
+
+  const {
+    direction,
+    relationshipTypes,
+    layers,
+    elementTypes,
+    maxDepth,
+    includeStart,
+    maxPaths,
+    maxPathLength
+  } = filters;
+
   const {
     modelName,
     hasLayerFacet,
@@ -196,11 +171,11 @@ export function AnalysisQueryPanel({
     modelKind,
     mode,
     relationshipTypes,
-    onChangeRelationshipTypes,
+    onChangeRelationshipTypes: filterActions.setRelationshipTypes,
     layers,
-    onChangeLayers,
+    onChangeLayers: filterActions.setLayers,
     elementTypes,
-    onChangeElementTypes
+    onChangeElementTypes: filterActions.setElementTypes
   });
 
   const hasAnyFilters = computeHasAnyFilters({
@@ -217,12 +192,12 @@ export function AnalysisQueryPanel({
 
   const { openChooser, chooserDialog } = useElementChooser({
     model,
-    draftStartId,
-    onChangeDraftStartId,
-    draftSourceId,
-    onChangeDraftSourceId,
-    draftTargetId,
-    onChangeDraftTargetId
+    draftStartId: draft.startId,
+    onChangeDraftStartId: draftActions.setStartId,
+    draftSourceId: draft.sourceId,
+    onChangeDraftSourceId: draftActions.setSourceId,
+    draftTargetId: draft.targetId,
+    onChangeDraftTargetId: draftActions.setTargetId
   });
 
   const { availableElementTypesByLayer, availableRowElementTypes, availableColElementTypes } = useMatrixFacetOptions({
@@ -231,8 +206,8 @@ export function AnalysisQueryPanel({
     hasLayerFacet,
     hasElementTypeFacet,
     availableLayers,
-    matrixRowLayer,
-    matrixColLayer
+    matrixRowLayer: matrix.rowLayer,
+    matrixColLayer: matrix.colLayer
   });
 
   const commonHint = useMemo(() => {
@@ -246,11 +221,11 @@ export function AnalysisQueryPanel({
     const matrixHint = (
       <>
         Choose row/column sets in “{modelName}” and build a relationship matrix. Rows:{' '}
-        <span className="mono">{matrixResolvedRowCount}</span>, Columns:{' '}
-        <span className="mono">{matrixResolvedColCount}</span>.{' '}
-        {matrixHasBuilt ? (
+        <span className="mono">{matrix.resolvedRowCount}</span>, Columns:{' '}
+        <span className="mono">{matrix.resolvedColCount}</span>.{' '}
+        {matrix.hasBuilt ? (
           <>
-            Last build: <span className="mono">{matrixBuildNonce}</span>.
+            Last build: <span className="mono">{matrix.buildNonce}</span>.
           </>
         ) : (
           <>No matrix built yet.</>
@@ -264,62 +239,62 @@ export function AnalysisQueryPanel({
         onRun={onRun}
         hint={matrixHint}
         selectionElementIds={selectionElementIds}
-        matrixRowSource={matrixRowSource}
-        onChangeMatrixRowSource={onChangeMatrixRowSource}
-        matrixRowElementType={matrixRowElementType}
-        onChangeMatrixRowElementType={onChangeMatrixRowElementType}
-        matrixRowLayer={matrixRowLayer}
-        onChangeMatrixRowLayer={onChangeMatrixRowLayer}
-        matrixRowSelectionIds={matrixRowSelectionIds}
-        onCaptureMatrixRowSelection={onCaptureMatrixRowSelection}
-        matrixColSource={matrixColSource}
-        onChangeMatrixColSource={onChangeMatrixColSource}
-        matrixColElementType={matrixColElementType}
-        onChangeMatrixColElementType={onChangeMatrixColElementType}
-        matrixColLayer={matrixColLayer}
-        onChangeMatrixColLayer={onChangeMatrixColLayer}
-        matrixColSelectionIds={matrixColSelectionIds}
-        onCaptureMatrixColSelection={onCaptureMatrixColSelection}
-        onSwapMatrixAxes={onSwapMatrixAxes}
+        matrixRowSource={matrix.rowSource}
+        onChangeMatrixRowSource={matrixActions.setRowSource}
+        matrixRowElementType={matrix.rowElementType}
+        onChangeMatrixRowElementType={matrixActions.setRowElementType}
+        matrixRowLayer={matrix.rowLayer}
+        onChangeMatrixRowLayer={matrixActions.setRowLayer}
+        matrixRowSelectionIds={matrix.rowSelectionIds}
+        onCaptureMatrixRowSelection={matrixActions.captureRowSelection}
+        matrixColSource={matrix.colSource}
+        onChangeMatrixColSource={matrixActions.setColSource}
+        matrixColElementType={matrix.colElementType}
+        onChangeMatrixColElementType={matrixActions.setColElementType}
+        matrixColLayer={matrix.colLayer}
+        onChangeMatrixColLayer={matrixActions.setColLayer}
+        matrixColSelectionIds={matrix.colSelectionIds}
+        onCaptureMatrixColSelection={matrixActions.captureColSelection}
+        onSwapMatrixAxes={matrixActions.swapAxes}
         hasLayerFacet={hasLayerFacet}
         availableLayers={availableLayers}
         availableRowElementTypes={availableRowElementTypes}
         availableColElementTypes={availableColElementTypes}
         availableElementTypesByLayer={availableElementTypesByLayer}
-        matrixPresets={matrixPresets}
-        matrixPresetId={matrixPresetId}
-        onChangeMatrixPresetId={onChangeMatrixPresetId}
-        onSaveMatrixPreset={onSaveMatrixPreset}
-        onApplyMatrixPreset={onApplyMatrixPreset}
-        onDeleteMatrixPreset={onDeleteMatrixPreset}
-        matrixSnapshots={matrixSnapshots}
-        matrixSnapshotId={matrixSnapshotId}
-        onChangeMatrixSnapshotId={onChangeMatrixSnapshotId}
-        canSaveMatrixSnapshot={canSaveMatrixSnapshot}
-        onSaveMatrixSnapshot={onSaveMatrixSnapshot}
-        onRestoreMatrixSnapshot={onRestoreMatrixSnapshot}
-        onDeleteMatrixSnapshot={onDeleteMatrixSnapshot}
+        matrixPresets={matrix.presets}
+        matrixPresetId={matrix.presetId}
+        onChangeMatrixPresetId={matrixActions.setPresetId}
+        onSaveMatrixPreset={matrixActions.savePreset}
+        onApplyMatrixPreset={matrixActions.applySelectedPreset}
+        onDeleteMatrixPreset={matrixActions.deleteSelectedPreset}
+        matrixSnapshots={matrix.snapshots}
+        matrixSnapshotId={matrix.snapshotId}
+        onChangeMatrixSnapshotId={matrixActions.setSnapshotId}
+        canSaveMatrixSnapshot={matrix.canSaveSnapshot}
+        onSaveMatrixSnapshot={matrixActions.saveSnapshot}
+        onRestoreMatrixSnapshot={matrixActions.restoreSelectedSnapshot}
+        onDeleteMatrixSnapshot={matrixActions.deleteSelectedSnapshot}
         mode={mode}
         direction={direction}
-        onChangeDirection={onChangeDirection}
+        onChangeDirection={filterActions.setDirection}
         maxDepth={maxDepth}
-        onChangeMaxDepth={onChangeMaxDepth}
+        onChangeMaxDepth={filterActions.setMaxDepth}
         includeStart={includeStart}
-        onChangeIncludeStart={onChangeIncludeStart}
+        onChangeIncludeStart={filterActions.setIncludeStart}
         maxPaths={maxPaths}
-        onChangeMaxPaths={onChangeMaxPaths}
+        onChangeMaxPaths={filterActions.setMaxPaths}
         maxPathLength={maxPathLength}
-        onChangeMaxPathLength={onChangeMaxPathLength}
+        onChangeMaxPathLength={filterActions.setMaxPathLength}
         availableRelationshipTypes={availableRelationshipTypes}
         relationshipTypesSorted={relationshipTypesSorted}
-        onChangeRelationshipTypes={onChangeRelationshipTypes}
+        onChangeRelationshipTypes={filterActions.setRelationshipTypes}
         layersSorted={layersSorted}
-        onChangeLayers={onChangeLayers}
+        onChangeLayers={filterActions.setLayers}
         hasElementTypeFacet={hasElementTypeFacet}
         allowedElementTypes={allowedElementTypes}
         elementTypesSorted={elementTypesSorted}
-        onChangeElementTypes={onChangeElementTypes}
-        onApplyPreset={onApplyPreset}
+        onChangeElementTypes={filterActions.setElementTypes}
+        onApplyPreset={filterActions.applyPreset}
         hasAnyFilters={hasAnyFilters}
       />
     );
@@ -327,43 +302,43 @@ export function AnalysisQueryPanel({
 
   return (
     <QuerySectionCommon
-        modelName={modelName}
+      modelName={modelName}
       mode={mode}
       model={model}
       hint={commonHint}
       canRun={canRun}
       onRun={onRun}
-      draftStartId={draftStartId}
-      onChangeDraftStartId={onChangeDraftStartId}
-      draftSourceId={draftSourceId}
-      onChangeDraftSourceId={onChangeDraftSourceId}
-      draftTargetId={draftTargetId}
-      onChangeDraftTargetId={onChangeDraftTargetId}
+      draftStartId={draft.startId}
+      onChangeDraftStartId={draftActions.setStartId}
+      draftSourceId={draft.sourceId}
+      onChangeDraftSourceId={draftActions.setSourceId}
+      draftTargetId={draft.targetId}
+      onChangeDraftTargetId={draftActions.setTargetId}
       openChooser={openChooser}
       canUseSelection={canUseSelection}
-      onUseSelection={onUseSelection}
+      onUseSelection={draftActions.useSelection}
       direction={direction}
-      onChangeDirection={onChangeDirection}
+      onChangeDirection={filterActions.setDirection}
       relationshipTypesSorted={relationshipTypesSorted}
       availableRelationshipTypes={availableRelationshipTypes}
-      onChangeRelationshipTypes={onChangeRelationshipTypes}
+      onChangeRelationshipTypes={filterActions.setRelationshipTypes}
       hasLayerFacet={hasLayerFacet}
       availableLayers={availableLayers}
       layersSorted={layersSorted}
-      onChangeLayers={onChangeLayers}
+      onChangeLayers={filterActions.setLayers}
       hasElementTypeFacet={hasElementTypeFacet}
       allowedElementTypes={allowedElementTypes}
       elementTypesSorted={elementTypesSorted}
-      onChangeElementTypes={onChangeElementTypes}
+      onChangeElementTypes={filterActions.setElementTypes}
       maxDepth={maxDepth}
-      onChangeMaxDepth={onChangeMaxDepth}
+      onChangeMaxDepth={filterActions.setMaxDepth}
       includeStart={includeStart}
-      onChangeIncludeStart={onChangeIncludeStart}
+      onChangeIncludeStart={filterActions.setIncludeStart}
       maxPaths={maxPaths}
-      onChangeMaxPaths={onChangeMaxPaths}
+      onChangeMaxPaths={filterActions.setMaxPaths}
       maxPathLength={maxPathLength}
-      onChangeMaxPathLength={onChangeMaxPathLength}
-      onApplyPreset={onApplyPreset}
+      onChangeMaxPathLength={filterActions.setMaxPathLength}
+      onApplyPreset={filterActions.applyPreset}
       hasAnyFilters={hasAnyFilters}
       chooserDialog={chooserDialog}
     />

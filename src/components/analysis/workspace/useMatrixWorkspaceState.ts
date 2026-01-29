@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { AnalysisDirection, Model, ModelKind, RelationshipType } from '../../../domain';
 import type { MatrixQueryPreset } from '../matrixPresetsStorage';
 
-import { useMatrixAxes } from './matrix/useMatrixAxes';
+import { useMatrixAxesState } from './matrix/useMatrixAxesState';
 import { useMatrixComputation } from './matrix/useMatrixComputation';
 import { useMatrixPreferences } from './matrix/useMatrixPreferences';
 import { useMatrixSavedQueries } from './matrix/useMatrixSavedQueries';
@@ -29,7 +29,7 @@ export function useMatrixWorkspaceState({
   relationshipTypes,
   selectionElementIds,
 }: UseMatrixWorkspaceStateArgs) {
-  const axes = useMatrixAxes({ model, modelKind });
+  const axes = useMatrixAxesState({ model, modelKind, selectionElementIds });
   const prefs = useMatrixPreferences({ modelId, modelKind });
 
   const [buildNonce, setBuildNonce] = useState<number>(0);
@@ -128,29 +128,11 @@ export function useMatrixWorkspaceState({
   });
 
   const resetDraft = useCallback(() => {
-    axes.setRowSource('facet');
-    axes.setRowElementType('');
-    axes.setRowLayer('');
-    axes.setRowSelectionIds([]);
-
-    axes.setColSource('facet');
-    axes.setColElementType('');
-    axes.setColLayer('');
-    axes.setColSelectionIds([]);
+    axes.resetAxesDraft();
 
     savedQueries.setPresetId('');
     savedQueries.setSnapshotId('');
   }, [axes, savedQueries]);
-
-  const captureSelectionAsRows = useCallback(() => {
-    axes.setRowSource('selection');
-    axes.setRowSelectionIds([...selectionElementIds]);
-  }, [axes, selectionElementIds]);
-
-  const captureSelectionAsCols = useCallback(() => {
-    axes.setColSource('selection');
-    axes.setColSelectionIds([...selectionElementIds]);
-  }, [axes, selectionElementIds]);
 
   const onChangeRelationshipTypeWeight = useCallback(
     (relationshipType: string, weight: number) => {
@@ -184,29 +166,6 @@ export function useMatrixWorkspaceState({
     return true;
   }, [axes.colIds.length, axes.rowIds.length, model]);
 
-  const swapAxes = useCallback(() => {
-    const nextRowSource = axes.colSource;
-    const nextColSource = axes.rowSource;
-
-    const nextRowElementType = axes.colElementType;
-    const nextColElementType = axes.rowElementType;
-
-    const nextRowLayer = axes.colLayer;
-    const nextColLayer = axes.rowLayer;
-
-    const nextRowSelectionIds = axes.colSelectionIds;
-    const nextColSelectionIds = axes.rowSelectionIds;
-
-    axes.setRowSource(nextRowSource);
-    axes.setRowElementType(nextRowElementType);
-    axes.setRowLayer(nextRowLayer);
-    axes.setRowSelectionIds([...nextRowSelectionIds]);
-
-    axes.setColSource(nextColSource);
-    axes.setColElementType(nextColElementType);
-    axes.setColLayer(nextColLayer);
-    axes.setColSelectionIds([...nextColSelectionIds]);
-  }, [axes]);
 
   const legacy = {
     // Axes state
@@ -230,11 +189,11 @@ export function useMatrixWorkspaceState({
 
     rowIds: axes.rowIds,
     colIds: axes.colIds,
-    swapAxes,
+    swapAxes: axes.swapAxes,
 
     resetDraft,
-    captureSelectionAsRows,
-    captureSelectionAsCols,
+    captureSelectionAsRows: axes.captureSelectionAsRows,
+    captureSelectionAsCols: axes.captureSelectionAsCols,
 
     // Build + results
     buildNonce,
@@ -334,10 +293,10 @@ export function useMatrixWorkspaceState({
       setColElementType: axes.setColElementType,
       setColLayer: axes.setColLayer,
       setColSelectionIds: axes.setColSelectionIds,
-      swapAxes,
+      swapAxes: axes.swapAxes,
       resetDraft,
-      captureSelectionAsRows,
-      captureSelectionAsCols,
+      captureSelectionAsRows: axes.captureSelectionAsRows,
+      captureSelectionAsCols: axes.captureSelectionAsCols,
     },
     build: {
       build,

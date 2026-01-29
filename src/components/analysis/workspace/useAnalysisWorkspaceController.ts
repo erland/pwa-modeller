@@ -5,7 +5,7 @@ import type { Selection } from '../../model/selection';
 import { useModelStore } from '../../../store';
 
 import type { AnalysisMode } from '../AnalysisQueryPanel';
-import { useMatrixWorkspaceState } from './useMatrixWorkspaceState';
+import { useMatrixModeIntegration } from './controller/useMatrixModeIntegration';
 import { useAnalysisGlobalFiltersState } from './controller/useAnalysisGlobalFiltersState';
 import { useAnalysisDraftActiveIdsState } from './controller/useAnalysisDraftActiveIdsState';
 import { useSelectionPrefillSync } from './controller/useSelectionPrefillSync';
@@ -100,7 +100,7 @@ export function useAnalysisWorkspaceController({
   // -----------------------------
   // Matrix workspace state (draft + persisted UI options + presets/snapshots)
   // -----------------------------
-  const matrixWorkspace = useMatrixWorkspaceState({
+  const matrix = useMatrixModeIntegration({
     model,
     modelId,
     modelKind,
@@ -109,9 +109,9 @@ export function useAnalysisWorkspaceController({
     selectionElementIds,
   });
 
-  const matrixState = matrixWorkspace.state;
-  const matrixActions = matrixWorkspace.actions;
-  const matrixDerived = matrixWorkspace.derived;
+  const matrixState = matrix.state;
+  const matrixActions = matrix.actions;
+  const matrixDerived = matrix.derived;
 
   const canRun = computeCanRun({
     modelPresent: Boolean(model),
@@ -298,7 +298,7 @@ export function useAnalysisWorkspaceController({
         state: matrixState,
         actions: matrixActions,
         derived: matrixDerived,
-        uiQuery: matrixState.uiQuery,
+        uiQuery: matrix.uiQuery,
       },
       queryPanel: {
         state: queryPanel.state,

@@ -2,6 +2,7 @@ import { ModelStore } from '../modelStore';
 import { createEmptyModel, createElement, createRelationship, createView } from '../../domain/factories';
 import type { Model, View } from '../../domain/types';
 import { addElementToViewAt } from '../mutations/layout';
+import { elkLayout } from '../../domain/layout/elk/elkLayout';
 
 // Mock ELK adapter to keep tests fast and deterministic.
 jest.mock('../../domain/layout/elk/elkLayout', () => ({
@@ -63,9 +64,9 @@ describe('ModelStore.autoLayoutView (ArchiMate)', () => {
     const nb = afterNodes.find((n) => n.elementId === b.id)!;
 
     // Mock returns {13,17} and {1013,17}, then store snaps to GRID=10.
-    expect(na.x).toBe(10);
+    const xs = [na.x, nb.x].sort((a, b) => a - b);
+    expect(xs).toEqual([10, 1010]);
     expect(na.y).toBe(20);
-    expect(nb.x).toBe(1010);
     expect(nb.y).toBe(20);
 
     // Sanity: positions actually changed.
@@ -106,5 +107,37 @@ describe('ModelStore.autoLayoutView (ArchiMate)', () => {
     const afterA = store.getState().model!.views[view.id].layout!.nodes.find((n) => n.elementId === a.id)!;
     expect(afterA.x).toBe(beforeA.x);
     expect(afterA.y).toBe(beforeA.y);
+  });
+
+  test('re-running with same graph uses cached ELK output (no extra elkLayout call)', async () => {
+    const model = createEmptyModel({ name: 'M' });
+    const a = createElement({ name: 'A', type: 'ApplicationComponent', layer: 'Application' });
+    const b = createElement({ name: 'B', type: 'ApplicationComponent', layer: 'Application' });
+    model.elements[a.id] = a;
+    model.elements[b.id] = b;
+
+    const view = createView({
+      name: 'V',
+      kind: 'archimate',
+      viewpointId: 'layered',
+      folderId: getRootFolderId(model)
+    });
+    putView(model, view);
+
+    addElementToViewAt(model, view.id, a.id, 100, 100);
+    addElementToViewAt(model, view.id, b.id, 300, 100);
+
+    const store = new ModelStore();
+    store.loadModel(model);
+
+    const fn = elkLayout as unknown as jest.Mock;
+    fn.mockClear();
+
+    await store.autoLayoutView(view.id);
+    expect(fn.mock.calls.length).toBe(1);
+
+    // Run again without changing graph/options. Should reuse cache and skip ELK call.
+    await store.autoLayoutView(view.id);
+    expect(fn.mock.calls.length).toBe(1);
   });
 });

@@ -13,8 +13,8 @@ import type {
   ViewObjectType,
   ViewConnectionRouteKind,
 } from '../domain';
-import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode } from '../domain/layout/types';
-import { extractLayoutInputForView, fitArchiMateBoxToText } from '../domain/layout';
+import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode, LayoutOutput } from '../domain/layout/types';
+import { extractLayoutInputForView, fitArchiMateBoxToText, computeLayoutSignature } from '../domain/layout';
 import { adjustEdgeRoutesForMovedNodes, nudgeOverlaps, snapToGrid } from '../domain/layout/post';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
 import {
@@ -53,6 +53,9 @@ export class ModelStore {
   };
 
   private listeners = new Set<Listener>();
+
+  // Cache last expensive auto-layout computation per view for responsiveness.
+  private autoLayoutCacheByView = new Map<string, { signature: string; output: LayoutOutput }>();
 
   /**
    * IMPORTANT: All store methods are arrow functions to avoid `this`-binding bugs.
@@ -482,21 +485,80 @@ export class ModelStore {
     const view = current.views[viewId];
     if (!view) throw new Error(`View not found: ${viewId}`);
 
-    const input = extractLayoutInputForView(current, viewId, options, selectionNodeIds);
-    if (input.nodes.length === 0) return;
+    // Dedupe selection ids for determinism.
+    const selection = Array.isArray(selectionNodeIds)
+      ? Array.from(new Set(selectionNodeIds.filter((id) => typeof id === 'string' && id.length > 0))).sort((a, b) => a.localeCompare(b))
+      : [];
 
-    const hasHierarchy = input.nodes.some((n) => typeof n.parentId === 'string' && n.parentId.length > 0);
+    const extracted = extractLayoutInputForView(current, viewId, options, selection);
+    if (extracted.nodes.length === 0) return;
+
+    const hasHierarchy = extracted.nodes.some((n) => typeof n.parentId === 'string' && n.parentId.length > 0);
     const isBpmnHierarchical = view.kind === 'bpmn' && hasHierarchy;
     const isUmlHierarchical = view.kind === 'uml' && hasHierarchy;
+
+    const readCurrentNodePos = (): Record<string, { x: number; y: number; width: number; height: number }> => {
+      const fresh = this.state.model?.views[viewId];
+      const out: Record<string, { x: number; y: number; width: number; height: number }> = {};
+      const rawNodes = fresh?.layout?.nodes ?? [];
+      for (const n of rawNodes) {
+        const id = n.elementId ?? n.connectorId;
+        if (!id) continue;
+        out[id] = { x: n.x, y: n.y, width: n.width, height: n.height };
+      }
+      return out;
+    };
+
+    const shouldSkipCommit = (positions: Record<string, { x: number; y: number }>, geometryById?: Record<string, { width?: number; height?: number }>, hasEdgeRoutes?: boolean): boolean => {
+      // If we have edge routes, play it safe and commit (routing may differ even if positions match).
+      if (hasEdgeRoutes) return false;
+
+      const cur = readCurrentNodePos();
+      for (const [id, p] of Object.entries(positions)) {
+        const c = cur[id];
+        if (!c) return false;
+        if (c.x !== p.x || c.y !== p.y) return false;
+      }
+
+      if (geometryById) {
+        for (const [id, g] of Object.entries(geometryById)) {
+          const c = cur[id];
+          if (!c) return false;
+          if (typeof g.width === 'number' && c.width !== g.width) return false;
+          if (typeof g.height === 'number' && c.height !== g.height) return false;
+        }
+      }
+
+      return true;
+    };
 
     if (isBpmnHierarchical || isUmlHierarchical) {
       const { elkLayoutHierarchical } = await import('../domain/layout/elk/elkLayoutHierarchical');
 
       const prepared = isBpmnHierarchical
-        ? (await import('../domain/layout/bpmn/prepareBpmnHierarchicalInput')).prepareBpmnHierarchicalInput(input, options)
-        : (await import('../domain/layout/uml/prepareUmlHierarchicalInput')).prepareUmlHierarchicalInput(input, options);
+        ? (await import('../domain/layout/bpmn/prepareBpmnHierarchicalInput')).prepareBpmnHierarchicalInput(extracted, options)
+        : (await import('../domain/layout/uml/prepareUmlHierarchicalInput')).prepareUmlHierarchicalInput(extracted, options);
 
-      const output = await elkLayoutHierarchical(prepared.input, options);
+      const signature = computeLayoutSignature({
+        viewId,
+        viewKind: view.kind,
+        mode: 'hierarchical',
+        input: prepared.input,
+        options,
+        selectionNodeIds: selection
+      });
+
+      const cached = this.autoLayoutCacheByView.get(viewId);
+      const base = cached && cached.signature === signature ? cached.output : await elkLayoutHierarchical(prepared.input, options);
+      if (!cached || cached.signature !== signature) {
+        this.autoLayoutCacheByView.set(viewId, { signature, output: base });
+      }
+
+      // Clone output so we don't mutate cached results.
+      const output = {
+        positions: { ...base.positions },
+        edgeRoutes: base.edgeRoutes ? { ...base.edgeRoutes } : undefined
+      };
 
       // Respect locked nodes (override positions) if requested.
       const fixedIds = new Set<string>();
@@ -520,7 +582,7 @@ export class ModelStore {
       const snapped = snapToGrid(output.positions, GRID, fixedIds);
       const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, prepared.input.edges, originalPositions, snapped);
 
-      // Build geometry updates: positions for all nodes, sizes for container nodes,
+      // Build geometry updates: positions for all nodes, sizes for container nodes.
       const geometryById: Record<string, { x?: number; y?: number; width?: number; height?: number }> = {};
       for (const [id, pos] of Object.entries(snapped)) {
         geometryById[id] = { ...(geometryById[id] ?? {}), x: pos.x, y: pos.y };
@@ -541,6 +603,8 @@ export class ModelStore {
         geometryById[containerId] = { ...(geometryById[containerId] ?? {}), width: s.width, height: s.height };
       }
 
+      if (shouldSkipCommit(snapped, geometryById, Boolean(edgeRoutes && Object.keys(edgeRoutes).length))) return;
+
       this.updateModel((model) => {
         autoLayoutMutations.autoLayoutViewGeometry(model, viewId, geometryById, edgeRoutes);
       });
@@ -549,7 +613,27 @@ export class ModelStore {
 
     // Lazy-load ELK so it doesn't get pulled into the main bundle until the user runs auto-layout.
     const { elkLayout } = await import('../domain/layout/elk/elkLayout');
-    const output = await elkLayout(input, options);
+
+    const signature = computeLayoutSignature({
+      viewId,
+      viewKind: view.kind,
+      mode: 'flat',
+      input: extracted,
+      options,
+      selectionNodeIds: selection
+    });
+
+    const cached = this.autoLayoutCacheByView.get(viewId);
+    const base = cached && cached.signature === signature ? cached.output : await elkLayout(extracted, options);
+    if (!cached || cached.signature !== signature) {
+      this.autoLayoutCacheByView.set(viewId, { signature, output: base });
+    }
+
+    // Clone output so we don't mutate cached results.
+    const output = {
+      positions: { ...base.positions },
+      edgeRoutes: base.edgeRoutes ? { ...base.edgeRoutes } : undefined
+    };
 
     // Post-pass tidy: keep pinned nodes fixed (if requested), snap to grid, then nudge overlaps.
     const fixedIds = new Set<string>();
@@ -573,17 +657,18 @@ export class ModelStore {
     let positions = snapToGrid(output.positions, GRID, fixedIds);
 
     // Then nudge remaining overlaps. Use node sizes from the layout input.
-    positions = nudgeOverlaps(
-      input.nodes.map((n) => ({ id: n.id, w: n.width, h: n.height })),
-      positions,
-      { padding: 10, fixedIds }
-    );
+    const nudgeNodes = [...extracted.nodes]
+      .map((n) => ({ id: n.id, w: n.width, h: n.height }))
+      .sort((a, b) => a.id.localeCompare(b.id));
 
-    const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, input.edges, originalPositions, positions);
-    output.positions = positions;
+    positions = nudgeOverlaps(nudgeNodes, positions, { padding: 10, fixedIds });
+
+    const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, extracted.edges, originalPositions, positions);
+
+    if (shouldSkipCommit(positions, undefined, Boolean(edgeRoutes && Object.keys(edgeRoutes).length))) return;
 
     this.updateModel((model) => {
-      autoLayoutMutations.autoLayoutView(model, viewId, output.positions, edgeRoutes);
+      autoLayoutMutations.autoLayoutView(model, viewId, positions, edgeRoutes);
     });
   };
 

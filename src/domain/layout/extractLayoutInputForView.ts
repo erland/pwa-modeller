@@ -3,12 +3,18 @@ import type { Model, View, ViewNodeLayout, Relationship } from '../types';
 import { extractArchiMateLayoutInput } from './archimate/extractArchiMateLayoutInput';
 import { extractBpmnLayoutInput } from './bpmn/extractBpmnLayoutInput';
 import { extractUmlLayoutInput } from './uml/extractUmlLayoutInput';
+import { normalizeLayoutInput } from './normalizeLayoutInput';
 
 const DEFAULTS_BY_KIND: Record<View['kind'], { element: { width: number; height: number }; connector: { width: number; height: number } }> = {
   archimate: { element: { width: 120, height: 60 }, connector: { width: 24, height: 24 } },
   bpmn: { element: { width: 160, height: 80 }, connector: { width: 26, height: 26 } },
   uml: { element: { width: 170, height: 90 }, connector: { width: 26, height: 26 } }
 };
+
+function dedupSelection(selectionNodeIds?: string[]): string[] {
+  if (!Array.isArray(selectionNodeIds) || selectionNodeIds.length === 0) return [];
+  return Array.from(new Set(selectionNodeIds.filter((id) => typeof id === 'string' && id.length > 0))).sort((a, b) => a.localeCompare(b));
+}
 
 function nodeIdFromLayoutNode(n: ViewNodeLayout): string | null {
   if (typeof n.elementId === 'string' && n.elementId.length > 0) return n.elementId;
@@ -45,6 +51,7 @@ function edgesFromConnections(view: View, nodeIdSet: Set<string>): LayoutEdgeInp
     if (!nodeIdSet.has(sourceId) || !nodeIdSet.has(targetId)) continue;
 
     const id = c.id || c.relationshipId;
+    if (!id) continue;
     if (seen.has(id)) continue;
     seen.add(id);
     out.push({ id, sourceId, targetId, weight: 1 });
@@ -96,10 +103,9 @@ export function extractGenericLayoutInput(
     });
   }
 
-  const wantedNodeIds =
-    options.scope === 'selection' && Array.isArray(selectionNodeIds) && selectionNodeIds.length > 0
-      ? new Set(selectionNodeIds)
-      : null;
+  const selection = dedupSelection(selectionNodeIds);
+
+  const wantedNodeIds = options.scope === 'selection' && selection.length > 0 ? new Set(selection) : null;
 
   const nodes = wantedNodeIds ? allNodes.filter((n) => wantedNodeIds.has(n.id)) : allNodes;
   const nodeIdSet = new Set(nodes.map((n) => n.id));
@@ -107,14 +113,14 @@ export function extractGenericLayoutInput(
   const edges =
     (view.connections?.length ?? 0) > 0 ? edgesFromConnections(view, nodeIdSet) : edgesFromLegacyLayout(model, view, nodeIdSet);
 
-  return { nodes, edges };
+  return normalizeLayoutInput({ nodes, edges });
 }
 
 /**
  * Dispatcher that extracts a layout graph based on view kind.
  *
  * - ArchiMate uses ArchiMate-specific policy hints (layer/group/edge weights).
- * - BPMN/UML currently use a generic extractor (no notation-specific hints yet).
+ * - BPMN/UML use notation-specific extractors.
  */
 export function extractLayoutInputForView(
   model: Model,
@@ -125,25 +131,27 @@ export function extractLayoutInputForView(
   const view = model.views[viewId];
   if (!view) throw new Error(`extractLayoutInputForView: view not found: ${viewId}`);
 
+  const selection = dedupSelection(selectionNodeIds);
+
   let input: LayoutInput;
   if (view.kind === 'archimate') {
-    input = extractArchiMateLayoutInput(model, viewId, options, selectionNodeIds);
+    input = extractArchiMateLayoutInput(model, viewId, options, selection);
   } else if (view.kind === 'bpmn') {
-    input = extractBpmnLayoutInput(model, viewId, options, selectionNodeIds);
+    input = extractBpmnLayoutInput(model, viewId, options, selection);
   } else if (view.kind === 'uml') {
-    input = extractUmlLayoutInput(model, viewId, options, selectionNodeIds);
+    input = extractUmlLayoutInput(model, viewId, options, selection);
   } else {
-    input = extractGenericLayoutInput(model, viewId, options, selectionNodeIds);
+    input = extractGenericLayoutInput(model, viewId, options, selection);
   }
 
   // Optional, non-mutating "keep my manual positions" behavior.
-  if (options.lockSelection && Array.isArray(selectionNodeIds) && selectionNodeIds.length > 0) {
-    const locked = new Set(selectionNodeIds);
+  if (options.lockSelection && selection.length > 0) {
+    const locked = new Set(selection);
     input = {
       ...input,
       nodes: input.nodes.map((n) => (locked.has(n.id) ? { ...n, locked: true } : n))
     };
   }
 
-  return input;
+  return normalizeLayoutInput(input);
 }

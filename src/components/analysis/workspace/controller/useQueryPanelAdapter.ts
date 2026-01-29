@@ -73,22 +73,52 @@ export function useQueryPanelAdapter({
 }: Args): { state: AnalysisQueryPanelState; actions: AnalysisQueryPanelActions; meta: AnalysisQueryPanelMeta } {
   const matrixUiQuery = matrix.state.uiQuery;
 
+  const {
+    direction,
+    relationshipTypes,
+    layers,
+    elementTypes,
+    maxDepth,
+    includeStart,
+    maxPaths,
+    maxPathLength,
+    setDirection,
+    setRelationshipTypes,
+    setLayers,
+    setElementTypes,
+    setMaxDepth,
+    setIncludeStart,
+    setMaxPaths,
+    setMaxPathLength,
+    applyPreset,
+  } = filters;
+
+  const {
+    startId: draftStartId,
+    sourceId: draftSourceId,
+    targetId: draftTargetId,
+    setStartId: setDraftStartId,
+    setSourceId: setDraftSourceId,
+    setTargetId: setDraftTargetId,
+    useSelection: useSelectionAs,
+  } = draft;
+
   const applySelectedMatrixPreset = useCallback(() => {
     const p = matrix.state.presets.presets.find((x) => x.id === matrix.state.presets.presetId);
     if (!p) return;
     matrix.actions.presets.applyUiQuery(p.query);
-    filters.setDirection(p.query.direction);
-    filters.setRelationshipTypes([...p.query.relationshipTypes]);
-  }, [filters, matrix.actions.presets, matrix.state.presets.presetId, matrix.state.presets.presets]);
+    setDirection(p.query.direction);
+    setRelationshipTypes([...p.query.relationshipTypes]);
+  }, [matrix.actions.presets, matrix.state.presets.presetId, matrix.state.presets.presets, setDirection, setRelationshipTypes]);
 
   const restoreSelectedMatrixSnapshot = useCallback(() => {
     const snap = matrix.state.presets.snapshots.find((s) => s.id === matrix.state.presets.snapshotId);
     if (!snap) return;
     matrix.actions.presets.applyUiQuery(snap.uiQuery);
-    filters.setDirection(snap.uiQuery.direction);
-    filters.setRelationshipTypes([...snap.uiQuery.relationshipTypes]);
+    setDirection(snap.uiQuery.direction);
+    setRelationshipTypes([...snap.uiQuery.relationshipTypes]);
     matrix.actions.presets.restoreSnapshot(matrix.state.presets.snapshotId);
-  }, [filters, matrix.actions.presets, matrix.state.presets.snapshotId, matrix.state.presets.snapshots]);
+  }, [matrix.actions.presets, matrix.state.presets.snapshotId, matrix.state.presets.snapshots, setDirection, setRelationshipTypes]);
 
   const deleteSelectedMatrixSnapshot = useCallback(() => {
     const id = matrix.state.presets.snapshotId;
@@ -101,19 +131,19 @@ export function useQueryPanelAdapter({
       mode,
       selectionElementIds,
       draft: {
-        startId: draft.startId,
-        sourceId: draft.sourceId,
-        targetId: draft.targetId,
+        startId: draftStartId,
+        sourceId: draftSourceId,
+        targetId: draftTargetId,
       },
       filters: {
-        direction: filters.direction,
-        relationshipTypes: filters.relationshipTypes,
-        layers: filters.layers,
-        elementTypes: filters.elementTypes,
-        maxDepth: filters.maxDepth,
-        includeStart: filters.includeStart,
-        maxPaths: filters.maxPaths,
-        maxPathLength: filters.maxPathLength,
+        direction,
+        relationshipTypes,
+        layers,
+        elementTypes,
+        maxDepth,
+        includeStart,
+        maxPaths,
+        maxPathLength,
       },
       matrix: {
         rowSource: matrix.state.axes.rowSource,
@@ -140,17 +170,17 @@ export function useQueryPanelAdapter({
       },
     }),
     [
-      draft.sourceId,
-      draft.startId,
-      draft.targetId,
-      filters.direction,
-      filters.elementTypes,
-      filters.includeStart,
-      filters.layers,
-      filters.maxDepth,
-      filters.maxPathLength,
-      filters.maxPaths,
-      filters.relationshipTypes,
+      draftSourceId,
+      draftStartId,
+      draftTargetId,
+      direction,
+      elementTypes,
+      includeStart,
+      layers,
+      maxDepth,
+      maxPathLength,
+      maxPaths,
+      relationshipTypes,
       matrix.derived.result,
       matrix.state.axes.colElementType,
       matrix.state.axes.colIds.length,
@@ -178,21 +208,21 @@ export function useQueryPanelAdapter({
       setMode,
       run,
       draft: {
-        setStartId: draft.setStartId,
-        setSourceId: draft.setSourceId,
-        setTargetId: draft.setTargetId,
-        useSelection: draft.useSelection,
+        setStartId: setDraftStartId,
+        setSourceId: setDraftSourceId,
+        setTargetId: setDraftTargetId,
+        useSelection: useSelectionAs,
       },
       filters: {
-        setDirection: filters.setDirection,
-        setRelationshipTypes: filters.setRelationshipTypes,
-        setLayers: filters.setLayers,
-        setElementTypes: filters.setElementTypes,
-        setMaxDepth: filters.setMaxDepth,
-        setIncludeStart: filters.setIncludeStart,
-        setMaxPaths: filters.setMaxPaths,
-        setMaxPathLength: filters.setMaxPathLength,
-        applyPreset: filters.applyPreset,
+        setDirection,
+        setRelationshipTypes,
+        setLayers,
+        setElementTypes,
+        setMaxDepth,
+        setIncludeStart,
+        setMaxPaths,
+        setMaxPathLength,
+        applyPreset,
       },
       matrix: {
         setRowSource: matrix.actions.axes.setRowSource,
@@ -223,8 +253,19 @@ export function useQueryPanelAdapter({
     [
       applySelectedMatrixPreset,
       deleteSelectedMatrixSnapshot,
-      draft,
-      filters,
+      applyPreset,
+      setDraftSourceId,
+      setDraftStartId,
+      setDraftTargetId,
+      setDirection,
+      setElementTypes,
+      setIncludeStart,
+      setLayers,
+      setMaxDepth,
+      setMaxPathLength,
+      setMaxPaths,
+      setRelationshipTypes,
+      useSelectionAs,
       matrix.actions.axes,
       matrix.actions.presets,
       matrixUiQuery,

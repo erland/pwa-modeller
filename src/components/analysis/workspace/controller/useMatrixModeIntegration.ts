@@ -1,5 +1,3 @@
-import { useMemo } from 'react';
-
 import type { Model, ModelKind, RelationshipType } from '../../../../domain';
 
 import { useMatrixWorkspaceState } from '../useMatrixWorkspaceState';
@@ -34,12 +32,10 @@ export function useMatrixModeIntegration({
     selectionElementIds,
   });
 
-  const uiQuery = useMemo(() => matrixWorkspace.state.uiQuery, [matrixWorkspace.state.uiQuery]);
-
   return {
     state: matrixWorkspace.state,
     actions: matrixWorkspace.actions,
     derived: matrixWorkspace.derived,
-    uiQuery,
+    uiQuery: matrixWorkspace.state.uiQuery,
   } as const;
 }

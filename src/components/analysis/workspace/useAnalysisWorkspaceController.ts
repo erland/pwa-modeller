@@ -60,6 +60,7 @@ export function useAnalysisWorkspaceController({
   const activeTargetId = ids.active.targetId;
 
   const setDraftTargetId = ids.actions.setDraftTargetId;
+  const setDraftStartIdRaw = ids.actions.setDraftStartId;
   const setActiveStartId = ids.actions.setActiveStartId;
   const setActiveSourceId = ids.actions.setActiveSourceId;
   const setActiveTargetId = ids.actions.setActiveTargetId;
@@ -137,7 +138,7 @@ export function useAnalysisWorkspaceController({
     setActiveTargetId(draftTargetId);
     // Keep related/traceability baseline aligned with the chosen source.
     setActiveStartId(draftSourceId);
-  }, [draftSourceId, draftStartId, draftTargetId, matrixActions.build, model, mode]);
+  }, [draftSourceId, draftStartId, draftTargetId, matrixActions.build.build, model, mode, setActiveSourceId, setActiveStartId, setActiveTargetId]);
 
   const applyPreset = useCallback(
     (presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') => {
@@ -179,7 +180,7 @@ export function useAnalysisWorkspaceController({
       setMaxPaths(10);
       setMaxPathLength(null);
     },
-    [matrixActions.axes]
+    [matrixActions.axes, setDirection, setRelationshipTypes, setLayers, setElementTypes, setMaxDepth, setIncludeStart, setMaxPaths, setMaxPathLength]
   );
 
   const useSelectionAs = useCallback(
@@ -189,15 +190,18 @@ export function useAnalysisWorkspaceController({
       if (which === 'source') onChangeDraftSourceIdSync(selectedElementId);
       if (which === 'target') setDraftTargetId(selectedElementId);
     },
-    [onChangeDraftSourceIdSync, onChangeDraftStartIdSync, selectedElementId]
+    [onChangeDraftSourceIdSync, onChangeDraftStartIdSync, selectedElementId, setDraftTargetId]
   );
 
-  const openTraceabilityFrom = useCallback((elementId: string) => {
-    setMode('traceability');
-    // Preserve legacy behavior: set only the Start id (not Source).
-    ids.actions.setDraftStartId(elementId);
-    setActiveStartId(elementId);
-  }, []);
+  const openTraceabilityFrom = useCallback(
+    (elementId: string) => {
+      setMode('traceability');
+      // Preserve legacy behavior: set only the Start id (not Source).
+      setDraftStartIdRaw(elementId);
+      setActiveStartId(elementId);
+    },
+    [setActiveStartId, setDraftStartIdRaw, setMode]
+  );
 
   const traceSeedId = useMemo(
     () => computeTraceSeedId({ activeStartId, draftStartId, selection }),

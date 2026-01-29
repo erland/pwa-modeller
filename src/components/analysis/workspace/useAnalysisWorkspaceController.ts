@@ -8,6 +8,7 @@ import type { AnalysisMode } from '../AnalysisQueryPanel';
 import type { AnalysisQueryPanelActions, AnalysisQueryPanelMeta, AnalysisQueryPanelState } from '../AnalysisQueryPanel';
 import { useMatrixWorkspaceState } from './useMatrixWorkspaceState';
 import { useAnalysisGlobalFiltersState } from './controller/useAnalysisGlobalFiltersState';
+import { useAnalysisDraftActiveIdsState } from './controller/useAnalysisDraftActiveIdsState';
 
 import {
   buildPathsAnalysisOpts,
@@ -46,27 +47,26 @@ export function useAnalysisWorkspaceController({
     setMaxPathLength,
   } = filterActions;
 
-  // Draft inputs (user edits these).
-  const [draftStartId, setDraftStartId] = useState<string>('');
-  const [draftSourceId, setDraftSourceId] = useState<string>('');
-  const [draftTargetId, setDraftTargetId] = useState<string>('');
+  // -----------------------------
+  // Draft + active element ids
+  // -----------------------------
+  const ids = useAnalysisDraftActiveIdsState();
+  const draftStartId = ids.draft.startId;
+  const draftSourceId = ids.draft.sourceId;
+  const draftTargetId = ids.draft.targetId;
 
-  // Active ids (used for the current computed result).
-  const [activeStartId, setActiveStartId] = useState<string>('');
-  const [activeSourceId, setActiveSourceId] = useState<string>('');
-  const [activeTargetId, setActiveTargetId] = useState<string>('');
+  const activeStartId = ids.active.startId;
+  const activeSourceId = ids.active.sourceId;
+  const activeTargetId = ids.active.targetId;
 
-  // Keep "Start element" (Related/Traceability) and "Source" (Connection between two) in sync.
-  // This makes it easy to switch between views without having to re-pick the baseline element.
-  const onChangeDraftStartIdSync = useCallback((id: string) => {
-    setDraftStartId(id);
-    setDraftSourceId(id);
-  }, []);
+  const setDraftTargetId = ids.actions.setDraftTargetId;
+  const setActiveStartId = ids.actions.setActiveStartId;
+  const setActiveSourceId = ids.actions.setActiveSourceId;
+  const setActiveTargetId = ids.actions.setActiveTargetId;
 
-  const onChangeDraftSourceIdSync = useCallback((id: string) => {
-    setDraftSourceId(id);
-    setDraftStartId(id);
-  }, []);
+  // Preferred setters that keep Start/Source aligned.
+  const onChangeDraftStartIdSync = ids.actions.setDraftStartIdSync;
+  const onChangeDraftSourceIdSync = ids.actions.setDraftSourceIdSync;
 
   const selectedElementId = useMemo(() => selectionToElementId(selection), [selection]);
 
@@ -213,7 +213,8 @@ export function useAnalysisWorkspaceController({
 
   const openTraceabilityFrom = useCallback((elementId: string) => {
     setMode('traceability');
-    setDraftStartId(elementId);
+    // Preserve legacy behavior: set only the Start id (not Source).
+    ids.actions.setDraftStartId(elementId);
     setActiveStartId(elementId);
   }, []);
 

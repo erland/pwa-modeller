@@ -2,6 +2,7 @@ import type { AutoLayoutOptions, LayoutInput, LayoutEdgeInput, LayoutNodeInput }
 import type { Model, View, ViewNodeLayout, Relationship } from '../types';
 import { extractArchiMateLayoutInput } from './archimate/extractArchiMateLayoutInput';
 import { extractBpmnLayoutInput } from './bpmn/extractBpmnLayoutInput';
+import { extractUmlLayoutInput } from './uml/extractUmlLayoutInput';
 
 const DEFAULTS_BY_KIND: Record<View['kind'], { element: { width: number; height: number }; connector: { width: number; height: number } }> = {
   archimate: { element: { width: 120, height: 60 }, connector: { width: 24, height: 24 } },
@@ -129,6 +130,9 @@ export function extractLayoutInputForView(
   }
   if (view.kind === 'bpmn') {
     return extractBpmnLayoutInput(model, viewId, options, selectionNodeIds);
+  }
+  if (view.kind === 'uml') {
+    return extractUmlLayoutInput(model, viewId, options, selectionNodeIds);
   }
   return extractGenericLayoutInput(model, viewId, options, selectionNodeIds);
 }

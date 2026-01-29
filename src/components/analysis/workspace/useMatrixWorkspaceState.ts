@@ -6,8 +6,8 @@ import type { MatrixQueryPreset } from '../matrixPresetsStorage';
 import { useMatrixAxes } from './matrix/useMatrixAxes';
 import { useMatrixComputation } from './matrix/useMatrixComputation';
 import { useMatrixPreferences } from './matrix/useMatrixPreferences';
-import { useMatrixPresets } from './matrix/useMatrixPresets';
-import { buildMatrixUiQuery, buildMatrixWorkspaceBuiltQuery, normalizeMatrixUiQueryForApply, mapAnalysisDirectionToMatrixDirection } from './matrix/queryHelpers';
+import { useMatrixSavedQueries } from './matrix/useMatrixSavedQueries';
+import { buildMatrixUiQuery, buildMatrixWorkspaceBuiltQuery, normalizeMatrixUiQueryForApply } from './matrix/queryHelpers';
 import type { MatrixWorkspaceBuiltQuery } from './matrix/types';
 
 export type { MatrixAxisSource, MatrixWorkspaceBuiltQuery, MatrixWorkspaceCellDialogInfo } from './matrix/types';
@@ -31,7 +31,6 @@ export function useMatrixWorkspaceState({
 }: UseMatrixWorkspaceStateArgs) {
   const axes = useMatrixAxes({ model, modelKind });
   const prefs = useMatrixPreferences({ modelId, modelKind });
-  const presetsState = useMatrixPresets({ modelId });
 
   const [buildNonce, setBuildNonce] = useState<number>(0);
   const [builtQuery, setBuiltQuery] = useState<MatrixWorkspaceBuiltQuery | null>(null);
@@ -112,137 +111,21 @@ export function useMatrixWorkspaceState({
     [axes, prefs]
   );
 
-  const selectedPreset = useMemo(() => {
-    if (!presetsState.presetId) return null;
-    return presetsState.presets.find((p) => p.id === presetsState.presetId) ?? null;
-  }, [presetsState.presetId, presetsState.presets]);
+  const bumpBuildNonce = useCallback(() => {
+    setBuildNonce((n) => n + 1);
+  }, []);
 
-  const selectedSnapshot = useMemo(() => {
-    if (!presetsState.snapshotId) return null;
-    return presetsState.snapshots.find((p) => p.id === presetsState.snapshotId) ?? null;
-  }, [presetsState.snapshotId, presetsState.snapshots]);
-
-  const saveCurrentPreset = useCallback(
-    (query?: MatrixQueryPreset['query']): void => {
-      if (!modelId) return;
-      const q = query ?? uiQuery;
-      const name = window.prompt('Preset name?');
-      if (!name) return;
-
-      const preset: MatrixQueryPreset = {
-        id: `preset_${Date.now()}`,
-        name,
-        createdAt: new Date().toISOString(),
-        query: q,
-  };
-
-      const next = [preset, ...presetsState.presets].slice(0, 50);
-      presetsState.savePresetList(next);
-      presetsState.setPresetId(preset.id);
-    },
-    [modelId, presetsState, uiQuery]
-  );
-
-  const deleteSelectedPreset = useCallback((): void => {
-    if (!modelId || !presetsState.presetId) return;
-    const preset = presetsState.presets.find((p) => p.id === presetsState.presetId);
-    const ok = window.confirm(`Delete preset “${preset?.name ?? 'Unnamed'}”?`);
-    if (!ok) return;
-    const next = presetsState.presets.filter((p) => p.id !== presetsState.presetId);
-    presetsState.savePresetList(next);
-    presetsState.setPresetId('');
-  }, [modelId, presetsState]);
-
-  const computeSnapshotSummary = useCallback(() => {
-    if (!result) {
-      return { rowCount: 0, colCount: 0, grandTotal: 0, missingCells: 0, nonZeroCells: 0 };
-    }
-    let missingCells = 0;
-    let nonZeroCells = 0;
-    for (const row of result.cells) {
-      for (const cell of row) {
-        if (cell.count === 0) missingCells += 1;
-        else nonZeroCells += 1;
-      }
-    }
-    return {
-      rowCount: result.rows.length,
-      colCount: result.cols.length,
-      grandTotal: result.grandTotal,
-      missingCells,
-      nonZeroCells,
-    };
-  }, [result]);
-
-  const saveSnapshot = useCallback(
-    (query?: MatrixQueryPreset['query']): void => {
-      if (!modelId) return;
-      const q = query ?? uiQuery;
-      const name = window.prompt('Snapshot name?');
-      if (!name) return;
-
-      const dir = mapAnalysisDirectionToMatrixDirection(q.direction);
-
-      const snapshot = {
-        id: `snapshot_${Date.now()}`,
-        name,
-        createdAt: new Date().toISOString(),
-        builtQuery: {
-          rowIds: builtQuery?.rowIds ?? axes.rowIds,
-          colIds: builtQuery?.colIds ?? axes.colIds,
-          direction: builtQuery?.direction ?? dir,
-          relationshipTypes: builtQuery?.relationshipTypes ?? q.relationshipTypes,
-        },
-        uiQuery: q,
-        summary: computeSnapshotSummary(),
-      };
-
-      const next = [snapshot, ...presetsState.snapshots].slice(0, 50);
-      presetsState.saveSnapshotList(next);
-      presetsState.setSnapshotId(snapshot.id);
-    },
-    [axes.colIds, axes.rowIds, builtQuery, computeSnapshotSummary, modelId, presetsState, uiQuery]
-  );
-
-  const deleteSnapshot = useCallback(
-    (id: string): void => {
-      if (!modelId) return;
-      const snap = presetsState.snapshots.find((s) => s.id === id);
-      const ok = window.confirm(`Delete snapshot “${snap?.name ?? 'Unnamed'}”?`);
-      if (!ok) return;
-      const next = presetsState.snapshots.filter((s) => s.id !== id);
-      presetsState.saveSnapshotList(next);
-      if (presetsState.snapshotId === id) presetsState.setSnapshotId('');
-    },
-    [modelId, presetsState]
-  );
-
-  const restoreSnapshot = useCallback(
-    (id: string): void => {
-      const snap = presetsState.snapshots.find((s) => s.id === id);
-      if (!snap) return;
-      presetsState.setSnapshotId(id);
-      applyUiQuery(snap.uiQuery);
-      setBuiltQuery({
-        rowIds: snap.builtQuery.rowIds,
-        colIds: snap.builtQuery.colIds,
-        direction: snap.builtQuery.direction,
-        relationshipTypes: snap.builtQuery.relationshipTypes,
-      });
-      setBuildNonce((n) => n + 1);
-    },
-    [applyUiQuery, presetsState]
-  );
-
-  const applySelectedPreset = useCallback(() => {
-    if (!selectedPreset) return;
-    applyUiQuery(selectedPreset.query);
-  }, [applyUiQuery, selectedPreset]);
-
-  const applySelectedSnapshot = useCallback(() => {
-    if (!selectedSnapshot) return;
-    restoreSnapshot(selectedSnapshot.id);
-  }, [restoreSnapshot, selectedSnapshot]);
+  const savedQueries = useMatrixSavedQueries({
+    modelId,
+    uiQuery,
+    axesRowIds: axes.rowIds,
+    axesColIds: axes.colIds,
+    builtQuery,
+    result,
+    applyUiQuery,
+    setBuiltQuery,
+    bumpBuildNonce,
+  });
 
   const resetDraft = useCallback(() => {
     axes.setRowSource('facet');
@@ -255,9 +138,9 @@ export function useMatrixWorkspaceState({
     axes.setColLayer('');
     axes.setColSelectionIds([]);
 
-    presetsState.setPresetId('');
-    presetsState.setSnapshotId('');
-  }, [axes, presetsState]);
+    savedQueries.setPresetId('');
+    savedQueries.setSnapshotId('');
+  }, [axes, savedQueries]);
 
   const captureSelectionAsRows = useCallback(() => {
     axes.setRowSource('selection');
@@ -384,26 +267,26 @@ export function useMatrixWorkspaceState({
     onChangeRelationshipTypeWeight,
 
     // Presets/snapshots
-    presets: presetsState.presets,
-    presetId: presetsState.presetId,
-    setPresetId: presetsState.setPresetId,
-    snapshots: presetsState.snapshots,
-    snapshotId: presetsState.snapshotId,
-    setSnapshotId: presetsState.setSnapshotId,
+    presets: savedQueries.presets,
+    presetId: savedQueries.presetId,
+    setPresetId: savedQueries.setPresetId,
+    snapshots: savedQueries.snapshots,
+    snapshotId: savedQueries.snapshotId,
+    setSnapshotId: savedQueries.setSnapshotId,
 
     uiQuery,
     applyUiQuery,
-    restoreSnapshot,
-    deleteSnapshot,
+    restoreSnapshot: savedQueries.restoreSnapshot,
+    deleteSnapshot: savedQueries.deleteSnapshot,
     applyWeightPreset,
 
-    saveCurrentPreset,
-    deleteSelectedPreset,
+    saveCurrentPreset: savedQueries.saveCurrentPreset,
+    deleteSelectedPreset: savedQueries.deleteSelectedPreset,
 
-    saveSnapshot,
+    saveSnapshot: savedQueries.saveSnapshot,
 
-    applySelectedPreset,
-    applySelectedSnapshot,
+    applySelectedPreset: savedQueries.applySelectedPreset,
+    applySelectedSnapshot: savedQueries.applySelectedSnapshot,
   } as const;
 
   const state = {
@@ -429,10 +312,10 @@ export function useMatrixWorkspaceState({
       weightsByRelationshipType: prefs.weightsByRelationshipType,
     },
     presets: {
-      presets: presetsState.presets,
-      presetId: presetsState.presetId,
-      snapshots: presetsState.snapshots,
-      snapshotId: presetsState.snapshotId,
+      presets: savedQueries.presets,
+      presetId: savedQueries.presetId,
+      snapshots: savedQueries.snapshots,
+      snapshotId: savedQueries.snapshotId,
     },
     build: {
       buildNonce,
@@ -471,15 +354,15 @@ export function useMatrixWorkspaceState({
       applyWeightPreset,
     },
     presets: {
-      setPresetId: presetsState.setPresetId,
-      saveCurrentPreset,
-      deleteSelectedPreset,
-      applySelectedPreset,
-      setSnapshotId: presetsState.setSnapshotId,
-      saveSnapshot,
-      deleteSnapshot,
-      restoreSnapshot,
-      applySelectedSnapshot,
+      setPresetId: savedQueries.setPresetId,
+      saveCurrentPreset: savedQueries.saveCurrentPreset,
+      deleteSelectedPreset: savedQueries.deleteSelectedPreset,
+      applySelectedPreset: savedQueries.applySelectedPreset,
+      setSnapshotId: savedQueries.setSnapshotId,
+      saveSnapshot: savedQueries.saveSnapshot,
+      deleteSnapshot: savedQueries.deleteSnapshot,
+      restoreSnapshot: savedQueries.restoreSnapshot,
+      applySelectedSnapshot: savedQueries.applySelectedSnapshot,
       applyUiQuery,
     },
   } as const;
@@ -489,8 +372,8 @@ export function useMatrixWorkspaceState({
     result,
     cellValues,
     relationshipTypesForWeights,
-    selectedPreset,
-    selectedSnapshot,
+    selectedPreset: savedQueries.selectedPreset,
+    selectedSnapshot: savedQueries.selectedSnapshot,
   } as const;
 
   return { state, actions, derived, legacy } as const;

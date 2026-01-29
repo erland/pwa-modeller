@@ -7,34 +7,14 @@ import { useAnalysisPathsBetween, useAnalysisRelatedElements, useModelStore } fr
 import type { AnalysisMode } from '../AnalysisQueryPanel';
 import { useMatrixWorkspaceState } from './useMatrixWorkspaceState';
 
-function selectionToElementId(sel: Selection): string | null {
-  switch (sel.kind) {
-    case 'element':
-      return sel.elementId;
-    case 'viewNode':
-      return sel.elementId;
-    case 'viewNodes':
-      return sel.elementIds[0] ?? null;
-    case 'relationship':
-      // For now we don't map relationship -> endpoint; Step 4+ can add this if desired.
-      return null;
-    default:
-      return null;
-  }
-}
-
-function selectionToElementIds(sel: Selection): string[] {
-  switch (sel.kind) {
-    case 'element':
-      return [sel.elementId];
-    case 'viewNode':
-      return [sel.elementId];
-    case 'viewNodes':
-      return sel.elementIds;
-    default:
-      return [];
-  }
-}
+import {
+  buildPathsAnalysisOpts,
+  buildRelatedAnalysisOpts,
+  computeCanRun,
+  computeTraceSeedId,
+  selectionToElementId,
+  selectionToElementIds,
+} from './analysisWorkspaceUtils';
 
 export type MatrixCellDialogInfo = {
   rowId: string;
@@ -118,26 +98,28 @@ export function useAnalysisWorkspaceController({
   }, [selection, mode, draftStartId, draftSourceId, draftTargetId, onChangeDraftStartIdSync, onChangeDraftSourceIdSync]);
 
   const relatedOpts = useMemo(
-    () => ({
-      direction,
-      maxDepth,
-      includeStart,
-      relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
-      layers: layers.length ? layers : undefined,
-      elementTypes: elementTypes.length ? elementTypes : undefined,
-    }),
+    () =>
+      buildRelatedAnalysisOpts({
+        direction,
+        maxDepth,
+        includeStart,
+        relationshipTypes,
+        layers,
+        elementTypes,
+      }),
     [direction, maxDepth, includeStart, relationshipTypes, layers, elementTypes]
   );
 
   const pathsOpts = useMemo(
-    () => ({
-      direction,
-      maxPaths,
-      maxPathLength: maxPathLength === null ? undefined : maxPathLength,
-      relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
-      layers: layers.length ? layers : undefined,
-      elementTypes: elementTypes.length ? elementTypes : undefined,
-    }),
+    () =>
+      buildPathsAnalysisOpts({
+        direction,
+        maxPaths,
+        maxPathLength,
+        relationshipTypes,
+        layers,
+        elementTypes,
+      }),
     [direction, maxPaths, maxPathLength, relationshipTypes, layers, elementTypes]
   );
 
@@ -165,14 +147,15 @@ export function useAnalysisWorkspaceController({
 
   const [matrixCellDialog, setMatrixCellDialog] = useState<MatrixCellDialogInfo | null>(null);
 
-  const canRun = Boolean(
-    model &&
-      (mode === 'matrix'
-        ? matrixState.axes.rowIds.length > 0 && matrixState.axes.colIds.length > 0
-        : mode !== 'paths'
-          ? draftStartId
-          : draftSourceId && draftTargetId && draftSourceId !== draftTargetId)
-  );
+  const canRun = computeCanRun({
+    modelPresent: Boolean(model),
+    mode,
+    matrixResolvedRowCount: matrixState.axes.rowIds.length,
+    matrixResolvedColCount: matrixState.axes.colIds.length,
+    draftStartId,
+    draftSourceId,
+    draftTargetId,
+  });
 
   const run = useCallback(() => {
     if (!model) return;
@@ -251,7 +234,7 @@ export function useAnalysisWorkspaceController({
   }, []);
 
   const traceSeedId = useMemo(
-    () => activeStartId || draftStartId || selectionToElementId(selection) || '',
+    () => computeTraceSeedId({ activeStartId, draftStartId, selection }),
     [activeStartId, draftStartId, selection]
   );
 

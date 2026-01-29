@@ -1,12 +1,9 @@
-import type { AutoLayoutOptions, LayoutInput, LayoutEdgeInput, LayoutNodeInput } from './types';
-import type { Model, View, ViewNodeLayout, Relationship } from '../types';
-import { extractArchiMateLayoutInput } from './archimate/extractArchiMateLayoutInput';
-import { extractBpmnLayoutInput } from './bpmn/extractBpmnLayoutInput';
+import type { AutoLayoutOptions, LayoutInput, LayoutEdgeInput, LayoutNodeInput } from '../types';
+import type { Model, View, ViewNodeLayout, Relationship } from '../../types';
 
-const DEFAULTS_BY_KIND: Record<View['kind'], { element: { width: number; height: number }; connector: { width: number; height: number } }> = {
-  archimate: { element: { width: 120, height: 60 }, connector: { width: 24, height: 24 } },
-  bpmn: { element: { width: 160, height: 80 }, connector: { width: 26, height: 26 } },
-  uml: { element: { width: 170, height: 90 }, connector: { width: 26, height: 26 } }
+const DEFAULTS = {
+  element: { width: 160, height: 80 },
+  connector: { width: 26, height: 26 }
 };
 
 function nodeIdFromLayoutNode(n: ViewNodeLayout): string | null {
@@ -16,12 +13,9 @@ function nodeIdFromLayoutNode(n: ViewNodeLayout): string | null {
   return null;
 }
 
-function sizeForLayoutNode(
-  n: ViewNodeLayout,
-  defaults: { element: { width: number; height: number }; connector: { width: number; height: number } }
-): { width: number; height: number } {
+function sizeForLayoutNode(n: ViewNodeLayout): { width: number; height: number } {
   const isConnector = Boolean(n.connectorId);
-  const d = isConnector ? defaults.connector : defaults.element;
+  const d = isConnector ? DEFAULTS.connector : DEFAULTS.element;
   const width = typeof n.width === 'number' ? n.width : d.width;
   const height = typeof n.height === 'number' ? n.height : d.height;
   return { width, height };
@@ -34,7 +28,7 @@ function edgeEndpointsFromRelationship(rel: Relationship): { sourceId: string; t
   return { sourceId, targetId };
 }
 
-function edgesFromConnections(view: View, nodeIdSet: Set<string>): LayoutEdgeInput[] {
+function edgesFromConnections(model: Model, view: View, nodeIdSet: Set<string>): LayoutEdgeInput[] {
   const out: LayoutEdgeInput[] = [];
   const seen = new Set<string>();
   for (const c of view.connections ?? []) {
@@ -43,10 +37,12 @@ function edgesFromConnections(view: View, nodeIdSet: Set<string>): LayoutEdgeInp
     if (!sourceId || !targetId) continue;
     if (!nodeIdSet.has(sourceId) || !nodeIdSet.has(targetId)) continue;
 
-    const id = c.id || c.relationshipId;
+    const id = c.id;
     if (seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, sourceId, targetId, weight: 1 });
+
+    const relType = model.relationships[c.relationshipId]?.type;
+    out.push({ id, sourceId, targetId, weight: 1, ...(relType ? { kind: relType } : {}) });
   }
   return out;
 }
@@ -65,32 +61,46 @@ function edgesFromLegacyLayout(model: Model, view: View, nodeIdSet: Set<string>)
     const id = r.relationshipId;
     if (seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, sourceId: ep.sourceId, targetId: ep.targetId, weight: 1 });
+    out.push({ id, sourceId: ep.sourceId, targetId: ep.targetId, weight: 1, kind: rel.type });
   }
   return out;
 }
 
-export function extractGenericLayoutInput(
+/**
+ * BPMN auto-layout extraction (v1: flat).
+ *
+ * - Converts element/connector nodes in the view into layout nodes.
+ * - Converts view connections (or legacy relationship layouts) into layout edges.
+ * - Ignores BPMN containers (pools/lanes/subprocesses) for now — those come in the "full" step.
+ */
+export function extractBpmnLayoutInput(
   model: Model,
   viewId: string,
   options: AutoLayoutOptions = {},
   selectionNodeIds?: string[]
 ): LayoutInput {
   const view = model.views[viewId];
-  if (!view) throw new Error(`extractGenericLayoutInput: view not found: ${viewId}`);
+  if (!view) throw new Error(`extractBpmnLayoutInput: view not found: ${viewId}`);
+  if (view.kind !== 'bpmn') throw new Error(`extractBpmnLayoutInput: expected bpmn view, got: ${view.kind}`);
 
-  const defaults = DEFAULTS_BY_KIND[view.kind] ?? DEFAULTS_BY_KIND.archimate;
   const rawNodes = view.layout?.nodes ?? [];
 
   const allNodes: LayoutNodeInput[] = [];
   for (const n of rawNodes) {
     const id = nodeIdFromLayoutNode(n);
     if (!id) continue;
-    const { width, height } = sizeForLayoutNode(n, defaults);
+    const { width, height } = sizeForLayoutNode(n);
+
+    // Optional, but useful for downstream heuristics.
+    const el = n.elementId ? model.elements[n.elementId] : undefined;
+    const conn = n.connectorId ? model.connectors?.[n.connectorId] : undefined;
+
     allNodes.push({
       id,
       width,
       height,
+      ...(el ? { kind: el.type, label: el.name } : {}),
+      ...(conn?.name ? { label: conn.name } : {}),
       ...(options.respectLocked && n.locked ? { locked: true } : {})
     });
   }
@@ -104,31 +114,7 @@ export function extractGenericLayoutInput(
   const nodeIdSet = new Set(nodes.map((n) => n.id));
 
   const edges =
-    (view.connections?.length ?? 0) > 0 ? edgesFromConnections(view, nodeIdSet) : edgesFromLegacyLayout(model, view, nodeIdSet);
+    (view.connections?.length ?? 0) > 0 ? edgesFromConnections(model, view, nodeIdSet) : edgesFromLegacyLayout(model, view, nodeIdSet);
 
   return { nodes, edges };
-}
-
-/**
- * Dispatcher that extracts a layout graph based on view kind.
- *
- * - ArchiMate uses ArchiMate-specific policy hints (layer/group/edge weights).
- * - BPMN/UML currently use a generic extractor (no notation-specific hints yet).
- */
-export function extractLayoutInputForView(
-  model: Model,
-  viewId: string,
-  options: AutoLayoutOptions = {},
-  selectionNodeIds?: string[]
-): LayoutInput {
-  const view = model.views[viewId];
-  if (!view) throw new Error(`extractLayoutInputForView: view not found: ${viewId}`);
-
-  if (view.kind === 'archimate') {
-    return extractArchiMateLayoutInput(model, viewId, options, selectionNodeIds);
-  }
-  if (view.kind === 'bpmn') {
-    return extractBpmnLayoutInput(model, viewId, options, selectionNodeIds);
-  }
-  return extractGenericLayoutInput(model, viewId, options, selectionNodeIds);
 }

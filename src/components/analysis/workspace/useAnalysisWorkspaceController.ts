@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { AnalysisDirection, ElementType, ModelKind, RelationshipType } from '../../../domain';
+import type { ModelKind } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import { useAnalysisPathsBetween, useAnalysisRelatedElements, useModelStore } from '../../../store';
 
 import type { AnalysisMode } from '../AnalysisQueryPanel';
 import type { AnalysisQueryPanelActions, AnalysisQueryPanelMeta, AnalysisQueryPanelState } from '../AnalysisQueryPanel';
 import { useMatrixWorkspaceState } from './useMatrixWorkspaceState';
+import { useAnalysisGlobalFiltersState } from './controller/useAnalysisGlobalFiltersState';
 
 import {
   buildPathsAnalysisOpts,
@@ -32,26 +33,18 @@ export function useAnalysisWorkspaceController({
   // -----------------------------
   // Global filters (draft)
   // -----------------------------
-  const [direction, setDirection] = useState<AnalysisDirection>('both');
-  const [relationshipTypes, setRelationshipTypes] = useState<RelationshipType[]>([]);
-  const [layers, setLayers] = useState<string[]>([]);
-  const [elementTypes, setElementTypes] = useState<ElementType[]>([]);
-
-  // Related-only
-  const [maxDepth, setMaxDepth] = useState<number>(4);
-
-  // Traceability: default to 1-hop expansion when entering explorer mode.
-  useEffect(() => {
-    if (mode !== 'traceability') return;
-    // Only auto-adjust when still at the global default (4) to avoid overriding user intent.
-    if (maxDepth === 4) setMaxDepth(1);
-  }, [mode, maxDepth]);
-
-  const [includeStart, setIncludeStart] = useState<boolean>(false);
-
-  // Paths-only
-  const [maxPaths, setMaxPaths] = useState<number>(10);
-  const [maxPathLength, setMaxPathLength] = useState<number | null>(null);
+  const { state: filters, actions: filterActions } = useAnalysisGlobalFiltersState(mode);
+  const { direction, relationshipTypes, layers, elementTypes, maxDepth, includeStart, maxPaths, maxPathLength } = filters;
+  const {
+    setDirection,
+    setRelationshipTypes,
+    setLayers,
+    setElementTypes,
+    setMaxDepth,
+    setIncludeStart,
+    setMaxPaths,
+    setMaxPathLength,
+  } = filterActions;
 
   // Draft inputs (user edits these).
   const [draftStartId, setDraftStartId] = useState<string>('');

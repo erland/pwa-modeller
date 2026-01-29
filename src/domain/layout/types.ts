@@ -40,6 +40,12 @@ export interface AutoLayoutOptions {
    * If true, nodes marked as locked/pinned should not be moved by the layout engine.
    */
   respectLocked?: boolean;
+
+  /**
+   * If true and the caller provides selection context, selected nodes will be treated
+   * as locked for this layout run (without permanently mutating the view).
+   */
+  lockSelection?: boolean;
 }
 
 /**

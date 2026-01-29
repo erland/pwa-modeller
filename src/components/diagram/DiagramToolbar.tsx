@@ -10,6 +10,7 @@ import { ArchimateToolbar } from './toolbar/ArchimateToolbar';
 import { UmlToolbar } from './toolbar/UmlToolbar';
 import { BpmnToolbar } from './toolbar/BpmnToolbar';
 import { AlignDialog } from './dialogs/AlignDialog';
+import { AutoLayoutDialog } from './dialogs/AutoLayoutDialog';
 
 export type DiagramToolbarProps = {
   model: Model;
@@ -73,6 +74,13 @@ export function DiagramToolbar({
   const hasActiveView = Boolean(activeViewId && activeView);
 
   const [alignDialogOpen, setAlignDialogOpen] = useState(false);
+
+  const [autoLayoutDialogOpen, setAutoLayoutDialogOpen] = useState(false);
+  const [autoLayoutSettingsByKind, setAutoLayoutSettingsByKind] = useState<Record<string, AutoLayoutOptions>>({
+    archimate: { scope: 'all', direction: 'RIGHT', spacing: 80, edgeRouting: 'POLYLINE', respectLocked: true },
+    bpmn: { scope: 'all', direction: 'RIGHT', spacing: 100, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+    uml: { scope: 'all', direction: 'RIGHT', spacing: 110, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+  });
 
   const selectedNodeCount = useMemo(() => {
     if (!activeViewId) return 0;
@@ -148,7 +156,6 @@ export function DiagramToolbar({
             onSelect={onSelect}
             onAddAndJunction={onAddAndJunction}
             onAddOrJunction={onAddOrJunction}
-            onAutoLayout={onAutoLayout}
           />
 
           <UmlToolbar
@@ -211,6 +218,16 @@ export function DiagramToolbar({
               Arrange
             </button>
 
+            <button
+              type="button"
+              onClick={() => setAutoLayoutDialogOpen(true)}
+              className="shellButton"
+              disabled={!hasActiveView}
+              title={`Auto layout this view${activeView?.kind ? ` (${activeView.kind.toUpperCase()})` : ''}`}
+            >
+              Auto Layout
+            </button>
+
             <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>
               Export as Image
             </button>
@@ -233,6 +250,20 @@ export function DiagramToolbar({
         onDistribute={(mode) => {
           onDistributeSelection(mode);
           setAlignDialogOpen(false);
+        }}
+      />
+
+      <AutoLayoutDialog
+        isOpen={autoLayoutDialogOpen}
+        onClose={() => setAutoLayoutDialogOpen(false)}
+        viewKind={activeView?.kind ?? null}
+        hasSelection={selectedNodeCount > 0}
+        initialOptions={autoLayoutSettingsByKind[activeView?.kind ?? 'archimate'] ?? autoLayoutSettingsByKind.archimate}
+        onRun={(opts) => {
+          const kindKey = activeView?.kind ?? 'archimate';
+          setAutoLayoutSettingsByKind((prev) => ({ ...prev, [kindKey]: opts }));
+          setAutoLayoutDialogOpen(false);
+          onAutoLayout(opts);
         }}
       />
     </>

@@ -181,20 +181,22 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
 
   const onAutoLayout = useCallback(
     async (overrides: Partial<AutoLayoutOptions> = {}) => {
-      if (!activeViewId || !activeView || activeView.kind !== 'archimate') return;
+      if (!activeViewId || !activeView) return;
       try {
-        // Defaults tuned for ArchiMate: layered layout left-to-right with comfortable spacing.
+        const defaultsByKind: Record<string, AutoLayoutOptions> = {
+          archimate: { scope: 'all', direction: 'RIGHT', spacing: 80, edgeRouting: 'POLYLINE', respectLocked: true },
+          bpmn: { scope: 'all', direction: 'RIGHT', spacing: 100, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+          uml: { scope: 'all', direction: 'RIGHT', spacing: 110, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+        };
+
+        // Defaults tuned per notation, but overridable via the dialog.
         const options: AutoLayoutOptions = {
-          scope: 'all',
-          direction: 'RIGHT',
-          spacing: 80,
-          edgeRouting: 'POLYLINE',
-          respectLocked: true,
+          ...(defaultsByKind[activeView.kind] ?? defaultsByKind.archimate),
           ...overrides,
         };
 
         let selectionNodeIds: string[] | undefined;
-        if (options.scope === 'selection') {
+        if (options.scope === 'selection' || options.lockSelection) {
           if (selection.kind === 'viewNode' && selection.viewId === activeViewId) {
             selectionNodeIds = [selection.elementId];
           } else if (selection.kind === 'viewNodes' && selection.viewId === activeViewId) {

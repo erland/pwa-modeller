@@ -125,14 +125,25 @@ export function extractLayoutInputForView(
   const view = model.views[viewId];
   if (!view) throw new Error(`extractLayoutInputForView: view not found: ${viewId}`);
 
+  let input: LayoutInput;
   if (view.kind === 'archimate') {
-    return extractArchiMateLayoutInput(model, viewId, options, selectionNodeIds);
+    input = extractArchiMateLayoutInput(model, viewId, options, selectionNodeIds);
+  } else if (view.kind === 'bpmn') {
+    input = extractBpmnLayoutInput(model, viewId, options, selectionNodeIds);
+  } else if (view.kind === 'uml') {
+    input = extractUmlLayoutInput(model, viewId, options, selectionNodeIds);
+  } else {
+    input = extractGenericLayoutInput(model, viewId, options, selectionNodeIds);
   }
-  if (view.kind === 'bpmn') {
-    return extractBpmnLayoutInput(model, viewId, options, selectionNodeIds);
+
+  // Optional, non-mutating "keep my manual positions" behavior.
+  if (options.lockSelection && Array.isArray(selectionNodeIds) && selectionNodeIds.length > 0) {
+    const locked = new Set(selectionNodeIds);
+    input = {
+      ...input,
+      nodes: input.nodes.map((n) => (locked.has(n.id) ? { ...n, locked: true } : n))
+    };
   }
-  if (view.kind === 'uml') {
-    return extractUmlLayoutInput(model, viewId, options, selectionNodeIds);
-  }
-  return extractGenericLayoutInput(model, viewId, options, selectionNodeIds);
+
+  return input;
 }

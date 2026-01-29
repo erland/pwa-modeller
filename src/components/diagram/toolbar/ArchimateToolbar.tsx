@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
 
-import type { AutoLayoutOptions, ElementType, Model, View } from '../../../domain';
+import type { ElementType, Model, View } from '../../../domain';
 
 import { CreateElementDialog } from '../../model/navigator/dialogs/CreateElementDialog';
 import type { Selection } from '../../model/selection';
-
-import { AutoLayoutDialog } from '../dialogs/AutoLayoutDialog';
 
 import type { ToolMode } from '../hooks/useDiagramToolState';
 
@@ -23,7 +21,6 @@ type Props = {
 
   onAddAndJunction: () => void;
   onAddOrJunction: () => void;
-  onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
 };
 
 export function ArchimateToolbar({
@@ -37,17 +34,8 @@ export function ArchimateToolbar({
   onSelect,
   onAddAndJunction,
   onAddOrJunction,
-  onAutoLayout,
 }: Props) {
   const [archimatePaletteDialog, setArchimatePaletteDialog] = useState<{ initialTypeId?: ElementType } | null>(null);
-  const [autoLayoutDialogOpen, setAutoLayoutDialogOpen] = useState(false);
-  const [autoLayoutSettings, setAutoLayoutSettings] = useState<AutoLayoutOptions>({
-    scope: 'all',
-    direction: 'RIGHT',
-    spacing: 80,
-    edgeRouting: 'POLYLINE',
-    respectLocked: true,
-  });
 
   const rootFolderId = useMemo(() => {
     // The model always has a root folder, but keep a defensive fallback.
@@ -81,20 +69,6 @@ export function ArchimateToolbar({
         >
           Element
         </button>
-
-        <button
-          type="button"
-          className="shellButton"
-          disabled={!hasActiveView}
-          onClick={() => {
-            setToolMode('select');
-            setAutoLayoutDialogOpen(true);
-          }}
-          title="Auto layout this view (ArchiMate)"
-        >
-          Auto Layout
-        </button>
-
 
         <span className="diagramToolbarDivider" aria-hidden="true" />
 
@@ -130,17 +104,6 @@ export function ArchimateToolbar({
         }}
         onClose={() => setArchimatePaletteDialog(null)}
         onSelect={onSelect}
-      />
-
-      <AutoLayoutDialog
-        isOpen={autoLayoutDialogOpen}
-        onClose={() => setAutoLayoutDialogOpen(false)}
-        initialOptions={autoLayoutSettings}
-        onRun={(opts) => {
-          setAutoLayoutSettings(opts);
-          setAutoLayoutDialogOpen(false);
-          onAutoLayout(opts);
-        }}
       />
     </>
   );

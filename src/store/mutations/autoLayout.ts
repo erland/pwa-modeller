@@ -38,3 +38,49 @@ export function autoLayoutView(model: Model, viewId: string, positions: LayoutOu
   // Ensure connections are consistent after layout changes.
   syncViewConnections(model, viewId);
 }
+
+export type NodeGeometryUpdate = {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+};
+
+/**
+ * Apply auto-layout geometry (position + optional size) to a view.
+ *
+ * This is useful for notations with containers (BPMN pools/lanes/subprocesses), where
+ * layout may want to grow container bounds to fit children.
+ */
+export function autoLayoutViewGeometry(
+  model: Model,
+  viewId: string,
+  geometryById: Record<string, NodeGeometryUpdate>
+): void {
+  const view = getView(model, viewId);
+  if (!view.layout) throw new Error(`View has no layout: ${viewId}`);
+
+  const nextNodes = view.layout.nodes.map((n) => {
+    const id = nodeIdFromLayoutNode(n);
+    if (!id) return n;
+    const g = geometryById[id];
+    if (!g) return n;
+
+    const next = {
+      ...n,
+      ...(typeof g.x === 'number' ? { x: g.x } : {}),
+      ...(typeof g.y === 'number' ? { y: g.y } : {}),
+      ...(typeof g.width === 'number' ? { width: g.width } : {}),
+      ...(typeof g.height === 'number' ? { height: g.height } : {}),
+    };
+
+    if (next.x === n.x && next.y === n.y && next.width === n.width && next.height === n.height) return n;
+    return next;
+  });
+
+  if (nextNodes !== view.layout.nodes) {
+    model.views[viewId] = { ...view, layout: { ...view.layout, nodes: nextNodes } };
+  }
+
+  syncViewConnections(model, viewId);
+}

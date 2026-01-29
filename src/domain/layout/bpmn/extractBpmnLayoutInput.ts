@@ -1,6 +1,37 @@
 import type { AutoLayoutOptions, LayoutInput, LayoutEdgeInput, LayoutNodeInput } from '../types';
 import type { Model, View, ViewNodeLayout, Relationship } from '../../types';
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+type Rect = { x: number; y: number; w: number; h: number };
+
+function rectContains(a: Rect, b: Rect, padding = 0): boolean {
+  return (
+    b.x >= a.x + padding &&
+    b.y >= a.y + padding &&
+    b.x + b.w <= a.x + a.w - padding &&
+    b.y + b.h <= a.y + a.h - padding
+  );
+}
+
+function rectFromLayoutNode(n: ViewNodeLayout): Rect {
+  return { x: n.x, y: n.y, w: n.width, h: n.height };
+}
+
+function isBpmnPoolType(t: string | undefined): boolean {
+  return t === 'bpmn.pool';
+}
+
+function isBpmnLaneType(t: string | undefined): boolean {
+  return t === 'bpmn.lane';
+}
+
+function isBpmnSubProcessType(t: string | undefined): boolean {
+  return t === 'bpmn.subProcess';
+}
+
 const DEFAULTS = {
   element: { width: 160, height: 80 },
   connector: { width: 26, height: 26 }
@@ -67,11 +98,13 @@ function edgesFromLegacyLayout(model: Model, view: View, nodeIdSet: Set<string>)
 }
 
 /**
- * BPMN auto-layout extraction (v1: flat).
+ * BPMN auto-layout extraction.
  *
- * - Converts element/connector nodes in the view into layout nodes.
- * - Converts view connections (or legacy relationship layouts) into layout edges.
- * - Ignores BPMN containers (pools/lanes/subprocesses) for now — those come in the "full" step.
+ * v1 (flat) extracts a simple graph.
+ * v2 ("full") additionally emits `parentId` for containment:
+ * - Pools contain Lanes (by geometry in the view)
+ * - Lanes contain flow nodes (by semantic lane.flowNodeRefs, falling back to geometry)
+ * - Sub-processes contain nodes drawn inside them (by geometry)
  */
 export function extractBpmnLayoutInput(
   model: Model,
@@ -85,10 +118,14 @@ export function extractBpmnLayoutInput(
 
   const rawNodes = view.layout?.nodes ?? [];
 
+  const rawById = new Map<string, ViewNodeLayout>();
   const allNodes: LayoutNodeInput[] = [];
+
+  // Pre-collect so we can compute containment parentId.
   for (const n of rawNodes) {
     const id = nodeIdFromLayoutNode(n);
     if (!id) continue;
+    rawById.set(id, n);
     const { width, height } = sizeForLayoutNode(n);
 
     // Optional, but useful for downstream heuristics.
@@ -103,6 +140,117 @@ export function extractBpmnLayoutInput(
       ...(conn?.name ? { label: conn.name } : {}),
       ...(options.respectLocked && n.locked ? { locked: true } : {})
     });
+  }
+
+  // ------------------------------
+  // Containment (Pools/Lanes/SubProcess)
+  // ------------------------------
+  const nodeById = new Map<string, LayoutNodeInput>();
+  for (const n of allNodes) nodeById.set(n.id, n);
+
+  const elementTypeById = (id: string): string | undefined => {
+    const raw = rawById.get(id);
+    if (!raw?.elementId) return undefined;
+    return model.elements[raw.elementId]?.type;
+  };
+
+  const elementAttrsById = (id: string): Record<string, unknown> => {
+    const raw = rawById.get(id);
+    if (!raw?.elementId) return {};
+    const el = model.elements[raw.elementId];
+    return isRecord(el?.attrs) ? (el!.attrs as Record<string, unknown>) : {};
+  };
+
+  const poolIds = allNodes
+    .map((n) => n.id)
+    .filter((id) => isBpmnPoolType(elementTypeById(id)));
+  const laneIds = allNodes
+    .map((n) => n.id)
+    .filter((id) => isBpmnLaneType(elementTypeById(id)));
+  const subProcessIds = allNodes
+    .map((n) => n.id)
+    .filter((id) => isBpmnSubProcessType(elementTypeById(id)));
+
+  const rectById = (id: string): Rect | null => {
+    const raw = rawById.get(id);
+    if (!raw) return null;
+    return rectFromLayoutNode(raw);
+  };
+
+  const area = (r: Rect): number => Math.max(0, r.w) * Math.max(0, r.h);
+
+  const findSmallestContaining = (containerIds: string[], childId: string, padding = 0): string | null => {
+    const childRect = rectById(childId);
+    if (!childRect) return null;
+    let best: { id: string; area: number } | null = null;
+    for (const cid of containerIds) {
+      if (cid === childId) continue;
+      const cr = rectById(cid);
+      if (!cr) continue;
+      if (!rectContains(cr, childRect, padding)) continue;
+      const a = area(cr);
+      if (!best || a < best.area) best = { id: cid, area: a };
+    }
+    return best?.id ?? null;
+  };
+
+  // 1) Lanes belong to Pools (by geometry).
+  for (const laneId of laneIds) {
+    const parentPool = findSmallestContaining(poolIds, laneId, 0);
+    if (parentPool) {
+      const n = nodeById.get(laneId);
+      if (n) n.parentId = parentPool;
+    }
+  }
+
+  // 2) Map lane.flowNodeRefs -> laneId for quick semantic assignment.
+  const laneOfNode = new Map<string, string>();
+  for (const laneId of laneIds) {
+    const attrs = elementAttrsById(laneId);
+    const flowNodeRefs = Array.isArray(attrs.flowNodeRefs) ? (attrs.flowNodeRefs as unknown[]).map(String) : [];
+    for (const nid of flowNodeRefs) {
+      // Keep first lane stable to avoid churn.
+      if (!laneOfNode.has(nid)) laneOfNode.set(nid, laneId);
+    }
+  }
+
+  // 3) Assign parentId for non-container nodes.
+  for (const n of allNodes) {
+    // Ignore connectors and view-local objects.
+    const raw = rawById.get(n.id);
+    if (!raw?.elementId) continue;
+
+    const t = elementTypeById(n.id);
+    const isPool = isBpmnPoolType(t);
+    const isLane = isBpmnLaneType(t);
+
+    // Pools already done; lanes done; everything else can be a child.
+    if (isPool) continue;
+
+    // a) Subprocess containment wins (if node is drawn inside a subprocess).
+    const subParent = findSmallestContaining(subProcessIds, n.id, 6);
+    if (subParent && subParent !== n.id) {
+      n.parentId = subParent;
+      continue;
+    }
+
+    // b) Lane membership (semantic first, then geometry).
+    const laneParent = laneOfNode.get(n.id) ?? findSmallestContaining(laneIds, n.id, 4);
+    if (laneParent && laneParent !== n.id) {
+      n.parentId = laneParent;
+      continue;
+    }
+
+    // c) If there are pools but no lanes, allow flow nodes to attach directly to a pool.
+    const poolParent = findSmallestContaining(poolIds, n.id, 2);
+    if (poolParent && poolParent !== n.id) {
+      n.parentId = poolParent;
+      continue;
+    }
+
+    // d) Lanes themselves can be members of a pool; if a lane wasn't geometrically inside a pool,
+    // leave it top-level.
+    if (isLane) continue;
   }
 
   const wantedNodeIds =

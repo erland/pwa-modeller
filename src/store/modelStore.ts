@@ -485,6 +485,62 @@ export class ModelStore {
     const input = extractLayoutInputForView(current, viewId, options, selectionNodeIds);
     if (input.nodes.length === 0) return;
 
+    const isBpmnHierarchical = view.kind === 'bpmn' && input.nodes.some((n) => typeof n.parentId === 'string' && n.parentId.length > 0);
+
+    if (isBpmnHierarchical) {
+      // BPMN full-support path: pools/lanes/subprocess containers.
+      const { prepareBpmnHierarchicalInput } = await import('../domain/layout/bpmn/prepareBpmnHierarchicalInput');
+      const { elkLayoutHierarchical } = await import('../domain/layout/elk/elkLayoutHierarchical');
+
+      const prepared = prepareBpmnHierarchicalInput(input, options);
+      const output = await elkLayoutHierarchical(prepared.input, options);
+
+      // Respect locked nodes (override positions) if requested.
+      const fixedIds = new Set<string>();
+      if (options.respectLocked) {
+        const fresh = this.state.model?.views[viewId];
+        const rawNodes = fresh?.layout?.nodes ?? [];
+        for (const n of rawNodes) {
+          if (!n.locked) continue;
+          const id = n.elementId ?? n.connectorId;
+          if (!id) continue;
+          fixedIds.add(id);
+          output.positions[id] = { x: n.x, y: n.y };
+        }
+      }
+
+      // Snap to grid (deterministic + tidy). Avoid overlap nudge for hierarchical BPMN,
+      // as it can push children outside containers.
+      const GRID = 10;
+      const snapped = snapToGrid(output.positions, GRID, fixedIds);
+
+      // Build geometry updates: positions for all nodes, sizes for container nodes.
+      const geometryById: Record<string, { x?: number; y?: number; width?: number; height?: number }> = {};
+      for (const [id, pos] of Object.entries(snapped)) {
+        geometryById[id] = { ...(geometryById[id] ?? {}), x: pos.x, y: pos.y };
+      }
+
+      // Apply computed sizes to container nodes only.
+      const childrenByParent = new Map<string, string[]>();
+      for (const n of prepared.input.nodes) {
+        if (!n.parentId) continue;
+        const list = childrenByParent.get(n.parentId) ?? [];
+        list.push(n.id);
+        childrenByParent.set(n.parentId, list);
+      }
+      for (const [containerId, kids] of childrenByParent.entries()) {
+        if (kids.length === 0) continue;
+        const s = prepared.sizes[containerId];
+        if (!s) continue;
+        geometryById[containerId] = { ...(geometryById[containerId] ?? {}), width: s.width, height: s.height };
+      }
+
+      this.updateModel((model) => {
+        autoLayoutMutations.autoLayoutViewGeometry(model, viewId, geometryById);
+      });
+      return;
+    }
+
     // Lazy-load ELK so it doesn't get pulled into the main bundle until the user runs auto-layout.
     const { elkLayout } = await import('../domain/layout/elk/elkLayout');
     const output = await elkLayout(input, options);

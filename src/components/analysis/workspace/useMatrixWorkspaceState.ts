@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import type { AnalysisDirection, ElementType, MatrixMetricId, Model, ModelKind, RelationshipType } from '../../../domain';
-import type { RelationshipMatrixDirection } from '../../../domain/analysis/relationshipMatrix';
+import type { AnalysisDirection, Model, ModelKind, RelationshipType } from '../../../domain';
 import type { MatrixQueryPreset } from '../matrixPresetsStorage';
 
 import { useMatrixAxes } from './matrix/useMatrixAxes';
 import { useMatrixComputation } from './matrix/useMatrixComputation';
 import { useMatrixPreferences } from './matrix/useMatrixPreferences';
 import { useMatrixPresets } from './matrix/useMatrixPresets';
+import { buildMatrixUiQuery, buildMatrixWorkspaceBuiltQuery, normalizeMatrixUiQueryForApply, mapAnalysisDirectionToMatrixDirection } from './matrix/queryHelpers';
 import type { MatrixWorkspaceBuiltQuery } from './matrix/types';
 
 export type { MatrixAxisSource, MatrixWorkspaceBuiltQuery, MatrixWorkspaceCellDialogInfo } from './matrix/types';
@@ -44,27 +44,28 @@ export function useMatrixWorkspaceState({
   });
 
   const uiQuery = useMemo(() => {
-    return {
-      rowSource: axes.rowSource,
-      rowElementType: axes.rowElementType,
-      rowLayer: axes.rowLayer,
-      rowSelectionIds: axes.rowSelectionIds,
-
-      colSource: axes.colSource,
-      colElementType: axes.colElementType,
-      colLayer: axes.colLayer,
-      colSelectionIds: axes.colSelectionIds,
-
+    return buildMatrixUiQuery({
+      axes: {
+        rowSource: axes.rowSource,
+        rowElementType: axes.rowElementType,
+        rowLayer: axes.rowLayer,
+        rowSelectionIds: axes.rowSelectionIds,
+        colSource: axes.colSource,
+        colElementType: axes.colElementType,
+        colLayer: axes.colLayer,
+        colSelectionIds: axes.colSelectionIds,
+      },
+      prefs: {
+        cellMetricId: prefs.cellMetricId,
+        heatmapEnabled: prefs.heatmapEnabled,
+        hideEmpty: prefs.hideEmpty,
+        highlightMissing: prefs.highlightMissing,
+        weightPresetId: prefs.weightPresetId,
+        weightsByRelationshipType: prefs.weightsByRelationshipType,
+      },
       direction,
       relationshipTypes,
-
-      cellMetricId: prefs.cellMetricId,
-      heatmapEnabled: prefs.heatmapEnabled,
-      hideEmpty: prefs.hideEmpty,
-      highlightMissing: prefs.highlightMissing,
-      weightPresetId: prefs.weightPresetId,
-      weightsByRelationshipType: prefs.weightsByRelationshipType,
-    } as MatrixQueryPreset['query'];
+    });
   }, [
     axes.colElementType,
     axes.colLayer,
@@ -74,6 +75,8 @@ export function useMatrixWorkspaceState({
     axes.rowLayer,
     axes.rowSelectionIds,
     axes.rowSource,
+    direction,
+    relationshipTypes,
     prefs.cellMetricId,
     prefs.heatmapEnabled,
     prefs.hideEmpty,
@@ -82,33 +85,32 @@ export function useMatrixWorkspaceState({
     prefs.weightsByRelationshipType,
   ]);
 
-  const applyUiQuery = useCallback((query: MatrixQueryPreset['query']): void => {
-    axes.setRowSource(query.rowSource);
-    axes.setRowElementType(query.rowElementType as ElementType | '');
-    axes.setRowLayer(query.rowLayer);
-    axes.setRowSelectionIds([...query.rowSelectionIds]);
+  const applyUiQuery = useCallback(
+    (query: MatrixQueryPreset['query']): void => {
+      const normalized = normalizeMatrixUiQueryForApply(query);
 
-    axes.setColSource(query.colSource);
-    axes.setColElementType(query.colElementType as ElementType | '');
-    axes.setColLayer(query.colLayer);
-    axes.setColSelectionIds([...query.colSelectionIds]);
+      axes.setRowSource(normalized.axes.rowSource);
+      axes.setRowElementType(normalized.axes.rowElementType);
+      axes.setRowLayer(normalized.axes.rowLayer);
+      axes.setRowSelectionIds([...normalized.axes.rowSelectionIds]);
 
-    if (
-      query.cellMetricId &&
-      (query.cellMetricId === 'off' ||
-        query.cellMetricId === 'matrixRelationshipCount' ||
-        query.cellMetricId === 'matrixWeightedCount')
-    ) {
-      prefs.setCellMetricId(query.cellMetricId as 'off' | MatrixMetricId);
-    }
-    if (typeof query.heatmapEnabled === 'boolean') prefs.setHeatmapEnabled(query.heatmapEnabled);
-    if (typeof query.hideEmpty === 'boolean') prefs.setHideEmpty(query.hideEmpty);
-    if (typeof query.highlightMissing === 'boolean') prefs.setHighlightMissing(query.highlightMissing);
-    if (typeof query.weightPresetId === 'string') prefs.applyWeightPreset(query.weightPresetId);
-    if (query.weightsByRelationshipType && typeof query.weightsByRelationshipType === 'object') {
-      prefs.setWeightsByRelationshipType(query.weightsByRelationshipType);
-    }
-  }, [axes, prefs]);
+      axes.setColSource(normalized.axes.colSource);
+      axes.setColElementType(normalized.axes.colElementType);
+      axes.setColLayer(normalized.axes.colLayer);
+      axes.setColSelectionIds([...normalized.axes.colSelectionIds]);
+
+      if (normalized.prefs.cellMetricId) prefs.setCellMetricId(normalized.prefs.cellMetricId);
+      if (typeof normalized.prefs.heatmapEnabled === 'boolean') prefs.setHeatmapEnabled(normalized.prefs.heatmapEnabled);
+      if (typeof normalized.prefs.hideEmpty === 'boolean') prefs.setHideEmpty(normalized.prefs.hideEmpty);
+      if (typeof normalized.prefs.highlightMissing === 'boolean')
+        prefs.setHighlightMissing(normalized.prefs.highlightMissing);
+      if (typeof normalized.prefs.weightPresetId === 'string') prefs.applyWeightPreset(normalized.prefs.weightPresetId);
+      if (normalized.prefs.weightsByRelationshipType && typeof normalized.prefs.weightsByRelationshipType === 'object') {
+        prefs.setWeightsByRelationshipType(normalized.prefs.weightsByRelationshipType);
+      }
+    },
+    [axes, prefs]
+  );
 
   const selectedPreset = useMemo(() => {
     if (!presetsState.presetId) return null;
@@ -179,8 +181,7 @@ export function useMatrixWorkspaceState({
       const name = window.prompt('Snapshot name?');
       if (!name) return;
 
-      const dir: RelationshipMatrixDirection =
-        q.direction === 'outgoing' ? 'rowToCol' : q.direction === 'incoming' ? 'colToRow' : 'both';
+      const dir = mapAnalysisDirectionToMatrixDirection(q.direction);
 
       const snapshot = {
         id: `snapshot_${Date.now()}`,
@@ -283,18 +284,12 @@ export function useMatrixWorkspaceState({
   );
 
   const build = useCallback(() => {
-    const rowIds = axes.rowIds;
-    const colIds = axes.colIds;
-
-    const dir: RelationshipMatrixDirection =
-      direction === 'outgoing' ? 'rowToCol' : direction === 'incoming' ? 'colToRow' : 'both';
-
-    const q: MatrixWorkspaceBuiltQuery = {
-      rowIds,
-      colIds,
+    const q: MatrixWorkspaceBuiltQuery = buildMatrixWorkspaceBuiltQuery({
+      rowIds: axes.rowIds,
+      colIds: axes.colIds,
+      direction,
       relationshipTypes,
-      direction: dir,
-    };
+    });
     setBuiltQuery(q);
     setBuildNonce((n) => n + 1);
   }, [axes.colIds, axes.rowIds, direction, relationshipTypes]);

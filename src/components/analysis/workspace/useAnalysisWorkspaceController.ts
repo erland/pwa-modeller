@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { ModelKind } from '../../../domain';
 import type { Selection } from '../../model/selection';
@@ -9,6 +9,7 @@ import type { AnalysisQueryPanelActions, AnalysisQueryPanelMeta, AnalysisQueryPa
 import { useMatrixWorkspaceState } from './useMatrixWorkspaceState';
 import { useAnalysisGlobalFiltersState } from './controller/useAnalysisGlobalFiltersState';
 import { useAnalysisDraftActiveIdsState } from './controller/useAnalysisDraftActiveIdsState';
+import { useSelectionPrefillSync } from './controller/useSelectionPrefillSync';
 
 import {
   buildPathsAnalysisOpts,
@@ -70,19 +71,16 @@ export function useAnalysisWorkspaceController({
 
   const selectedElementId = useMemo(() => selectionToElementId(selection), [selection]);
 
-  // If the user has an element selected and the draft is empty, prefill to reduce friction.
-  useEffect(() => {
-    if (!selectedElementId) return;
-
-    if (mode !== 'paths' && mode !== 'matrix') {
-      if (!draftStartId) onChangeDraftStartIdSync(selectedElementId);
-      return;
-    }
-    if (mode === 'paths') {
-      if (!draftSourceId) onChangeDraftSourceIdSync(selectedElementId);
-      else if (!draftTargetId && draftSourceId !== selectedElementId) setDraftTargetId(selectedElementId);
-    }
-  }, [mode, draftStartId, draftSourceId, draftTargetId, onChangeDraftStartIdSync, onChangeDraftSourceIdSync, selectedElementId]);
+  useSelectionPrefillSync({
+    mode,
+    selectedElementId,
+    draftStartId,
+    draftSourceId,
+    draftTargetId,
+    setDraftStartIdSync: onChangeDraftStartIdSync,
+    setDraftSourceIdSync: onChangeDraftSourceIdSync,
+    setDraftTargetId,
+  });
 
   const relatedOpts = useMemo(
     () =>

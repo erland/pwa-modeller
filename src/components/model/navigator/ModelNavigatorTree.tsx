@@ -7,6 +7,7 @@ import type { NavNode } from './types';
 import { NavigatorTreeItem } from './NavigatorTreeItem';
 import type { ModelKind } from '../../../domain';
 import { useNavigatorTreeDnd } from './useNavigatorTreeDnd';
+import { collectExpandableKeysInSubtree, expandSingleChildChainFromKey, findNodeByKey } from './navUtils';
 
 type Props = {
   treeData: NavNode[];
@@ -39,12 +40,6 @@ type Props = {
   onMoveFolderToFolder?: (folderId: string, targetFolderId: string) => void;
 };
 
-function toggleExpandedKey(current: Set<Key>, key: Key): Set<Key> {
-  const next = new Set(current);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  return next;
-}
 
 export function ModelNavigatorTree({
   treeData,
@@ -78,7 +73,29 @@ export function ModelNavigatorTree({
   });
 
   const toggleExpanded = (nodeKey: string) => {
-    setExpandedKeys((prev) => toggleExpandedKey(prev, nodeKey));
+    setExpandedKeys((prev) => {
+      const isExpanding = !prev.has(nodeKey);
+      if (!isExpanding) {
+        // Collapsing: also prune any expanded descendants so re-expanding doesn't
+        // unexpectedly open deep levels.
+        const next = new Set(prev);
+        next.delete(nodeKey);
+        const node = findNodeByKey(treeData, nodeKey);
+        if (node) {
+          for (const k of collectExpandableKeysInSubtree(node)) next.delete(k);
+        }
+        return next;
+      }
+
+      const next = new Set(prev);
+      // Expanding: add this node, then keep expanding along any single-child chain.
+      for (const k of expandSingleChildChainFromKey(treeData, nodeKey)) {
+        next.add(k);
+      }
+      // If the node is expandable but the helper returned empty (edge cases), ensure it is included.
+      next.add(nodeKey);
+      return next;
+    });
   };
 
   return (
@@ -90,7 +107,32 @@ export function ModelNavigatorTree({
         selectedKeys={selectedKey ? new Set([selectedKey]) : new Set()}
         onSelectionChange={handleSelectionChange}
         expandedKeys={expandedKeys}
-        onExpandedChange={(keys) => setExpandedKeys(new Set(keys as Iterable<Key>))}
+        onExpandedChange={(keys) =>
+          setExpandedKeys((prev) => {
+            const incoming = new Set(keys as Iterable<Key>);
+
+            // Detect added keys and apply smart single-child expansion for each.
+            for (const k of incoming) {
+              if (!prev.has(k)) {
+                for (const extra of expandSingleChildChainFromKey(treeData, String(k))) {
+                  incoming.add(extra);
+                }
+              }
+            }
+
+            // Detect removed keys and prune any expandable descendants.
+            for (const k of prev) {
+              if (!incoming.has(k)) {
+                const node = findNodeByKey(treeData, String(k));
+                if (node) {
+                  for (const dk of collectExpandableKeysInSubtree(node)) incoming.delete(dk);
+                }
+              }
+            }
+
+            return incoming;
+          })
+        }
         className="navAriaTree"
         renderEmptyState={() => <div className="navEmpty">No items</div>}
       >

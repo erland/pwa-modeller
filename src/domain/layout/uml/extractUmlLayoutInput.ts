@@ -6,6 +6,22 @@ const DEFAULTS = {
   connector: { width: 26, height: 26 }
 };
 
+type BBox = { x: number; y: number; width: number; height: number };
+
+function bboxContains(outer: BBox, inner: BBox, margin = 10): boolean {
+  const ox1 = outer.x + margin;
+  const oy1 = outer.y + margin;
+  const ox2 = outer.x + outer.width - margin;
+  const oy2 = outer.y + outer.height - margin;
+
+  const ix1 = inner.x;
+  const iy1 = inner.y;
+  const ix2 = inner.x + inner.width;
+  const iy2 = inner.y + inner.height;
+
+  return ix1 >= ox1 && iy1 >= oy1 && ix2 <= ox2 && iy2 <= oy2;
+}
+
 function nodeIdFromLayoutNode(n: ViewNodeLayout): string | null {
   if (typeof n.elementId === 'string' && n.elementId.length > 0) return n.elementId;
   if (typeof n.connectorId === 'string' && n.connectorId.length > 0) return n.connectorId;
@@ -77,11 +93,11 @@ function edgesFromLegacyLayout(model: Model, view: View, nodeIdSet: Set<string>)
 }
 
 /**
- * UML auto-layout extraction (v1: flat).
+ * UML auto-layout extraction (v1: packages as containers).
  *
  * - Converts element/connector nodes in the view into layout nodes.
  * - Converts view connections (or legacy relationship layouts) into layout edges.
- * - Does not model UML containers/packages as groups yet — that comes in a later "full" step.
+ * - Models UML packages as containers (parentId) using geometry-based containment.
  */
 export function extractUmlLayoutInput(
   model: Model,
@@ -95,33 +111,85 @@ export function extractUmlLayoutInput(
 
   const rawNodes = view.layout?.nodes ?? [];
 
-  const allNodes: LayoutNodeInput[] = [];
+  type RawNodeInfo = {
+    id: string;
+    bbox: BBox;
+    kind?: string;
+    label?: string;
+    locked?: boolean;
+    isPackage: boolean;
+  };
+
+  const rawInfos: RawNodeInfo[] = [];
   for (const n of rawNodes) {
     const id = nodeIdFromLayoutNode(n);
     if (!id) continue;
     const { width, height } = sizeForLayoutNode(n);
 
-    // Optional, but useful for downstream heuristics.
     const el = n.elementId ? model.elements[n.elementId] : undefined;
     const conn = n.connectorId ? model.connectors?.[n.connectorId] : undefined;
+    const kind = el?.type;
+    const label = el?.name ?? conn?.name;
+    const isPackage = kind === 'uml.package';
 
-    allNodes.push({
+    rawInfos.push({
       id,
-      width,
-      height,
-      ...(el ? { kind: el.type, label: el.name } : {}),
-      ...(conn?.name ? { label: conn.name } : {}),
-      ...(options.respectLocked && n.locked ? { locked: true } : {})
+      bbox: { x: n.x, y: n.y, width, height },
+      ...(kind ? { kind } : {}),
+      ...(label ? { label } : {}),
+      ...(options.respectLocked && n.locked ? { locked: true } : {}),
+      isPackage
     });
   }
+
+  // Compute package containment by geometry (flat UML "full support": packages as containers).
+  // If a node is inside multiple packages, pick the smallest containing package (deepest).
+  const packages = rawInfos.filter((n) => n.isPackage);
+
+  const parentById = new Map<string, string>();
+  if (packages.length > 0) {
+    for (const n of rawInfos) {
+      // Connectors don't participate in package grouping.
+      if (n.kind == null || n.kind === 'uml.note') continue;
+
+      const candidates: Array<{ id: string; area: number }> = [];
+      for (const p of packages) {
+        if (p.id === n.id) continue;
+        if (!bboxContains(p.bbox, n.bbox, 12)) continue;
+        candidates.push({ id: p.id, area: p.bbox.width * p.bbox.height });
+      }
+      if (candidates.length === 0) continue;
+      candidates.sort((a, b) => a.area - b.area);
+      parentById.set(n.id, candidates[0].id);
+    }
+  }
+
+  const allNodes: LayoutNodeInput[] = rawInfos.map((n) => ({
+    id: n.id,
+    width: n.bbox.width,
+    height: n.bbox.height,
+    ...(n.kind ? { kind: n.kind } : {}),
+    ...(n.label ? { label: n.label } : {}),
+    ...(n.locked ? { locked: true } : {}),
+    ...(parentById.has(n.id) ? { parentId: parentById.get(n.id) } : {})
+  }));
 
   const wantedNodeIds =
     options.scope === 'selection' && Array.isArray(selectionNodeIds) && selectionNodeIds.length > 0
       ? new Set(selectionNodeIds)
       : null;
 
-  const nodes = wantedNodeIds ? allNodes.filter((n) => wantedNodeIds.has(n.id)) : allNodes;
+  let nodes = wantedNodeIds ? allNodes.filter((n) => wantedNodeIds.has(n.id)) : allNodes;
   const nodeIdSet = new Set(nodes.map((n) => n.id));
+
+  // If a selection scope excludes the parent container, drop parentId to avoid dangling references.
+  if (nodes.some((n) => typeof n.parentId === 'string' && n.parentId.length > 0)) {
+    nodes = nodes.map((n) => {
+      if (!n.parentId) return n;
+      if (nodeIdSet.has(n.parentId)) return n;
+      return { ...n, parentId: undefined };
+    });
+  }
 
   const edges =
     (view.connections?.length ?? 0) > 0 ? edgesFromConnections(model, view, nodeIdSet) : edgesFromLegacyLayout(model, view, nodeIdSet);

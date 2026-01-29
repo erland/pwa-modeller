@@ -114,4 +114,41 @@ describe('extractUmlLayoutInput', () => {
     expect(input.nodes[0].id).toBe(a.id);
     expect(input.edges).toHaveLength(0);
   });
+
+  test('assigns parentId for nodes inside uml.package containers (geometry-based)', () => {
+    const model = createEmptyModel({ name: 'M' });
+
+    const pkg = createElement({ id: 'P', name: 'Pkg', type: 'uml.package' });
+    const a = createElement({ id: 'A', name: 'Class A', type: 'uml.class' });
+    const b = createElement({ id: 'B', name: 'Class B', type: 'uml.class' });
+    model.elements[pkg.id] = pkg;
+    model.elements[a.id] = a;
+    model.elements[b.id] = b;
+
+    const view = createView({
+      name: 'UML View',
+      kind: 'uml',
+      viewpointId: 'uml',
+      folderId: getRootFolderId(model)
+    });
+    putView(model, view);
+
+    addElementToViewAt(model, view.id, pkg.id, 50, 50);
+    addElementToViewAt(model, view.id, a.id, 100, 120);
+    addElementToViewAt(model, view.id, b.id, 300, 120);
+
+    // Enlarge the package bounds so it clearly contains its children.
+    const v = model.views[view.id];
+    const pkgNode = (v.layout?.nodes ?? []).find((n) => n.elementId === pkg.id);
+    if (!pkgNode) throw new Error('Expected package node');
+    pkgNode.width = 600;
+    pkgNode.height = 400;
+
+    const input = extractUmlLayoutInput(model, view.id);
+
+    expect(input.nodes.find((n) => n.id === a.id)?.parentId).toBe(pkg.id);
+    expect(input.nodes.find((n) => n.id === b.id)?.parentId).toBe(pkg.id);
+    // Package itself is a top-level container.
+    expect(input.nodes.find((n) => n.id === pkg.id)?.parentId).toBeUndefined();
+  });
 });

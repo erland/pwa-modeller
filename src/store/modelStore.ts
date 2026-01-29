@@ -485,14 +485,17 @@ export class ModelStore {
     const input = extractLayoutInputForView(current, viewId, options, selectionNodeIds);
     if (input.nodes.length === 0) return;
 
-    const isBpmnHierarchical = view.kind === 'bpmn' && input.nodes.some((n) => typeof n.parentId === 'string' && n.parentId.length > 0);
+    const hasHierarchy = input.nodes.some((n) => typeof n.parentId === 'string' && n.parentId.length > 0);
+    const isBpmnHierarchical = view.kind === 'bpmn' && hasHierarchy;
+    const isUmlHierarchical = view.kind === 'uml' && hasHierarchy;
 
-    if (isBpmnHierarchical) {
-      // BPMN full-support path: pools/lanes/subprocess containers.
-      const { prepareBpmnHierarchicalInput } = await import('../domain/layout/bpmn/prepareBpmnHierarchicalInput');
+    if (isBpmnHierarchical || isUmlHierarchical) {
       const { elkLayoutHierarchical } = await import('../domain/layout/elk/elkLayoutHierarchical');
 
-      const prepared = prepareBpmnHierarchicalInput(input, options);
+      const prepared = isBpmnHierarchical
+        ? (await import('../domain/layout/bpmn/prepareBpmnHierarchicalInput')).prepareBpmnHierarchicalInput(input, options)
+        : (await import('../domain/layout/uml/prepareUmlHierarchicalInput')).prepareUmlHierarchicalInput(input, options);
+
       const output = await elkLayoutHierarchical(prepared.input, options);
 
       // Respect locked nodes (override positions) if requested.
@@ -509,7 +512,7 @@ export class ModelStore {
         }
       }
 
-      // Snap to grid (deterministic + tidy). Avoid overlap nudge for hierarchical BPMN,
+      // Snap to grid (deterministic + tidy). Avoid overlap nudge for hierarchical layouts,
       // as it can push children outside containers.
       const GRID = 10;
       const snapped = snapToGrid(output.positions, GRID, fixedIds);

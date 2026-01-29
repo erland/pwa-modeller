@@ -1,15 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback } from 'react';
 
 import type { AnalysisDirection, Model, ModelKind, RelationshipType } from '../../../domain';
-import type { MatrixQueryPreset } from '../matrixPresetsStorage';
-
 import { useMatrixAxesState } from './matrix/useMatrixAxesState';
 import { useMatrixComputation } from './matrix/useMatrixComputation';
-import { useMatrixPreferences } from './matrix/useMatrixPreferences';
+import { useMatrixDraftPreferencesState } from './matrix/useMatrixDraftPreferencesState';
 import { useMatrixSavedQueries } from './matrix/useMatrixSavedQueries';
-import { buildMatrixUiQuery, buildMatrixWorkspaceBuiltQuery, normalizeMatrixUiQueryForApply } from './matrix/queryHelpers';
-import type { MatrixWorkspaceBuiltQuery } from './matrix/types';
-
 export type { MatrixAxisSource, MatrixWorkspaceBuiltQuery, MatrixWorkspaceCellDialogInfo } from './matrix/types';
 
 export type UseMatrixWorkspaceStateArgs = {
@@ -30,142 +25,42 @@ export function useMatrixWorkspaceState({
   selectionElementIds,
 }: UseMatrixWorkspaceStateArgs) {
   const axes = useMatrixAxesState({ model, modelKind, selectionElementIds });
-  const prefs = useMatrixPreferences({ modelId, modelKind });
 
-  const [buildNonce, setBuildNonce] = useState<number>(0);
-  const [builtQuery, setBuiltQuery] = useState<MatrixWorkspaceBuiltQuery | null>(null);
+  const draft = useMatrixDraftPreferencesState({
+    model,
+    modelId,
+    modelKind,
+    direction,
+    relationshipTypes,
+    axes,
+  });
 
   const { result, cellValues, relationshipTypesForWeights } = useMatrixComputation({
     model,
-    builtQuery,
-    cellMetricId: prefs.cellMetricId,
-    weightsByRelationshipType: prefs.weightsByRelationshipType,
+    builtQuery: draft.builtQuery,
+    cellMetricId: draft.prefs.cellMetricId,
+    weightsByRelationshipType: draft.prefs.weightsByRelationshipType,
   });
-
-  const uiQuery = useMemo(() => {
-    return buildMatrixUiQuery({
-      axes: {
-        rowSource: axes.rowSource,
-        rowElementType: axes.rowElementType,
-        rowLayer: axes.rowLayer,
-        rowSelectionIds: axes.rowSelectionIds,
-        colSource: axes.colSource,
-        colElementType: axes.colElementType,
-        colLayer: axes.colLayer,
-        colSelectionIds: axes.colSelectionIds,
-      },
-      prefs: {
-        cellMetricId: prefs.cellMetricId,
-        heatmapEnabled: prefs.heatmapEnabled,
-        hideEmpty: prefs.hideEmpty,
-        highlightMissing: prefs.highlightMissing,
-        weightPresetId: prefs.weightPresetId,
-        weightsByRelationshipType: prefs.weightsByRelationshipType,
-      },
-      direction,
-      relationshipTypes,
-    });
-  }, [
-    axes.colElementType,
-    axes.colLayer,
-    axes.colSelectionIds,
-    axes.colSource,
-    axes.rowElementType,
-    axes.rowLayer,
-    axes.rowSelectionIds,
-    axes.rowSource,
-    direction,
-    relationshipTypes,
-    prefs.cellMetricId,
-    prefs.heatmapEnabled,
-    prefs.hideEmpty,
-    prefs.highlightMissing,
-    prefs.weightPresetId,
-    prefs.weightsByRelationshipType,
-  ]);
-
-  const applyUiQuery = useCallback(
-    (query: MatrixQueryPreset['query']): void => {
-      const normalized = normalizeMatrixUiQueryForApply(query);
-
-      axes.setRowSource(normalized.axes.rowSource);
-      axes.setRowElementType(normalized.axes.rowElementType);
-      axes.setRowLayer(normalized.axes.rowLayer);
-      axes.setRowSelectionIds([...normalized.axes.rowSelectionIds]);
-
-      axes.setColSource(normalized.axes.colSource);
-      axes.setColElementType(normalized.axes.colElementType);
-      axes.setColLayer(normalized.axes.colLayer);
-      axes.setColSelectionIds([...normalized.axes.colSelectionIds]);
-
-      if (normalized.prefs.cellMetricId) prefs.setCellMetricId(normalized.prefs.cellMetricId);
-      if (typeof normalized.prefs.heatmapEnabled === 'boolean') prefs.setHeatmapEnabled(normalized.prefs.heatmapEnabled);
-      if (typeof normalized.prefs.hideEmpty === 'boolean') prefs.setHideEmpty(normalized.prefs.hideEmpty);
-      if (typeof normalized.prefs.highlightMissing === 'boolean')
-        prefs.setHighlightMissing(normalized.prefs.highlightMissing);
-      if (typeof normalized.prefs.weightPresetId === 'string') prefs.applyWeightPreset(normalized.prefs.weightPresetId);
-      if (normalized.prefs.weightsByRelationshipType && typeof normalized.prefs.weightsByRelationshipType === 'object') {
-        prefs.setWeightsByRelationshipType(normalized.prefs.weightsByRelationshipType);
-      }
-    },
-    [axes, prefs]
-  );
-
-  const bumpBuildNonce = useCallback(() => {
-    setBuildNonce((n) => n + 1);
-  }, []);
 
   const savedQueries = useMatrixSavedQueries({
     modelId,
-    uiQuery,
+    uiQuery: draft.uiQuery,
     axesRowIds: axes.rowIds,
     axesColIds: axes.colIds,
-    builtQuery,
+    builtQuery: draft.builtQuery,
     result,
-    applyUiQuery,
-    setBuiltQuery,
-    bumpBuildNonce,
+    applyUiQuery: draft.applyUiQuery,
+    setBuiltQuery: draft.setBuiltQuery,
+    bumpBuildNonce: draft.bumpBuildNonce,
   });
 
   const resetDraft = useCallback(() => {
-    axes.resetAxesDraft();
+    draft.resetDraftCore();
 
+    // IMPORTANT: Keep current behavior: reset axes + clear selected preset/snapshot ids.
     savedQueries.setPresetId('');
     savedQueries.setSnapshotId('');
-  }, [axes, savedQueries]);
-
-  const onChangeRelationshipTypeWeight = useCallback(
-    (relationshipType: string, weight: number) => {
-      prefs.setWeightsByRelationshipType((prev) => ({ ...prev, [relationshipType]: weight }));
-    },
-    [prefs]
-  );
-
-  const applyWeightPreset = useCallback(
-    (presetId: string) => {
-      prefs.applyWeightPreset(presetId);
-    },
-    [prefs]
-  );
-
-  const build = useCallback(() => {
-    const q: MatrixWorkspaceBuiltQuery = buildMatrixWorkspaceBuiltQuery({
-      rowIds: axes.rowIds,
-      colIds: axes.colIds,
-      direction,
-      relationshipTypes,
-    });
-    setBuiltQuery(q);
-    setBuildNonce((n) => n + 1);
-  }, [axes.colIds, axes.rowIds, direction, relationshipTypes]);
-
-  const canBuild = useMemo(() => {
-    if (!model) return false;
-    if (!axes.rowIds.length) return false;
-    if (!axes.colIds.length) return false;
-    return true;
-  }, [axes.colIds.length, axes.rowIds.length, model]);
-
+  }, [draft, savedQueries]);
 
   const legacy = {
     // Axes state
@@ -196,34 +91,34 @@ export function useMatrixWorkspaceState({
     captureSelectionAsCols: axes.captureSelectionAsCols,
 
     // Build + results
-    buildNonce,
-    builtQuery,
-    build,
-    canBuild,
+    buildNonce: draft.buildNonce,
+    builtQuery: draft.builtQuery,
+    build: draft.build,
+    canBuild: draft.canBuild,
     result,
     cellValues,
     relationshipTypesForWeights,
 
     // Preferences
-    highlightMissing: prefs.highlightMissing,
-    setHighlightMissing: prefs.setHighlightMissing,
-    onToggleHighlightMissing: () => prefs.setHighlightMissing((v) => !v),
+    highlightMissing: draft.prefs.highlightMissing,
+    setHighlightMissing: draft.prefs.setHighlightMissing,
+    onToggleHighlightMissing: () => draft.prefs.setHighlightMissing((v) => !v),
 
-    heatmapEnabled: prefs.heatmapEnabled,
-    setHeatmapEnabled: prefs.setHeatmapEnabled,
+    heatmapEnabled: draft.prefs.heatmapEnabled,
+    setHeatmapEnabled: draft.prefs.setHeatmapEnabled,
 
-    hideEmpty: prefs.hideEmpty,
-    setHideEmpty: prefs.setHideEmpty,
+    hideEmpty: draft.prefs.hideEmpty,
+    setHideEmpty: draft.prefs.setHideEmpty,
 
-    cellMetricId: prefs.cellMetricId,
-    setCellMetricId: prefs.setCellMetricId,
+    cellMetricId: draft.prefs.cellMetricId,
+    setCellMetricId: draft.prefs.setCellMetricId,
 
-    weightPresets: prefs.weightPresets,
-    weightPresetId: prefs.weightPresetId,
-    setWeightPresetId: prefs.setWeightPresetId,
-    weightsByRelationshipType: prefs.weightsByRelationshipType,
-    setWeightsByRelationshipType: prefs.setWeightsByRelationshipType,
-    onChangeRelationshipTypeWeight,
+    weightPresets: draft.prefs.weightPresets,
+    weightPresetId: draft.prefs.weightPresetId,
+    setWeightPresetId: draft.prefs.setWeightPresetId,
+    weightsByRelationshipType: draft.prefs.weightsByRelationshipType,
+    setWeightsByRelationshipType: draft.prefs.setWeightsByRelationshipType,
+    onChangeRelationshipTypeWeight: draft.onChangeRelationshipTypeWeight,
 
     // Presets/snapshots
     presets: savedQueries.presets,
@@ -233,11 +128,11 @@ export function useMatrixWorkspaceState({
     snapshotId: savedQueries.snapshotId,
     setSnapshotId: savedQueries.setSnapshotId,
 
-    uiQuery,
-    applyUiQuery,
+    uiQuery: draft.uiQuery,
+    applyUiQuery: draft.applyUiQuery,
     restoreSnapshot: savedQueries.restoreSnapshot,
     deleteSnapshot: savedQueries.deleteSnapshot,
-    applyWeightPreset,
+    applyWeightPreset: draft.applyWeightPreset,
 
     saveCurrentPreset: savedQueries.saveCurrentPreset,
     deleteSelectedPreset: savedQueries.deleteSelectedPreset,
@@ -262,13 +157,13 @@ export function useMatrixWorkspaceState({
       colIds: axes.colIds,
     },
     preferences: {
-      highlightMissing: prefs.highlightMissing,
-      heatmapEnabled: prefs.heatmapEnabled,
-      hideEmpty: prefs.hideEmpty,
-      cellMetricId: prefs.cellMetricId,
-      weightPresets: prefs.weightPresets,
-      weightPresetId: prefs.weightPresetId,
-      weightsByRelationshipType: prefs.weightsByRelationshipType,
+      highlightMissing: draft.prefs.highlightMissing,
+      heatmapEnabled: draft.prefs.heatmapEnabled,
+      hideEmpty: draft.prefs.hideEmpty,
+      cellMetricId: draft.prefs.cellMetricId,
+      weightPresets: draft.prefs.weightPresets,
+      weightPresetId: draft.prefs.weightPresetId,
+      weightsByRelationshipType: draft.prefs.weightsByRelationshipType,
     },
     presets: {
       presets: savedQueries.presets,
@@ -277,10 +172,10 @@ export function useMatrixWorkspaceState({
       snapshotId: savedQueries.snapshotId,
     },
     build: {
-      buildNonce,
-      builtQuery,
+      buildNonce: draft.buildNonce,
+      builtQuery: draft.builtQuery,
     },
-    uiQuery,
+    uiQuery: draft.uiQuery,
   } as const;
 
   const actions = {
@@ -299,18 +194,18 @@ export function useMatrixWorkspaceState({
       captureSelectionAsCols: axes.captureSelectionAsCols,
     },
     build: {
-      build,
+      build: draft.build,
     },
     preferences: {
-      setHighlightMissing: prefs.setHighlightMissing,
-      onToggleHighlightMissing: () => prefs.setHighlightMissing((v) => !v),
-      setHeatmapEnabled: prefs.setHeatmapEnabled,
-      setHideEmpty: prefs.setHideEmpty,
-      setCellMetricId: prefs.setCellMetricId,
-      setWeightPresetId: prefs.setWeightPresetId,
-      setWeightsByRelationshipType: prefs.setWeightsByRelationshipType,
-      onChangeRelationshipTypeWeight,
-      applyWeightPreset,
+      setHighlightMissing: draft.prefs.setHighlightMissing,
+      onToggleHighlightMissing: () => draft.prefs.setHighlightMissing((v) => !v),
+      setHeatmapEnabled: draft.prefs.setHeatmapEnabled,
+      setHideEmpty: draft.prefs.setHideEmpty,
+      setCellMetricId: draft.prefs.setCellMetricId,
+      setWeightPresetId: draft.prefs.setWeightPresetId,
+      setWeightsByRelationshipType: draft.prefs.setWeightsByRelationshipType,
+      onChangeRelationshipTypeWeight: draft.onChangeRelationshipTypeWeight,
+      applyWeightPreset: draft.applyWeightPreset,
     },
     presets: {
       setPresetId: savedQueries.setPresetId,
@@ -322,17 +217,18 @@ export function useMatrixWorkspaceState({
       deleteSnapshot: savedQueries.deleteSnapshot,
       restoreSnapshot: savedQueries.restoreSnapshot,
       applySelectedSnapshot: savedQueries.applySelectedSnapshot,
-      applyUiQuery,
+      applyUiQuery: draft.applyUiQuery,
     },
   } as const;
 
   const derived = {
-    canBuild,
+    canBuild: draft.canBuild,
     result,
     cellValues,
     relationshipTypesForWeights,
     selectedPreset: savedQueries.selectedPreset,
     selectedSnapshot: savedQueries.selectedSnapshot,
+    isDraftDirty: draft.isDraftDirty,
   } as const;
 
   return { state, actions, derived, legacy } as const;

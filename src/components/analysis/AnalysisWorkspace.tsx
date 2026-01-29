@@ -4,11 +4,10 @@ import type { Selection } from '../model/selection';
 import '../../styles/crud.css';
 
 import { AnalysisQueryPanel } from './AnalysisQueryPanel';
-import { AnalysisResultTable } from './AnalysisResultTable';
-import { TraceabilityExplorer } from './TraceabilityExplorer';
-import { PortfolioAnalysisView } from './PortfolioAnalysisView';
-import { RelationshipMatrixTable } from './RelationshipMatrixTable';
-import { RelationshipMatrixCellDialog } from './RelationshipMatrixCellDialog';
+import { MatrixModeView } from './modes/MatrixModeView';
+import { PortfolioModeView } from './modes/PortfolioModeView';
+import { ResultsModeView } from './modes/ResultsModeView';
+import { TraceabilityModeView } from './modes/TraceabilityModeView';
 
 import { AnalysisWorkspaceHeader } from './workspace/AnalysisWorkspaceHeader';
 import { useAnalysisWorkspaceController } from './workspace/useAnalysisWorkspaceController';
@@ -183,79 +182,40 @@ export function AnalysisWorkspace({
           ) : null}
 
           {mode === 'matrix' ? (
-            <>
-              {matrixDerived.result ? (
-                <RelationshipMatrixTable
-                  modelName={model.metadata?.name || 'model'}
-                  result={matrixDerived.result}
-                  cellMetricId={matrixState.preferences.cellMetricId}
-                  onChangeCellMetricId={matrixActions.preferences.setCellMetricId}
-                  weightsByRelationshipType={matrixState.preferences.weightsByRelationshipType}
-                  onChangeRelationshipTypeWeight={(relationshipType, weight) =>
-                    matrixActions.preferences.setWeightsByRelationshipType((prev) => ({ ...prev, [relationshipType]: weight }))
-                  }
-                  weightPresets={matrixState.preferences.weightPresets}
-                  weightPresetId={matrixState.preferences.weightPresetId}
-                  onChangeWeightPresetId={(presetId) => matrixActions.preferences.applyWeightPreset(presetId)}
-                  relationshipTypesForWeights={matrixDerived.relationshipTypesForWeights}
-                  cellValues={matrixDerived.cellValues}
-                  highlightMissing={matrixState.preferences.highlightMissing}
-                  onToggleHighlightMissing={() => matrixActions.preferences.onToggleHighlightMissing()}
-                  heatmapEnabled={matrixState.preferences.heatmapEnabled}
-                  onChangeHeatmapEnabled={matrixActions.preferences.setHeatmapEnabled}
-                  hideEmpty={matrixState.preferences.hideEmpty}
-                  onChangeHideEmpty={matrixActions.preferences.setHideEmpty}
-                  onOpenCell={(info) => setMatrixCellDialog(info)}
-                />
-              ) : null}
-
-              {matrixDerived.result && matrixCellDialog ? (
-                <RelationshipMatrixCellDialog
-                  isOpen={Boolean(matrixCellDialog)}
-                  onClose={() => setMatrixCellDialog(null)}
-                  model={model}
-                  cell={matrixCellDialog}
-                />
-              ) : null}
-            </>
+            <MatrixModeView
+              model={model}
+              matrixState={matrixState}
+              matrixActions={matrixActions}
+              matrixDerived={matrixDerived}
+              matrixCellDialog={matrixCellDialog}
+              onOpenCell={(info) => setMatrixCellDialog(info)}
+              onCloseCellDialog={() => setMatrixCellDialog(null)}
+            />
           ) : mode === 'portfolio' ? (
-            <PortfolioAnalysisView
+            <PortfolioModeView
               model={model}
               modelKind={modelKind}
               selection={selection}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
             />
           ) : mode === 'traceability' ? (
-            traceSeedId ? (
-              <TraceabilityExplorer
-                model={model}
-                modelKind={modelKind}
-                seedId={traceSeedId}
-                direction={direction}
-                relationshipTypes={relationshipTypes}
-                layers={layers}
-                elementTypes={elementTypes}
-                expandDepth={maxDepth}
-                onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
-                onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
-              />
-            ) : (
-              <div className="crudSection">
-                <div className="crudHeader">
-                  <div>
-                    <p className="crudTitle">No start element</p>
-                    <p className="crudHint">
-                      Pick a start element in the Query panel (or select an element in the model) and click Run analysis.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )
-          ) : (
-            <AnalysisResultTable
+            <TraceabilityModeView
               model={model}
               modelKind={modelKind}
-              mode={mode}
+              seedId={traceSeedId}
+              direction={direction}
+              relationshipTypes={relationshipTypes}
+              layers={layers}
+              elementTypes={elementTypes}
+              expandDepth={maxDepth}
+              onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+              onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
+            />
+          ) : (
+            <ResultsModeView
+              model={model}
+              modelKind={modelKind}
+              mode={mode as 'related' | 'paths'}
               relatedResult={relatedResult}
               pathsResult={pathsResult}
               selection={selection}

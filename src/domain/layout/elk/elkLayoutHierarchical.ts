@@ -12,11 +12,20 @@ type ElkNode = {
   ports?: ElkPort[];
   edges?: ElkEdge[];
   layoutOptions?: Record<string, string>;
+  sections?: ElkSection[];
 };
 
 type ElkPort = {
   id: string;
   layoutOptions?: Record<string, string>;
+};
+
+type ElkPoint = { x: number; y: number };
+
+type ElkSection = {
+  startPoint?: ElkPoint;
+  endPoint?: ElkPoint;
+  bendPoints?: ElkPoint[];
 };
 
 type ElkEdge = {
@@ -137,8 +146,8 @@ export async function elkLayoutHierarchical(input: LayoutInput, options: AutoLay
       'elk.spacing.edgeEdge': String(Math.max(10, Math.floor(spacing / 4))),
     },
     children: topLevelIds.sort((a, b) => a.localeCompare(b)).map(buildNode),
-    edges: edges.map((e, i) => ({
-      id: `e${i}`,
+    edges: edges.map((e) => ({
+      id: e.id,
       sources: [e.sourcePortId ?? e.sourceId],
       targets: [e.targetPortId ?? e.targetId],
       layoutOptions: e.weight != null ? { 'elk.layered.priority': String(e.weight) } : undefined,
@@ -167,5 +176,18 @@ export async function elkLayoutHierarchical(input: LayoutInput, options: AutoLay
 
   walk(laidOut, 0, 0);
 
-  return { positions };
+  const edgeRoutes: Record<string, { points: Array<{ x: number; y: number }> }> = {};
+  for (const e of laidOut.edges ?? []) {
+    // elkjs types vary between versions; edge routing data is typically exposed via `sections`.
+    // Cast to `any` to avoid coupling the app to a specific elkjs type definition.
+    const sec = (((e as any).sections ?? []) as any[])[0];
+    if (!sec) continue;
+    const pts: Array<{ x: number; y: number }> = [];
+    if (sec.startPoint) pts.push({ x: sec.startPoint.x, y: sec.startPoint.y });
+    for (const bp of sec.bendPoints ?? []) pts.push({ x: bp.x, y: bp.y });
+    if (sec.endPoint) pts.push({ x: sec.endPoint.x, y: sec.endPoint.y });
+    if (pts.length >= 2) edgeRoutes[e.id] = { points: pts };
+  }
+
+  return { positions, ...(Object.keys(edgeRoutes).length ? { edgeRoutes } : {}) };
 }

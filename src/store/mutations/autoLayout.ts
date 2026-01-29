@@ -1,4 +1,4 @@
-import type { Model, ViewNodeLayout } from '../../domain/types';
+import type { Model, ViewConnection, ViewNodeLayout, ViewRelationshipLayout } from '../../domain/types';
 import type { LayoutOutput } from '../../domain/layout/types';
 import { getView } from './helpers';
 import { syncViewConnections } from './layout/syncViewConnections';
@@ -10,13 +10,126 @@ function nodeIdFromLayoutNode(n: ViewNodeLayout): string | null {
   return null;
 }
 
+type EdgeRoutes = LayoutOutput['edgeRoutes'];
+
+type Point = { x: number; y: number };
+
+function pointsEqual(a?: Point[], b?: Point[]): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].x !== b[i].x || a[i].y !== b[i].y) return false;
+  }
+  return true;
+}
+
+function normalizeBendPoints(points: Point[]): Point[] {
+  if (points.length <= 1) return points;
+
+  // Remove consecutive duplicates.
+  const dedup: Point[] = [];
+  for (const p of points) {
+    const prev = dedup[dedup.length - 1];
+    if (prev && prev.x === p.x && prev.y === p.y) continue;
+    dedup.push(p);
+  }
+
+  // Remove collinear mid-points (axis-aligned).
+  const simplified: Point[] = [];
+  for (const p of dedup) {
+    simplified.push(p);
+    while (simplified.length >= 3) {
+      const c = simplified[simplified.length - 1];
+      const b = simplified[simplified.length - 2];
+      const a = simplified[simplified.length - 3];
+      const collinearX = a.x === b.x && b.x === c.x;
+      const collinearY = a.y === b.y && b.y === c.y;
+      if (collinearX || collinearY) {
+        // Remove b
+        simplified.splice(simplified.length - 2, 1);
+        continue;
+      }
+      break;
+    }
+  }
+
+  return simplified;
+}
+
+function applyEdgeRoutesToView(model: Model, viewId: string, edgeRoutes?: EdgeRoutes): void {
+  if (!edgeRoutes) return;
+
+  const view = getView(model, viewId);
+
+  const routes = edgeRoutes as Record<string, { points: Point[] }>;
+  const nextConnections = (view.connections ?? []).map((c: ViewConnection) => {
+    const route = routes[c.id] ?? routes[c.relationshipId];
+    if (!route) return c;
+
+    const pts = route.points ?? [];
+    const bend = pts.length > 2 ? pts.slice(1, -1) : [];
+    const normalized = bend.length ? normalizeBendPoints(bend) : [];
+    const nextPoints = normalized.length ? normalized : undefined;
+
+    if (pointsEqual(c.points, nextPoints)) return c;
+    return { ...c, points: nextPoints };
+  });
+
+  let changed = false;
+  for (let i = 0; i < (view.connections ?? []).length; i++) {
+    if (nextConnections[i] !== (view.connections ?? [])[i]) {
+      changed = true;
+      break;
+    }
+  }
+
+  const nextLayoutRelationships = view.layout?.relationships?.map((r: ViewRelationshipLayout) => {
+    const route = routes[r.relationshipId];
+    if (!route) return r;
+    const pts = route.points ?? [];
+    const bend = pts.length > 2 ? pts.slice(1, -1) : [];
+    const normalized = bend.length ? normalizeBendPoints(bend) : [];
+    const nextPoints = normalized.length ? normalized : undefined;
+    if (pointsEqual(r.points, nextPoints)) return r;
+    return { ...r, points: nextPoints };
+  });
+
+  if (nextLayoutRelationships && view.layout?.relationships) {
+    for (let i = 0; i < view.layout.relationships.length; i++) {
+      if (nextLayoutRelationships[i] !== view.layout.relationships[i]) {
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  if (!changed) return;
+
+  model.views[viewId] = {
+    ...view,
+    connections: changed ? nextConnections : view.connections,
+    layout: view.layout
+      ? {
+          ...view.layout,
+          relationships: nextLayoutRelationships ?? view.layout.relationships,
+        }
+      : view.layout,
+  };
+}
+
 /**
  * Apply auto-layout node positions to a view.
  *
  * This mutation is intentionally sync and side-effect free outside of updating the model object.
  * The layout computation (ELK) is performed elsewhere (e.g. ModelStore command).
  */
-export function autoLayoutView(model: Model, viewId: string, positions: LayoutOutput['positions']): void {
+export function autoLayoutView(
+  model: Model,
+  viewId: string,
+  positions: LayoutOutput['positions'],
+  edgeRoutes?: EdgeRoutes
+): void {
   const view = getView(model, viewId);
   if (!view.layout) throw new Error(`View has no layout: ${viewId}`);
 
@@ -37,6 +150,9 @@ export function autoLayoutView(model: Model, viewId: string, positions: LayoutOu
 
   // Ensure connections are consistent after layout changes.
   syncViewConnections(model, viewId);
+
+  // Apply any computed edge routes last (so we patch the latest connection objects).
+  applyEdgeRoutesToView(model, viewId, edgeRoutes);
 }
 
 export type NodeGeometryUpdate = {
@@ -55,7 +171,8 @@ export type NodeGeometryUpdate = {
 export function autoLayoutViewGeometry(
   model: Model,
   viewId: string,
-  geometryById: Record<string, NodeGeometryUpdate>
+  geometryById: Record<string, NodeGeometryUpdate>,
+  edgeRoutes?: EdgeRoutes
 ): void {
   const view = getView(model, viewId);
   if (!view.layout) throw new Error(`View has no layout: ${viewId}`);
@@ -83,4 +200,5 @@ export function autoLayoutViewGeometry(
   }
 
   syncViewConnections(model, viewId);
+  applyEdgeRoutesToView(model, viewId, edgeRoutes);
 }

@@ -24,11 +24,20 @@ type ElkApi = {
 
 type ElkCtor = new () => ElkApi;
 
+type ElkPoint = { x: number; y: number };
+
+type ElkSection = {
+  startPoint?: ElkPoint;
+  endPoint?: ElkPoint;
+  bendPoints?: ElkPoint[];
+};
+
 type ElkEdge = {
   id: string;
   sources: string[];
   targets: string[];
   layoutOptions?: Record<string, string>;
+  sections?: ElkSection[];
 };
 
 function sideToElk(side: 'N' | 'E' | 'S' | 'W'): 'NORTH' | 'EAST' | 'SOUTH' | 'WEST' {
@@ -107,8 +116,8 @@ export async function elkLayout(input: LayoutInput, options: AutoLayoutOptions =
           }
         : {}),
     })),
-    edges: edges.map((e, i) => ({
-      id: `e${i}`,
+    edges: edges.map((e) => ({
+      id: e.id,
       sources: [e.sourcePortId ?? e.sourceId],
       targets: [e.targetPortId ?? e.targetId],
       layoutOptions: e.weight != null ? { 'elk.layered.priority': String(e.weight) } : undefined,
@@ -123,5 +132,16 @@ export async function elkLayout(input: LayoutInput, options: AutoLayoutOptions =
     positions[child.id] = { x: child.x ?? 0, y: child.y ?? 0 };
   }
 
-  return { positions };
+  const edgeRoutes: Record<string, { points: Array<{ x: number; y: number }> }> = {};
+  for (const e of laidOut.edges ?? []) {
+    const sec = (e.sections ?? [])[0];
+    if (!sec) continue;
+    const pts: Array<{ x: number; y: number }> = [];
+    if (sec.startPoint) pts.push({ x: sec.startPoint.x, y: sec.startPoint.y });
+    for (const bp of sec.bendPoints ?? []) pts.push({ x: bp.x, y: bp.y });
+    if (sec.endPoint) pts.push({ x: sec.endPoint.x, y: sec.endPoint.y });
+    if (pts.length >= 2) edgeRoutes[e.id] = { points: pts };
+  }
+
+  return { positions, ...(Object.keys(edgeRoutes).length ? { edgeRoutes } : {}) };
 }

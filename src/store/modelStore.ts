@@ -15,7 +15,7 @@ import type {
 } from '../domain';
 import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode } from '../domain/layout/types';
 import { extractLayoutInputForView, fitArchiMateBoxToText } from '../domain/layout';
-import { nudgeOverlaps, snapToGrid } from '../domain/layout/post';
+import { adjustEdgeRoutesForMovedNodes, nudgeOverlaps, snapToGrid } from '../domain/layout/post';
 import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
 import {
   connectorMutations,
@@ -512,12 +512,15 @@ export class ModelStore {
         }
       }
 
+      const originalPositions = { ...output.positions };
+
       // Snap to grid (deterministic + tidy). Avoid overlap nudge for hierarchical layouts,
       // as it can push children outside containers.
       const GRID = 10;
       const snapped = snapToGrid(output.positions, GRID, fixedIds);
+      const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, prepared.input.edges, originalPositions, snapped);
 
-      // Build geometry updates: positions for all nodes, sizes for container nodes.
+      // Build geometry updates: positions for all nodes, sizes for container nodes,
       const geometryById: Record<string, { x?: number; y?: number; width?: number; height?: number }> = {};
       for (const [id, pos] of Object.entries(snapped)) {
         geometryById[id] = { ...(geometryById[id] ?? {}), x: pos.x, y: pos.y };
@@ -539,7 +542,7 @@ export class ModelStore {
       }
 
       this.updateModel((model) => {
-        autoLayoutMutations.autoLayoutViewGeometry(model, viewId, geometryById);
+        autoLayoutMutations.autoLayoutViewGeometry(model, viewId, geometryById, edgeRoutes);
       });
       return;
     }
@@ -563,6 +566,8 @@ export class ModelStore {
       }
     }
 
+    const originalPositions = { ...output.positions };
+
     // Snap to grid first (keeps things tidy and deterministic).
     const GRID = 10;
     let positions = snapToGrid(output.positions, GRID, fixedIds);
@@ -574,10 +579,11 @@ export class ModelStore {
       { padding: 10, fixedIds }
     );
 
+    const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, input.edges, originalPositions, positions);
     output.positions = positions;
 
     this.updateModel((model) => {
-      autoLayoutMutations.autoLayoutView(model, viewId, output.positions);
+      autoLayoutMutations.autoLayoutView(model, viewId, output.positions, edgeRoutes);
     });
   };
 

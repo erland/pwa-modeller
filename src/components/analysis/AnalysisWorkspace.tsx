@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-
-import type { AnalysisDirection, ElementType, ModelKind, RelationshipType } from '../../domain';
+import type { ModelKind } from '../../domain';
 import type { Selection } from '../model/selection';
-import { useModelStore, useAnalysisPathsBetween, useAnalysisRelatedElements } from '../../store';
 
 import '../../styles/crud.css';
 
-import { AnalysisQueryPanel, type AnalysisMode } from './AnalysisQueryPanel';
+import { AnalysisQueryPanel } from './AnalysisQueryPanel';
 import { AnalysisResultTable } from './AnalysisResultTable';
 import { TraceabilityExplorer } from './TraceabilityExplorer';
 import { PortfolioAnalysisView } from './PortfolioAnalysisView';
@@ -14,36 +11,7 @@ import { RelationshipMatrixTable } from './RelationshipMatrixTable';
 import { RelationshipMatrixCellDialog } from './RelationshipMatrixCellDialog';
 
 import { AnalysisWorkspaceHeader } from './workspace/AnalysisWorkspaceHeader';
-import { useMatrixWorkspaceState } from './workspace/useMatrixWorkspaceState';
-
-function selectionToElementId(sel: Selection): string | null {
-  switch (sel.kind) {
-    case 'element':
-      return sel.elementId;
-    case 'viewNode':
-      return sel.elementId;
-    case 'viewNodes':
-      return sel.elementIds[0] ?? null;
-    case 'relationship':
-      // For now we don't map relationship -> endpoint; Step 4+ can add this if desired.
-      return null;
-    default:
-      return null;
-  }
-}
-
-function selectionToElementIds(sel: Selection): string[] {
-  switch (sel.kind) {
-    case 'element':
-      return [sel.elementId];
-    case 'viewNode':
-      return [sel.elementId];
-    case 'viewNodes':
-      return sel.elementIds;
-    default:
-      return [];
-  }
-}
+import { useAnalysisWorkspaceController } from './workspace/useAnalysisWorkspaceController';
 
 export function AnalysisWorkspace({
   modelKind,
@@ -54,219 +22,65 @@ export function AnalysisWorkspace({
   selection: Selection;
   onSelect: (sel: Selection) => void;
 }) {
-  const model = useModelStore((s) => s.model);
-  const modelId = model?.id ?? '';
-
-  const [mode, setMode] = useState<AnalysisMode>('related');
-
-  // -----------------------------
-  // Global filters (draft)
-  // -----------------------------
-  const [direction, setDirection] = useState<AnalysisDirection>('both');
-  const [relationshipTypes, setRelationshipTypes] = useState<RelationshipType[]>([]);
-  const [layers, setLayers] = useState<string[]>([]);
-  const [elementTypes, setElementTypes] = useState<ElementType[]>([]);
-
-  // Related-only
-  const [maxDepth, setMaxDepth] = useState<number>(4);
-
-  // Traceability: default to 1-hop expansion when entering explorer mode.
-  useEffect(() => {
-    if (mode !== 'traceability') return;
-    // Only auto-adjust when still at the global default (4) to avoid overriding user intent.
-    if (maxDepth === 4) setMaxDepth(1);
-  }, [mode, maxDepth]);
-
-  const [includeStart, setIncludeStart] = useState<boolean>(false);
-
-  // Paths-only
-  const [maxPaths, setMaxPaths] = useState<number>(10);
-  const [maxPathLength, setMaxPathLength] = useState<number | null>(null);
-
-  // Draft inputs (user edits these).
-  const [draftStartId, setDraftStartId] = useState<string>('');
-  const [draftSourceId, setDraftSourceId] = useState<string>('');
-  const [draftTargetId, setDraftTargetId] = useState<string>('');
-
-  // Active ids (used for the current computed result).
-  const [activeStartId, setActiveStartId] = useState<string>('');
-  const [activeSourceId, setActiveSourceId] = useState<string>('');
-  const [activeTargetId, setActiveTargetId] = useState<string>('');
-
-  // Keep "Start element" (Related/Traceability) and "Source" (Connection between two) in sync.
-  // This makes it easy to switch between views without having to re-pick the baseline element.
-  const onChangeDraftStartIdSync = useCallback((id: string) => {
-    setDraftStartId(id);
-    setDraftSourceId(id);
-  }, []);
-
-  const onChangeDraftSourceIdSync = useCallback((id: string) => {
-    setDraftSourceId(id);
-    setDraftStartId(id);
-  }, []);
-
-  // If the user has an element selected and the draft is empty, prefill to reduce friction.
-  useEffect(() => {
-    const picked = selectionToElementId(selection);
-    if (!picked) return;
-
-    if (mode !== 'paths' && mode !== 'matrix') {
-      if (!draftStartId) onChangeDraftStartIdSync(picked);
-      return;
-    }
-    if (mode === 'paths') {
-      if (!draftSourceId) onChangeDraftSourceIdSync(picked);
-      else if (!draftTargetId && draftSourceId !== picked) setDraftTargetId(picked);
-    }
-  }, [selection, mode, draftStartId, draftSourceId, draftTargetId, onChangeDraftStartIdSync, onChangeDraftSourceIdSync]);
-
-  const relatedOpts = useMemo(
-    () => ({
-      direction,
-      maxDepth,
-      includeStart,
-      relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
-      layers: layers.length ? layers : undefined,
-      elementTypes: elementTypes.length ? elementTypes : undefined
-    }),
-    [direction, maxDepth, includeStart, relationshipTypes, layers, elementTypes]
-  );
-
-  const pathsOpts = useMemo(
-    () => ({
-      direction,
-      maxPaths,
-      maxPathLength: maxPathLength === null ? undefined : maxPathLength,
-      relationshipTypes: relationshipTypes.length ? relationshipTypes : undefined,
-      layers: layers.length ? layers : undefined,
-      elementTypes: elementTypes.length ? elementTypes : undefined
-    }),
-    [direction, maxPaths, maxPathLength, relationshipTypes, layers, elementTypes]
-  );
-
-  // Results are driven by active element selection + *draft* filters (QoL).
-  const relatedResult = useAnalysisRelatedElements(activeStartId || null, relatedOpts);
-  const pathsResult = useAnalysisPathsBetween(activeSourceId || null, activeTargetId || null, pathsOpts);
-
-  const selectionElementIds = useMemo(() => selectionToElementIds(selection), [selection]);
-
-  // -----------------------------
-  // Matrix workspace state (draft + persisted UI options + presets/snapshots)
-  // -----------------------------
-  const matrixWorkspace = useMatrixWorkspaceState({
+  const { state, actions, derived } = useAnalysisWorkspaceController({ modelKind, selection });
+  const {
     model,
-    modelId,
-    modelKind,
+    mode,
     direction,
     relationshipTypes,
+    layers,
+    elementTypes,
+    maxDepth,
+    includeStart,
+    maxPaths,
+    maxPathLength,
+    draftStartId,
+    draftSourceId,
+    draftTargetId,
+    matrixCellDialog,
+    matrixState,
+  } = state;
+
+  const {
+    setMode,
+    setDirection,
+    setRelationshipTypes,
+    setLayers,
+    setElementTypes,
+    setMaxDepth,
+    setIncludeStart,
+    setMaxPaths,
+    setMaxPathLength,
+    onChangeDraftStartId,
+    onChangeDraftSourceId,
+    onChangeDraftTargetId,
+    run,
+    applyPreset,
+    useSelectionAs,
+    openTraceabilityFrom,
+    setMatrixCellDialog,
+    matrixActions,
+  } = actions;
+
+  const {
     selectionElementIds,
-  });
-
-  const matrixState = matrixWorkspace.state;
-  const matrixActions = matrixWorkspace.actions;
-  const matrixDerived = matrixWorkspace.derived;
-
-  const [matrixCellDialog, setMatrixCellDialog] = useState<{
-    rowId: string;
-    rowLabel: string;
-    colId: string;
-    colLabel: string;
-    relationshipIds: string[];
-  } | null>(null);
-
-  const canRun = Boolean(
-    model &&
-      (mode === 'matrix'
-        ? matrixState.axes.rowIds.length > 0 && matrixState.axes.colIds.length > 0
-        : mode !== 'paths'
-          ? draftStartId
-          : draftSourceId && draftTargetId && draftSourceId !== draftTargetId)
-  );
-
-  function run() {
-    if (!model) return;
-    if (mode === 'matrix') {
-      matrixActions.build.build();
-      return;
-    }
-    if (mode !== 'paths') {
-      setActiveStartId(draftStartId);
-      return;
-    }
-    setActiveSourceId(draftSourceId);
-    setActiveTargetId(draftTargetId);
-    // Keep related/traceability baseline aligned with the chosen source.
-    setActiveStartId(draftSourceId);
-  }
-
-  function applyPreset(presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') {
-    if (presetId === 'clear') {
-      setDirection('both');
-      setRelationshipTypes([]);
-      setLayers([]);
-      setElementTypes([]);
-      setMaxDepth(4);
-      setIncludeStart(false);
-      setMaxPaths(10);
-      setMaxPathLength(null);
-      matrixActions.axes.resetDraft();
-      return;
-    }
-
-    if (presetId === 'upstream') {
-      setDirection('incoming');
-      setMaxDepth(3);
-      setMaxPaths(10);
-      setMaxPathLength(null);
-      return;
-    }
-
-    if (presetId === 'downstream') {
-      setDirection('outgoing');
-      setMaxDepth(3);
-      setMaxPaths(10);
-      setMaxPathLength(null);
-      return;
-    }
-
-    // crossLayerTrace: Business → Application → Technology
-    setDirection('both');
-    setMaxDepth(4);
-    setLayers(['Business', 'Application', 'Technology']);
-    setElementTypes([]);
-    setRelationshipTypes(['Realization', 'Serving', 'Assignment', 'Access', 'Flow', 'Association']);
-    setMaxPaths(10);
-    setMaxPathLength(null);
-  }
-
-  function useSelectionAs(which: 'start' | 'source' | 'target') {
-    const picked = selectionToElementId(selection);
-    if (!picked) return;
-    if (which === 'start') onChangeDraftStartIdSync(picked);
-    if (which === 'source') onChangeDraftSourceIdSync(picked);
-    if (which === 'target') setDraftTargetId(picked);
-  }
-
-  const openTraceabilityFrom = (elementId: string) => {
-    setMode('traceability');
-    setDraftStartId(elementId);
-    setActiveStartId(elementId);
-  };
-
-  const traceSeedId = activeStartId || draftStartId || selectionToElementId(selection) || '';
-
-  const matrixUiQuery = matrixState.uiQuery;
+    canRun,
+    canOpenTraceability,
+    openTraceabilityFromSelection,
+    relatedResult,
+    pathsResult,
+    traceSeedId,
+    matrixDerived,
+    matrixUiQuery,
+  } = derived;
 
   return (
     <div className="workspace" aria-label="Analysis workspace">
       <AnalysisWorkspaceHeader
         mode={mode}
         onChangeMode={setMode}
-        canOpenTraceability={Boolean(selectionToElementId(selection))}
-        onOpenTraceability={() => {
-          const picked = selectionToElementId(selection);
-          if (picked) openTraceabilityFrom(picked);
-        }}
+        canOpenTraceability={canOpenTraceability}
+        onOpenTraceability={openTraceabilityFromSelection}
       />
 
       {!model ? (
@@ -356,13 +170,13 @@ export function AnalysisWorkspace({
               onChangeMaxPathLength={setMaxPathLength}
               onApplyPreset={applyPreset}
               draftStartId={draftStartId}
-              onChangeDraftStartId={onChangeDraftStartIdSync}
+              onChangeDraftStartId={onChangeDraftStartId}
               draftSourceId={draftSourceId}
-              onChangeDraftSourceId={onChangeDraftSourceIdSync}
+              onChangeDraftSourceId={onChangeDraftSourceId}
               draftTargetId={draftTargetId}
-              onChangeDraftTargetId={setDraftTargetId}
+              onChangeDraftTargetId={onChangeDraftTargetId}
               onUseSelection={useSelectionAs}
-              canUseSelection={Boolean(selectionToElementId(selection))}
+              canUseSelection={canOpenTraceability}
               canRun={canRun}
               onRun={run}
             />

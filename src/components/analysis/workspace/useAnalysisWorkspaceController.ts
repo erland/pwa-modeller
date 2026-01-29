@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type { ModelKind } from '../../../domain';
 import type { Selection } from '../../model/selection';
-import { useAnalysisPathsBetween, useAnalysisRelatedElements, useModelStore } from '../../../store';
+import { useModelStore } from '../../../store';
 
 import type { AnalysisMode } from '../AnalysisQueryPanel';
 import type { AnalysisQueryPanelActions, AnalysisQueryPanelMeta, AnalysisQueryPanelState } from '../AnalysisQueryPanel';
@@ -10,10 +10,9 @@ import { useMatrixWorkspaceState } from './useMatrixWorkspaceState';
 import { useAnalysisGlobalFiltersState } from './controller/useAnalysisGlobalFiltersState';
 import { useAnalysisDraftActiveIdsState } from './controller/useAnalysisDraftActiveIdsState';
 import { useSelectionPrefillSync } from './controller/useSelectionPrefillSync';
+import { useAnalysisResultsState } from './controller/useAnalysisResultsState';
 
 import {
-  buildPathsAnalysisOpts,
-  buildRelatedAnalysisOpts,
   computeCanRun,
   computeTraceSeedId,
   selectionToElementId,
@@ -82,35 +81,19 @@ export function useAnalysisWorkspaceController({
     setDraftTargetId,
   });
 
-  const relatedOpts = useMemo(
-    () =>
-      buildRelatedAnalysisOpts({
-        direction,
-        maxDepth,
-        includeStart,
-        relationshipTypes,
-        layers,
-        elementTypes,
-      }),
-    [direction, maxDepth, includeStart, relationshipTypes, layers, elementTypes]
-  );
-
-  const pathsOpts = useMemo(
-    () =>
-      buildPathsAnalysisOpts({
-        direction,
-        maxPaths,
-        maxPathLength,
-        relationshipTypes,
-        layers,
-        elementTypes,
-      }),
-    [direction, maxPaths, maxPathLength, relationshipTypes, layers, elementTypes]
-  );
-
-  // Results are driven by active element selection + *draft* filters (QoL).
-  const relatedResult = useAnalysisRelatedElements(activeStartId || null, relatedOpts);
-  const pathsResult = useAnalysisPathsBetween(activeSourceId || null, activeTargetId || null, pathsOpts);
+  const { relatedResult, pathsResult } = useAnalysisResultsState({
+    activeStartId,
+    activeSourceId,
+    activeTargetId,
+    direction,
+    relationshipTypes,
+    layers,
+    elementTypes,
+    maxDepth,
+    includeStart,
+    maxPaths,
+    maxPathLength,
+  });
 
   const selectionElementIds = useMemo(() => selectionToElementIds(selection), [selection]);
 

@@ -290,7 +290,48 @@ export class ModelStore {
     this.updateModel((model) => {
       const view = model.views[viewId];
       if (!view) return;
-      model.views[viewId] = { ...view, connections: materializeViewConnectionsForView(model, view) };
+      const nextConnections = materializeViewConnectionsForView(model, view);
+
+      // If this view uses explicit relationship visibility, prune any stale ids
+      // (e.g. deleted relationships) to keep the stored list tidy.
+      const rv = view.relationshipVisibility;
+      if (rv?.mode === 'explicit') {
+        const raw = Array.isArray(rv.relationshipIds) ? rv.relationshipIds : [];
+        const pruned = Array.from(
+          new Set(raw.filter((id) => typeof id === 'string' && id.length > 0 && Boolean(model.relationships[id])))
+        ).sort((a, b) => a.localeCompare(b));
+        model.views[viewId] = {
+          ...view,
+          relationshipVisibility: { mode: 'explicit', relationshipIds: pruned },
+          connections: nextConnections,
+        };
+        return;
+      }
+
+      model.views[viewId] = { ...view, connections: nextConnections };
+    });
+  };
+
+  /**
+   * If the target view uses explicit relationship visibility, include the given relationship id.
+   * This is used to keep "explicit" views usable when creating relationships interactively.
+   */
+  includeRelationshipInView = (viewId: string, relationshipId: string): void => {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) return;
+      const rv = view.relationshipVisibility;
+      if (!rv || rv.mode !== 'explicit') return;
+      if (!relationshipId || !model.relationships[relationshipId]) return;
+
+      const nextIds = Array.from(
+        new Set([...(Array.isArray(rv.relationshipIds) ? rv.relationshipIds : []), relationshipId].filter((id) => typeof id === 'string' && id.length > 0))
+      ).sort((a, b) => a.localeCompare(b));
+
+      model.views[viewId] = {
+        ...view,
+        relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
+      };
     });
   };
 

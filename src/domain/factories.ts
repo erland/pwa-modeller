@@ -188,6 +188,7 @@ export function createView(input: CreateViewInput): View {
     id: input.id ?? createId('view'),
     name: input.name.trim(),
     kind: input.kind ?? 'archimate',
+    relationshipVisibility: input.relationshipVisibility,
     ownerRef: input.ownerRef,
     viewpointId: input.viewpointId.trim(),
     documentation: input.documentation?.trim() || undefined,

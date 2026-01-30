@@ -183,6 +183,9 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
       targetConnectorId: targetRef.kind === 'connector' ? targetRef.id : undefined,
     });
     modelStore.addRelationship(rel);
+    // If the view is an "explicit" relationship view (e.g. created from Sandbox save),
+    // ensure the newly created relationship is included.
+    modelStore.includeRelationshipInView(pendingCreateRel.viewId, rel.id);
     modelStore.ensureViewConnections(pendingCreateRel.viewId);
     setLastRelType(pendingRelType);
     setPendingCreateRel(null);

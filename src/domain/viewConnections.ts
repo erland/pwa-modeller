@@ -31,6 +31,29 @@ export function computeVisibleRelationshipIdsForView(model: Model, view: View): 
     if (typeof n.connectorId === 'string') nodeSet.add(`connector:${n.connectorId}`);
   }
 
+  // Explicit mode: only include relationship ids explicitly listed on the view.
+  if (view.relationshipVisibility?.mode === 'explicit') {
+    const raw = Array.isArray(view.relationshipVisibility.relationshipIds)
+      ? view.relationshipVisibility.relationshipIds
+      : [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const id of raw) {
+      if (!id || typeof id !== 'string') continue;
+      if (seen.has(id)) continue;
+      const rel = model.relationships[id];
+      if (!rel) continue;
+      const s = endpointRefForRelationship(rel, 'source');
+      const t = endpointRefForRelationship(rel, 'target');
+      if (!s || !t) continue;
+      if (!nodeSet.has(keyOf(s)) || !nodeSet.has(keyOf(t))) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out;
+  }
+
+  // Implicit mode (default): include all model relationships whose endpoints exist as nodes in the view.
   const ids: string[] = [];
   for (const rel of Object.values(model.relationships)) {
     const s = endpointRefForRelationship(rel, 'source');

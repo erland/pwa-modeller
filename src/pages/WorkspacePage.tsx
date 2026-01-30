@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 
+import { useLocation, useNavigate } from 'react-router-dom';
+
 import { ModelActions } from '../components/model/ModelActions';
 import { ModelNavigator } from '../components/model/ModelNavigator';
 import { ModelPropertiesDialog } from '../components/model/ModelPropertiesDialog';
@@ -91,6 +93,20 @@ export default function WorkspacePage() {
   const [modelPropsOpen, setModelPropsOpen] = useState(false);
   const [mainTab, setMainTab] = useState<'diagram' | 'reports' | 'validation'>('diagram');
   const model = useModelStore((s) => s.model);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+  const openViewId = (location.state as { openViewId?: string } | null)?.openViewId ?? null;
+
+  // Allow navigation from Analysis -> Workspace when creating a diagram from Sandbox.
+  useEffect(() => {
+    if (!openViewId) return;
+    if (!model) return;
+    if (!model.views[openViewId]) return;
+    setSelection({ kind: 'view', viewId: openViewId });
+    setMainTab('diagram');
+    navigate('/', { replace: true, state: {} });
+  }, [model, navigate, openViewId]);
 
   // Allow dialogs (e.g. import report) to trigger selection jumps without prop-drilling.
   useEffect(() => {

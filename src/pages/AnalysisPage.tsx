@@ -93,6 +93,7 @@ export default function AnalysisPage() {
           selection={selection}
           onSelect={setSelection}
           sandboxSeedViewId={sandboxSeedViewId}
+          onOpenViewInWorkspace={(openViewId) => navigate('/', { state: { openViewId } })}
         />
       </AppShell>
 

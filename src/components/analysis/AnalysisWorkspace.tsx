@@ -1,7 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
-import type { ModelKind } from '../../domain';
+import type { ModelKind, ViewNodeLayout } from '../../domain';
+import { createView, materializeViewConnectionsForView } from '../../domain';
 import type { Selection } from '../model/selection';
+
+import { modelStore } from '../../store';
 
 import '../../styles/crud.css';
 
@@ -19,12 +22,14 @@ export function AnalysisWorkspace({
   modelKind,
   selection,
   onSelect,
-  sandboxSeedViewId
+  sandboxSeedViewId,
+  onOpenViewInWorkspace,
 }: {
   modelKind: ModelKind;
   selection: Selection;
   onSelect: (sel: Selection) => void;
   sandboxSeedViewId?: string | null;
+  onOpenViewInWorkspace?: (openViewId: string) => void;
 }) {
   const { state, actions, derived } = useAnalysisWorkspaceController({ modelKind, selection });
   const {
@@ -63,6 +68,85 @@ export function AnalysisWorkspace({
     sandbox.actions.seedFromView(sandboxSeedViewId);
     setMode('sandbox');
   }, [model, sandbox.actions, sandboxSeedViewId, setMode]);
+
+  const onSaveSandboxAsDiagram = useCallback(
+    (name: string, visibleRelationshipIds: string[]) => {
+      if (!model) return;
+      const trimmed = name.trim();
+      if (!trimmed) return;
+
+      // Infer diagram kind from the sandbox nodes.
+      const nodeIds = sandbox.state.nodes.map((n) => n.elementId);
+      const kindCounts: Record<ModelKind, number> = { archimate: 0, uml: 0, bpmn: 0 };
+      for (const id of nodeIds) {
+        const el = model.elements[id];
+        const k = (el?.kind ?? 'archimate') as ModelKind;
+        kindCounts[k] = (kindCounts[k] ?? 0) + 1;
+      }
+      const inferredKind: ModelKind = (Object.entries(kindCounts).sort((a, b) => b[1] - a[1])[0]?.[0] as ModelKind) ?? 'archimate';
+
+      const viewpointId = inferredKind === 'uml' ? 'uml-class' : inferredKind === 'bpmn' ? 'bpmn-process' : 'layered';
+
+      // Ensure a unique diagram name.
+      const existingNames = new Set(Object.values(model.views).map((v) => v.name));
+      let uniqueName = trimmed;
+      if (existingNames.has(uniqueName)) {
+        let i = 2;
+        while (existingNames.has(`${trimmed} (${i})`)) i++;
+        uniqueName = `${trimmed} (${i})`;
+      }
+
+      const defaultsByKind: Record<ModelKind, { width: number; height: number }> = {
+        archimate: { width: 120, height: 60 },
+        bpmn: { width: 160, height: 80 },
+        uml: { width: 170, height: 90 },
+      };
+      const d = defaultsByKind[inferredKind] ?? defaultsByKind.archimate;
+
+      // Normalize positions to keep everything within a positive viewport margin.
+      const xs = sandbox.state.nodes.map((n) => n.x);
+      const ys = sandbox.state.nodes.map((n) => n.y);
+      const minX = xs.length ? Math.min(...xs) : 0;
+      const minY = ys.length ? Math.min(...ys) : 0;
+      const dx = minX < 40 ? 40 - minX : 0;
+      const dy = minY < 40 ? 40 - minY : 0;
+
+      const layoutNodes: ViewNodeLayout[] = sandbox.state.nodes.map((n, idx) => ({
+        elementId: n.elementId,
+        x: n.x + dx,
+        y: n.y + dy,
+        width: d.width,
+        height: d.height,
+        locked: n.pinned ?? false,
+        zIndex: idx,
+      }));
+
+      const sortedRelIds = Array.from(new Set(visibleRelationshipIds.filter((id) => typeof id === 'string' && id.length > 0)))
+        .filter((id) => Boolean(model.relationships[id]))
+        .sort((a, b) => a.localeCompare(b));
+
+      const viewDraft = createView({
+        name: uniqueName,
+        kind: inferredKind,
+        viewpointId,
+        relationshipVisibility: { mode: 'explicit', relationshipIds: sortedRelIds },
+        layout: { nodes: layoutNodes, relationships: [] },
+        objects: {},
+        connections: [],
+      });
+
+      const connections = materializeViewConnectionsForView(model, viewDraft);
+      const view = { ...viewDraft, connections };
+
+      // Prefer putting new views into the built-in "Views" folder if present.
+      const viewsFolderId = Object.values(model.folders).find((f) => f.kind === 'views')?.id;
+      modelStore.addView(view, viewsFolderId);
+
+      // Navigate back to the main workspace and open the new view.
+      onOpenViewInWorkspace?.(view.id);
+    },
+    [model, onOpenViewInWorkspace, sandbox.state.nodes]
+  );
 
   return (
     <div className="workspace" aria-label="Analysis workspace">
@@ -118,6 +202,7 @@ export function AnalysisWorkspace({
               onToggleAddRelatedEnabledType={(type) => sandbox.actions.toggleAddRelatedEnabledType(type)}
               onAddRelatedFromSelection={(anchorIds) => sandbox.actions.addRelatedFromSelection(anchorIds)}
               onInsertIntermediatesBetween={(a, b, options) => sandbox.actions.insertIntermediatesBetween(a, b, options)}
+              onSaveAsDiagram={onSaveSandboxAsDiagram}
             />
           ) : mode === 'matrix' ? (
             <MatrixModeView

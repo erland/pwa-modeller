@@ -17,6 +17,8 @@ import { dataTransferHasElement, readDraggedElementId } from '../../diagram/drag
 
 import '../../../styles/analysisSandbox.css';
 
+import { SaveSandboxAsDiagramDialog } from './SaveSandboxAsDiagramDialog';
+
 const NODE_W = 180;
 const NODE_H = 56;
 
@@ -72,6 +74,7 @@ export function SandboxModeView({
   onToggleAddRelatedEnabledType,
   onAddRelatedFromSelection,
   onInsertIntermediatesBetween,
+  onSaveAsDiagram,
 }: {
   model: Model;
   nodes: SandboxNode[];
@@ -99,6 +102,7 @@ export function SandboxModeView({
     targetElementId: string,
     options: SandboxInsertIntermediatesOptions
   ) => void;
+  onSaveAsDiagram: (name: string, visibleRelationshipIds: string[]) => void;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -109,6 +113,8 @@ export function SandboxModeView({
   const [insertK, setInsertK] = useState(3);
   const [insertMaxHops, setInsertMaxHops] = useState(8);
   const [insertDirection, setInsertDirection] = useState<SandboxAddRelatedDirection>('both');
+
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 
   const selectedElementId = useMemo(() => getSelectedElementId(selection), [selection]);
 
@@ -322,6 +328,16 @@ export function SandboxModeView({
           </p>
         </div>
         <div className="rowActions">
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={() => setSaveDialogOpen(true)}
+            disabled={!nodes.length}
+            aria-disabled={!nodes.length}
+            title="Create a new model diagram from the current sandbox layout"
+          >
+            Save as diagram…
+          </button>
           <button
             type="button"
             className="miniLinkButton"
@@ -733,6 +749,17 @@ export function SandboxModeView({
           })}
         </svg>
       </div>
+
+      <SaveSandboxAsDiagramDialog
+        isOpen={saveDialogOpen}
+        initialName="Sandbox diagram"
+        onCancel={() => setSaveDialogOpen(false)}
+        onConfirm={(name) => {
+          setSaveDialogOpen(false);
+          const ids = visibleRelationships.map((r) => r.id);
+          onSaveAsDiagram(name, ids);
+        }}
+      />
     </div>
   );
 }

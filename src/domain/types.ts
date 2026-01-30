@@ -422,6 +422,21 @@ export interface View extends HasTaggedValues, HasExternalIds {
   name: string;
   /** Diagram notation / language for this view (e.g. ArchiMate, UML, BPMN). */
   kind: ModelKind;
+
+  /**
+   * Optional relationship visibility mode for this view.
+   *
+   * - implicit (default): render all model relationships whose endpoints exist as nodes in the view
+   * - explicit: render only the relationship ids explicitly listed
+   */
+  relationshipVisibility?:
+    | {
+        mode: 'implicit';
+      }
+    | {
+        mode: 'explicit';
+        relationshipIds: string[];
+      };
   /**
    * Optional cross-diagram reference describing what this view is a drill-down/detail view for.
    * Example: A BPMN view may have ownerRef pointing to an ArchiMate Business Process.

@@ -1,13 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { DragEvent, PointerEvent } from 'react';
 
 import type { Model } from '../../../domain';
 import type { Selection } from '../../model/selection';
-import type {
-  SandboxNode,
-  SandboxRelationshipVisibilityMode,
-  SandboxRelationshipsState,
-} from '../workspace/controller/useSandboxState';
+import type { SandboxNode } from '../workspace/controller/useSandboxState';
 
 import { dataTransferHasElement, readDraggedElementId } from '../../diagram/dragDrop';
 
@@ -48,7 +44,6 @@ function clientToSvg(svg: SVGSVGElement, clientX: number, clientY: number): { x:
 export function SandboxModeView({
   model,
   nodes,
-  relationships,
   selection,
   selectionElementIds,
   onSelectElement,
@@ -57,14 +52,9 @@ export function SandboxModeView({
   onRemoveSelected,
   onClear,
   onAddNodeAt,
-  onSetShowRelationships,
-  onSetRelationshipMode,
-  onSetEnabledRelationshipTypes,
-  onToggleEnabledRelationshipType,
 }: {
   model: Model;
   nodes: SandboxNode[];
-  relationships: SandboxRelationshipsState;
   selection: Selection;
   selectionElementIds: string[];
   onSelectElement: (elementId: string) => void;
@@ -73,10 +63,6 @@ export function SandboxModeView({
   onRemoveSelected: () => void;
   onClear: () => void;
   onAddNodeAt: (elementId: string, x: number, y: number) => void;
-  onSetShowRelationships: (show: boolean) => void;
-  onSetRelationshipMode: (mode: SandboxRelationshipVisibilityMode) => void;
-  onSetEnabledRelationshipTypes: (types: string[]) => void;
-  onToggleEnabledRelationshipType: (type: string) => void;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -104,7 +90,8 @@ export function SandboxModeView({
     }
     return false;
   }, [nodeById, selectionElementIds]);
-  const baseVisibleRelationships = useMemo(() => {
+
+  const visibleRelationships = useMemo(() => {
     const ids = new Set(nodes.map((n) => n.elementId));
     const rels = Object.values(model.relationships).filter((r) => {
       if (!r.sourceElementId || !r.targetElementId) return false;
@@ -112,40 +99,6 @@ export function SandboxModeView({
     });
     return rels.sort((a, b) => a.id.localeCompare(b.id));
   }, [model.relationships, nodes]);
-
-  const availableRelationshipTypes = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of baseVisibleRelationships) set.add(r.type);
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [baseVisibleRelationships]);
-
-  const enabledTypeSet = useMemo(() => new Set(relationships.enabledTypes), [relationships.enabledTypes]);
-
-  // When switching to type filtering, default to enabling all available types.
-  useEffect(() => {
-    if (!relationships.show) return;
-    if (relationships.mode !== 'types') return;
-    if (relationships.enabledTypes.length > 0) return;
-    if (availableRelationshipTypes.length === 0) return;
-    onSetEnabledRelationshipTypes(availableRelationshipTypes);
-  }, [
-    availableRelationshipTypes,
-    onSetEnabledRelationshipTypes,
-    relationships.enabledTypes.length,
-    relationships.mode,
-    relationships.show,
-  ]);
-
-  const selectedTypeCount = useMemo(() => {
-    if (availableRelationshipTypes.length === 0) return 0;
-    return availableRelationshipTypes.filter((t) => enabledTypeSet.has(t)).length;
-  }, [availableRelationshipTypes, enabledTypeSet]);
-
-  const visibleRelationships = useMemo(() => {
-    if (!relationships.show) return [];
-    if (relationships.mode === 'all') return baseVisibleRelationships;
-    return baseVisibleRelationships.filter((r) => enabledTypeSet.has(r.type));
-  }, [baseVisibleRelationships, enabledTypeSet, relationships.mode, relationships.show]);
 
   const onPointerDownNode = useCallback(
     (e: PointerEvent<SVGGElement>, elementId: string) => {
@@ -261,88 +214,6 @@ export function SandboxModeView({
             Clear
           </button>
         </div>
-      </div>
-
-      <div className="toolbar" style={{ marginTop: 10 }}>
-        <div className="toolbarGroup" style={{ minWidth: 240 }}>
-          <label>Relationships</label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 }}>
-            <input
-              type="checkbox"
-              checked={relationships.show}
-              onChange={(e) => onSetShowRelationships(e.currentTarget.checked)}
-            />
-            <span>Show relationships</span>
-          </label>
-          {relationships.show ? (
-            <select
-              className="selectInput"
-              value={relationships.mode}
-              onChange={(e) => onSetRelationshipMode(e.currentTarget.value as SandboxRelationshipVisibilityMode)}
-              aria-label="Relationship visibility mode"
-            >
-              <option value="all">All</option>
-              <option value="types">Filter by type</option>
-            </select>
-          ) : null}
-          <p className="crudHint" style={{ margin: 0 }}>
-            {relationships.show
-              ? `${baseVisibleRelationships.length} relationships between ${nodes.length} node(s)`
-              : 'Relationships are hidden'}
-          </p>
-        </div>
-
-        {relationships.show && relationships.mode === 'types' ? (
-          <div className="toolbarGroup" style={{ minWidth: 260, flex: '1 1 260px' }}>
-            <label>
-              Types ({selectedTypeCount}/{availableRelationshipTypes.length})
-            </label>
-            <div
-              style={{
-                maxHeight: 160,
-                overflow: 'auto',
-                border: '1px solid var(--border-1)',
-                borderRadius: 10,
-                padding: '8px 10px',
-                background: 'rgba(255,255,255,0.02)',
-              }}
-            >
-              {availableRelationshipTypes.length === 0 ? (
-                <p className="crudHint" style={{ margin: 0 }}>
-                  No relationships found between sandbox nodes.
-                </p>
-              ) : (
-                availableRelationshipTypes.map((t) => (
-                  <label
-                    key={t}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={enabledTypeSet.has(t)}
-                      onChange={() => onToggleEnabledRelationshipType(t)}
-                    />
-                    <span title={t}>{t}</span>
-                  </label>
-                ))
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="miniLinkButton"
-                onClick={() => onSetEnabledRelationshipTypes(availableRelationshipTypes)}
-                disabled={availableRelationshipTypes.length === 0}
-                aria-disabled={availableRelationshipTypes.length === 0}
-              >
-                All
-              </button>
-              <button type="button" className="miniLinkButton" onClick={() => onSetEnabledRelationshipTypes([])}>
-                None
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="analysisSandboxRoot" aria-label="Analysis sandbox">

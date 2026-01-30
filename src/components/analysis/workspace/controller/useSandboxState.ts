@@ -10,8 +10,21 @@ export type SandboxNode = {
   pinned?: boolean;
 };
 
+export type SandboxRelationshipVisibilityMode = 'all' | 'types';
+
+export type SandboxRelationshipsState = {
+  show: boolean;
+  mode: SandboxRelationshipVisibilityMode;
+  /**
+   * Enabled relationship type strings when mode === 'types'.
+   * When empty, no relationships are shown.
+   */
+  enabledTypes: string[];
+};
+
 export type SandboxState = {
   nodes: SandboxNode[];
+  relationships: SandboxRelationshipsState;
 };
 
 export type SandboxActions = {
@@ -20,6 +33,11 @@ export type SandboxActions = {
   addManyIfMissing: (elementIds: string[], baseX?: number, baseY?: number) => void;
   removeMany: (elementIds: string[]) => void;
   clear: () => void;
+
+  setShowRelationships: (show: boolean) => void;
+  setRelationshipMode: (mode: SandboxRelationshipVisibilityMode) => void;
+  setEnabledRelationshipTypes: (types: string[]) => void;
+  toggleEnabledRelationshipType: (type: string) => void;
 };
 
 const DEFAULT_SEED_POS = { x: 260, y: 180 };
@@ -51,6 +69,13 @@ function computeAppendBase(nodes: SandboxNode[]): { x: number; y: number } {
   return { x: maxX + GRID_X, y: minY };
 }
 
+function toggleString(values: string[], v: string): string[] {
+  const set = new Set(values);
+  if (set.has(v)) set.delete(v);
+  else set.add(v);
+  return Array.from(set);
+}
+
 /**
  * Owns Analysis Sandbox state.
  *
@@ -62,6 +87,9 @@ function computeAppendBase(nodes: SandboxNode[]): { x: number; y: number } {
  * Step 2 scope:
  * - Add/remove/clear actions
  * - Accept element drops from the navigator
+ *
+ * Step 3 scope:
+ * - Relationship visibility controls (hide/show + filter by relationship type)
  */
 export function useSandboxState(args: {
   model: Model | null;
@@ -72,10 +100,16 @@ export function useSandboxState(args: {
   const { model, modelId, mode, selectionElementIds } = args;
 
   const [nodes, setNodes] = useState<SandboxNode[]>([]);
+  const [showRelationships, setShowRelationships] = useState(true);
+  const [relationshipMode, setRelationshipMode] = useState<SandboxRelationshipVisibilityMode>('all');
+  const [enabledRelationshipTypes, setEnabledRelationshipTypes] = useState<string[]>([]);
 
   // Reset when switching to another model to avoid stale element ids.
   useEffect(() => {
     setNodes([]);
+    setShowRelationships(true);
+    setRelationshipMode('all');
+    setEnabledRelationshipTypes([]);
   }, [modelId]);
 
   const addManyIfMissing = useCallback(
@@ -140,10 +174,35 @@ export function useSandboxState(args: {
     addIfMissing(first);
   }, [addIfMissing, model, mode, nodes.length, selectionElementIds]);
 
-  const state: SandboxState = useMemo(() => ({ nodes }), [nodes]);
+  const toggleEnabledRelationshipType = useCallback((type: string) => {
+    setEnabledRelationshipTypes((prev) => toggleString(prev, type).sort((a, b) => a.localeCompare(b)));
+  }, []);
+
+  const state: SandboxState = useMemo(
+    () => ({
+      nodes,
+      relationships: {
+        show: showRelationships,
+        mode: relationshipMode,
+        enabledTypes: enabledRelationshipTypes,
+      },
+    }),
+    [enabledRelationshipTypes, nodes, relationshipMode, showRelationships]
+  );
+
   const actions: SandboxActions = useMemo(
-    () => ({ setNodePosition, addIfMissing, addManyIfMissing, removeMany, clear }),
-    [addIfMissing, addManyIfMissing, clear, removeMany, setNodePosition]
+    () => ({
+      setNodePosition,
+      addIfMissing,
+      addManyIfMissing,
+      removeMany,
+      clear,
+      setShowRelationships,
+      setRelationshipMode,
+      setEnabledRelationshipTypes,
+      toggleEnabledRelationshipType,
+    }),
+    [addIfMissing, addManyIfMissing, clear, removeMany, setNodePosition, toggleEnabledRelationshipType]
   );
 
   return { state, actions } as const;

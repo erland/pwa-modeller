@@ -84,6 +84,7 @@ export function AnalysisWorkspace({
             <SandboxModeView
               model={model}
               nodes={sandbox.state.nodes}
+              relationships={sandbox.state.relationships}
               selection={selection}
               selectionElementIds={selectionElementIds}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
@@ -92,6 +93,10 @@ export function AnalysisWorkspace({
               onRemoveSelected={() => sandbox.actions.removeMany(selectionElementIds)}
               onClear={() => sandbox.actions.clear()}
               onAddNodeAt={(elementId, x, y) => sandbox.actions.addIfMissing(elementId, x, y)}
+              onSetShowRelationships={(show) => sandbox.actions.setShowRelationships(show)}
+              onSetRelationshipMode={(mode) => sandbox.actions.setRelationshipMode(mode)}
+              onSetEnabledRelationshipTypes={(types) => sandbox.actions.setEnabledRelationshipTypes(types)}
+              onToggleEnabledRelationshipType={(type) => sandbox.actions.toggleEnabledRelationshipType(type)}
             />
           ) : mode === 'matrix' ? (
             <MatrixModeView

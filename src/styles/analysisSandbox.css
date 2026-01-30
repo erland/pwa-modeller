@@ -1,0 +1,48 @@
+.analysisSandboxRoot {
+  height: 68vh;
+  border-top: 1px solid var(--border, #ddd);
+}
+
+.analysisSandboxSvg {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+}
+
+.analysisSandboxEdge line {
+  stroke: #444;
+  stroke-width: 1.2;
+}
+
+.analysisSandboxEdge text {
+  font-size: 11px;
+  fill: #333;
+  pointer-events: none;
+  user-select: none;
+}
+
+.analysisSandboxNode rect {
+  fill: #f7f7f7;
+  stroke: #666;
+  stroke-width: 1.2;
+}
+
+.analysisSandboxNode.isSelected rect {
+  stroke: #111;
+  stroke-width: 2.2;
+}
+
+.analysisSandboxNodeTitle {
+  font-size: 13px;
+  font-weight: 600;
+  fill: #111;
+  pointer-events: none;
+  user-select: none;
+}
+
+.analysisSandboxNodeMeta {
+  font-size: 11px;
+  fill: #444;
+  pointer-events: none;
+  user-select: none;
+}

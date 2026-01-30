@@ -60,6 +60,15 @@ export function AnalysisWorkspaceHeader({
         >
           Portfolio
         </button>
+        <button
+          type="button"
+          className={`tabButton ${mode === 'sandbox' ? 'isActive' : ''}`}
+          role="tab"
+          aria-selected={mode === 'sandbox'}
+          onClick={() => onChangeMode('sandbox')}
+        >
+          Sandbox
+        </button>
       </div>
       <div className="rowActions">
         <button

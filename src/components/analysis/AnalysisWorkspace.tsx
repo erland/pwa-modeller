@@ -8,6 +8,7 @@ import { MatrixModeView } from './modes/MatrixModeView';
 import { PortfolioModeView } from './modes/PortfolioModeView';
 import { ResultsModeView } from './modes/ResultsModeView';
 import { TraceabilityModeView } from './modes/TraceabilityModeView';
+import { SandboxModeView } from './modes/SandboxModeView';
 
 import { AnalysisWorkspaceHeader } from './workspace/AnalysisWorkspaceHeader';
 import { useAnalysisWorkspaceController } from './workspace/useAnalysisWorkspaceController';
@@ -45,6 +46,7 @@ export function AnalysisWorkspace({
     traceSeedId,
     matrix,
     queryPanel,
+    sandbox,
   } = derived;
 
   return (
@@ -67,7 +69,7 @@ export function AnalysisWorkspace({
         </div>
       ) : (
         <>
-          {mode !== 'portfolio' ? (
+          {mode !== 'portfolio' && mode !== 'sandbox' ? (
             <AnalysisQueryPanel
               model={model}
               modelKind={modelKind}
@@ -77,7 +79,15 @@ export function AnalysisWorkspace({
             />
           ) : null}
 
-          {mode === 'matrix' ? (
+          {mode === 'sandbox' ? (
+            <SandboxModeView
+              model={model}
+              nodes={sandbox.state.nodes}
+              selection={selection}
+              onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+              onMoveNode={(elementId, x, y) => sandbox.actions.setNodePosition(elementId, x, y)}
+            />
+          ) : mode === 'matrix' ? (
             <MatrixModeView
               model={model}
               matrixState={matrix.state}

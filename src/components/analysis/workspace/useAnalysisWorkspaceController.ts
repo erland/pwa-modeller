@@ -12,6 +12,7 @@ import { useAnalysisDraftActiveIdsState } from './controller/useAnalysisDraftAct
 import { useSelectionPrefillSync } from './controller/useSelectionPrefillSync';
 import { useAnalysisResultsState } from './controller/useAnalysisResultsState';
 import { useQueryPanelAdapter } from './controller/useQueryPanelAdapter';
+import { useSandboxState } from './controller/useSandboxState';
 
 import {
   computeCanRun,
@@ -104,6 +105,11 @@ export function useAnalysisWorkspaceController({
   });
 
   const selectionElementIds = useMemo(() => selectionToElementIds(selection), [selection]);
+
+  // -----------------------------
+  // Sandbox state (local analysis canvas)
+  // -----------------------------
+  const sandbox = useSandboxState({ model, modelId, mode, selectionElementIds });
 
   // -----------------------------
   // Matrix workspace state (draft + persisted UI options + presets/snapshots)
@@ -335,6 +341,10 @@ useEffect(() => {
       relatedResult,
       pathsResult,
       traceSeedId,
+      sandbox: {
+        state: sandbox.state,
+        actions: sandbox.actions,
+      },
       matrix: {
         state: matrixState,
         actions: matrixActions,

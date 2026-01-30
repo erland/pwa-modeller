@@ -109,6 +109,7 @@ export function computeCanRun(args: {
 
   if (!modelPresent) return false;
 
+  if (mode === 'sandbox') return false;
   if (mode === 'matrix') return matrixResolvedRowCount > 0 && matrixResolvedColCount > 0;
   if (mode === 'paths') return Boolean(draftSourceId && draftTargetId && draftSourceId !== draftTargetId);
   // related / traceability

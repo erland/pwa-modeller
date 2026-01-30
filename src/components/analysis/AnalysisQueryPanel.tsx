@@ -18,7 +18,7 @@ import { useElementChooser } from './queryPanel/useElementChooser';
 import { useMatrixFacetOptions } from './queryPanel/useMatrixFacetOptions';
 import { hasAnyFilters as computeHasAnyFilters } from './queryPanel/utils';
 
-export type AnalysisMode = 'related' | 'paths' | 'traceability' | 'matrix' | 'portfolio';
+export type AnalysisMode = 'related' | 'paths' | 'traceability' | 'matrix' | 'portfolio' | 'sandbox';
 
 export type AnalysisQueryPanelState = {
   mode: AnalysisMode;

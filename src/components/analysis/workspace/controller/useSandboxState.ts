@@ -54,6 +54,8 @@ export type SandboxActions = {
   removeMany: (elementIds: string[]) => void;
   clear: () => void;
 
+  seedFromView: (viewId: string) => void;
+
   setShowRelationships: (show: boolean) => void;
   setRelationshipMode: (mode: SandboxRelationshipVisibilityMode) => void;
   setEnabledRelationshipTypes: (types: string[]) => void;
@@ -589,6 +591,46 @@ export function useSandboxState(args: {
     [addRelatedEnabledTypes, model]
   );
 
+  const seedFromView = useCallback((viewId: string) => {
+    if (!model) return;
+    const v = model.views?.[viewId];
+    const layoutNodes = v?.layout?.nodes ?? [];
+    const elementNodes = layoutNodes.filter((n) => Boolean(n.elementId)) as Array<{ elementId: string; x: number; y: number; locked?: boolean }>;
+    if (elementNodes.length === 0) return;
+
+    // Keep relative positions from the diagram, but normalize so the top-left starts near a margin.
+    let minX = Infinity;
+    let minY = Infinity;
+    for (const n of elementNodes) {
+      if (n.x < minX) minX = n.x;
+      if (n.y < minY) minY = n.y;
+    }
+    if (!Number.isFinite(minX)) minX = 0;
+    if (!Number.isFinite(minY)) minY = 0;
+
+    const MARGIN_X = 120;
+    const MARGIN_Y = 120;
+
+    const next: SandboxNode[] = [];
+    const seen = new Set<string>();
+    for (const n of elementNodes) {
+      const id = n.elementId;
+      if (!id) continue;
+      if (seen.has(id)) continue;
+      if (!model.elements[id]) continue;
+      seen.add(id);
+      next.push({
+        elementId: id,
+        x: (n.x - minX) + MARGIN_X,
+        y: (n.y - minY) + MARGIN_Y,
+        pinned: Boolean(n.locked),
+      });
+    }
+
+    if (next.length === 0) return;
+    setNodes(next);
+  }, [model]);
+
   const state: SandboxState = useMemo(
     () => ({
       nodes,
@@ -613,6 +655,7 @@ export function useSandboxState(args: {
       addManyIfMissing,
       removeMany,
       clear,
+      seedFromView,
       setShowRelationships,
       setRelationshipMode,
       setEnabledRelationshipTypes,
@@ -631,6 +674,7 @@ export function useSandboxState(args: {
       addManyIfMissing,
       addRelatedFromSelection,
       clear,
+      seedFromView,
       removeMany,
       setAddRelatedDepthSafe,
       setAddRelatedEnabledTypesSafe,

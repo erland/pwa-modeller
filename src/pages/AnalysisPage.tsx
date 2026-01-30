@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ModelActions } from '../components/model/ModelActions';
 import { ModelNavigator } from '../components/model/ModelNavigator';
@@ -53,6 +55,17 @@ export default function AnalysisPage() {
   const model = useModelStore((s) => s.model);
   const modelKind = useMemo(() => inferAnalysisKind(model, selection), [model, selection]);
 
+  const location = useLocation();
+  const navigate = useNavigate();
+  const sandboxSeedViewId =
+    (location.state as { openSandboxFromViewId?: string } | null)?.openSandboxFromViewId ?? null;
+
+  // Clear navigation state after consuming it to avoid re-seeding when navigating back.
+  useEffect(() => {
+    if (!sandboxSeedViewId) return;
+    navigate('/analysis', { replace: true, state: {} });
+  }, [navigate, sandboxSeedViewId]);
+
   // In Analysis, we mostly care about element/relationship selection, but keep this generic
   // so the same PropertiesPanel works.
   const shellSubtitle = useMemo(
@@ -75,7 +88,12 @@ export default function AnalysisPage() {
           />
         }
       >
-        <AnalysisWorkspace modelKind={modelKind} selection={selection} onSelect={setSelection} />
+        <AnalysisWorkspace
+          modelKind={modelKind}
+          selection={selection}
+          onSelect={setSelection}
+          sandboxSeedViewId={sandboxSeedViewId}
+        />
       </AppShell>
 
       <ModelPropertiesDialog isOpen={modelPropsOpen} onClose={() => setModelPropsOpen(false)} />

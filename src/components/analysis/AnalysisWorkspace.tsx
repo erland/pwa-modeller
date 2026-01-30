@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 import type { ModelKind } from '../../domain';
 import type { Selection } from '../model/selection';
 
@@ -16,11 +18,13 @@ import { useAnalysisWorkspaceController } from './workspace/useAnalysisWorkspace
 export function AnalysisWorkspace({
   modelKind,
   selection,
-  onSelect
+  onSelect,
+  sandboxSeedViewId
 }: {
   modelKind: ModelKind;
   selection: Selection;
   onSelect: (sel: Selection) => void;
+  sandboxSeedViewId?: string | null;
 }) {
   const { state, actions, derived } = useAnalysisWorkspaceController({ modelKind, selection });
   const {
@@ -49,6 +53,16 @@ export function AnalysisWorkspace({
     sandbox,
     selectionElementIds,
   } = derived;
+
+  const lastSeedViewId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sandboxSeedViewId) return;
+    if (!model) return;
+    if (lastSeedViewId.current === sandboxSeedViewId) return;
+    lastSeedViewId.current = sandboxSeedViewId;
+    sandbox.actions.seedFromView(sandboxSeedViewId);
+    setMode('sandbox');
+  }, [model, sandbox.actions, sandboxSeedViewId, setMode]);
 
   return (
     <div className="workspace" aria-label="Analysis workspace">

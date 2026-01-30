@@ -32,6 +32,7 @@ export type DiagramToolbarProps = {
 
   canExportImage: boolean;
   onExportImage: () => void;
+  onOpenInSandbox?: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
   onAlignSelection: (mode: AlignMode) => void;
   onDistributeSelection: (mode: DistributeMode) => void;
@@ -60,6 +61,7 @@ export function DiagramToolbar({
   fitToView,
   canExportImage,
   onExportImage,
+  onOpenInSandbox,
   onAutoLayout,
   onAlignSelection,
   onDistributeSelection,
@@ -226,6 +228,16 @@ export function DiagramToolbar({
               title={`Auto layout this view${activeView?.kind ? ` (${activeView.kind.toUpperCase()})` : ''}`}
             >
               Auto Layout
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onOpenInSandbox?.()}
+              className="shellButton"
+              disabled={!hasActiveView || !onOpenInSandbox}
+              title="Open this diagram in the Analysis Sandbox"
+            >
+              Open in Sandbox
             </button>
 
             <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>

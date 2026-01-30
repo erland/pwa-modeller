@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { AlignMode, AutoLayoutOptions, DistributeMode, Model, SameSizeMode, View } from '../../domain';
 import { createConnector } from '../../domain';
 import { modelStore } from '../../store';
@@ -37,6 +38,7 @@ function sortViews(views: Record<string, View>): View[] {
  * Rendering is delegated to {@link DiagramCanvasView}; all non-trivial logic lives in hooks.
  */
 export function DiagramCanvas({ selection, onSelect }: Props) {
+  const navigate = useNavigate();
   const model = useModelStore((s) => s.model) as Model | null;
 
   const views = useMemo(() => (model ? sortViews(model.views) : []), [model]);
@@ -279,6 +281,10 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
     }
   }, [activeViewId, activeView, selection]);
 
+  const onOpenInSandbox = useCallback(() => {
+    if (!activeViewId) return;
+    navigate('/analysis', { state: { openSandboxFromViewId: activeViewId } });
+  }, [activeViewId, navigate]);
 
   if (!model) {
     return (
@@ -326,6 +332,7 @@ export function DiagramCanvas({ selection, onSelect }: Props) {
       onBeginNodeDrag={onBeginNodeDrag}
       clientToModelPoint={viewport.clientToModelPoint}
       getElementBgVar={getElementBgVar}
+      onOpenInSandbox={onOpenInSandbox}
       canExportImage={canExportImage}
       onExportImage={handleExportImage}
       onAutoLayout={onAutoLayout}

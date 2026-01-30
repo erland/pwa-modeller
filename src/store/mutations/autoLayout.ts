@@ -62,14 +62,22 @@ function clearManualEdgePointsForView(model: Model, viewId: string): void {
   const view = getView(model, viewId);
   // For UML/BPMN we prefer the built-in router over persisted bend-points from ELK.
   // Persisted points cause stale/odd routing when nodes move after auto-layout.
-  if (view.kind === 'archimate') return;
-
   let changed = false;
 
   const nextConnections = (view.connections ?? []).map((c: ViewConnection) => {
-    if (!c.points) return c;
+    const hasPoints = Boolean(c.points);
+    const hasAnchors = c.sourceAnchor !== undefined || c.targetAnchor !== undefined;
+    if (!hasPoints && !hasAnchors) return c;
+
     changed = true;
-    return { ...c, points: undefined };
+    return {
+      ...c,
+      // Always reset endpoint anchoring overrides on auto layout.
+      sourceAnchor: undefined,
+      targetAnchor: undefined,
+      // For UML/BPMN we also reset persisted bendpoints.
+      points: view.kind === 'archimate' ? c.points : undefined,
+    };
   });
 
   const nextLayoutRelationships = view.layout?.relationships?.map((r: ViewRelationshipLayout) => {

@@ -10,7 +10,7 @@ import {
   nodeRefFromLayout,
   offsetPolyline,
   polylineMidPoint,
-  rectAlignedOrthogonalAnchors,
+  rectAlignedOrthogonalAnchorsWithEndpointAnchors,
   unitPerp,
   type Point,
 } from './geometry';
@@ -200,7 +200,7 @@ export function createViewSvg(model: Model, viewId: string): string {
       const tc = nodeCenter(tNode);
 
       // Prefer border anchors (like in the canvas).
-      const { start, end } = rectAlignedOrthogonalAnchors(sNode, tNode);
+      const { start, end } = rectAlignedOrthogonalAnchorsWithEndpointAnchors(sNode, tNode, conn.sourceAnchor, conn.targetAnchor);
 
       // Translate any stored bendpoints.
       const translatedPoints = conn.points ? conn.points.map((p) => ({ x: p.x + offsetX, y: p.y + offsetY })) : undefined;

@@ -1,7 +1,14 @@
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 
-import type { Element, Model, Relationship, RelationshipType, ViewConnectionRouteKind } from '../../../../domain';
+import type {
+  Element,
+  Model,
+  Relationship,
+  RelationshipType,
+  ViewConnectionAnchorSide,
+  ViewConnectionRouteKind,
+} from '../../../../domain';
 import { getRelationshipTypeLabel, kindFromTypeId } from '../../../../domain';
 
 import type { Selection } from '../../selection';
@@ -60,6 +67,8 @@ export function CommonRelationshipProperties({
   const selectedView = viewId ? model.views[viewId] : undefined;
   const selectedConnection = selectedView?.connections?.find((c) => c.relationshipId === rel.id);
   const routingKind: ViewConnectionRouteKind | null = selectedConnection?.route?.kind ?? null;
+  const sourceAnchor: ViewConnectionAnchorSide = (selectedConnection?.sourceAnchor ?? 'auto') as ViewConnectionAnchorSide;
+  const targetAnchor: ViewConnectionAnchorSide = (selectedConnection?.targetAnchor ?? 'auto') as ViewConnectionAnchorSide;
 
   const sourceName = rel.sourceElementId ? model.elements[rel.sourceElementId]?.name ?? rel.sourceElementId : '—';
   const targetName = rel.targetElementId ? model.elements[rel.targetElementId]?.name ?? rel.targetElementId : '—';
@@ -175,6 +184,56 @@ export function CommonRelationshipProperties({
               </select>
               <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
                 Applies to this relationship instance in the selected view.
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <div style={{ fontSize: 12, opacity: 0.75 }}>From anchor</div>
+                  <select
+                    className="selectInput"
+                    aria-label="View connection source anchor"
+                    value={sourceAnchor}
+                    onChange={(e) => {
+                      const v = e.target.value as ViewConnectionAnchorSide;
+                      actions.setViewConnectionEndpointAnchors(viewId, selectedConnection.id, {
+                        sourceAnchor: v === 'auto' ? undefined : v,
+                        targetAnchor: targetAnchor === 'auto' ? undefined : targetAnchor,
+                      });
+                    }}
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                    <option value="top">Top</option>
+                    <option value="bottom">Bottom</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gap: 4 }}>
+                  <div style={{ fontSize: 12, opacity: 0.75 }}>To anchor</div>
+                  <select
+                    className="selectInput"
+                    aria-label="View connection target anchor"
+                    value={targetAnchor}
+                    onChange={(e) => {
+                      const v = e.target.value as ViewConnectionAnchorSide;
+                      actions.setViewConnectionEndpointAnchors(viewId, selectedConnection.id, {
+                        sourceAnchor: sourceAnchor === 'auto' ? undefined : sourceAnchor,
+                        targetAnchor: v === 'auto' ? undefined : v,
+                      });
+                    }}
+                  >
+                    <option value="auto">Auto</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                    <option value="top">Top</option>
+                    <option value="bottom">Bottom</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                Anchor overrides are view-only and influence the auto-router. Auto Layout resets these.
               </div>
             </div>
           </div>

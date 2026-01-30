@@ -5,6 +5,7 @@ import type {
   Relationship,
   RelationshipType,
   ViewConnectionRouteKind,
+  ViewConnectionAnchorSide,
   ViewObject,
   View,
   ViewFormatting,
@@ -41,6 +42,13 @@ export type ModelActions = {
 
   /** Update per-view routing style for a ViewConnection instance. */
   setViewConnectionRoute: (viewId: string, connectionId: string, kind: ViewConnectionRouteKind) => void;
+
+  /** Update per-view endpoint anchoring hints for a ViewConnection instance. */
+  setViewConnectionEndpointAnchors: (
+    viewId: string,
+    connectionId: string,
+    patch: { sourceAnchor?: ViewConnectionAnchorSide; targetAnchor?: ViewConnectionAnchorSide }
+  ) => void;
 
   updateConnector: (connectorId: string, patch: Partial<Omit<RelationshipConnector, 'id'>>) => void;
   deleteConnector: (connectorId: string) => void;

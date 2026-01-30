@@ -7,7 +7,7 @@ import {
   distancePointToPolyline,
   nodeRefFromLayout,
   offsetPolyline,
-  rectAlignedOrthogonalAnchors,
+  rectAlignedOrthogonalAnchorsWithEndpointAnchors,
   unitPerp,
 } from '../geometry';
 import { applyLaneOffsetsSafely } from '../connectionLanes';
@@ -87,7 +87,7 @@ export function useDiagramConnections({ model, activeView, nodes }: Args) {
 
       const sc: Point = { x: s.x + (s.width ?? 120) / 2, y: s.y + (s.height ?? 60) / 2 };
       const tc: Point = { x: t.x + (t.width ?? 120) / 2, y: t.y + (t.height ?? 60) / 2 };
-      const { start, end } = rectAlignedOrthogonalAnchors(s, t);
+      const { start, end } = rectAlignedOrthogonalAnchorsWithEndpointAnchors(s, t, conn.sourceAnchor, conn.targetAnchor);
 
       // Include obstacle rectangles (other nodes) so the orthogonal auto-router can shift channels.
       const nodeRect = (n: ViewNodeLayout) => {

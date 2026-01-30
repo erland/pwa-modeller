@@ -12,6 +12,7 @@ import type {
   ViewObject,
   ViewObjectType,
   ViewConnectionRouteKind,
+  ViewConnectionAnchorSide,
 } from '../domain';
 import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode, LayoutOutput } from '../domain/layout/types';
 import { extractLayoutInputForView, fitArchiMateBoxToText, computeLayoutSignature } from '../domain/layout';
@@ -304,6 +305,31 @@ export class ModelStore {
       const nextConn = {
         ...current,
         route: { ...(current.route ?? { kind: 'orthogonal' }), kind },
+      };
+      const nextConnections = [...view.connections];
+      nextConnections[idx] = nextConn;
+      model.views[viewId] = { ...view, connections: nextConnections };
+    });
+  };
+
+  setViewConnectionEndpointAnchors = (
+    viewId: string,
+    connectionId: string,
+    patch: { sourceAnchor?: ViewConnectionAnchorSide; targetAnchor?: ViewConnectionAnchorSide }
+  ): void => {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view || !Array.isArray(view.connections)) return;
+      const idx = view.connections.findIndex((c) => c.id === connectionId);
+      if (idx < 0) return;
+
+      const current = view.connections[idx];
+      const nextConn = {
+        ...current,
+        // Allow explicitly clearing anchors by passing `undefined`.
+        // Using nullish coalescing here would prevent clearing back to auto.
+        sourceAnchor: 'sourceAnchor' in patch ? patch.sourceAnchor : current.sourceAnchor,
+        targetAnchor: 'targetAnchor' in patch ? patch.targetAnchor : current.targetAnchor,
       };
       const nextConnections = [...view.connections];
       nextConnections[idx] = nextConn;

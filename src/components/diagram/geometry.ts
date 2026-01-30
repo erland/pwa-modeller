@@ -1,4 +1,4 @@
-import type { ViewNodeLayout } from '../../domain';
+import type { ViewConnectionAnchorSide, ViewNodeLayout } from '../../domain';
 import type { ConnectableRef } from './connectable';
 
 export function clamp(v: number, min: number, max: number): number {
@@ -188,6 +188,53 @@ export function rectAlignedOrthogonalAnchors(source: ViewNodeLayout, target: Vie
 
   // Fallback: classic directional edge anchor.
   return { start: rectEdgeAnchor(source, tc), end: rectEdgeAnchor(target, sc) };
+}
+
+function anchorOnRectSide(n: ViewNodeLayout, side: Exclude<ViewConnectionAnchorSide, 'auto'>, toward: Point): Point {
+  const r = nodeRect(n);
+  const pad = cornerPadForRect(r);
+  const left = r.x;
+  const right = r.x + r.w;
+  const top = r.y;
+  const bottom = r.y + r.h;
+
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+  if (side === 'left') return { x: left, y: clamp(toward.y, top + pad, bottom - pad) };
+  if (side === 'right') return { x: right, y: clamp(toward.y, top + pad, bottom - pad) };
+  if (side === 'top') return { x: clamp(toward.x, left + pad, right - pad), y: top };
+  return { x: clamp(toward.x, left + pad, right - pad), y: bottom };
+}
+
+/**
+ * Like rectAlignedOrthogonalAnchors, but allows view-local endpoint anchor overrides.
+ *
+ * When an endpoint is forced (left/right/top/bottom), we bias the other endpoint
+ * toward that forced point to keep the route natural.
+ */
+export function rectAlignedOrthogonalAnchorsWithEndpointAnchors(
+  source: ViewNodeLayout,
+  target: ViewNodeLayout,
+  sourceAnchor?: ViewConnectionAnchorSide,
+  targetAnchor?: ViewConnectionAnchorSide
+): { start: Point; end: Point } {
+  const sc: Point = { x: source.x + (source.width ?? 120) / 2, y: source.y + (source.height ?? 60) / 2 };
+  const tc: Point = { x: target.x + (target.width ?? 120) / 2, y: target.y + (target.height ?? 60) / 2 };
+
+  const sForced = sourceAnchor && sourceAnchor !== 'auto' ? anchorOnRectSide(source, sourceAnchor, tc) : null;
+  const tForced = targetAnchor && targetAnchor !== 'auto' ? anchorOnRectSide(target, targetAnchor, sc) : null;
+
+  if (!sForced && !tForced) return rectAlignedOrthogonalAnchors(source, target);
+
+  if (sForced && tForced) return { start: sForced, end: tForced };
+
+  if (sForced) {
+    // Let the target choose a sensible edge toward the forced start anchor.
+    return { start: sForced, end: rectEdgeAnchor(target, sForced) };
+  }
+
+  // tForced
+  return { start: rectEdgeAnchor(source, tForced!), end: tForced! };
 }
 
 export function unitPerp(from: Point, to: Point): Point {

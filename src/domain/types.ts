@@ -350,6 +350,9 @@ export interface ViewRelationshipLayout {
 
 export type ViewConnectionRouteKind = 'orthogonal' | 'straight';
 
+/** View-only hint for how the auto-router should attach a connection to a node. */
+export type ViewConnectionAnchorSide = 'auto' | 'left' | 'right' | 'top' | 'bottom';
+
 export interface ViewConnectionRoute {
   kind: ViewConnectionRouteKind;
 }
@@ -385,6 +388,10 @@ export interface ViewConnection {
   target: ViewConnectionEndpointRef;
 
   route: ViewConnectionRoute;
+
+  /** Optional endpoint anchoring hints for the auto-router (view-only). */
+  sourceAnchor?: ViewConnectionAnchorSide;
+  targetAnchor?: ViewConnectionAnchorSide;
 
   /** Optional polyline points for routing (future: user-edited bendpoints). */
   points?: Array<{ x: number; y: number }>;

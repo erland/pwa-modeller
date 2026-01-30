@@ -27,6 +27,17 @@ export type PathsBetweenResult = {
 
 type Pred = { prevId: string; step: TraversalStep };
 
+function traversalStepKey(s: TraversalStep): string {
+  // Keep this consistent with the step key used for de-duplication in traverse.ts.
+  return `${s.relationshipId}:${s.fromId}->${s.toId}`;
+}
+
+function traversalStepSortKey(s: TraversalStep): string {
+  // Deterministic ordering for BFS exploration.
+  // Prefer stable ordering by destination, then relationship identifiers.
+  return `${s.toId}:${s.relationshipId}:${s.relationshipType}:${s.reversed ? '1' : '0'}`;
+}
+
 function nodeAllowedForTraversal(
   model: Model,
   nodeId: string,
@@ -45,6 +56,108 @@ function nodeAllowedForTraversal(
 
 function predSortKey(p: Pred): string {
   return `${p.prevId}:${p.step.relationshipId}:${p.step.relationshipType}`;
+}
+
+export type BannedTraversal = {
+  /** Elements that must not be visited by the BFS. */
+  bannedNodeIds?: ReadonlySet<string>;
+  /** Traversal steps that must not be used, keyed by `${relationshipId}:${fromId}->${toId}`. */
+  bannedStepKeys?: ReadonlySet<string>;
+};
+
+/**
+ * Find a *single* shortest path between two elements.
+ *
+ * This helper is intended for future K-shortest-paths implementations (e.g., Yen),
+ * where we repeatedly compute shortest paths while temporarily banning nodes/edges.
+ *
+ * - Uses BFS (unweighted graph).
+ * - Respects the same filters as {@link queryPathsBetween}.
+ * - Returns one deterministic shortest path (based on stable traversal ordering).
+ */
+export function findShortestSinglePathWithBans(
+  model: Model,
+  sourceElementId: string,
+  targetElementId: string,
+  opts: PathsBetweenOptions = {},
+  bans: BannedTraversal = {}
+): AnalysisPath | undefined {
+  const graph = buildAnalysisGraph(model);
+  if (!graph.nodes.has(sourceElementId) || !graph.nodes.has(targetElementId)) return undefined;
+
+  const bannedNodeIds = bans.bannedNodeIds;
+  const bannedStepKeys = bans.bannedStepKeys;
+  if (bannedNodeIds?.has(sourceElementId) || bannedNodeIds?.has(targetElementId)) return undefined;
+
+  if (sourceElementId === targetElementId) {
+    return { elementIds: [sourceElementId], steps: [] };
+  }
+
+  const direction = opts.direction ?? 'both';
+  const typeSet = normalizeRelationshipTypeFilter(opts);
+  const layerSet = normalizeLayerFilter(opts);
+  const elementTypeSet = normalizeElementTypeFilter(opts);
+  const endpoints = { sourceId: sourceElementId, targetId: targetElementId };
+
+  const dist = new Map<string, number>();
+  const prev = new Map<string, Pred>();
+  const queue: string[] = [];
+
+  dist.set(sourceElementId, 0);
+  queue.push(sourceElementId);
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current) break;
+
+    const d = dist.get(current);
+    if (d === undefined) continue;
+
+    const steps = getTraversalSteps(graph, current, direction, typeSet)
+      .filter(s => !bannedStepKeys?.has(traversalStepKey(s)))
+      .filter(s => !bannedNodeIds?.has(s.toId))
+      .sort((a, b) => traversalStepSortKey(a).localeCompare(traversalStepSortKey(b)));
+
+    for (const s of steps) {
+      const nextId = s.toId;
+      const nd = d + 1;
+
+      if (opts.maxPathLength !== undefined && nd > opts.maxPathLength) continue;
+      if (!nodeAllowedForTraversal(model, nextId, layerSet, elementTypeSet, endpoints)) continue;
+
+      if (!dist.has(nextId)) {
+        dist.set(nextId, nd);
+        prev.set(nextId, { prevId: current, step: s });
+
+        if (nextId === targetElementId) {
+          // BFS ensures this is the shortest distance; deterministic step ordering
+          // ensures stable choice among equal-length alternatives.
+          queue.length = 0;
+          break;
+        }
+
+        queue.push(nextId);
+      }
+    }
+  }
+
+  if (!prev.has(targetElementId)) return undefined;
+
+  const elementIdsRev: string[] = [targetElementId];
+  const stepsRev: TraversalStep[] = [];
+  let cur = targetElementId;
+  while (cur !== sourceElementId) {
+    const p = prev.get(cur);
+    if (!p) return undefined;
+    stepsRev.push(p.step);
+    elementIdsRev.push(p.prevId);
+    cur = p.prevId;
+  }
+
+  return {
+    elementIds: elementIdsRev.reverse(),
+    steps: stepsRev.reverse()
+  };
 }
 
 /**

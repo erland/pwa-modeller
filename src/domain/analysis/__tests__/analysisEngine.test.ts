@@ -1,6 +1,6 @@
 import { createElement, createEmptyModel, createRelationship } from '../../factories';
 import type { Model } from '../../types';
-import { queryPathsBetween, queryRelatedElements } from '../index';
+import { findShortestSinglePathWithBans, queryPathsBetween, queryRelatedElements } from '../index';
 
 function buildSmallModel(): Model {
   const model = createEmptyModel({ name: 't' });
@@ -31,6 +31,10 @@ function buildSmallModel(): Model {
   model.relationships[r1.id] = r1;
   model.relationships[r2.id] = r2;
   model.relationships[r3.id] = r3;
+
+  // Alternative path A -- D -> C (A -- D is undirected association)
+  const r4 = createRelationship({ id: 'R4', type: 'Flow', sourceElementId: d.id, targetElementId: c.id });
+  model.relationships[r4.id] = r4;
 
   return model;
 }
@@ -100,5 +104,58 @@ describe('domain analysis engine', () => {
     expect(res.paths.length).toBe(1);
     expect(res.paths[0]?.elementIds).toEqual(['A', 'B', 'C']);
     expect(res.paths[0]?.steps.map(s => s.relationshipId)).toEqual(['R1', 'R2']);
+  });
+
+  test('findShortestSinglePathWithBans returns one deterministic shortest path and respects bans', () => {
+    const model = buildSmallModel();
+
+    const base = findShortestSinglePathWithBans(model, 'A', 'C', {
+      direction: 'outgoing',
+      relationshipTypes: ['Serving', 'Flow', 'Association']
+    });
+
+    // There are two equal-length paths: A->B->C and A->D->C.
+    // Deterministic traversal order should pick A->B->C.
+    expect(base?.elementIds).toEqual(['A', 'B', 'C']);
+    expect(base?.steps.map(s => s.relationshipId)).toEqual(['R1', 'R2']);
+
+    const bannedEdge = findShortestSinglePathWithBans(
+      model,
+      'A',
+      'C',
+      {
+        direction: 'outgoing',
+        relationshipTypes: ['Serving', 'Flow', 'Association']
+      },
+      { bannedStepKeys: new Set(['R1:A->B']) }
+    );
+
+    // With the A->B step banned, the alternative A->D->C should be chosen.
+    expect(bannedEdge?.elementIds).toEqual(['A', 'D', 'C']);
+    expect(bannedEdge?.steps.map(s => s.relationshipId)).toEqual(['R3', 'R4']);
+
+    const bannedNode = findShortestSinglePathWithBans(
+      model,
+      'A',
+      'C',
+      {
+        direction: 'outgoing',
+        relationshipTypes: ['Serving', 'Flow', 'Association']
+      },
+      { bannedNodeIds: new Set(['B']) }
+    );
+    expect(bannedNode?.elementIds).toEqual(['A', 'D', 'C']);
+
+    const noPath = findShortestSinglePathWithBans(
+      model,
+      'A',
+      'C',
+      {
+        direction: 'outgoing',
+        relationshipTypes: ['Serving', 'Flow', 'Association']
+      },
+      { bannedNodeIds: new Set(['B', 'D']) }
+    );
+    expect(noPath).toBeUndefined();
   });
 });

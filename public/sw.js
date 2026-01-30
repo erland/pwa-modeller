@@ -27,6 +27,15 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// Allow the app to trigger an update immediately.
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || typeof data !== 'object') return;
+  if (data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
@@ -75,7 +84,20 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(req);
-        if (cached) return cached;
+        if (cached) {
+          // Stale-while-revalidate: return cache immediately, refresh in background.
+          event.waitUntil(
+            (async () => {
+              try {
+                const res = await fetch(req);
+                if (res.ok) await cache.put(req, res.clone());
+              } catch {
+                // Ignore background refresh errors.
+              }
+            })()
+          );
+          return cached;
+        }
 
         try {
           const res = await fetch(req);

@@ -74,7 +74,7 @@ describe('domain analysis miniGraph', () => {
     expect(g.edges[0].relationshipId).toBe('r1');
   });
 
-  test('paths mode assigns level by earliest position across paths', () => {
+  test('paths mode assigns level by latest position across paths', () => {
     const paths: PathsBetweenResult = {
       sourceElementId: 's',
       targetElementId: 't',
@@ -90,10 +90,13 @@ describe('domain analysis miniGraph', () => {
 
     const byId = new Map(g.nodes.map((n) => [n.id, n]));
     expect(byId.get('s')?.level).toBe(0);
-    expect(byId.get('a')?.level).toBe(1); // appears at index 1 in first path
+    // Node levels are assigned by the latest (right-most) position they appear in any path.
+    // 'a' appears at index 1 in the first path, and index 2 in the second path.
+    expect(byId.get('a')?.level).toBe(2);
     expect(byId.get('b')?.level).toBe(1); // appears at index 1 in second path
-    expect(byId.get('t')?.level).toBe(2); // earliest index is 2 in first path
-    expect(g.maxLevel).toBeGreaterThanOrEqual(2);
+    // 't' appears at index 2 in the first path and index 3 in the second path.
+    expect(byId.get('t')?.level).toBe(3);
+    expect(g.maxLevel).toBeGreaterThanOrEqual(3);
   });
 
   test('paths mode caps edges (trimmed.edges) when steps exceed limit', () => {

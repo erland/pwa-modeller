@@ -100,12 +100,17 @@ function graphFromRelated(related: RelatedElementsResult, labelForId: (id: strin
 }
 
 function levelForPathsNode(paths: PathsBetweenResult, nodeId: string): number {
-  // Assign level by earliest position in any path.
+  // Assign level by latest position in any path.
+  //
+  // When showing multiple paths, a node may appear at different positions.
+  // Using the latest position tends to make the mini graph look more intuitive
+  // (shared nodes "converge" to the right rather than being pulled left by a
+  // single shorter path).
   let best: number | undefined;
   for (const p of paths.paths) {
     const idx = p.elementIds.indexOf(nodeId);
     if (idx < 0) continue;
-    if (best === undefined || idx < best) best = idx;
+    if (best === undefined || idx > best) best = idx;
   }
   return best ?? 0;
 }

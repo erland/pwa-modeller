@@ -90,6 +90,7 @@ export function AnalysisResultTable({
   const [showGraph, setShowGraph] = useState(false);
   const [graphOptions, setGraphOptions] = useState(defaultMiniGraphOptions);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
+  const [showAllPathsInMiniGraph, setShowAllPathsInMiniGraph] = useState(false);
 
   // Step 9: restore + persist mini-graph UI options per model.
   useEffect(() => {
@@ -383,9 +384,13 @@ export function AnalysisResultTable({
     selectedPathIndex === null ? null : selectedPathIndex >= 0 && selectedPathIndex < paths.length ? selectedPathIndex : null;
   const selectedPath = safeSelectedIndex === null ? null : paths[safeSelectedIndex];
   const graphPathsResult: PathsBetweenResult | null =
-    selectedPath && res
-      ? { ...res, paths: [selectedPath] }
-      : res;
+    !res
+      ? null
+      : showAllPathsInMiniGraph
+        ? res
+        : selectedPath
+          ? { ...res, paths: [selectedPath] }
+          : res;
 
   return (
     <AnalysisSection
@@ -404,7 +409,9 @@ export function AnalysisResultTable({
           ) : null}
           {paths.length > 0 ? (
             <div style={{ marginTop: 6 }}>
-              Showing: {safeSelectedIndex === null ? 'all paths' : `path #${safeSelectedIndex + 1} of ${paths.length}`}
+              Mini-graph: {(showAllPathsInMiniGraph || safeSelectedIndex === null)
+                ? 'all paths'
+                : `path #${safeSelectedIndex + 1} of ${paths.length}`}
             </div>
           ) : null}
         </>
@@ -430,10 +437,15 @@ export function AnalysisResultTable({
           >
             Export CSV
           </button>
-          {paths.length > 1 && safeSelectedIndex !== null ? (
-            <button type="button" className="miniLinkButton" onClick={() => setSelectedPathIndex(null)} title="Show all paths in the mini-graph">
-              Show all paths
-            </button>
+          {paths.length > 1 ? (
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 6 }} title="When enabled, the mini-graph shows the union of all returned paths">
+              <input
+                type="checkbox"
+                checked={showAllPathsInMiniGraph}
+                onChange={(e) => setShowAllPathsInMiniGraph(e.target.checked)}
+              />
+              All paths in graph
+            </label>
           ) : null}
           <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} availablePropertyKeys={availablePropertyKeys} />
           {sourceId ? (

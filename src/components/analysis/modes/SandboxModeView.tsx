@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import type { PointerEvent } from 'react';
+import type { DragEvent, PointerEvent } from 'react';
 
 import type { Model } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import type { SandboxNode } from '../workspace/controller/useSandboxState';
+
+import { dataTransferHasElement, readDraggedElementId } from '../../diagram/dragDrop';
 
 import '../../../styles/analysisSandbox.css';
 
@@ -43,17 +45,28 @@ export function SandboxModeView({
   model,
   nodes,
   selection,
+  selectionElementIds,
   onSelectElement,
   onMoveNode,
+  onAddSelected,
+  onRemoveSelected,
+  onClear,
+  onAddNodeAt,
 }: {
   model: Model;
   nodes: SandboxNode[];
   selection: Selection;
+  selectionElementIds: string[];
   onSelectElement: (elementId: string) => void;
   onMoveNode: (elementId: string, x: number, y: number) => void;
+  onAddSelected: () => void;
+  onRemoveSelected: () => void;
+  onClear: () => void;
+  onAddNodeAt: (elementId: string, x: number, y: number) => void;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [isDropTarget, setIsDropTarget] = useState(false);
 
   const selectedElementId = useMemo(() => getSelectedElementId(selection), [selection]);
 
@@ -63,13 +76,27 @@ export function SandboxModeView({
     return m;
   }, [nodes]);
 
+  const canAddSelected = useMemo(() => {
+    for (const id of selectionElementIds) {
+      if (!model.elements[id]) continue;
+      if (!nodeById.has(id)) return true;
+    }
+    return false;
+  }, [model.elements, nodeById, selectionElementIds]);
+
+  const canRemoveSelected = useMemo(() => {
+    for (const id of selectionElementIds) {
+      if (nodeById.has(id)) return true;
+    }
+    return false;
+  }, [nodeById, selectionElementIds]);
+
   const visibleRelationships = useMemo(() => {
     const ids = new Set(nodes.map((n) => n.elementId));
     const rels = Object.values(model.relationships).filter((r) => {
       if (!r.sourceElementId || !r.targetElementId) return false;
       return ids.has(r.sourceElementId) && ids.has(r.targetElementId);
     });
-    // Stable ordering for predictable rendering
     return rels.sort((a, b) => a.id.localeCompare(b.id));
   }, [model.relationships, nodes]);
 
@@ -114,97 +141,171 @@ export function SandboxModeView({
     [drag]
   );
 
-  if (!nodes.length) {
-    return (
-      <div className="crudSection">
-        <div className="crudHeader">
-          <div>
-            <p className="crudTitle">Sandbox</p>
-            <p className="crudHint">
-              Select an element and switch to Sandbox to start. (Step 2 will add drag-and-drop from the navigator.)
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const onDragOver = useCallback((e: DragEvent<SVGSVGElement>) => {
+    if (!dataTransferHasElement(e.dataTransfer)) return;
+    e.preventDefault();
+    setIsDropTarget(true);
+  }, []);
+
+  const onDragLeave = useCallback(() => {
+    setIsDropTarget(false);
+  }, []);
+
+  const onDrop = useCallback(
+    (e: DragEvent<SVGSVGElement>) => {
+      setIsDropTarget(false);
+      if (!dataTransferHasElement(e.dataTransfer)) return;
+      e.preventDefault();
+
+      const id = readDraggedElementId(e.dataTransfer);
+      if (!id) return;
+      if (!model.elements[id]) return;
+
+      const svg = svgRef.current;
+      if (!svg) return;
+      const p = clientToSvg(svg, e.clientX, e.clientY);
+      const x = p.x - NODE_W / 2;
+      const y = p.y - NODE_H / 2;
+      onAddNodeAt(id, x, y);
+      onSelectElement(id);
+    },
+    [model.elements, onAddNodeAt, onSelectElement]
+  );
 
   return (
-    <div className="analysisSandboxRoot" aria-label="Analysis sandbox">
-      <svg
-        ref={svgRef}
-        className="analysisSandboxSvg"
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        role="img"
-        aria-label="Sandbox canvas"
-      >
-        <defs>
-          <marker
-            id="sandboxArrow"
-            viewBox="0 0 10 10"
-            refX="10"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
+    <div className="crudSection">
+      <div className="crudHeader">
+        <div>
+          <p className="crudTitle">Sandbox</p>
+          <p className="crudHint">
+            Drag elements from the Model Navigator into the canvas, or use the buttons to add and remove the current
+            selection.
+          </p>
+        </div>
+        <div className="rowActions">
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={onAddSelected}
+            disabled={!canAddSelected}
+            aria-disabled={!canAddSelected}
+            title="Add the currently selected element(s) to the sandbox"
           >
-            <path d="M 0 0 L 10 5 L 0 10 z" />
-          </marker>
-        </defs>
+            Add selected
+          </button>
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={onRemoveSelected}
+            disabled={!canRemoveSelected}
+            aria-disabled={!canRemoveSelected}
+            title="Remove the currently selected element(s) from the sandbox"
+          >
+            Remove selected
+          </button>
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={onClear}
+            disabled={!nodes.length}
+            aria-disabled={!nodes.length}
+            title="Clear all sandbox nodes"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
 
-        {visibleRelationships.map((r) => {
-          const sId = r.sourceElementId as string;
-          const tId = r.targetElementId as string;
-          const s = nodeById.get(sId);
-          const t = nodeById.get(tId);
-          if (!s || !t) return null;
-          const x1 = s.x + NODE_W / 2;
-          const y1 = s.y + NODE_H / 2;
-          const x2 = t.x + NODE_W / 2;
-          const y2 = t.y + NODE_H / 2;
-          const mx = (x1 + x2) / 2;
-          const my = (y1 + y2) / 2;
-          return (
-            <g key={r.id} className="analysisSandboxEdge">
-              <line x1={x1} y1={y1} x2={x2} y2={y2} markerEnd="url(#sandboxArrow)" />
-              <text x={mx} y={my - 6} textAnchor="middle">
-                {r.type}
-              </text>
-            </g>
-          );
-        })}
-
-        {nodes.map((n) => {
-          const el = model.elements[n.elementId];
-          if (!el) return null;
-          const isSelected = selectedElementId === n.elementId;
-          const label = el.name || '(unnamed)';
-          const secondary = el.type;
-
-          return (
-            <g
-              key={n.elementId}
-              className={`analysisSandboxNode ${isSelected ? 'isSelected' : ''}`}
-              transform={`translate(${n.x}, ${n.y})`}
-              onPointerDown={(e) => onPointerDownNode(e, n.elementId)}
-              onDoubleClick={() => onSelectElement(n.elementId)}
-              onClick={() => onSelectElement(n.elementId)}
-              role="button"
-              tabIndex={0}
-              aria-label={label}
+      <div className="analysisSandboxRoot" aria-label="Analysis sandbox">
+        <svg
+          ref={svgRef}
+          className={`analysisSandboxSvg ${isDropTarget ? 'isDropTarget' : ''}`}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          role="img"
+          aria-label="Sandbox canvas"
+        >
+          <defs>
+            <marker
+              id="sandboxArrow"
+              viewBox="0 0 10 10"
+              refX="10"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
             >
-              <rect width={NODE_W} height={NODE_H} rx={8} ry={8} />
-              <text x={10} y={22} className="analysisSandboxNodeTitle">
-                {label}
+              <path d="M 0 0 L 10 5 L 0 10 z" />
+            </marker>
+          </defs>
+
+          {!nodes.length ? (
+            <g className="analysisSandboxEmpty">
+              <text x="50%" y="45%" textAnchor="middle">
+                Drop elements here
               </text>
-              <text x={10} y={42} className="analysisSandboxNodeMeta">
-                {secondary}
+              <text x="50%" y="55%" textAnchor="middle">
+                Tip: you can also select an element and press “Add selected”
               </text>
             </g>
-          );
-        })}
-      </svg>
+          ) : null}
+
+          {visibleRelationships.map((r) => {
+            const sId = r.sourceElementId as string;
+            const tId = r.targetElementId as string;
+            const s = nodeById.get(sId);
+            const t = nodeById.get(tId);
+            if (!s || !t) return null;
+            const x1 = s.x + NODE_W / 2;
+            const y1 = s.y + NODE_H / 2;
+            const x2 = t.x + NODE_W / 2;
+            const y2 = t.y + NODE_H / 2;
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            return (
+              <g key={r.id} className="analysisSandboxEdge">
+                <line x1={x1} y1={y1} x2={x2} y2={y2} markerEnd="url(#sandboxArrow)" />
+                <text x={mx} y={my - 6} textAnchor="middle">
+                  {r.type}
+                </text>
+              </g>
+            );
+          })}
+
+          {nodes.map((n) => {
+            const el = model.elements[n.elementId];
+            if (!el) return null;
+            const isSelected = selectedElementId === n.elementId;
+            const label = el.name || '(unnamed)';
+            const secondary = el.type;
+
+            return (
+              <g
+                key={n.elementId}
+                className={`analysisSandboxNode ${isSelected ? 'isSelected' : ''}`}
+                transform={`translate(${n.x}, ${n.y})`}
+                onPointerDown={(e) => onPointerDownNode(e, n.elementId)}
+                onDoubleClick={() => onSelectElement(n.elementId)}
+                onClick={() => onSelectElement(n.elementId)}
+                role="button"
+                tabIndex={0}
+                aria-label={label}
+              >
+                <rect width={NODE_W} height={NODE_H} rx={8} ry={8} />
+                <text x={10} y={22} className="analysisSandboxNodeTitle">
+                  {label}
+                </text>
+                <text x={10} y={42} className="analysisSandboxNodeMeta">
+                  {secondary}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
     </div>
   );
 }

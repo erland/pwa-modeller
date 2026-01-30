@@ -47,6 +47,7 @@ export function AnalysisWorkspace({
     matrix,
     queryPanel,
     sandbox,
+    selectionElementIds,
   } = derived;
 
   return (
@@ -84,8 +85,13 @@ export function AnalysisWorkspace({
               model={model}
               nodes={sandbox.state.nodes}
               selection={selection}
+              selectionElementIds={selectionElementIds}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
               onMoveNode={(elementId, x, y) => sandbox.actions.setNodePosition(elementId, x, y)}
+              onAddSelected={() => sandbox.actions.addManyIfMissing(selectionElementIds)}
+              onRemoveSelected={() => sandbox.actions.removeMany(selectionElementIds)}
+              onClear={() => sandbox.actions.clear()}
+              onAddNodeAt={(elementId, x, y) => sandbox.actions.addIfMissing(elementId, x, y)}
             />
           ) : mode === 'matrix' ? (
             <MatrixModeView

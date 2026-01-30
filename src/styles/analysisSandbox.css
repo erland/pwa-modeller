@@ -46,3 +46,14 @@
   pointer-events: none;
   user-select: none;
 }
+
+.analysisSandboxSvg.isDropTarget {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.analysisSandboxEmpty text {
+  font-size: 14px;
+  fill: #333;
+  user-select: none;
+  pointer-events: none;
+}

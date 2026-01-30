@@ -8,6 +8,8 @@ import type {
   RelationshipType
 } from '../../domain';
 
+import type { PathsBetweenQueryMode } from '../../store';
+
 import type { MatrixQueryPreset, MatrixQuerySnapshot } from './matrixPresetsStorage';
 import { QuerySectionCommon } from './queryPanel/QuerySectionCommon';
 import { MatrixQuerySection } from './queryPanel/MatrixQuerySection';
@@ -37,6 +39,8 @@ export type AnalysisQueryPanelState = {
     includeStart: boolean;
     maxPaths: number;
     maxPathLength: number | null;
+    // Opt-in: selects which path engine is used for Paths mode.
+    pathsMode: PathsBetweenQueryMode;
   };
 
   matrix: {
@@ -83,6 +87,7 @@ export type AnalysisQueryPanelActions = {
     setIncludeStart: (v: boolean) => void;
     setMaxPaths: (n: number) => void;
     setMaxPathLength: (n: number | null) => void;
+    setPathsMode: (v: PathsBetweenQueryMode) => void;
     applyPreset: (presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') => void;
   };
 

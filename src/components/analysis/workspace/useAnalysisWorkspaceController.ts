@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type { ModelKind } from '../../../domain';
 import type { Selection } from '../../model/selection';
+import type { PathsBetweenQueryMode } from '../../../store';
 import { useModelStore } from '../../../store';
 
 import type { AnalysisMode } from '../AnalysisQueryPanel';
@@ -30,6 +31,11 @@ export function useAnalysisWorkspaceController({
   const modelId = model?.id ?? '';
 
   const [mode, setMode] = useState<AnalysisMode>('related');
+
+  // Opt-in: allow choosing between shortest-only paths and k-shortest (Yen) paths.
+  // Not currently exposed in the UI; we thread it through state so we can toggle
+  // it in code or wire it up later.
+  const [pathsMode, setPathsMode] = useState<PathsBetweenQueryMode>('shortest');
 
   // -----------------------------
   // Global filters (draft)
@@ -94,6 +100,7 @@ export function useAnalysisWorkspaceController({
     includeStart,
     maxPaths,
     maxPathLength,
+    pathsMode,
   });
 
   const selectionElementIds = useMemo(() => selectionToElementIds(selection), [selection]);
@@ -151,6 +158,7 @@ export function useAnalysisWorkspaceController({
         setIncludeStart(false);
         setMaxPaths(10);
         setMaxPathLength(null);
+        setPathsMode('shortest');
         matrixActions.axes.resetDraft();
         return;
       }
@@ -235,6 +243,8 @@ export function useAnalysisWorkspaceController({
       includeStart,
       maxPaths,
       maxPathLength,
+      // Not currently shown in UI (opt-in)
+      pathsMode,
       setDirection,
       setRelationshipTypes,
       setLayers,
@@ -243,6 +253,7 @@ export function useAnalysisWorkspaceController({
       setIncludeStart,
       setMaxPaths,
       setMaxPathLength,
+      setPathsMode,
       applyPreset,
     },
     matrix: {
@@ -268,6 +279,7 @@ export function useAnalysisWorkspaceController({
       includeStart,
       maxPaths,
       maxPathLength,
+      pathsMode,
       draftStartId,
       draftSourceId,
       draftTargetId,
@@ -282,6 +294,7 @@ export function useAnalysisWorkspaceController({
       setIncludeStart,
       setMaxPaths,
       setMaxPathLength,
+      setPathsMode,
       onChangeDraftStartId: onChangeDraftStartIdSync,
       onChangeDraftSourceId: onChangeDraftSourceIdSync,
       onChangeDraftTargetId: setDraftTargetId,

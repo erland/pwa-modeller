@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import type { AnalysisDirection, ElementType, RelationshipType } from '../../../../domain';
+import type { PathsBetweenQueryMode } from '../../../../store';
 import { useAnalysisPathsBetween, useAnalysisRelatedElements } from '../../../../store';
 
 import { buildPathsAnalysisOpts, buildRelatedAnalysisOpts } from '../analysisWorkspaceUtils';
@@ -24,6 +25,9 @@ export function useAnalysisResultsState(args: {
   // Paths
   maxPaths: number;
   maxPathLength: number | null;
+
+  // Paths mode (opt-in)
+  pathsMode?: PathsBetweenQueryMode;
 }) {
   const {
     activeStartId,
@@ -37,6 +41,7 @@ export function useAnalysisResultsState(args: {
     includeStart,
     maxPaths,
     maxPathLength,
+    pathsMode,
   } = args;
 
   const relatedOpts = useMemo(
@@ -67,7 +72,7 @@ export function useAnalysisResultsState(args: {
 
   // Results are driven by active element selection + *draft* filters (QoL).
   const relatedResult = useAnalysisRelatedElements(activeStartId || null, relatedOpts);
-  const pathsResult = useAnalysisPathsBetween(activeSourceId || null, activeTargetId || null, pathsOpts);
+  const pathsResult = useAnalysisPathsBetween(activeSourceId || null, activeTargetId || null, pathsOpts, pathsMode ?? 'shortest');
 
   return { relatedOpts, pathsOpts, relatedResult, pathsResult } as const;
 }

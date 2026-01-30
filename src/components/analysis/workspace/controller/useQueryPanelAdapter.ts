@@ -7,6 +7,7 @@ import type {
   AnalysisMode,
 } from '../../AnalysisQueryPanel';
 import type { AnalysisDirection, ElementType, RelationshipType } from '../../../../domain';
+import type { PathsBetweenQueryMode } from '../../../../store';
 import type { useMatrixWorkspaceState } from '../useMatrixWorkspaceState';
 
 type MatrixWorkspace = ReturnType<typeof useMatrixWorkspaceState>;
@@ -36,6 +37,7 @@ type Args = {
     includeStart: boolean;
     maxPaths: number;
     maxPathLength: number | null;
+    pathsMode: PathsBetweenQueryMode;
 
     setDirection: (v: AnalysisDirection) => void;
     setRelationshipTypes: (v: RelationshipType[]) => void;
@@ -45,6 +47,7 @@ type Args = {
     setIncludeStart: (v: boolean) => void;
     setMaxPaths: (v: number) => void;
     setMaxPathLength: (v: number | null) => void;
+    setPathsMode: (v: PathsBetweenQueryMode) => void;
 
     applyPreset: (presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') => void;
   };
@@ -82,6 +85,7 @@ export function useQueryPanelAdapter({
     includeStart,
     maxPaths,
     maxPathLength,
+    pathsMode,
     setDirection,
     setRelationshipTypes,
     setLayers,
@@ -90,6 +94,7 @@ export function useQueryPanelAdapter({
     setIncludeStart,
     setMaxPaths,
     setMaxPathLength,
+    setPathsMode,
     applyPreset,
   } = filters;
 
@@ -144,6 +149,7 @@ export function useQueryPanelAdapter({
         includeStart,
         maxPaths,
         maxPathLength,
+        pathsMode,
       },
       matrix: {
         rowSource: matrix.state.axes.rowSource,
@@ -180,6 +186,7 @@ export function useQueryPanelAdapter({
       maxDepth,
       maxPathLength,
       maxPaths,
+      pathsMode,
       relationshipTypes,
       matrix.derived.result,
       matrix.state.axes.colElementType,
@@ -222,6 +229,7 @@ export function useQueryPanelAdapter({
         setIncludeStart,
         setMaxPaths,
         setMaxPathLength,
+        setPathsMode,
         applyPreset,
       },
       matrix: {
@@ -264,6 +272,7 @@ export function useQueryPanelAdapter({
       setMaxDepth,
       setMaxPathLength,
       setMaxPaths,
+      setPathsMode,
       setRelationshipTypes,
       useSelectionAs,
       matrix.actions.axes,

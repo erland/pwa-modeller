@@ -9,9 +9,10 @@ import type {
   RelatedElementsResult,
   RelationshipType
 } from '../domain';
-import { queryPathsBetween, queryRelatedElements } from '../domain';
-
+import { queryKShortestPathsBetween, queryPathsBetween, queryRelatedElements } from '../domain';
 import { useModelStore } from './hooks';
+
+export type PathsBetweenQueryMode = 'shortest' | 'kShortest';
 
 function normalizeStringArray<T extends string>(arr: readonly T[] | undefined): T[] | undefined {
   if (!arr || arr.length === 0) return undefined;
@@ -46,6 +47,14 @@ function stableAnalysisKey(opts: RelatedElementsOptions | PathsBetweenOptions | 
     elementTypes: normalizeStringArray<ElementType>(opts.elementTypes)
   };
   return JSON.stringify(o);
+}
+
+function stablePathsBetweenKey(opts: PathsBetweenOptions | undefined, mode: PathsBetweenQueryMode): string {
+  // Keep the same key shape as `stableAnalysisKey` (direction/maxDepth/etc),
+  // but add the mode so memoization doesn't cross-contaminate shortest vs k-shortest.
+  const baseKey = stableAnalysisKey(opts);
+  const base = baseKey ? (JSON.parse(baseKey) as Record<string, unknown>) : {};
+  return JSON.stringify({ ...base, pathMode: mode });
 }
 
 function relatedOptsFromKey(key: string): RelatedElementsOptions {
@@ -123,10 +132,13 @@ export function runAnalysisPathsBetween(
   model: Model | null | undefined,
   sourceElementId: string,
   targetElementId: string,
-  opts: PathsBetweenOptions = {}
+  opts: PathsBetweenOptions = {},
+  mode: PathsBetweenQueryMode = 'shortest'
 ): PathsBetweenResult {
   if (!model) return { sourceElementId, targetElementId, paths: [] }; 
-  return queryPathsBetween(model, sourceElementId, targetElementId, opts); 
+  return mode === 'kShortest'
+    ? queryKShortestPathsBetween(model, sourceElementId, targetElementId, opts)
+    : queryPathsBetween(model, sourceElementId, targetElementId, opts);
 }
 
 // -----------------------------
@@ -150,16 +162,19 @@ export function useAnalysisRelatedElements(
 export function useAnalysisPathsBetween(
   sourceElementId: string | null | undefined,
   targetElementId: string | null | undefined,
-  opts: PathsBetweenOptions = {}
+  opts: PathsBetweenOptions = {},
+  mode: PathsBetweenQueryMode = 'shortest'
 ): PathsBetweenResult | null {
   const model = useModelStore((s) => s.model);
-  const key = stableAnalysisKey(opts);
+  const key = stablePathsBetweenKey(opts, mode);
   const normalizedOpts = useMemo(() => pathsOptsFromKey(key), [key]);
 
   return useMemo(() => {
     if (!model || !sourceElementId || !targetElementId) return null;
-    return queryPathsBetween(model, sourceElementId, targetElementId, normalizedOpts);
-  }, [model, sourceElementId, targetElementId, normalizedOpts]);
+    return mode === 'kShortest'
+      ? queryKShortestPathsBetween(model, sourceElementId, targetElementId, normalizedOpts)
+      : queryPathsBetween(model, sourceElementId, targetElementId, normalizedOpts);
+  }, [model, sourceElementId, targetElementId, normalizedOpts, mode]);
 }
 
 // -----------------------------

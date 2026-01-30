@@ -57,10 +57,46 @@ function normalizeBendPoints(points: Point[]): Point[] {
   return simplified;
 }
 
+
+function clearManualEdgePointsForView(model: Model, viewId: string): void {
+  const view = getView(model, viewId);
+  // For UML/BPMN we prefer the built-in router over persisted bend-points from ELK.
+  // Persisted points cause stale/odd routing when nodes move after auto-layout.
+  if (view.kind === 'archimate') return;
+
+  let changed = false;
+
+  const nextConnections = (view.connections ?? []).map((c: ViewConnection) => {
+    if (!c.points) return c;
+    changed = true;
+    return { ...c, points: undefined };
+  });
+
+  const nextLayoutRelationships = view.layout?.relationships?.map((r: ViewRelationshipLayout) => {
+    if (!r.points) return r;
+    changed = true;
+    return { ...r, points: undefined };
+  });
+
+  if (!changed) return;
+
+  model.views[viewId] = {
+    ...view,
+    connections: nextConnections,
+    layout: view.layout
+      ? {
+          ...view.layout,
+          relationships: nextLayoutRelationships ?? view.layout.relationships,
+        }
+      : view.layout,
+  };
+}
+
 function applyEdgeRoutesToView(model: Model, viewId: string, edgeRoutes?: EdgeRoutes): void {
   if (!edgeRoutes) return;
 
   const view = getView(model, viewId);
+  if (view.kind !== 'archimate') return;
 
   const routes = edgeRoutes as Record<string, { points: Point[] }>;
   const nextConnections = (view.connections ?? []).map((c: ViewConnection) => {
@@ -151,6 +187,9 @@ export function autoLayoutView(
   // Ensure connections are consistent after layout changes.
   syncViewConnections(model, viewId);
 
+  // Clear persisted bend-points for UML/BPMN so the router can recompute cleanly.
+  clearManualEdgePointsForView(model, viewId);
+
   // Apply any computed edge routes last (so we patch the latest connection objects).
   applyEdgeRoutesToView(model, viewId, edgeRoutes);
 }
@@ -200,5 +239,6 @@ export function autoLayoutViewGeometry(
   }
 
   syncViewConnections(model, viewId);
+  clearManualEdgePointsForView(model, viewId);
   applyEdgeRoutesToView(model, viewId, edgeRoutes);
 }

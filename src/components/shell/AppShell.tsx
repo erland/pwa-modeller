@@ -1,6 +1,6 @@
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
 import '../../styles/shell.css';
 import { useModelStore } from '../../store';
@@ -17,8 +17,7 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-function TopNavLink({ to, label, confirmNavigate, className }: { to: string; label: string; confirmNavigate?: () => boolean; className?: string }) {
-  const location = useLocation();
+function TopNavLink({ to, label, className }: { to: string; label: string; className?: string }) {
   return (
     <NavLink
       to={to}
@@ -26,13 +25,6 @@ function TopNavLink({ to, label, confirmNavigate, className }: { to: string; lab
         ['shellNavLink', className ?? null, isActive ? 'isActive' : null].filter(Boolean).join(' ')
       }
       end={to === '/'}
-      onClick={(e) => {
-        if (!confirmNavigate) return;
-        // Only confirm if we're actually leaving the current route.
-        if (location.pathname === to) return;
-        const ok = confirmNavigate();
-        if (!ok) e.preventDefault();
-      }}
     >
       {label}
     </NavLink>
@@ -133,13 +125,6 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const online = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
 
-  const confirmNavigate = useMemo(() => {
-    return () => {
-      if (!isDirty) return true;
-      return window.confirm('You have unsaved changes. Leave this page?');
-    };
-  }, [isDirty]);
-
   const [leftOpen, setLeftOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth > 720;
@@ -237,9 +222,9 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
         </div>
 
         <nav className="shellNav" aria-label="Primary navigation" data-testid="app-nav">
-          <TopNavLink to="/" label="Workspace" confirmNavigate={confirmNavigate} />
-          <TopNavLink to="/analysis" label="Analysis" confirmNavigate={confirmNavigate} />
-          <TopNavLink to="/about" label="About" className="shellNavLinkAbout" confirmNavigate={confirmNavigate} />
+          <TopNavLink to="/" label="Workspace" />
+          <TopNavLink to="/analysis" label="Analysis" />
+          <TopNavLink to="/about" label="About" className="shellNavLinkAbout" />
         </nav>
 
         <div className="shellActions" aria-label="Actions">

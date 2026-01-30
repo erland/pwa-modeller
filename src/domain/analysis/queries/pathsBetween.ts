@@ -156,3 +156,24 @@ export function queryPathsBetween(
 
   return { sourceElementId, targetElementId, shortestDistance: shortest, paths };
 }
+
+
+// NOTE: This is intentionally a thin wrapper around queryPathsBetween.
+// It exists to allow the analysis workspace to opt into "Top-K" (potentially longer) paths
+// in a future change, without altering the semantics of queryPathsBetween.
+export type KShortestPathsBetweenOptions = PathsBetweenOptions;
+
+/**
+ * Find up to K paths between two elements.
+ *
+ * Current semantics (Step 1): identical to {@link queryPathsBetween} (shortest-paths only).
+ * Future steps will implement K-shortest simple paths (which may include longer alternatives).
+ */
+export function queryKShortestPathsBetween(
+  model: Model,
+  sourceElementId: string,
+  targetElementId: string,
+  opts: KShortestPathsBetweenOptions = {}
+): PathsBetweenResult {
+  return queryPathsBetween(model, sourceElementId, targetElementId, opts);
+}

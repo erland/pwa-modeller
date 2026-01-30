@@ -143,7 +143,7 @@ describe('AnalysisWorkspace behavior safety net', () => {
     const runButton = await screen.findByRole('button', { name: /Run analysis/i });
     await waitFor(() => expect(runButton).toBeEnabled());
 
-    fireEvent.click(runButton);
+    // Auto-run should trigger as soon as the query becomes runnable.
 
     // A simple direct Flow should yield at least one path.
     await waitFor(() => {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ModelKind } from '../../../domain';
 import type { Selection } from '../../model/selection';
@@ -148,6 +148,28 @@ export function useAnalysisWorkspaceController({
     // Keep related/traceability baseline aligned with the chosen source.
     setActiveStartId(draftSourceId);
   }, [buildMatrix, draftSourceId, draftStartId, draftTargetId, model, mode, setActiveSourceId, setActiveStartId, setActiveTargetId]);
+
+// Auto-run analyses when the draft selection is sufficient.
+// This avoids an extra "Run analysis" click for common workflows.
+// Matrix mode is intentionally excluded for now to avoid triggering expensive builds
+// while the user is still configuring axes/prefs.
+useEffect(() => {
+  if (!model) return;
+  if (!canRun) return;
+
+  if (mode === 'matrix') return;
+
+  if (mode === 'paths') {
+    const changed = activeSourceId !== draftSourceId || activeTargetId !== draftTargetId;
+    if (changed) run();
+    return;
+  }
+
+  // related / traceability
+  if (activeStartId !== draftStartId) run();
+}, [activeSourceId, activeStartId, activeTargetId, canRun, draftSourceId, draftStartId, draftTargetId, model, mode, run]);
+
+
 
   const applyPreset = useCallback(
     (presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') => {

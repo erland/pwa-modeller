@@ -160,8 +160,8 @@ export function ElementChooserDialog({ title, isOpen, model, value, onClose, onC
                     key={el.id}
                     type="button"
                     className={isActive ? 'shellButton' : 'shellButton secondary'}
-                    onClick={() => setSelectedId(el.id)}
-                    onDoubleClick={() => onChoose(el.id)}
+                    onClick={() => { setSelectedId(el.id); onChoose(el.id); }}
+
                     style={{
                       display: 'block',
                       width: '100%',
@@ -239,7 +239,7 @@ export function ElementChooserDialog({ title, isOpen, model, value, onClose, onC
             data-autofocus="true"
           />
           <p className="hintText" style={{ marginTop: 2 }}>
-            Tip: double-click an element to choose it.
+            Tip: click an element to choose it.
           </p>
         </div>
 
@@ -267,8 +267,8 @@ export function ElementChooserDialog({ title, isOpen, model, value, onClose, onC
                       key={el.id}
                       type="button"
                       className={isActive ? 'shellButton' : 'shellButton secondary'}
-                      onClick={() => setSelectedId(el.id)}
-                      onDoubleClick={() => onChoose(el.id)}
+                      onClick={() => { setSelectedId(el.id); onChoose(el.id); }}
+
                       style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 8, padding: '8px 10px' }}
                     >
                       <div>

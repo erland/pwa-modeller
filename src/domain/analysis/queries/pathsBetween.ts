@@ -276,10 +276,18 @@ export function queryPathsBetween(
 // in a future change, without altering the semantics of queryPathsBetween.
 export type KShortestPathsBetweenOptions = PathsBetweenOptions;
 
+const HARD_MAX_KSHORTEST_PATHS = 25;
+const HARD_MAX_KSHORTEST_PATH_LENGTH = 50;
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
 type YenCandidate = {
   path: AnalysisPath;
   cost: number;
   sortKey: string;
+  key: string;
 };
 
 function analysisPathKey(p: AnalysisPath): string {
@@ -296,6 +304,19 @@ function yenCandidateSortKey(p: AnalysisPath): string {
   // Pad to keep lexicographic ordering stable.
   const costKey = String(cost).padStart(6, '0');
   return `${costKey}:${analysisPathKey(p)}`;
+}
+
+function insertCandidateSorted(arr: YenCandidate[], cand: YenCandidate): void {
+  // Keep candidates sorted by sortKey (ascending) to avoid full sorts each iteration.
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    const cmp = arr[mid]?.sortKey.localeCompare(cand.sortKey) ?? 0;
+    if (cmp <= 0) lo = mid + 1;
+    else hi = mid;
+  }
+  arr.splice(lo, 0, cand);
 }
 
 function pathHasPrefix(p: AnalysisPath, rootElementIds: readonly string[]): boolean {
@@ -321,10 +342,13 @@ export function queryKShortestPathsBetween(
   targetElementId: string,
   opts: KShortestPathsBetweenOptions = {}
 ): PathsBetweenResult {
-  const maxPaths = opts.maxPaths ?? 10;
+  const maxPaths = clampInt(opts.maxPaths ?? 10, 0, HARD_MAX_KSHORTEST_PATHS);
   if (maxPaths <= 0) return { sourceElementId, targetElementId, paths: [] };
 
-  const first = findShortestSinglePathWithBans(model, sourceElementId, targetElementId, opts, {});
+  const effectiveMaxPathLength = clampInt(opts.maxPathLength ?? HARD_MAX_KSHORTEST_PATH_LENGTH, 0, HARD_MAX_KSHORTEST_PATH_LENGTH);
+  const effectiveOpts: PathsBetweenOptions = { ...opts, maxPathLength: effectiveMaxPathLength };
+
+  const first = findShortestSinglePathWithBans(model, sourceElementId, targetElementId, effectiveOpts, {});
   if (!first) return { sourceElementId, targetElementId, paths: [] };
 
   // Yen's algorithm uses A for best paths and B for candidates.
@@ -339,8 +363,8 @@ export function queryKShortestPathsBetween(
   const pushCandidate = (p: AnalysisPath): void => {
     const k = analysisPathKey(p);
     if (bestKeySet.has(k) || candidateKeySet.has(k)) return;
-    const cand: YenCandidate = { path: p, cost: p.steps.length, sortKey: yenCandidateSortKey(p) };
-    B.push(cand);
+    const cand: YenCandidate = { path: p, cost: p.steps.length, sortKey: yenCandidateSortKey(p), key: k };
+    insertCandidateSorted(B, cand);
     candidateKeySet.add(k);
   };
 
@@ -366,14 +390,12 @@ export function queryKShortestPathsBetween(
       }
 
       // If caller specified an absolute maxPathLength, adjust for the already-fixed root prefix.
-      const remainingMax =
-        opts.maxPathLength === undefined ? undefined : Math.max(0, opts.maxPathLength - rootSteps.length);
-      if (remainingMax !== undefined && remainingMax === 0 && spurNodeId !== targetElementId) {
+      const remainingMax = Math.max(0, effectiveOpts.maxPathLength! - rootSteps.length);
+      if (remainingMax === 0 && spurNodeId !== targetElementId) {
         continue;
       }
 
-      const spurOpts: PathsBetweenOptions =
-        remainingMax === undefined ? opts : { ...opts, maxPathLength: remainingMax };
+      const spurOpts: PathsBetweenOptions = { ...effectiveOpts, maxPathLength: remainingMax };
 
       const spurPath = findShortestSinglePathWithBans(
         model,
@@ -389,18 +411,17 @@ export function queryKShortestPathsBetween(
       const combinedSteps = rootSteps.concat(spurPath.steps);
 
       // Respect the absolute maxPathLength if provided.
-      if (opts.maxPathLength !== undefined && combinedSteps.length > opts.maxPathLength) continue;
+      if (combinedSteps.length > effectiveOpts.maxPathLength!) continue;
 
       pushCandidate({ elementIds: combinedElementIds, steps: combinedSteps });
     }
 
     if (!B.length) break;
 
-    // Pick best candidate deterministically.
-    B.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+    // Pick best candidate deterministically (B is maintained sorted).
     const next = B.shift();
     if (!next) break;
-    candidateKeySet.delete(analysisPathKey(next.path));
+    candidateKeySet.delete(next.key);
 
     A.push(next.path);
     bestKeySet.add(analysisPathKey(next.path));

@@ -84,10 +84,19 @@ describe('domain analysis engine', () => {
   test('undirected association is traversable from both ends', () => {
     const model = buildSmallModel();
 
-    const fromD = queryRelatedElements(model, 'D', { direction: 'outgoing', maxDepth: 1 });
+    // Only test Association traversal semantics here (D also has an outgoing Flow to C in this fixture).
+    const fromD = queryRelatedElements(model, 'D', {
+      direction: 'outgoing',
+      maxDepth: 1,
+      relationshipTypes: ['Association']
+    });
     expect(fromD.hits.map(h => h.elementId)).toEqual(['A']);
 
-    const fromA = queryRelatedElements(model, 'A', { direction: 'incoming', maxDepth: 1 });
+    const fromA = queryRelatedElements(model, 'A', {
+      direction: 'incoming',
+      maxDepth: 1,
+      relationshipTypes: ['Association']
+    });
     // Because association is undirected, incoming traversal at A can reach D.
     expect(fromA.hits.map(h => h.elementId)).toEqual(['D']);
   });

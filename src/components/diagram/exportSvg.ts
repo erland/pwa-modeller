@@ -88,8 +88,9 @@ function escapeXml(s: string): string {
 }
 
 function nodeSize(n: ViewNodeLayout): { w: number; h: number } {
-  const w = n.width ?? (n.connectorId ? 24 : 120);
-  const h = n.height ?? (n.connectorId ? 24 : 60);
+  const isObj = Boolean(n.objectId);
+  const w = n.width ?? (n.connectorId ? 24 : isObj ? 200 : 120);
+  const h = n.height ?? (n.connectorId ? 24 : isObj ? 120 : 60);
   return { w, h };
 }
 
@@ -110,12 +111,12 @@ export function createViewSvg(model: Model, viewId: string): string {
 
   const nodes0 = view.layout?.nodes ?? [];
   const orderedNodes = [...nodes0]
-    .filter((n) => Boolean(n.elementId || n.connectorId))
+    .filter((n) => Boolean(n.elementId || n.connectorId || n.objectId))
     .sort((a, b) => {
       const za = typeof a.zIndex === 'number' ? a.zIndex : 0;
       const zb = typeof b.zIndex === 'number' ? b.zIndex : 0;
-      const ka = a.elementId ?? a.connectorId ?? '';
-      const kb = b.elementId ?? b.connectorId ?? '';
+      const ka = a.elementId ?? a.connectorId ?? a.objectId ?? '';
+      const kb = b.elementId ?? b.connectorId ?? b.objectId ?? '';
       return za - zb || ka.localeCompare(kb);
     });
 
@@ -287,6 +288,32 @@ export function createViewSvg(model: Model, viewId: string): string {
     .join('');
 
   const isContainerType = (typeId: string): boolean => typeId === 'bpmn.pool' || typeId === 'bpmn.lane';
+  const isObjectType = (t: unknown): t is 'Note' | 'Label' | 'GroupBox' | 'Divider' =>
+    t === 'Note' || t === 'Label' || t === 'GroupBox' || t === 'Divider';
+
+  const objectText = (t: string, obj: { name?: string; text?: string }): string => {
+    if (t === 'GroupBox') return obj.name?.trim() || 'Group';
+    if (t === 'Divider') return '';
+    const raw = obj.text?.trim();
+    if (raw) return raw;
+    return t === 'Label' ? 'Label' : 'Note';
+  };
+
+  const svgTextAnchor = (align: unknown): 'start' | 'middle' | 'end' => {
+    if (align === 'center') return 'middle';
+    if (align === 'right') return 'end';
+    return 'start';
+  };
+
+  const renderMultilineText = (x: number, y: number, text: string, opts: { fontSize: number; fontWeight?: number; fill: string; anchor: 'start' | 'middle' | 'end' }): string => {
+    const lines = text.split(/\r?\n/);
+    const lh = Math.round(opts.fontSize * 1.25);
+    return `<text x="${x}" y="${y}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="${opts.fontSize}"${
+      opts.fontWeight ? ` font-weight="${opts.fontWeight}"` : ''
+    } fill="${opts.fill}" text-anchor="${opts.anchor}">${lines
+      .map((ln, i) => `<tspan x="${x}" dy="${i === 0 ? 0 : lh}">${escapeXml(ln)}</tspan>`)
+      .join('')}</text>`;
+  };
 
   const renderNodeSvg = (n: ViewNodeLayout): string => {
     const x = n.x;
@@ -306,6 +333,70 @@ export function createViewSvg(model: Model, viewId: string): string {
           <text x="${cx}" y="${cy + 4}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" font-weight="800" fill="#0f172a" text-anchor="middle">${symbol}</text>
         </g>
       `;
+    }
+
+    // View-local objects (note/label/group box/divider).
+    if (n.objectId) {
+      const obj = view.objects?.[n.objectId];
+      if (!obj || !isObjectType(obj.type)) return '';
+
+      const isGroup = obj.type === 'GroupBox';
+      const isDivider = obj.type === 'Divider';
+      const isDividerVertical = isDivider && h > w;
+      const isLabel = obj.type === 'Label';
+      const isNote = obj.type === 'Note';
+
+      const stroke = (obj.style?.stroke as string | undefined) ?? (n.highlighted ? '#f59e0b' : 'rgba(0,0,0,0.18)');
+      const fill = (obj.style?.fill as string | undefined) ?? (isNote ? 'rgba(255, 255, 200, 0.92)' : isGroup || isLabel || isDivider ? 'transparent' : 'rgba(255,255,255,0.92)');
+      const dash = isGroup || isLabel ? ' stroke-dasharray="6 6"' : '';
+      const strokeWidth = isGroup ? 2 : isDivider ? 0 : 1;
+      const rx = isDivider ? 0 : 12;
+
+      if (isDivider) {
+        const lineStroke = (obj.style?.stroke as string | undefined) ?? 'rgba(0,0,0,0.55)';
+        const x1 = isDividerVertical ? x + w / 2 : x;
+        const y1 = isDividerVertical ? y : y + h / 2;
+        const x2 = isDividerVertical ? x + w / 2 : x + w;
+        const y2 = isDividerVertical ? y + h : y + h / 2;
+        return `<g>
+          <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${lineStroke}" stroke-width="2" />
+        </g>`;
+      }
+
+      const text = objectText(obj.type, obj);
+      const textAlign = svgTextAnchor(obj.style?.textAlign);
+      const padX = isLabel ? 6 : 10;
+      const padY = isLabel ? 14 : isGroup ? 18 : 18;
+      const tx = textAlign === 'middle' ? x + w / 2 : textAlign === 'end' ? x + w - padX : x + padX;
+
+      const rect = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"${dash} />`;
+
+      if (isGroup) {
+        return `<g>
+          ${rect}
+          ${renderMultilineText(tx, y + padY, text, { fontSize: 12, fontWeight: 800, fill: 'rgba(0,0,0,0.88)', anchor: textAlign })}
+        </g>`;
+      }
+
+      if (isLabel) {
+        return `<g>
+          ${rect}
+          ${renderMultilineText(tx, y + padY, text, { fontSize: 13, fill: 'rgba(0,0,0,0.88)', anchor: textAlign })}
+        </g>`;
+      }
+
+      if (isNote) {
+        return `<g>
+          ${rect}
+          ${renderMultilineText(tx, y + padY, text, { fontSize: 13, fill: 'rgba(0,0,0,0.88)', anchor: textAlign })}
+        </g>`;
+      }
+
+      // Default fallback.
+      return `<g>
+        ${rect}
+        ${renderMultilineText(tx, y + padY, text, { fontSize: 13, fill: 'rgba(0,0,0,0.88)', anchor: textAlign })}
+      </g>`;
     }
 
     const el = n.elementId ? model.elements[n.elementId] : null;
@@ -348,6 +439,13 @@ export function createViewSvg(model: Model, viewId: string): string {
     const el = model.elements[n.elementId];
     return Boolean(el && isContainerType(el.type));
   });
+
+  const groupBoxNodes = nodes.filter((n) => {
+    if (!n.objectId) return false;
+    const obj = view.objects?.[n.objectId];
+    return Boolean(obj && obj.type === 'GroupBox');
+  });
+
   const foregroundNodes = nodes.filter((n) => {
     if (n.connectorId) return true;
     if (!n.elementId) return false;
@@ -355,8 +453,14 @@ export function createViewSvg(model: Model, viewId: string): string {
     return Boolean(el && !isContainerType(el.type));
   });
 
-  const containersSvg = containerNodes.map(renderNodeSvg).join('');
-  const nodesSvg = foregroundNodes.map(renderNodeSvg).join('');
+  const foregroundObjectNodes = nodes.filter((n) => {
+    if (!n.objectId) return false;
+    const obj = view.objects?.[n.objectId];
+    return Boolean(obj && obj.type !== 'GroupBox');
+  });
+
+  const containersSvg = [...containerNodes, ...groupBoxNodes].map(renderNodeSvg).join('');
+  const nodesSvg = [...foregroundNodes, ...foregroundObjectNodes].map(renderNodeSvg).join('');
 
   // Export uses a neutral light background so diagrams remain readable when
   // embedded in documents regardless of the app's current theme.

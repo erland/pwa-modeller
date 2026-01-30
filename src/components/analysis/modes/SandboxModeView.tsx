@@ -6,6 +6,8 @@ import type { Selection } from '../../model/selection';
 import type {
   SandboxNode,
   SandboxAddRelatedDirection,
+  SandboxInsertIntermediatesMode,
+  SandboxInsertIntermediatesOptions,
   SandboxRelationshipVisibilityMode,
   SandboxRelationshipsState,
   SandboxState,
@@ -69,6 +71,7 @@ export function SandboxModeView({
   onSetAddRelatedEnabledTypes,
   onToggleAddRelatedEnabledType,
   onAddRelatedFromSelection,
+  onInsertIntermediatesBetween,
 }: {
   model: Model;
   nodes: SandboxNode[];
@@ -91,10 +94,21 @@ export function SandboxModeView({
   onSetAddRelatedEnabledTypes: (types: string[]) => void;
   onToggleAddRelatedEnabledType: (type: string) => void;
   onAddRelatedFromSelection: (anchorElementIds: string[]) => void;
+  onInsertIntermediatesBetween: (
+    sourceElementId: string,
+    targetElementId: string,
+    options: SandboxInsertIntermediatesOptions
+  ) => void;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+
+  const [insertMode, setInsertMode] = useState<SandboxInsertIntermediatesMode>('shortest');
+  const [insertK, setInsertK] = useState(3);
+  const [insertMaxHops, setInsertMaxHops] = useState(8);
+  const [insertDirection, setInsertDirection] = useState<SandboxAddRelatedDirection>('both');
 
   const selectedElementId = useMemo(() => getSelectedElementId(selection), [selection]);
 
@@ -138,6 +152,15 @@ export function SandboxModeView({
   const addRelatedAnchors = useMemo(() => {
     return selectionElementIds.filter((id) => nodeById.has(id));
   }, [nodeById, selectionElementIds]);
+
+  const insertAnchors = useMemo(() => {
+    const uniq = Array.from(new Set(selectionElementIds.filter((id) => nodeById.has(id))));
+    return uniq;
+  }, [nodeById, selectionElementIds]);
+
+  const canInsertIntermediates = useMemo(() => {
+    return insertAnchors.length === 2 && addRelated.enabledTypes.length > 0;
+  }, [addRelated.enabledTypes.length, insertAnchors.length]);
 
   const canAddRelated = useMemo(() => {
     return addRelatedAnchors.length > 0 && addRelated.enabledTypes.length > 0;
@@ -184,6 +207,16 @@ export function SandboxModeView({
     if (relationships.mode === 'all') return baseVisibleRelationships;
     return baseVisibleRelationships.filter((r) => enabledTypeSet.has(r.type));
   }, [baseVisibleRelationships, enabledTypeSet, relationships.mode, relationships.show]);
+
+  const selectedEdge = useMemo(() => {
+    if (!selectedEdgeId) return null;
+    const r = (model.relationships as Record<string, any>)[selectedEdgeId];
+    if (!r) return null;
+    if (!r.sourceElementId || !r.targetElementId) return null;
+    if (!nodeById.has(r.sourceElementId)) return null;
+    if (!nodeById.has(r.targetElementId)) return null;
+    return r as { id: string; type: string; sourceElementId: string; targetElementId: string };
+  }, [model.relationships, nodeById, selectedEdgeId]);
 
   const onPointerDownNode = useCallback(
     (e: PointerEvent<SVGGElement>, elementId: string) => {
@@ -256,6 +289,27 @@ export function SandboxModeView({
     },
     [model.elements, onAddNodeAt, onSelectElement]
   );
+
+  const onInsert = useCallback(() => {
+    if (insertAnchors.length !== 2) return;
+    const [a, b] = insertAnchors;
+    onInsertIntermediatesBetween(a, b, {
+      mode: insertMode,
+      k: insertK,
+      maxHops: insertMaxHops,
+      direction: insertDirection,
+    });
+  }, [insertAnchors, insertDirection, insertK, insertMaxHops, insertMode, onInsertIntermediatesBetween]);
+
+  const onInsertFromSelectedEdge = useCallback(() => {
+    if (!selectedEdge) return;
+    onInsertIntermediatesBetween(selectedEdge.sourceElementId, selectedEdge.targetElementId, {
+      mode: insertMode,
+      k: insertK,
+      maxHops: insertMaxHops,
+      direction: insertDirection,
+    });
+  }, [insertDirection, insertK, insertMaxHops, insertMode, onInsertIntermediatesBetween, selectedEdge]);
 
   return (
     <div className="crudSection">
@@ -477,6 +531,106 @@ export function SandboxModeView({
         </div>
       </div>
 
+      <div className="toolbar" style={{ marginTop: 10 }}>
+        <div className="toolbarGroup" style={{ minWidth: 280 }}>
+          <label>Insert intermediate elements</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ fontSize: 12, opacity: 0.9 }}>
+              Mode
+              <select
+                className="selectInput"
+                value={insertMode}
+                onChange={(e) => setInsertMode(e.currentTarget.value as SandboxInsertIntermediatesMode)}
+                style={{ marginLeft: 8 }}
+                aria-label="Insert intermediates mode"
+              >
+                <option value="shortest">Shortest path</option>
+                <option value="topk">Top-K shortest paths</option>
+              </select>
+            </label>
+
+            <label style={{ fontSize: 12, opacity: 0.9 }}>
+              K
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={insertK}
+                disabled={insertMode !== 'topk'}
+                aria-disabled={insertMode !== 'topk'}
+                onChange={(e) => setInsertK(Number(e.currentTarget.value))}
+                style={{ width: 70, marginLeft: 8 }}
+              />
+            </label>
+
+            <label style={{ fontSize: 12, opacity: 0.9 }}>
+              Max hops
+              <input
+                type="number"
+                min={1}
+                max={16}
+                value={insertMaxHops}
+                onChange={(e) => setInsertMaxHops(Number(e.currentTarget.value))}
+                style={{ width: 78, marginLeft: 8 }}
+              />
+            </label>
+
+            <label style={{ fontSize: 12, opacity: 0.9 }}>
+              Direction
+              <select
+                className="selectInput"
+                value={insertDirection}
+                onChange={(e) => setInsertDirection(e.currentTarget.value as SandboxAddRelatedDirection)}
+                style={{ marginLeft: 8 }}
+                aria-label="Insert intermediates direction"
+              >
+                <option value="both">Both</option>
+                <option value="outgoing">Outgoing</option>
+                <option value="incoming">Incoming</option>
+              </select>
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={onInsert}
+              disabled={!canInsertIntermediates}
+              aria-disabled={!canInsertIntermediates}
+              title={
+                insertAnchors.length === 2
+                  ? 'Insert intermediate elements between the two selected sandbox nodes'
+                  : 'Select exactly two sandbox nodes (elements) to insert intermediates'
+              }
+            >
+              Insert between selection
+            </button>
+
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={onInsertFromSelectedEdge}
+              disabled={!selectedEdge || addRelated.enabledTypes.length === 0}
+              aria-disabled={!selectedEdge || addRelated.enabledTypes.length === 0}
+              title={selectedEdge ? 'Insert intermediate elements between the selected relationship endpoints' : 'Click a relationship line to select it'}
+            >
+              Insert from selected relationship
+            </button>
+          </div>
+
+          <p className="crudHint" style={{ margin: 0 }}>
+            {insertAnchors.length !== 2
+              ? `Selection: ${insertAnchors.length} node(s) · Tip: multi-select two elements in the Navigator and then return here.`
+              : `Between: ${insertAnchors[0]} → ${insertAnchors[1]}${selectedEdge ? ` · Edge: ${selectedEdge.type}` : ''}`}
+          </p>
+
+          <p className="crudHint" style={{ margin: 0 }}>
+            Uses the “Traversal types” filter above.
+          </p>
+        </div>
+      </div>
+
       <div className="analysisSandboxRoot" aria-label="Analysis sandbox">
         <svg
           ref={svgRef}
@@ -486,6 +640,7 @@ export function SandboxModeView({
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
+          onClick={() => setSelectedEdgeId(null)}
           role="img"
           aria-label="Sandbox canvas"
         >
@@ -527,7 +682,18 @@ export function SandboxModeView({
             const mx = (x1 + x2) / 2;
             const my = (y1 + y2) / 2;
             return (
-              <g key={r.id} className="analysisSandboxEdge">
+              <g
+                key={r.id}
+                className={`analysisSandboxEdge ${selectedEdgeId === r.id ? 'isSelected' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedEdgeId(r.id);
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Relationship ${r.type}`}
+              >
+                <title>Click to select relationship</title>
                 <line x1={x1} y1={y1} x2={x2} y2={y2} markerEnd="url(#sandboxArrow)" />
                 <text x={mx} y={my - 6} textAnchor="middle">
                   {r.type}

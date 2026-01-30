@@ -14,6 +14,15 @@ export type SandboxRelationshipVisibilityMode = 'all' | 'types';
 
 export type SandboxAddRelatedDirection = 'both' | 'outgoing' | 'incoming';
 
+export type SandboxInsertIntermediatesMode = 'shortest' | 'topk';
+
+export type SandboxInsertIntermediatesOptions = {
+  mode: SandboxInsertIntermediatesMode;
+  k: number;
+  maxHops: number;
+  direction: SandboxAddRelatedDirection;
+};
+
 export type SandboxRelationshipsState = {
   show: boolean;
   mode: SandboxRelationshipVisibilityMode;
@@ -55,6 +64,12 @@ export type SandboxActions = {
   setAddRelatedEnabledTypes: (types: string[]) => void;
   toggleAddRelatedEnabledType: (type: string) => void;
   addRelatedFromSelection: (anchorElementIds: string[]) => void;
+
+  insertIntermediatesBetween: (
+    sourceElementId: string,
+    targetElementId: string,
+    options: SandboxInsertIntermediatesOptions
+  ) => void;
 };
 
 const DEFAULT_SEED_POS = { x: 260, y: 180 };
@@ -108,6 +123,104 @@ function buildAdjacency(model: Model, allowedTypes: Set<string>): Adjacency {
     _in.get(t)!.push({ to: s, type: r.type });
   }
   return { out, in: _in };
+}
+
+function getNeighbors(args: { adjacency: Adjacency; id: string; direction: SandboxAddRelatedDirection }): string[] {
+  const { adjacency, id, direction } = args;
+  const out: string[] = [];
+  if (direction === 'both' || direction === 'outgoing') {
+    for (const e of adjacency.out.get(id) ?? []) out.push(e.to);
+  }
+  if (direction === 'both' || direction === 'incoming') {
+    for (const e of adjacency.in.get(id) ?? []) out.push(e.to);
+  }
+  return out;
+}
+
+function bfsShortestPath(args: {
+  startId: string;
+  targetId: string;
+  adjacency: Adjacency;
+  direction: SandboxAddRelatedDirection;
+  maxHops: number;
+}): string[] | null {
+  const { startId, targetId, adjacency, direction, maxHops } = args;
+  if (startId === targetId) return [startId];
+
+  const q: string[] = [startId];
+  const parent = new Map<string, string | null>();
+  parent.set(startId, null);
+  const depth = new Map<string, number>();
+  depth.set(startId, 0);
+
+  while (q.length) {
+    const cur = q.shift();
+    if (!cur) break;
+    const d = depth.get(cur) ?? 0;
+    if (d >= maxHops) continue;
+    for (const nb of getNeighbors({ adjacency, id: cur, direction })) {
+      if (parent.has(nb)) continue;
+      parent.set(nb, cur);
+      depth.set(nb, d + 1);
+      if (nb === targetId) {
+        q.length = 0;
+        break;
+      }
+      q.push(nb);
+    }
+  }
+
+  if (!parent.has(targetId)) return null;
+  const path: string[] = [];
+  let cur: string | null = targetId;
+  while (cur) {
+    path.push(cur);
+    cur = parent.get(cur) ?? null;
+  }
+  path.reverse();
+  return path;
+}
+
+function bfsKShortestPaths(args: {
+  startId: string;
+  targetId: string;
+  adjacency: Adjacency;
+  direction: SandboxAddRelatedDirection;
+  maxHops: number;
+  k: number;
+}): string[][] {
+  const { startId, targetId, adjacency, direction, maxHops, k } = args;
+  if (k <= 0) return [];
+  if (startId === targetId) return [[startId]];
+
+  const results: string[][] = [];
+  const q: string[][] = [[startId]];
+  let expansions = 0;
+  const MAX_EXPANSIONS = 20000;
+  const MAX_QUEUE = 6000;
+
+  while (q.length && results.length < k) {
+    const path = q.shift();
+    if (!path) break;
+    expansions++;
+    if (expansions > MAX_EXPANSIONS) break;
+
+    const last = path[path.length - 1];
+    const hops = path.length - 1;
+    if (hops > maxHops) continue;
+    if (last === targetId) {
+      results.push(path);
+      continue;
+    }
+
+    for (const nb of getNeighbors({ adjacency, id: last, direction })) {
+      if (path.includes(nb)) continue;
+      q.push([...path, nb]);
+      if (q.length > MAX_QUEUE) break;
+    }
+  }
+
+  return results;
 }
 
 function dist2(a: { x: number; y: number }, b: { x: number; y: number }): number {
@@ -397,6 +510,85 @@ export function useSandboxState(args: {
     [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, model]
   );
 
+  const insertIntermediatesBetween = useCallback(
+    (sourceElementId: string, targetElementId: string, options: SandboxInsertIntermediatesOptions) => {
+      if (!model) return;
+      if (!sourceElementId || !targetElementId) return;
+      if (sourceElementId === targetElementId) return;
+
+      const allowedTypes = new Set(addRelatedEnabledTypes);
+      if (allowedTypes.size === 0) return;
+
+      const direction = options.direction;
+      const maxHops = clampInt(options.maxHops, 1, 16);
+      const mode = options.mode;
+      const k = clampInt(options.k, 1, 10);
+
+      const adjacency = buildAdjacency(model, allowedTypes);
+
+      const paths: string[][] =
+        mode === 'topk'
+          ? bfsKShortestPaths({ startId: sourceElementId, targetId: targetElementId, adjacency, direction, maxHops, k })
+          : (() => {
+              const p = bfsShortestPath({ startId: sourceElementId, targetId: targetElementId, adjacency, direction, maxHops });
+              return p ? [p] : [];
+            })();
+
+      if (paths.length === 0) return;
+
+      setNodes((prev) => {
+        const existingById = new Map<string, SandboxNode>();
+        for (const n of prev) existingById.set(n.elementId, n);
+
+        const startNode = existingById.get(sourceElementId);
+        const endNode = existingById.get(targetElementId);
+        if (!startNode || !endNode) return prev;
+
+        const sx = startNode.x + SANDBOX_NODE_W / 2;
+        const sy = startNode.y + SANDBOX_NODE_H / 2;
+        const tx = endNode.x + SANDBOX_NODE_W / 2;
+        const ty = endNode.y + SANDBOX_NODE_H / 2;
+
+        const dx = tx - sx;
+        const dy = ty - sy;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ux = dx / len;
+        const uy = dy / len;
+        const px = -uy;
+        const py = ux;
+
+        const added = new Set(existingById.keys());
+        const positioned = new Map<string, { x: number; y: number }>();
+
+        for (let pIdx = 0; pIdx < paths.length; pIdx++) {
+          const path = paths[pIdx];
+          if (path.length < 3) continue;
+          const intermediates = path.slice(1, -1).filter((id) => Boolean(model.elements[id]));
+          const m = intermediates.length;
+          if (m === 0) continue;
+          const offset = (pIdx - (paths.length - 1) / 2) * 84;
+          for (let i = 0; i < m; i++) {
+            const elementId = intermediates[i];
+            if (added.has(elementId)) continue;
+            if (positioned.has(elementId)) continue;
+            const t = (i + 1) / (m + 1);
+            const cx = sx + ux * (len * t) + px * offset;
+            const cy = sy + uy * (len * t) + py * offset;
+            positioned.set(elementId, { x: cx - SANDBOX_NODE_W / 2, y: cy - SANDBOX_NODE_H / 2 });
+          }
+        }
+
+        if (positioned.size === 0) return prev;
+        const newNodes: SandboxNode[] = [];
+        for (const [elementId, pos] of positioned.entries()) {
+          newNodes.push({ elementId, x: pos.x, y: pos.y });
+        }
+        return uniqByElementId([...prev, ...newNodes]);
+      });
+    },
+    [addRelatedEnabledTypes, model]
+  );
+
   const state: SandboxState = useMemo(
     () => ({
       nodes,
@@ -431,6 +623,8 @@ export function useSandboxState(args: {
       setAddRelatedEnabledTypes: setAddRelatedEnabledTypesSafe,
       toggleAddRelatedEnabledType,
       addRelatedFromSelection,
+
+      insertIntermediatesBetween,
     }),
     [
       addIfMissing,
@@ -443,6 +637,8 @@ export function useSandboxState(args: {
       setNodePosition,
       toggleAddRelatedEnabledType,
       toggleEnabledRelationshipType,
+
+      insertIntermediatesBetween,
     ]
   );
 

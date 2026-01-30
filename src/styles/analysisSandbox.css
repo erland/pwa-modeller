@@ -14,11 +14,24 @@
   stroke-width: 1.2;
 }
 
+.analysisSandboxEdge {
+  cursor: pointer;
+}
+
+.analysisSandboxEdge.isSelected line {
+  stroke: #111;
+  stroke-width: 2.2;
+}
+
 .analysisSandboxEdge text {
   font-size: 11px;
   fill: #333;
   pointer-events: none;
   user-select: none;
+}
+
+.analysisSandboxEdge.isSelected text {
+  font-weight: 700;
 }
 
 .analysisSandboxNode rect {

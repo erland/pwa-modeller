@@ -103,6 +103,7 @@ export function AnalysisWorkspace({
               onSetAddRelatedEnabledTypes={(types) => sandbox.actions.setAddRelatedEnabledTypes(types)}
               onToggleAddRelatedEnabledType={(type) => sandbox.actions.toggleAddRelatedEnabledType(type)}
               onAddRelatedFromSelection={(anchorIds) => sandbox.actions.addRelatedFromSelection(anchorIds)}
+              onInsertIntermediatesBetween={(a, b, options) => sandbox.actions.insertIntermediatesBetween(a, b, options)}
             />
           ) : mode === 'matrix' ? (
             <MatrixModeView

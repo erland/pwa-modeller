@@ -89,6 +89,7 @@ export function AnalysisResultTable({
   const modelId = model.id ?? '';
   const [showGraph, setShowGraph] = useState(false);
   const [graphOptions, setGraphOptions] = useState(defaultMiniGraphOptions);
+  const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
 
   // Step 9: restore + persist mini-graph UI options per model.
   useEffect(() => {
@@ -229,6 +230,18 @@ export function AnalysisResultTable({
     if ((pathsResult?.paths?.length ?? 0) > 0) setShowGraph(true);
   }, [mode, relatedResult, pathsResult, showGraph]);
 
+  // When a new connection query runs, default-highlight the first returned path.
+  useEffect(() => {
+    if (mode !== 'paths') return;
+    const p = pathsResult?.paths ?? [];
+    if (p.length === 0) {
+      setSelectedPathIndex(null);
+      return;
+    }
+    // Reset to the first path whenever endpoints or result set changes.
+    setSelectedPathIndex(0);
+  }, [mode, pathsResult?.sourceElementId, pathsResult?.targetElementId, pathsResult?.paths?.length]);
+
   if (mode === 'related') {
     const hits = relatedResult?.hits ?? [];
     const startId = relatedResult?.startElementId;
@@ -366,6 +379,14 @@ export function AnalysisResultTable({
   const targetId = res?.targetElementId;
   const shortest = res?.shortestDistance;
 
+  const safeSelectedIndex =
+    selectedPathIndex === null ? null : selectedPathIndex >= 0 && selectedPathIndex < paths.length ? selectedPathIndex : null;
+  const selectedPath = safeSelectedIndex === null ? null : paths[safeSelectedIndex];
+  const graphPathsResult: PathsBetweenResult | null =
+    selectedPath && res
+      ? { ...res, paths: [selectedPath] }
+      : res;
+
   return (
     <AnalysisSection
       title="Results"
@@ -379,6 +400,11 @@ export function AnalysisResultTable({
           {shortest !== undefined ? (
             <div style={{ marginTop: 6 }}>
               Shortest distance: <span className="mono">{shortest}</span> hops.
+            </div>
+          ) : null}
+          {paths.length > 0 ? (
+            <div style={{ marginTop: 6 }}>
+              Showing: {safeSelectedIndex === null ? 'all paths' : `path #${safeSelectedIndex + 1} of ${paths.length}`}
             </div>
           ) : null}
         </>
@@ -404,6 +430,11 @@ export function AnalysisResultTable({
           >
             Export CSV
           </button>
+          {paths.length > 1 && safeSelectedIndex !== null ? (
+            <button type="button" className="miniLinkButton" onClick={() => setSelectedPathIndex(null)} title="Show all paths in the mini-graph">
+              Show all paths
+            </button>
+          ) : null}
           <MiniGraphOptionsToggles options={graphOptions} onChange={setGraphOptions} availablePropertyKeys={availablePropertyKeys} />
           {sourceId ? (
             <button type="button" className="miniLinkButton" onClick={() => onOpenTraceability(sourceId)}>
@@ -427,6 +458,7 @@ export function AnalysisResultTable({
         <table className="dataTable" aria-label="Connection paths">
           <thead>
             <tr>
+              <th style={{ width: 1 }}>Show</th>
               <th>Hops</th>
               <th>Path</th>
               <th style={{ width: 1 }} />
@@ -440,7 +472,19 @@ export function AnalysisResultTable({
               const last = p.elementIds[p.elementIds.length - 1];
 
               return (
-                <tr key={idx}>
+                <tr
+                  key={idx}
+                  style={safeSelectedIndex === idx ? { outline: '2px solid var(--accent-3)', outlineOffset: '-2px' } : undefined}
+                >
+                  <td>
+                    <input
+                      type="radio"
+                      name="analysis-selected-path"
+                      checked={safeSelectedIndex === idx}
+                      onChange={() => setSelectedPathIndex(idx)}
+                      title="Highlight this path in the mini-graph"
+                    />
+                  </td>
                   <td className="mono">{hops}</td>
                   <td>
                     <details>
@@ -495,7 +539,7 @@ export function AnalysisResultTable({
           modelKind={modelKind}
           mode={mode}
           relatedResult={null}
-          pathsResult={pathsResult}
+          pathsResult={graphPathsResult}
           selection={selection}
           onSelectRelationship={onSelectRelationship}
           onSelectElement={onSelectElement}

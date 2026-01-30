@@ -2,6 +2,7 @@ import type { AnalysisDirection, ElementType, RelationshipType } from '../../../
 import { getElementTypeLabel, getRelationshipTypeLabel } from '../../../domain';
 
 import type { AnalysisMode } from '../AnalysisQueryPanel';
+import type { PathsBetweenQueryMode } from '../../../store';
 
 import { dedupeSort, toggle } from './utils';
 
@@ -18,6 +19,8 @@ type Props = {
   onChangeIncludeStart: (v: boolean) => void;
 
   // Paths-only
+  pathsMode: PathsBetweenQueryMode;
+  onChangePathsMode: (v: PathsBetweenQueryMode) => void;
   maxPaths: number;
   onChangeMaxPaths: (n: number) => void;
   maxPathLength: number | null;
@@ -52,6 +55,8 @@ export function FiltersPanel({
   onChangeMaxDepth,
   includeStart,
   onChangeIncludeStart,
+  pathsMode,
+  onChangePathsMode,
   maxPaths,
   onChangeMaxPaths,
   maxPathLength,
@@ -97,6 +102,29 @@ export function FiltersPanel({
         {mode === 'paths' ? (
           <>
             <div className="toolbarGroup">
+              <label htmlFor="analysis-pathsMode">Path engine</label>
+              <select
+                id="analysis-pathsMode"
+                className="selectInput"
+                value={pathsMode}
+                onChange={(e) => onChangePathsMode(e.currentTarget.value as PathsBetweenQueryMode)}
+                title={
+                  pathsMode === 'shortest'
+                    ? 'Enumerates all shortest paths (ties), up to Max paths.'
+                    : 'Enumerates up to K shortest simple paths (can include longer alternatives). Consider setting Max path length.'
+                }
+              >
+                <option value="shortest">Shortest paths only</option>
+                <option value="kShortest">Top-K paths (include longer)</option>
+              </select>
+              {pathsMode === 'kShortest' ? (
+                <div className="crudHint" style={{ marginTop: 6 }}>
+                  Tip: set <span className="mono">Max path length</span> to keep results fast on dense models.
+                </div>
+              ) : null}
+            </div>
+
+            <div className="toolbarGroup">
               <label htmlFor="analysis-maxPaths">Max paths</label>
               <select
                 id="analysis-maxPaths"
@@ -123,7 +151,7 @@ export function FiltersPanel({
                   onChangeMaxPathLength(v ? Number(v) : null);
                 }}
               >
-                <option value="">Auto (shortest only)</option>
+                <option value="">No cap</option>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15].map((n) => (
                   <option key={n} value={String(n)}>
                     {n}

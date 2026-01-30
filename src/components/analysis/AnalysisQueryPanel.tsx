@@ -158,7 +158,8 @@ export function AnalysisQueryPanel({
     maxDepth,
     includeStart,
     maxPaths,
-    maxPathLength
+    maxPathLength,
+    pathsMode
   } = filters;
 
   const {
@@ -339,6 +340,8 @@ export function AnalysisQueryPanel({
       onChangeMaxDepth={filterActions.setMaxDepth}
       includeStart={includeStart}
       onChangeIncludeStart={filterActions.setIncludeStart}
+      pathsMode={pathsMode}
+      onChangePathsMode={filterActions.setPathsMode}
       maxPaths={maxPaths}
       onChangeMaxPaths={filterActions.setMaxPaths}
       maxPathLength={maxPathLength}

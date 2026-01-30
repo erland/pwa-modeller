@@ -6,6 +6,7 @@ import type {
   Model,
   RelationshipType
 } from '../../../domain';
+import type { PathsBetweenQueryMode } from '../../../store';
 import { AnalysisSection } from '../layout/AnalysisSection';
 import { FiltersPanel } from './FiltersPanel';
 import { QueryToolbar } from './QueryToolbar';
@@ -52,6 +53,9 @@ export type QuerySectionCommonProps = {
   onChangeMaxDepth: (n: number) => void;
   includeStart: boolean;
   onChangeIncludeStart: (v: boolean) => void;
+  // paths-only extras
+  pathsMode: PathsBetweenQueryMode;
+  onChangePathsMode: (v: PathsBetweenQueryMode) => void;
   maxPaths: number;
   onChangeMaxPaths: (n: number) => void;
   maxPathLength: number | null;
@@ -95,6 +99,8 @@ export function QuerySectionCommon({
   onChangeMaxDepth,
   includeStart,
   onChangeIncludeStart,
+  pathsMode,
+  onChangePathsMode,
   maxPaths,
   onChangeMaxPaths,
   maxPathLength,
@@ -140,6 +146,8 @@ export function QuerySectionCommon({
         onChangeMaxDepth={onChangeMaxDepth}
         includeStart={includeStart}
         onChangeIncludeStart={onChangeIncludeStart}
+        pathsMode={pathsMode}
+        onChangePathsMode={onChangePathsMode}
         maxPaths={maxPaths}
         onChangeMaxPaths={onChangeMaxPaths}
         maxPathLength={maxPathLength}

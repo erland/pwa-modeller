@@ -5,6 +5,7 @@ import type {
   ElementType,
   RelationshipType
 } from '../../../domain';
+import type { PathsBetweenQueryMode } from '../../../store';
 
 import { AnalysisSection } from '../layout/AnalysisSection';
 import type { MatrixQueryPreset, MatrixQuerySnapshot } from '../matrixPresetsStorage';
@@ -424,6 +425,9 @@ export function MatrixQuerySection({
         onChangeMaxDepth={onChangeMaxDepth}
         includeStart={includeStart}
         onChangeIncludeStart={onChangeIncludeStart}
+        // Matrix mode never uses the path engine selector, but FiltersPanel expects it.
+        pathsMode={'shortest' as PathsBetweenQueryMode}
+        onChangePathsMode={() => undefined}
         maxPaths={maxPaths}
         onChangeMaxPaths={onChangeMaxPaths}
         maxPathLength={maxPathLength}

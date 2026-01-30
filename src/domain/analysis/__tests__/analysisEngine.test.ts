@@ -1,6 +1,6 @@
 import { createElement, createEmptyModel, createRelationship } from '../../factories';
 import type { Model } from '../../types';
-import { findShortestSinglePathWithBans, queryPathsBetween, queryRelatedElements } from '../index';
+import { findShortestSinglePathWithBans, queryKShortestPathsBetween, queryPathsBetween, queryRelatedElements } from '../index';
 
 function buildSmallModel(): Model {
   const model = createEmptyModel({ name: 't' });
@@ -157,5 +157,31 @@ describe('domain analysis engine', () => {
       { bannedNodeIds: new Set(['B', 'D']) }
     );
     expect(noPath).toBeUndefined();
+  });
+
+  test('queryKShortestPathsBetween returns multiple shortest paths and longer alternatives (Yen)', () => {
+    const model = buildSmallModel();
+
+    // Add a longer alternative: A -> B -> D -> C
+    const r5 = createRelationship({ id: 'R5', type: 'Flow', sourceElementId: 'B', targetElementId: 'D' });
+    model.relationships[r5.id] = r5;
+
+    const res = queryKShortestPathsBetween(model, 'A', 'C', {
+      direction: 'outgoing',
+      relationshipTypes: ['Serving', 'Flow', 'Association'],
+      maxPaths: 3,
+      maxPathLength: 4
+    });
+
+    expect(res.shortestDistance).toBe(2);
+    expect(res.paths.length).toBe(3);
+
+    // Two equal-length shortest paths.
+    expect(res.paths[0]?.elementIds).toEqual(['A', 'B', 'C']);
+    expect(res.paths[1]?.elementIds).toEqual(['A', 'D', 'C']);
+
+    // Next best is the longer alternative.
+    expect(res.paths[2]?.elementIds).toEqual(['A', 'B', 'D', 'C']);
+    expect(res.paths[2]?.steps.map(s => s.relationshipId)).toEqual(['R1', 'R5', 'R4']);
   });
 });

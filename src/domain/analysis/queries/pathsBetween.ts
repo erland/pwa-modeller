@@ -276,11 +276,44 @@ export function queryPathsBetween(
 // in a future change, without altering the semantics of queryPathsBetween.
 export type KShortestPathsBetweenOptions = PathsBetweenOptions;
 
+type YenCandidate = {
+  path: AnalysisPath;
+  cost: number;
+  sortKey: string;
+};
+
+function analysisPathKey(p: AnalysisPath): string {
+  // Deterministic key used for de-duplication + stable ordering.
+  // Include both elements and traversal steps to disambiguate otherwise identical node sequences.
+  const els = p.elementIds.join('>');
+  const steps = p.steps.map(traversalStepKey).join('|');
+  return `${els}#${steps}`;
+}
+
+function yenCandidateSortKey(p: AnalysisPath): string {
+  // Primary: hop count (cost). Secondary: deterministic path key.
+  const cost = p.steps.length;
+  // Pad to keep lexicographic ordering stable.
+  const costKey = String(cost).padStart(6, '0');
+  return `${costKey}:${analysisPathKey(p)}`;
+}
+
+function pathHasPrefix(p: AnalysisPath, rootElementIds: readonly string[]): boolean {
+  if (p.elementIds.length < rootElementIds.length) return false;
+  for (let i = 0; i < rootElementIds.length; i++) {
+    if (p.elementIds[i] !== rootElementIds[i]) return false;
+  }
+  return true;
+}
+
 /**
- * Find up to K paths between two elements.
+ * Find up to K shortest simple paths between two elements.
  *
- * Current semantics (Step 1): identical to {@link queryPathsBetween} (shortest-paths only).
- * Future steps will implement K-shortest simple paths (which may include longer alternatives).
+ * Semantics:
+ * - Uses Yen's algorithm on an unweighted graph (BFS for each shortest-path sub-problem).
+ * - Respects the same traversal filters as {@link queryPathsBetween}.
+ * - Returned paths are simple (no repeated nodes).
+ * - Results are ordered by hop count (shorter first) with deterministic tie-breaking.
  */
 export function queryKShortestPathsBetween(
   model: Model,
@@ -288,5 +321,95 @@ export function queryKShortestPathsBetween(
   targetElementId: string,
   opts: KShortestPathsBetweenOptions = {}
 ): PathsBetweenResult {
-  return queryPathsBetween(model, sourceElementId, targetElementId, opts);
+  const maxPaths = opts.maxPaths ?? 10;
+  if (maxPaths <= 0) return { sourceElementId, targetElementId, paths: [] };
+
+  const first = findShortestSinglePathWithBans(model, sourceElementId, targetElementId, opts, {});
+  if (!first) return { sourceElementId, targetElementId, paths: [] };
+
+  // Yen's algorithm uses A for best paths and B for candidates.
+  const A: AnalysisPath[] = [first];
+  const bestKeySet = new Set<string>([analysisPathKey(first)]);
+
+  const B: YenCandidate[] = [];
+  const candidateKeySet = new Set<string>();
+
+  const shortestDistance = first.steps.length;
+
+  const pushCandidate = (p: AnalysisPath): void => {
+    const k = analysisPathKey(p);
+    if (bestKeySet.has(k) || candidateKeySet.has(k)) return;
+    const cand: YenCandidate = { path: p, cost: p.steps.length, sortKey: yenCandidateSortKey(p) };
+    B.push(cand);
+    candidateKeySet.add(k);
+  };
+
+  for (let k = 1; k < maxPaths; k++) {
+    const prevPath = A[k - 1];
+    if (!prevPath) break;
+
+    // The spur node can be any node in the previous best path except the target.
+    for (let i = 0; i < prevPath.elementIds.length - 1; i++) {
+      const rootElementIds = prevPath.elementIds.slice(0, i + 1);
+      const rootSteps = prevPath.steps.slice(0, i);
+      const spurNodeId = rootElementIds[rootElementIds.length - 1];
+
+      // Ban all nodes in the root path except the spur node to ensure simplicity.
+      const bannedNodeIds = new Set<string>(rootElementIds.slice(0, -1));
+
+      // Ban the edge that would recreate any previously found path that shares this root.
+      const bannedStepKeys = new Set<string>();
+      for (const p of A) {
+        if (!pathHasPrefix(p, rootElementIds)) continue;
+        const stepAfterRoot = p.steps[i];
+        if (stepAfterRoot) bannedStepKeys.add(traversalStepKey(stepAfterRoot));
+      }
+
+      // If caller specified an absolute maxPathLength, adjust for the already-fixed root prefix.
+      const remainingMax =
+        opts.maxPathLength === undefined ? undefined : Math.max(0, opts.maxPathLength - rootSteps.length);
+      if (remainingMax !== undefined && remainingMax === 0 && spurNodeId !== targetElementId) {
+        continue;
+      }
+
+      const spurOpts: PathsBetweenOptions =
+        remainingMax === undefined ? opts : { ...opts, maxPathLength: remainingMax };
+
+      const spurPath = findShortestSinglePathWithBans(
+        model,
+        spurNodeId,
+        targetElementId,
+        spurOpts,
+        { bannedNodeIds, bannedStepKeys }
+      );
+      if (!spurPath) continue;
+
+      // Combine root + spur, avoiding duplicate spur node.
+      const combinedElementIds = rootElementIds.slice(0, -1).concat(spurPath.elementIds);
+      const combinedSteps = rootSteps.concat(spurPath.steps);
+
+      // Respect the absolute maxPathLength if provided.
+      if (opts.maxPathLength !== undefined && combinedSteps.length > opts.maxPathLength) continue;
+
+      pushCandidate({ elementIds: combinedElementIds, steps: combinedSteps });
+    }
+
+    if (!B.length) break;
+
+    // Pick best candidate deterministically.
+    B.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+    const next = B.shift();
+    if (!next) break;
+    candidateKeySet.delete(analysisPathKey(next.path));
+
+    A.push(next.path);
+    bestKeySet.add(analysisPathKey(next.path));
+  }
+
+  return {
+    sourceElementId,
+    targetElementId,
+    shortestDistance,
+    paths: A
+  };
 }

@@ -85,6 +85,7 @@ export function AnalysisWorkspace({
               model={model}
               nodes={sandbox.state.nodes}
               relationships={sandbox.state.relationships}
+              addRelated={sandbox.state.addRelated}
               selection={selection}
               selectionElementIds={selectionElementIds}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
@@ -97,6 +98,11 @@ export function AnalysisWorkspace({
               onSetRelationshipMode={(mode) => sandbox.actions.setRelationshipMode(mode)}
               onSetEnabledRelationshipTypes={(types) => sandbox.actions.setEnabledRelationshipTypes(types)}
               onToggleEnabledRelationshipType={(type) => sandbox.actions.toggleEnabledRelationshipType(type)}
+              onSetAddRelatedDepth={(depth) => sandbox.actions.setAddRelatedDepth(depth)}
+              onSetAddRelatedDirection={(direction) => sandbox.actions.setAddRelatedDirection(direction)}
+              onSetAddRelatedEnabledTypes={(types) => sandbox.actions.setAddRelatedEnabledTypes(types)}
+              onToggleAddRelatedEnabledType={(type) => sandbox.actions.toggleAddRelatedEnabledType(type)}
+              onAddRelatedFromSelection={(anchorIds) => sandbox.actions.addRelatedFromSelection(anchorIds)}
             />
           ) : mode === 'matrix' ? (
             <MatrixModeView

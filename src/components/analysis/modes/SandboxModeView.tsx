@@ -5,8 +5,10 @@ import type { Model } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import type {
   SandboxNode,
+  SandboxAddRelatedDirection,
   SandboxRelationshipVisibilityMode,
   SandboxRelationshipsState,
+  SandboxState,
 } from '../workspace/controller/useSandboxState';
 
 import { dataTransferHasElement, readDraggedElementId } from '../../diagram/dragDrop';
@@ -49,6 +51,7 @@ export function SandboxModeView({
   model,
   nodes,
   relationships,
+  addRelated,
   selection,
   selectionElementIds,
   onSelectElement,
@@ -61,10 +64,16 @@ export function SandboxModeView({
   onSetRelationshipMode,
   onSetEnabledRelationshipTypes,
   onToggleEnabledRelationshipType,
+  onSetAddRelatedDepth,
+  onSetAddRelatedDirection,
+  onSetAddRelatedEnabledTypes,
+  onToggleAddRelatedEnabledType,
+  onAddRelatedFromSelection,
 }: {
   model: Model;
   nodes: SandboxNode[];
   relationships: SandboxRelationshipsState;
+  addRelated: SandboxState['addRelated'];
   selection: Selection;
   selectionElementIds: string[];
   onSelectElement: (elementId: string) => void;
@@ -77,6 +86,11 @@ export function SandboxModeView({
   onSetRelationshipMode: (mode: SandboxRelationshipVisibilityMode) => void;
   onSetEnabledRelationshipTypes: (types: string[]) => void;
   onToggleEnabledRelationshipType: (type: string) => void;
+  onSetAddRelatedDepth: (depth: number) => void;
+  onSetAddRelatedDirection: (direction: SandboxAddRelatedDirection) => void;
+  onSetAddRelatedEnabledTypes: (types: string[]) => void;
+  onToggleAddRelatedEnabledType: (type: string) => void;
+  onAddRelatedFromSelection: (anchorElementIds: string[]) => void;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -104,6 +118,30 @@ export function SandboxModeView({
     }
     return false;
   }, [nodeById, selectionElementIds]);
+
+  const allRelationshipTypes = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of Object.values(model.relationships)) {
+      if (!r.type) continue;
+      set.add(r.type);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [model.relationships]);
+
+  const addRelatedEnabledTypeSet = useMemo(() => new Set(addRelated.enabledTypes), [addRelated.enabledTypes]);
+
+  const addRelatedSelectedTypeCount = useMemo(() => {
+    if (allRelationshipTypes.length === 0) return 0;
+    return allRelationshipTypes.filter((t) => addRelatedEnabledTypeSet.has(t)).length;
+  }, [addRelatedEnabledTypeSet, allRelationshipTypes]);
+
+  const addRelatedAnchors = useMemo(() => {
+    return selectionElementIds.filter((id) => nodeById.has(id));
+  }, [nodeById, selectionElementIds]);
+
+  const canAddRelated = useMemo(() => {
+    return addRelatedAnchors.length > 0 && addRelated.enabledTypes.length > 0;
+  }, [addRelated.enabledTypes.length, addRelatedAnchors.length]);
   const baseVisibleRelationships = useMemo(() => {
     const ids = new Set(nodes.map((n) => n.elementId));
     const rels = Object.values(model.relationships).filter((r) => {
@@ -343,6 +381,100 @@ export function SandboxModeView({
             </div>
           </div>
         ) : null}
+      </div>
+
+      <div className="toolbar" style={{ marginTop: 10 }}>
+        <div className="toolbarGroup" style={{ minWidth: 260 }}>
+          <label>Add related elements</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label style={{ fontSize: 12, opacity: 0.9 }}>
+              Depth
+              <input
+                type="number"
+                min={1}
+                max={6}
+                value={addRelated.depth}
+                onChange={(e) => onSetAddRelatedDepth(Number(e.currentTarget.value))}
+                style={{ width: 70, marginLeft: 8 }}
+              />
+            </label>
+            <label style={{ fontSize: 12, opacity: 0.9 }}>
+              Direction
+              <select
+                className="selectInput"
+                value={addRelated.direction}
+                onChange={(e) => onSetAddRelatedDirection(e.currentTarget.value as SandboxAddRelatedDirection)}
+                style={{ marginLeft: 8 }}
+                aria-label="Add related direction"
+              >
+                <option value="both">Both</option>
+                <option value="outgoing">Outgoing</option>
+                <option value="incoming">Incoming</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => onAddRelatedFromSelection(addRelatedAnchors)}
+              disabled={!canAddRelated}
+              aria-disabled={!canAddRelated}
+              title={addRelatedAnchors.length ? 'Add related elements around the selected sandbox node(s)' : 'Select one or more sandbox nodes to expand'}
+            >
+              Add related
+            </button>
+          </div>
+          <p className="crudHint" style={{ margin: 0 }}>
+            {addRelatedAnchors.length === 0
+              ? 'Select a sandbox node to expand.'
+              : `Anchors: ${addRelatedAnchors.length} · Types: ${addRelatedSelectedTypeCount}/${allRelationshipTypes.length}`}
+          </p>
+        </div>
+
+        <div className="toolbarGroup" style={{ minWidth: 260, flex: '1 1 260px' }}>
+          <label>
+            Traversal types ({addRelatedSelectedTypeCount}/{allRelationshipTypes.length})
+          </label>
+          <div
+            style={{
+              maxHeight: 160,
+              overflow: 'auto',
+              border: '1px solid var(--border-1)',
+              borderRadius: 10,
+              padding: '8px 10px',
+              background: 'rgba(255,255,255,0.02)',
+            }}
+          >
+            {allRelationshipTypes.length === 0 ? (
+              <p className="crudHint" style={{ margin: 0 }}>
+                This model has no relationships.
+              </p>
+            ) : (
+              allRelationshipTypes.map((t) => (
+                <label
+                  key={t}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
+                >
+                  <input type="checkbox" checked={addRelatedEnabledTypeSet.has(t)} onChange={() => onToggleAddRelatedEnabledType(t)} />
+                  <span title={t}>{t}</span>
+                </label>
+              ))
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => onSetAddRelatedEnabledTypes(allRelationshipTypes)}
+              disabled={allRelationshipTypes.length === 0}
+              aria-disabled={allRelationshipTypes.length === 0}
+            >
+              All
+            </button>
+            <button type="button" className="miniLinkButton" onClick={() => onSetAddRelatedEnabledTypes([])}>
+              None
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="analysisSandboxRoot" aria-label="Analysis sandbox">

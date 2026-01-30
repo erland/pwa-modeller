@@ -91,12 +91,13 @@ export function DiagramNode({
 
   // UML activity diagrams: some node types render their own shape (diamond/circle/bar).
   // We attach a CSS modifier class based on view-local node attrs to allow shape-specific styling.
-  const umlShape =
-    notation.kind === 'uml' &&
-    (n as unknown as { attrs?: unknown }).attrs &&
-    typeof ((n as unknown as { attrs?: any }).attrs as any).umlShape === 'string'
-      ? (((n as unknown as { attrs?: any }).attrs as any).umlShape as string)
-      : null;
+  const umlShape = (() => {
+    if (notation.kind !== 'uml') return null;
+    const attrs = (n as unknown as { attrs?: unknown }).attrs;
+    if (!attrs || typeof attrs !== 'object') return null;
+    const shape = (attrs as Record<string, unknown>).umlShape;
+    return typeof shape === 'string' ? shape : null;
+  })();
 
   return (
     <div

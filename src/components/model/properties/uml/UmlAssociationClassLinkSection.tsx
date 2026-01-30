@@ -29,7 +29,7 @@ export function UmlAssociationClassLinkSection({ model, element: el, onSelect }:
   if (el.type !== 'uml.associationClass') return null;
 
   const attrs = isRecord(el.attrs) ? el.attrs : {};
-  const relId = trimId((attrs as any).associationRelationshipId);
+  const relId = trimId(attrs['associationRelationshipId']);
   const rel = relId ? model.relationships[relId] : undefined;
 
   const srcId = rel ? (rel.sourceElementId ?? rel.sourceConnectorId) : undefined;

@@ -33,6 +33,8 @@ type ElkEdge = {
   sources: string[];
   targets: string[];
   layoutOptions?: Record<string, string>;
+  /** Edge routing data returned by ELK (present on layout output). */
+  sections?: ElkSection[];
 };
 
 function sideToElk(side: 'N' | 'E' | 'S' | 'W'): 'NORTH' | 'EAST' | 'SOUTH' | 'WEST' {
@@ -178,9 +180,7 @@ export async function elkLayoutHierarchical(input: LayoutInput, options: AutoLay
 
   const edgeRoutes: Record<string, { points: Array<{ x: number; y: number }> }> = {};
   for (const e of laidOut.edges ?? []) {
-    // elkjs types vary between versions; edge routing data is typically exposed via `sections`.
-    // Cast to `any` to avoid coupling the app to a specific elkjs type definition.
-    const sec = (((e as any).sections ?? []) as any[])[0];
+    const sec = (e.sections ?? [])[0];
     if (!sec) continue;
     const pts: Array<{ x: number; y: number }> = [];
     if (sec.startPoint) pts.push({ x: sec.startPoint.x, y: sec.startPoint.y });

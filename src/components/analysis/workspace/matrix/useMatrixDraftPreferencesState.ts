@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import type { AnalysisDirection, Model, ModelKind, RelationshipType } from '../../../../domain';
+import type { AnalysisDirection, ElementType, Model, ModelKind, RelationshipType } from '../../../../domain';
 import type { MatrixQueryPreset } from '../../matrixPresetsStorage';
 
 import { buildMatrixUiQuery, buildMatrixWorkspaceBuiltQuery, normalizeMatrixUiQueryForApply } from './queryHelpers';
@@ -17,8 +17,8 @@ export type UseMatrixDraftPreferencesStateArgs = {
     // Draft axes state + setters
     rowSource: MatrixAxisSource;
     setRowSource: (v: MatrixAxisSource) => void;
-    rowElementType: any;
-    setRowElementType: (v: any) => void;
+    rowElementType: ElementType | '';
+    setRowElementType: (v: ElementType | '') => void;
     rowLayer: string | '';
     setRowLayer: (v: string | '') => void;
     rowSelectionIds: string[];
@@ -26,8 +26,8 @@ export type UseMatrixDraftPreferencesStateArgs = {
 
     colSource: MatrixAxisSource;
     setColSource: (v: MatrixAxisSource) => void;
-    colElementType: any;
-    setColElementType: (v: any) => void;
+    colElementType: ElementType | '';
+    setColElementType: (v: ElementType | '') => void;
     colLayer: string | '';
     setColLayer: (v: string | '') => void;
     colSelectionIds: string[];

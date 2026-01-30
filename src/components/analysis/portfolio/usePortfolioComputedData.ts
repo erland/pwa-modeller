@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import type { Model } from '../../../domain';
 import { readNumericPropertyFromElement } from '../../../domain';
 import { buildAnalysisGraph, buildPortfolioPopulation, computeNodeMetric } from '../../../domain/analysis';
+import type { AnalysisAdapter } from '../../../analysis/adapters/AnalysisAdapter';
 
 import type { GroupBy, SortDir, SortKey } from './types';
 import { percentRounded } from './utils';
@@ -10,7 +11,7 @@ import { percentRounded } from './utils';
 type Args = {
   model: Model;
   // Adapter is passed through to buildPortfolioPopulation, which expects a notation-specific adapter.
-  adapter: unknown;
+  adapter: AnalysisAdapter;
   layersSorted: string[];
   typesSorted: string[];
   search: string;
@@ -43,7 +44,7 @@ export function usePortfolioComputedData({
     () =>
       buildPortfolioPopulation({
         model,
-        adapter: adapter as any,
+        adapter,
         filter: {
           layers: layersSorted.length ? layersSorted : undefined,
           types: typesSorted.length ? (typesSorted as unknown as string[]) : undefined,
@@ -53,11 +54,13 @@ export function usePortfolioComputedData({
     [adapter, layersSorted, model, search, typesSorted]
   );
 
+  type Row = (typeof rows)[number];
+
   const valueByElementId = useMemo(() => {
     if (!metricKey) return {} as Record<string, number | undefined>;
     const out: Record<string, number | undefined> = {};
     for (const r of rows) {
-      out[r.elementId] = readNumericPropertyFromElement((model as any).elements[r.elementId], metricKey);
+      out[r.elementId] = readNumericPropertyFromElement(model.elements?.[r.elementId], metricKey);
     }
     return out;
   }, [metricKey, model, rows]);
@@ -124,7 +127,7 @@ export function usePortfolioComputedData({
     const keyString = (s: string | null | undefined): string => (s ?? '').toString();
     const cmpStr = (a: string, b: string): number => a.localeCompare(b, undefined, { sensitivity: 'base' });
 
-    return (a: (typeof displayRows)[number], b: (typeof displayRows)[number]): number => {
+    return (a: Row, b: Row): number => {
       if (sortKey === 'name') return cmpStr(a.label, b.label) * dirMul;
       // For secondary comparisons (tie-breakers), always use Name asc to keep ordering predictable.
       if (sortKey === 'type') return cmpStr(a.typeLabel, b.typeLabel) * dirMul || cmpStr(a.label, b.label);
@@ -160,7 +163,7 @@ export function usePortfolioComputedData({
       if (av !== bv) return (av - bv) * dirMul;
       return cmpStr(a.label, b.label);
     };
-  }, [degreeByElementId, displayRows, metricKey, reach3ByElementId, sortDir, sortKey, valueByElementId]);
+  }, [degreeByElementId, metricKey, reach3ByElementId, sortDir, sortKey, valueByElementId]);
 
   const sortedRows = useMemo(() => {
     // Stable sort.

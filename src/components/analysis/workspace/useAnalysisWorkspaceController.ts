@@ -121,6 +121,8 @@ export function useAnalysisWorkspaceController({
   const matrixActions = matrix.actions;
   const matrixDerived = matrix.derived;
 
+  const buildMatrix = matrixActions.build.build;
+
   const canRun = computeCanRun({
     modelPresent: Boolean(model),
     mode,
@@ -134,7 +136,7 @@ export function useAnalysisWorkspaceController({
   const run = useCallback(() => {
     if (!model) return;
     if (mode === 'matrix') {
-      matrixActions.build.build();
+      buildMatrix();
       return;
     }
     if (mode !== 'paths') {
@@ -145,7 +147,7 @@ export function useAnalysisWorkspaceController({
     setActiveTargetId(draftTargetId);
     // Keep related/traceability baseline aligned with the chosen source.
     setActiveStartId(draftSourceId);
-  }, [draftSourceId, draftStartId, draftTargetId, matrixActions.build.build, model, mode, setActiveSourceId, setActiveStartId, setActiveTargetId]);
+  }, [buildMatrix, draftSourceId, draftStartId, draftTargetId, model, mode, setActiveSourceId, setActiveStartId, setActiveTargetId]);
 
   const applyPreset = useCallback(
     (presetId: 'upstream' | 'downstream' | 'crossLayerTrace' | 'clear') => {
@@ -188,7 +190,7 @@ export function useAnalysisWorkspaceController({
       setMaxPaths(10);
       setMaxPathLength(null);
     },
-    [matrixActions.axes, setDirection, setRelationshipTypes, setLayers, setElementTypes, setMaxDepth, setIncludeStart, setMaxPaths, setMaxPathLength]
+    [matrixActions.axes, setDirection, setRelationshipTypes, setLayers, setElementTypes, setMaxDepth, setIncludeStart, setMaxPaths, setMaxPathLength, setPathsMode]
   );
 
   const useSelectionAs = useCallback(

@@ -1,4 +1,5 @@
 import type { AnalysisDirection, Model, ModelKind, RelationshipType } from '../../../domain';
+import type { PathsBetweenResult, RelatedElementsResult } from '../../../domain';
 import type { Selection } from '../../model/selection';
 
 import { AnalysisResultTable } from '../AnalysisResultTable';
@@ -7,8 +8,8 @@ export type ResultsModeViewProps = {
   model: Model;
   modelKind: ModelKind;
   mode: 'related' | 'paths';
-  relatedResult: any;
-  pathsResult: any;
+  relatedResult: RelatedElementsResult | null;
+  pathsResult: PathsBetweenResult | null;
   selection: Selection;
   direction: AnalysisDirection;
   relationshipTypes: RelationshipType[];

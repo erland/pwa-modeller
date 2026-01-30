@@ -27,8 +27,8 @@ export type Props = {
 export function PortfolioAnalysisView({ model, modelKind, selection, onSelectElement }: Props) {
   const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
   const facetDefs = useMemo(() => adapter.getFacetDefinitions(model), [adapter, model]);
-  const hasLayerFacet = facetDefs.some((d) => (d as any).id === 'archimateLayer');
-  const hasElementTypeFacet = facetDefs.some((d) => (d as any).id === 'elementType');
+  const hasLayerFacet = facetDefs.some((d) => d.id === 'archimateLayer');
+  const hasElementTypeFacet = facetDefs.some((d) => d.id === 'elementType');
 
   const modelId = model.id;
 
@@ -52,7 +52,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     // Limit type options to those that actually occur within the currently selected layers.
     const layerRows = buildPortfolioPopulation({
       model,
-      adapter: adapter as any,
+      adapter,
       filter: { layers: ui.layersSorted.length ? ui.layersSorted : undefined }
     });
 
@@ -170,7 +170,7 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
         metricRange={computed.metricRange}
         completeness={computed.completeness}
         displayRows={computed.displayRows}
-        grouped={computed.grouped as any}
+        grouped={computed.grouped}
         tableRows={computed.tableRows}
         hasLayerFacet={hasLayerFacet}
         showDegree={ui.showDegree}

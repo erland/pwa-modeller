@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useState } from 'react';
 
 import type { MatrixWorkspaceCellDialogInfo } from '../workspace/useMatrixWorkspaceState';
+import type { RelationshipMatrixResult } from '../../../domain/analysis/relationshipMatrix';
 
 import { RelationshipMatrixCellDialog } from '../RelationshipMatrixCellDialog';
 import { RelationshipMatrixTable } from '../RelationshipMatrixTable';
@@ -35,8 +36,8 @@ export type MatrixModeViewProps = {
     };
   };
   matrixDerived: {
-    result: any | null;
-    cellValues: any;
+    result: RelationshipMatrixResult | null;
+    cellValues: number[][] | undefined;
     relationshipTypesForWeights: string[];
   };
 };

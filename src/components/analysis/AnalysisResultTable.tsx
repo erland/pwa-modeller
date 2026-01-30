@@ -241,7 +241,7 @@ export function AnalysisResultTable({
     }
     // Reset to the first path whenever endpoints or result set changes.
     setSelectedPathIndex(0);
-  }, [mode, pathsResult?.sourceElementId, pathsResult?.targetElementId, pathsResult?.paths?.length]);
+  }, [mode, pathsResult?.sourceElementId, pathsResult?.targetElementId, pathsResult?.paths]);
 
   if (mode === 'related') {
     const hits = relatedResult?.hits ?? [];

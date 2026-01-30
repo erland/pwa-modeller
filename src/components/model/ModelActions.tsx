@@ -28,8 +28,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         modelLoaded: !!model,
         isDirty,
         onNew: ctrl.doNewModel,
-        onOpen: ctrl.doOpenModel,
-        onImport: ctrl.doImport,
+        onLoad: ctrl.doLoad,
         onProperties: ctrl.doProperties,
         onSave: ctrl.doSave,
         onSaveAs: ctrl.doSaveAs,
@@ -40,8 +39,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       model,
       isDirty,
       ctrl.doNewModel,
-      ctrl.doOpenModel,
-      ctrl.doImport,
+      ctrl.doLoad,
       ctrl.doProperties,
       ctrl.doSave,
       ctrl.doSaveAs,
@@ -60,29 +58,16 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       </button>
 
       <input
-        ref={ctrl.openInputRef}
-        data-testid="open-model-input"
+        ref={ctrl.loadInputRef}
+        data-testid="load-model-input"
         type="file"
-        accept="application/json,.json"
+        accept=".json,.bpmn,.xml,.xmi,application/json,application/xml,text/xml"
         style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
         onChange={(e) => {
           const f = e.currentTarget.files?.[0] ?? null;
           // Allow choosing the same file again.
           e.currentTarget.value = '';
-          void ctrl.onFileChosen(f);
-        }}
-      />
-
-      <input
-        ref={ctrl.importInputRef}
-        type="file"
-        accept=".bpmn,.xml,.xmi,application/xml,text/xml"
-        style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
-        onChange={(e) => {
-          const f = e.currentTarget.files?.[0] ?? null;
-          // Allow choosing the same file again.
-          e.currentTarget.value = '';
-          void ctrl.onImportFileChosen(f);
+          void ctrl.onLoadFileChosen(f);
         }}
       />
 
@@ -114,7 +99,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onClose={() => ctrl.setImportDialogOpen(false)}
         importing={ctrl.importing}
         error={ctrl.importError}
-        onChooseFile={ctrl.triggerImportFilePicker}
+        onChooseFile={ctrl.triggerLoadFilePicker}
       />
 
       <ImportReportDialog

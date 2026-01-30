@@ -1,7 +1,6 @@
 export type ModelActionId =
   | 'new'
-  | 'open'
-  | 'import'
+  | 'load'
   | 'properties'
   | 'save'
   | 'saveAs'
@@ -20,8 +19,7 @@ type BuildRegistryArgs = {
   modelLoaded: boolean;
   isDirty: boolean;
   onNew: () => void;
-  onOpen: () => void;
-  onImport: () => void;
+  onLoad: () => void;
   onProperties: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -43,14 +41,9 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       run: args.onNew
     },
     {
-      id: 'open',
-      label: 'Open',
-      run: args.onOpen
-    },
-    {
-      id: 'import',
-      label: 'Import…',
-      run: args.onImport
+      id: 'load',
+      label: 'Load…',
+      run: args.onLoad
     },
     {
       id: 'properties',

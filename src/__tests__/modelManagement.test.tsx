@@ -67,7 +67,7 @@ describe('Model management UI', () => {
     const json = serializeModel(model);
     const file = new File([json], 'loaded-model.json', { type: 'application/json' });
 
-    const input = screen.getByTestId('open-model-input') as HTMLInputElement;
+    const input = screen.getByTestId('load-model-input') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
 
     expect(await screen.findByText('Loaded Model')).toBeInTheDocument();

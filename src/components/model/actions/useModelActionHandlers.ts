@@ -43,8 +43,7 @@ export type UseModelActionHandlersArgs = {
  * Keeps React UI components small and focused.
  */
 export function useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps }: UseModelActionHandlersArgs) {
-  const openInputRef = useRef<HTMLInputElement | null>(null);
-  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const loadInputRef = useRef<HTMLInputElement | null>(null);
 
   const [overflowOpen, setOverflowOpen] = useState(false);
 
@@ -78,10 +77,18 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
     setNewDesc('');
   }, [confirmReplaceIfDirty, model]);
 
-  const doOpenModel = useCallback(() => {
+  const triggerLoadFilePicker = useCallback(() => {
+    const el = loadInputRef.current;
+    if (!el) return;
+    // Allow choosing the same file again.
+    el.value = '';
+    el.click();
+  }, []);
+
+  const doLoad = useCallback(() => {
     if (!confirmReplaceIfDirty()) return;
-    openInputRef.current?.click();
-  }, [confirmReplaceIfDirty]);
+    triggerLoadFilePicker();
+  }, [confirmReplaceIfDirty, triggerLoadFilePicker]);
 
   async function readFileAsText(file: File): Promise<string> {
     // Prefer the modern File.text() API when available.
@@ -100,42 +107,31 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
     });
   }
 
-  const onFileChosen = useCallback(
-    async (file: File | null) => {
-      if (!file) return;
+  const tryOpenNativeModel = useCallback(
+    async (file: File): Promise<boolean> => {
+      // Only attempt native open for .json (or json MIME) to avoid expensive reads for large XML/XMI.
+      const name = (file.name || '').toLowerCase();
+      const isJson = name.endsWith('.json') || (file.type || '').includes('json');
+      if (!isJson) return false;
+
       try {
         const json = await readFileAsText(file);
         const loadedModel = deserializeModel(json);
         const safeName = sanitizeFileNameWithExtension(file.name || 'model.json', 'json');
         modelStore.loadModel(loadedModel, safeName);
         navigate('/');
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        window.alert(`Failed to open model: ${msg}`);
+        return true;
+      } catch {
+        // Not a native model JSON (or invalid) - fall back to import.
+        return false;
       }
     },
     [navigate]
   );
 
-  const triggerImportFilePicker = useCallback(() => {
-    const el = importInputRef.current;
-    if (!el) return;
-    // Allow choosing the same file again.
-    el.value = '';
-    el.click();
-  }, []);
-
-  const doImport = useCallback(() => {
-    if (!confirmReplaceIfDirty()) return;
-    setImportError(null);
-    // Open the dialog (shows progress/errors) and immediately open the file picker.
-    setImportDialogOpen(true);
-    triggerImportFilePicker();
-  }, [confirmReplaceIfDirty, triggerImportFilePicker]);
-
   const onImportFileChosen = useCallback(
-    async (file: File | null) => {
-      if (!file) return;
+    async (file: File) => {
+      setImportDialogOpen(true);
 
       setImporting(true);
       setImportError(null);
@@ -170,6 +166,22 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
       }
     },
     []
+  );
+
+  const onLoadFileChosen = useCallback(
+    async (file: File | null) => {
+      if (!file) return;
+      if (!confirmReplaceIfDirty()) return;
+
+      // Native JSON open first when applicable, otherwise import.
+      const opened = await tryOpenNativeModel(file);
+      if (opened) return;
+
+      // Import path (shows progress/errors via ImportDialog).
+      setImportError(null);
+      await onImportFileChosen(file);
+    },
+    [confirmReplaceIfDirty, onImportFileChosen, tryOpenNativeModel]
   );
 
   const triggerDownload = useCallback(
@@ -304,11 +316,9 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
 
   return {
     // refs / inputs
-    openInputRef,
-    importInputRef,
-    onFileChosen,
-    onImportFileChosen,
-    triggerImportFilePicker,
+    loadInputRef,
+    onLoadFileChosen,
+    triggerLoadFilePicker,
 
     // dialogs / menu
     overflowOpen,
@@ -336,8 +346,7 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
 
     // commands
     doNewModel,
-    doOpenModel,
-    doImport,
+    doLoad,
     doSave,
     doSaveAs,
     doProperties,

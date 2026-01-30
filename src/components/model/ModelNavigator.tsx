@@ -104,6 +104,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
 
       <div className="navTreeWrap" onKeyDown={nav.onTreeKeyDown}>
         <ModelNavigatorTree
+          rootFolderId={rootFolder.id}
           treeData={treeData}
           selectedKey={nav.selectedKey}
           expandedKeys={nav.expandedKeys}

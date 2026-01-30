@@ -10,6 +10,8 @@ import { useNavigatorTreeDnd } from './useNavigatorTreeDnd';
 import { collectExpandableKeysInSubtree, expandSingleChildChainFromKey, findNodeByKey } from './navUtils';
 
 type Props = {
+  /** The technical root folder id. UI hides the root node but we still need a drop/create target for it. */
+  rootFolderId: string;
   treeData: NavNode[];
   selectedKey: string | null;
   expandedKeys: Set<Key>;
@@ -42,6 +44,7 @@ type Props = {
 
 
 export function ModelNavigatorTree({
+  rootFolderId,
   treeData,
   selectedKey,
   expandedKeys,
@@ -100,6 +103,37 @@ export function ModelNavigatorTree({
 
   return (
     <div ref={treeWrapRef}>
+      {/*
+        Top-level drop/create target.
+        The root folder node is intentionally hidden in the tree to save space, but users still need
+        an easy way to move items to the top level and create folders directly under the root.
+      */}
+      <div
+        className="navTreeRow navTopLevelRow"
+        data-kind="folder"
+        data-drop-folder="folder"
+        data-folderid={rootFolderId}
+        title="Top level"
+      >
+        <span className="navTreeChevronSpacer" aria-hidden />
+        <span className="navTreeIcon" aria-hidden>
+          ⬆️
+        </span>
+        <span className="navTreeLabel">Top level</span>
+        <button
+          type="button"
+          className="navTopLevelCreate"
+          aria-label="Create folder at top level"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openCreateFolder(rootFolderId);
+          }}
+        >
+          + Folder
+        </button>
+      </div>
+
       <Tree
         aria-label="Model navigator"
         selectionMode="single"

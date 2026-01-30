@@ -84,6 +84,34 @@
   background: var(--surface-2);
 }
 
+/* Compact "Top level" row shown above the first visible folder.
+   Provides a drop target to move items to the root folder without showing the root node itself. */
+.navTopLevelRow {
+  margin: 4px 0 6px;
+  padding: 3px 6px;
+  cursor: default;
+  opacity: 0.9;
+}
+
+.navTopLevelRow:hover {
+  background: var(--surface-1);
+}
+
+.navTopLevelCreate {
+  margin-left: auto;
+  border: 1px solid var(--border-1);
+  background: var(--surface-1);
+  color: inherit;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.navTopLevelCreate:hover {
+  background: var(--surface-2);
+}
+
 
 .navTreeIndent {
   height: 18px;

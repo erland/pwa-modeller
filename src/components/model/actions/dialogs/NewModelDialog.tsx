@@ -18,6 +18,15 @@ export function NewModelDialog({
   setName,
   setDescription
 }: NewModelDialogProps) {
+  const canCreate = name.trim().length > 0;
+
+  const createModel = (): void => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+    modelStore.newModel({ name: trimmedName, description: description.trim() || undefined });
+    onClose();
+  };
+
   return (
     <Dialog
       title="New model"
@@ -28,23 +37,21 @@ export function NewModelDialog({
           <button type="button" className="shellButton" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="shellButton"
-            onClick={() => {
-              const trimmedName = name.trim();
-              if (!trimmedName) return;
-              modelStore.newModel({ name: trimmedName, description: description.trim() || undefined });
-              onClose();
-            }}
-            disabled={name.trim().length === 0}
-          >
+          <button type="submit" className="shellButton" disabled={!canCreate} form="new-model-form">
             Create
           </button>
         </>
       }
     >
-      <div className="formGrid">
+      <form
+        id="new-model-form"
+        className="formGrid"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!canCreate) return;
+          createModel();
+        }}
+      >
         <div className="formRow">
           <label htmlFor="new-model-name">Name</label>
           <input
@@ -64,7 +71,7 @@ export function NewModelDialog({
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
-      </div>
+      </form>
     </Dialog>
   );
 }

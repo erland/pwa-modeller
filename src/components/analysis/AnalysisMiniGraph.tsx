@@ -83,7 +83,8 @@ export function AnalysisMiniGraph({
   nodeOverlayPropertyKey = '',
   scaleNodesByOverlayScore = false,
   overlayDirection = 'both',
-  overlayRelationshipTypes
+  overlayRelationshipTypes,
+  onOpenInSandbox
 }: {
   model: Model;
   modelKind: ModelKind;
@@ -101,6 +102,11 @@ export function AnalysisMiniGraph({
   scaleNodesByOverlayScore?: boolean;
   overlayDirection?: AnalysisDirection;
   overlayRelationshipTypes?: RelationshipType[];
+  onOpenInSandbox?: (args: {
+    elementIds: string[];
+    relationshipIds: string[];
+    layout: { mode: 'levels'; levelById: Record<string, number>; orderById: Record<string, number> };
+  }) => void;
 }) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
@@ -287,9 +293,33 @@ export function AnalysisMiniGraph({
   return (
     <div style={{ marginTop: 10 }} aria-label={title}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-        <p className="crudTitle" style={{ margin: 0 }}>
-          Graph
-        </p>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <p className="crudTitle" style={{ margin: 0 }}>
+            Graph
+          </p>
+          {onOpenInSandbox ? (
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => {
+                const elementIds = safeData.nodes.map((n) => n.id);
+                const relationshipIds = Array.from(new Set(safeData.edges.map((e) => e.relationshipId))).sort((a, b) => a.localeCompare(b));
+                const levelById: Record<string, number> = {};
+                const orderById: Record<string, number> = {};
+                for (const n of safeData.nodes) {
+                  levelById[n.id] = n.level;
+                  orderById[n.id] = n.order;
+                }
+                onOpenInSandbox({ elementIds, relationshipIds, layout: { mode: 'levels', levelById, orderById } });
+              }}
+              disabled={safeData.nodes.length === 0}
+              aria-disabled={safeData.nodes.length === 0}
+              title="Open this mini graph as a Sandbox"
+            >
+              Open in Sandbox
+            </button>
+          ) : null}
+        </div>
         <p className="crudHint" style={{ margin: 0 }}>
           {safeData.nodes.length} nodes, {safeData.edges.length} edges
           {safeData.trimmed.nodes || safeData.trimmed.edges ? ' (trimmed)' : ''}

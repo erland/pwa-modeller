@@ -10,7 +10,7 @@ export type SandboxNode = {
   pinned?: boolean;
 };
 
-export type SandboxRelationshipVisibilityMode = 'all' | 'types';
+export type SandboxRelationshipVisibilityMode = 'all' | 'types' | 'explicit';
 
 export type SandboxAddRelatedDirection = 'both' | 'outgoing' | 'incoming';
 
@@ -31,6 +31,12 @@ export type SandboxRelationshipsState = {
    * When empty, no relationships are shown.
    */
   enabledTypes: string[];
+
+  /**
+   * When mode === 'explicit', only relationship ids in this list are shown
+   * (in addition to the global `show` toggle).
+   */
+  explicitIds: string[];
 };
 
 export type SandboxState = {
@@ -56,9 +62,26 @@ export type SandboxActions = {
 
   seedFromView: (viewId: string) => void;
 
+
+  /**
+   * Replace sandbox contents from an arbitrary element set (used by Step 8: open sandbox from analysis results).
+   */
+  seedFromElements: (args: {
+    elementIds: string[];
+    relationshipIds?: string[];
+    relationshipTypes?: string[];
+    layout?: {
+      mode: 'grid' | 'distance' | 'levels';
+      levelById?: Record<string, number>;
+      orderById?: Record<string, number>;
+    };
+  }) => void;
+
+
   setShowRelationships: (show: boolean) => void;
   setRelationshipMode: (mode: SandboxRelationshipVisibilityMode) => void;
   setEnabledRelationshipTypes: (types: string[]) => void;
+  setExplicitRelationshipIds: (relationshipIds: string[]) => void;
   toggleEnabledRelationshipType: (type: string) => void;
 
   setAddRelatedDepth: (depth: number) => void;
@@ -260,6 +283,10 @@ function toggleString(values: string[], v: string): string[] {
   return Array.from(set);
 }
 
+function uniqSortedStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter((x) => typeof x === 'string' && x.length > 0))).sort((a, b) => a.localeCompare(b));
+}
+
 /**
  * Owns Analysis Sandbox state.
  *
@@ -287,6 +314,7 @@ export function useSandboxState(args: {
   const [showRelationships, setShowRelationships] = useState(true);
   const [relationshipMode, setRelationshipMode] = useState<SandboxRelationshipVisibilityMode>('all');
   const [enabledRelationshipTypes, setEnabledRelationshipTypes] = useState<string[]>([]);
+  const [explicitRelationshipIds, setExplicitRelationshipIds] = useState<string[]>([]);
 
   const [addRelatedDepth, setAddRelatedDepth] = useState(1);
   const [addRelatedDirection, setAddRelatedDirection] = useState<SandboxAddRelatedDirection>('both');
@@ -298,6 +326,7 @@ export function useSandboxState(args: {
     setShowRelationships(true);
     setRelationshipMode('all');
     setEnabledRelationshipTypes([]);
+    setExplicitRelationshipIds([]);
 
     setAddRelatedDepth(1);
     setAddRelatedDirection('both');
@@ -591,7 +620,109 @@ export function useSandboxState(args: {
     [addRelatedEnabledTypes, model]
   );
 
-  const seedFromView = useCallback((viewId: string) => {
+  
+  const seedFromElements = useCallback(
+    (args: {
+      elementIds: string[];
+      relationshipIds?: string[];
+      relationshipTypes?: string[];
+      layout?: {
+        mode: 'grid' | 'distance' | 'levels';
+        levelById?: Record<string, number>;
+        orderById?: Record<string, number>;
+      };
+    }) => {
+      if (!model) return;
+
+      const inputIds = args.elementIds ?? [];
+      const validIds = inputIds.filter((id) => typeof id === 'string' && id.length > 0 && Boolean(model.elements[id]));
+      const uniqIds = uniqByElementId(validIds.map((id) => ({ elementId: id, x: 0, y: 0 }))).map((n) => n.elementId);
+      if (uniqIds.length === 0) return;
+
+      const mode = args.layout?.mode ?? 'grid';
+      const levelById = args.layout?.levelById ?? {};
+      const orderById = args.layout?.orderById ?? {};
+
+      const MARGIN_X = 120;
+      const MARGIN_Y = 120;
+
+      const nextNodes: SandboxNode[] = [];
+
+      if (mode === 'distance') {
+        const groups = new Map<number, string[]>();
+        for (const id of uniqIds) {
+          const raw = (levelById as Record<string, number>)[id];
+          const lvl = Number.isFinite(raw) ? Math.max(0, Math.round(raw)) : 0;
+          if (!groups.has(lvl)) groups.set(lvl, []);
+          groups.get(lvl)!.push(id);
+        }
+        const levels = Array.from(groups.keys()).sort((a, b) => a - b);
+        for (const lvl of levels) {
+          const ids = (groups.get(lvl) ?? []).slice().sort((a, b) => a.localeCompare(b));
+          for (let i = 0; i < ids.length; i++) {
+            nextNodes.push({
+              elementId: ids[i],
+              x: MARGIN_X + lvl * GRID_X,
+              y: MARGIN_Y + i * GRID_Y,
+            });
+          }
+        }
+      } else if (mode === 'levels') {
+        const entries = uniqIds.map((id) => {
+          const rawL = (levelById as Record<string, number>)[id];
+          const rawO = (orderById as Record<string, number>)[id];
+          const lvl = Number.isFinite(rawL) ? Math.max(0, Math.round(rawL)) : 0;
+          const ord = Number.isFinite(rawO) ? Math.max(0, Math.round(rawO)) : 0;
+          return { id, lvl, ord };
+        });
+        entries.sort((a, b) => a.lvl - b.lvl || a.ord - b.ord || a.id.localeCompare(b.id));
+        for (const e of entries) {
+          nextNodes.push({
+            elementId: e.id,
+            x: MARGIN_X + e.lvl * GRID_X,
+            y: MARGIN_Y + e.ord * GRID_Y,
+          });
+        }
+      } else {
+        for (let i = 0; i < uniqIds.length; i++) {
+          const id = uniqIds[i];
+          const col = i % GRID_COLS;
+          const row = Math.floor(i / GRID_COLS);
+          nextNodes.push({
+            elementId: id,
+            x: MARGIN_X + col * GRID_X,
+            y: MARGIN_Y + row * GRID_Y,
+          });
+        }
+      }
+
+      setNodes(nextNodes);
+
+      // Seed relationship visibility to match the source context.
+      setShowRelationships(true);
+
+      const relationshipIds = args.relationshipIds ? uniqSortedStrings(args.relationshipIds) : [];
+      const relationshipTypes = args.relationshipTypes ? uniqSortedStrings(args.relationshipTypes) : [];
+
+      if (relationshipIds.length > 0) {
+        const validRelIds = relationshipIds.filter((id) => Boolean((model.relationships as Record<string, any>)[id]));
+        setRelationshipMode('explicit');
+        setExplicitRelationshipIds(validRelIds);
+        // Keep type filter as-is (not used in explicit mode).
+      } else if (relationshipTypes.length > 0) {
+        setRelationshipMode('types');
+        setEnabledRelationshipTypes(relationshipTypes);
+        setExplicitRelationshipIds([]);
+      } else {
+        setRelationshipMode('all');
+        setEnabledRelationshipTypes([]);
+        setExplicitRelationshipIds([]);
+      }
+    },
+    [model]
+  );
+
+const seedFromView = useCallback((viewId: string) => {
     if (!model) return;
     const v = model.views?.[viewId];
     const layoutNodes = v?.layout?.nodes ?? [];
@@ -638,6 +769,7 @@ export function useSandboxState(args: {
         show: showRelationships,
         mode: relationshipMode,
         enabledTypes: enabledRelationshipTypes,
+        explicitIds: explicitRelationshipIds,
       },
       addRelated: {
         depth: addRelatedDepth,
@@ -645,7 +777,7 @@ export function useSandboxState(args: {
         enabledTypes: addRelatedEnabledTypes,
       },
     }),
-    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, nodes, relationshipMode, showRelationships]
+    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, explicitRelationshipIds, nodes, relationshipMode, showRelationships]
   );
 
   const actions: SandboxActions = useMemo(
@@ -656,9 +788,11 @@ export function useSandboxState(args: {
       removeMany,
       clear,
       seedFromView,
+      seedFromElements,
       setShowRelationships,
       setRelationshipMode,
       setEnabledRelationshipTypes,
+      setExplicitRelationshipIds,
       toggleEnabledRelationshipType,
 
       setAddRelatedDepth: setAddRelatedDepthSafe,
@@ -675,6 +809,7 @@ export function useSandboxState(args: {
       addRelatedFromSelection,
       clear,
       seedFromView,
+      seedFromElements,
       removeMany,
       setAddRelatedDepthSafe,
       setAddRelatedEnabledTypesSafe,

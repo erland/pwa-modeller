@@ -187,6 +187,7 @@ export function SandboxModeView({
   }, [baseVisibleRelationships]);
 
   const enabledTypeSet = useMemo(() => new Set(relationships.enabledTypes), [relationships.enabledTypes]);
+  const explicitIdSet = useMemo(() => new Set(relationships.explicitIds), [relationships.explicitIds]);
 
   // When switching to type filtering, default to enabling all available types.
   useEffect(() => {
@@ -211,8 +212,10 @@ export function SandboxModeView({
   const visibleRelationships = useMemo(() => {
     if (!relationships.show) return [];
     if (relationships.mode === 'all') return baseVisibleRelationships;
-    return baseVisibleRelationships.filter((r) => enabledTypeSet.has(r.type));
-  }, [baseVisibleRelationships, enabledTypeSet, relationships.mode, relationships.show]);
+    if (relationships.mode === 'types') return baseVisibleRelationships.filter((r) => enabledTypeSet.has(r.type));
+    // explicit ids
+    return baseVisibleRelationships.filter((r) => explicitIdSet.has(r.id));
+  }, [baseVisibleRelationships, enabledTypeSet, explicitIdSet, relationships.mode, relationships.show]);
 
   const selectedEdge = useMemo(() => {
     if (!selectedEdgeId) return null;
@@ -391,11 +394,14 @@ export function SandboxModeView({
             >
               <option value="all">All</option>
               <option value="types">Filter by type</option>
+              <option value="explicit">Explicit set</option>
             </select>
           ) : null}
           <p className="crudHint" style={{ margin: 0 }}>
             {relationships.show
-              ? `${baseVisibleRelationships.length} relationships between ${nodes.length} node(s)`
+              ? relationships.mode === 'explicit'
+                ? `${baseVisibleRelationships.length} relationships between ${nodes.length} node(s) · explicit: ${relationships.explicitIds.length} id(s)`
+                : `${baseVisibleRelationships.length} relationships between ${nodes.length} node(s)`
               : 'Relationships are hidden'}
           </p>
         </div>

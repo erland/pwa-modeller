@@ -32,6 +32,17 @@ type Props = {
   onSelectRelationship: (relationshipId: string) => void;
   onSelectElement: (elementId: string) => void;
   onOpenTraceability: (elementId: string) => void;
+
+  /**
+   * Optional: open the current results (or the mini-graph) in the Analysis Sandbox.
+   * This is used by Step 8 of the sandbox plan.
+   */
+  onOpenSandbox?: (args: {
+    elementIds: string[];
+    relationshipIds?: string[];
+    relationshipTypes?: string[];
+    layout?: { mode: 'grid' | 'distance' | 'levels'; levelById?: Record<string, number>; orderById?: Record<string, number> };
+  }) => void;
 };
 
 function docSnippet(doc: string | undefined): string {
@@ -83,7 +94,8 @@ export function AnalysisResultTable({
   selection,
   onSelectRelationship,
   onSelectElement,
-  onOpenTraceability
+  onOpenTraceability,
+  onOpenSandbox,
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const modelId = model.id ?? '';
@@ -280,6 +292,33 @@ export function AnalysisResultTable({
             >
               Export CSV
             </button>
+            {onOpenSandbox ? (
+              <button
+                type="button"
+                className="miniLinkButton"
+                onClick={() => {
+                  const hits = relatedResult?.hits ?? [];
+                  const startId = relatedResult?.startElementId;
+                  const elementIds = Array.from(
+                    new Set([...(startId ? [startId] : []), ...hits.map((h) => h.elementId)].filter(Boolean))
+                  ) as string[];
+                  const levelById: Record<string, number> = {};
+                  if (startId) levelById[startId] = 0;
+                  for (const h of hits) levelById[h.elementId] = h.distance ?? 1;
+                  const relationshipTypesSeed = relationshipTypes && relationshipTypes.length ? relationshipTypes : undefined;
+                  onOpenSandbox({
+                    elementIds,
+                    relationshipTypes: relationshipTypesSeed,
+                    layout: { mode: 'distance', levelById },
+                  });
+                }}
+                disabled={(relatedResult?.hits?.length ?? 0) === 0 && !relatedResult?.startElementId}
+                aria-disabled={(relatedResult?.hits?.length ?? 0) === 0 && !relatedResult?.startElementId}
+                title="Open these results as a Sandbox"
+              >
+                Open in Sandbox
+              </button>
+            ) : null}
           </>
         }
       >
@@ -351,6 +390,7 @@ export function AnalysisResultTable({
             selection={selection}
             onSelectRelationship={onSelectRelationship}
             onSelectElement={onSelectElement}
+            onOpenInSandbox={onOpenSandbox ? (payload) => onOpenSandbox(payload) : undefined}
             wrapLabels={true}
             autoFitColumns={true}
             nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
@@ -555,6 +595,7 @@ export function AnalysisResultTable({
           selection={selection}
           onSelectRelationship={onSelectRelationship}
           onSelectElement={onSelectElement}
+            onOpenInSandbox={onOpenSandbox ? (payload) => onOpenSandbox(payload) : undefined}
           wrapLabels={true}
           autoFitColumns={true}
           nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}

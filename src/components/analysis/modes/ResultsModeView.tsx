@@ -16,6 +16,12 @@ export type ResultsModeViewProps = {
   onSelectRelationship: (relationshipId: string) => void;
   onSelectElement: (elementId: string) => void;
   onOpenTraceability: (elementId: string) => void;
+  onOpenSandbox?: (args: {
+    elementIds: string[];
+    relationshipIds?: string[];
+    relationshipTypes?: string[];
+    layout?: { mode: 'grid' | 'distance' | 'levels'; levelById?: Record<string, number>; orderById?: Record<string, number> };
+  }) => void;
 };
 
 export function ResultsModeView({
@@ -30,6 +36,7 @@ export function ResultsModeView({
   onSelectRelationship,
   onSelectElement,
   onOpenTraceability,
+  onOpenSandbox,
 }: ResultsModeViewProps) {
   return (
     <AnalysisResultTable
@@ -44,6 +51,7 @@ export function ResultsModeView({
       onSelectRelationship={onSelectRelationship}
       onSelectElement={onSelectElement}
       onOpenTraceability={onOpenTraceability}
+      onOpenSandbox={onOpenSandbox}
     />
   );
 }

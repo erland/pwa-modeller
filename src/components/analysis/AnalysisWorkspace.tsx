@@ -148,6 +148,21 @@ export function AnalysisWorkspace({
     [model, onOpenViewInWorkspace, sandbox.state.nodes]
   );
 
+
+  const onOpenSandboxFromResults = useCallback(
+    (args: {
+      elementIds: string[];
+      relationshipIds?: string[];
+      relationshipTypes?: string[];
+      layout?: { mode: 'grid' | 'distance' | 'levels'; levelById?: Record<string, number>; orderById?: Record<string, number> };
+    }) => {
+      if (!model) return;
+      sandbox.actions.seedFromElements(args);
+      setMode('sandbox');
+    },
+    [model, sandbox.actions, setMode]
+  );
+
   return (
     <div className="workspace" aria-label="Analysis workspace">
       <AnalysisWorkspaceHeader
@@ -244,6 +259,7 @@ export function AnalysisWorkspace({
               onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
               onOpenTraceability={(elementId) => openTraceabilityFrom(elementId)}
+              onOpenSandbox={onOpenSandboxFromResults}
             />
           )}
         </>

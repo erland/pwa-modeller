@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent, PointerEvent } from 'react';
 
-import type { Model } from '../../../domain';
+import type { Model, ViewNodeLayout } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import type {
   SandboxNode,
@@ -16,6 +16,13 @@ import type {
 
 import { dataTransferHasElement, readDraggedElementId } from '../../diagram/dragDrop';
 
+import type { Point } from '../../diagram/geometry';
+import { polylineMidPoint, rectAlignedOrthogonalAnchorsWithEndpointAnchors } from '../../diagram/geometry';
+import { orthogonalRoutingHintsFromAnchors } from '../../diagram/orthogonalHints';
+import { adjustOrthogonalConnectionEndpoints } from '../../diagram/adjustConnectionEndpoints';
+import { getConnectionPath } from '../../diagram/connectionPath';
+import { applyLaneOffsetsSafely } from '../../diagram/connectionLanes';
+
 import '../../../styles/analysisSandbox.css';
 
 import { SaveSandboxAsDiagramDialog } from './SaveSandboxAsDiagramDialog';
@@ -24,97 +31,10 @@ import { SandboxInsertDialog } from './SandboxInsertDialog';
 const NODE_W = 180;
 const NODE_H = 56;
 
-type Point = { x: number; y: number };
-type Rect = { x: number; y: number; w: number; h: number };
+const GRID_SIZE = 20;
 
-function rectForNode(n: SandboxNode): Rect {
-  return { x: n.x, y: n.y, w: NODE_W, h: NODE_H };
-}
-
-function segmentIntersectsRect(a: Point, b: Point, r: Rect): boolean {
-  // Only used for orthogonal segments.
-  const rx1 = r.x;
-  const ry1 = r.y;
-  const rx2 = r.x + r.w;
-  const ry2 = r.y + r.h;
-
-  if (a.x === b.x) {
-    const x = a.x;
-    if (x < rx1 || x > rx2) return false;
-    const y1 = Math.min(a.y, b.y);
-    const y2 = Math.max(a.y, b.y);
-    return y2 >= ry1 && y1 <= ry2;
-  }
-
-  if (a.y === b.y) {
-    const y = a.y;
-    if (y < ry1 || y > ry2) return false;
-    const x1 = Math.min(a.x, b.x);
-    const x2 = Math.max(a.x, b.x);
-    return x2 >= rx1 && x1 <= rx2;
-  }
-
-  // Diagonal segment (shouldn't happen here)
-  return false;
-}
-
-function countBadIntersections(points: Point[], sourceRect: Rect, targetRect: Rect): number {
-  if (points.length < 2) return 0;
-  let bad = 0;
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    // Allow the first segment to originate from the source node and the last to terminate in the target node.
-    const allowSource = i === 0;
-    const allowTarget = i === points.length - 2;
-    if (!allowSource && segmentIntersectsRect(a, b, sourceRect)) bad++;
-    if (!allowTarget && segmentIntersectsRect(a, b, targetRect)) bad++;
-  }
-  return bad;
-}
-
-function routeOrthogonal(source: SandboxNode, target: SandboxNode): Point[] {
-  const sRect = rectForNode(source);
-  const tRect = rectForNode(target);
-
-  const sx = source.x + NODE_W / 2;
-  const sy = source.y + NODE_H / 2;
-  const tx = target.x + NODE_W / 2;
-  const ty = target.y + NODE_H / 2;
-  const dx = tx - sx;
-  const dy = ty - sy;
-
-  // Exit/entry points on node borders.
-  const horizontal = Math.abs(dx) >= Math.abs(dy);
-  const start: Point = horizontal
-    ? { x: source.x + (dx >= 0 ? NODE_W : 0), y: source.y + NODE_H / 2 }
-    : { x: source.x + NODE_W / 2, y: source.y + (dy >= 0 ? NODE_H : 0) };
-  const end: Point = horizontal
-    ? { x: target.x + (dx >= 0 ? 0 : NODE_W), y: target.y + NODE_H / 2 }
-    : { x: target.x + NODE_W / 2, y: target.y + (dy >= 0 ? 0 : NODE_H) };
-
-  const midX = Math.round((start.x + end.x) / 2);
-  const midY = Math.round((start.y + end.y) / 2);
-
-  const hv: Point[] = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
-  const vh: Point[] = [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end];
-
-  const hvBad = countBadIntersections(hv, sRect, tRect);
-  const vhBad = countBadIntersections(vh, sRect, tRect);
-  return hvBad <= vhBad ? hv : vh;
-}
-
-function labelPositionForRoute(points: Point[]): Point {
-  if (points.length < 2) return { x: 0, y: 0 };
-  if (points.length >= 4) {
-    const a = points[1];
-    const b = points[2];
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  }
-  // Fallback: middle of first segment.
-  const a = points[0];
-  const b = points[1];
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+function layoutForSandboxNode(n: SandboxNode): ViewNodeLayout {
+  return { elementId: n.elementId, x: n.x, y: n.y, width: NODE_W, height: NODE_H };
 }
 
 type DragState = {
@@ -355,6 +275,67 @@ export function SandboxModeView({
     if (edgeOverflow <= 0) return visibleRelationships;
     return visibleRelationships.slice(0, relationshipCap);
   }, [edgeOverflow, relationshipCap, visibleRelationships]);
+
+  const orthogonalPointsByRelationshipId = useMemo(() => {
+    if (ui.edgeRouting !== 'orthogonal') return new Map<string, Point[]>();
+    if (!relationships.show) return new Map<string, Point[]>();
+    if (renderedRelationships.length === 0) return new Map<string, Point[]>();
+
+    const layoutsByElementId = new Map<string, ViewNodeLayout>();
+    for (const n of nodes) {
+      layoutsByElementId.set(n.elementId, layoutForSandboxNode(n));
+    }
+
+    const obstacleRects: Array<{ id: string; x: number; y: number; w: number; h: number }> = nodes.map((n) => ({
+      id: n.elementId,
+      x: n.x,
+      y: n.y,
+      w: NODE_W,
+      h: NODE_H,
+    }));
+
+    const laneItems: Array<{ id: string; points: Point[] }> = [];
+    const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
+
+    for (const r of renderedRelationships) {
+      const sId = r.sourceElementId as string;
+      const tId = r.targetElementId as string;
+      const s = layoutsByElementId.get(sId);
+      const t = layoutsByElementId.get(tId);
+      if (!s || !t) continue;
+
+      const { start, end } = rectAlignedOrthogonalAnchorsWithEndpointAnchors(s, t);
+
+      const obstacles = obstacleRects
+        .filter((o) => o.id !== sId && o.id !== tId)
+        .map(({ id: _id, ...rect }) => rect);
+
+      obstaclesById.set(r.id, obstacles);
+
+      const hints = {
+        ...orthogonalRoutingHintsFromAnchors(s, start, t, end, GRID_SIZE),
+        obstacles,
+        obstacleMargin: GRID_SIZE / 2,
+        laneSpacing: GRID_SIZE / 2,
+        maxChannelShiftSteps: 10,
+      };
+
+      let points = getConnectionPath({ route: { kind: 'orthogonal' }, points: undefined }, { a: start, b: end, hints }).points;
+      points = adjustOrthogonalConnectionEndpoints(points, s, t, { stubLength: GRID_SIZE / 2 });
+
+      laneItems.push({ id: r.id, points });
+    }
+
+    const adjusted = applyLaneOffsetsSafely(laneItems, {
+      gridSize: GRID_SIZE,
+      obstaclesById,
+      obstacleMargin: GRID_SIZE / 2,
+    });
+
+    const map = new Map<string, Point[]>();
+    for (const it of adjusted) map.set(it.id, it.points);
+    return map;
+  }, [nodes, renderedRelationships, relationships.show, ui.edgeRouting]);
 
   const fitToContent = useCallback(() => {
     if (!nodes.length) {
@@ -893,8 +874,8 @@ export function SandboxModeView({
             const mx = (x1 + x2) / 2;
             const my = (y1 + y2) / 2;
 
-            const orthoPoints = ui.edgeRouting === 'orthogonal' ? routeOrthogonal(s, t) : null;
-            const label = orthoPoints ? labelPositionForRoute(orthoPoints) : { x: mx, y: my };
+            const orthoPoints = ui.edgeRouting === 'orthogonal' ? orthogonalPointsByRelationshipId.get(r.id) ?? null : null;
+            const label = orthoPoints ? polylineMidPoint(orthoPoints) : { x: mx, y: my };
             return (
               <g
                 key={r.id}

@@ -45,6 +45,15 @@
   stroke-width: 2.2;
 }
 
+.analysisSandboxNode.isPairSelected rect {
+  stroke: #111;
+  stroke-width: 2.0;
+}
+
+.analysisSandboxNode.isPairSecondary rect {
+  stroke-dasharray: 4 2;
+}
+
 .analysisSandboxNodeTitle {
   font-size: 13px;
   font-weight: 600;

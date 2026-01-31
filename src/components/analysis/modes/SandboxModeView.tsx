@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DragEvent, PointerEvent } from 'react';
+import type { DragEvent, MouseEvent, PointerEvent } from 'react';
 
 import type { Model } from '../../../domain';
 import type { Selection } from '../../model/selection';
@@ -61,6 +61,7 @@ export function SandboxModeView({
   selection,
   selectionElementIds,
   onSelectElement,
+  onClearSelection,
   onMoveNode,
   onAddSelected,
   onRemoveSelected,
@@ -89,6 +90,7 @@ export function SandboxModeView({
   selection: Selection;
   selectionElementIds: string[];
   onSelectElement: (elementId: string) => void;
+  onClearSelection: () => void;
   onMoveNode: (elementId: string, x: number, y: number) => void;
   onAddSelected: () => void;
   onRemoveSelected: () => void;
@@ -118,6 +120,10 @@ export function SandboxModeView({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [edgeCapDismissed, setEdgeCapDismissed] = useState(false);
+
+  // Sandbox-local pair selection for "Insert between selection".
+  // Keeps sandbox operations independent from the global single-selection UX.
+  const [pairSelection, setPairSelection] = useState<string[]>([]);
 
   const [viewBox, setViewBox] = useState<string | undefined>(undefined);
 
@@ -176,9 +182,16 @@ export function SandboxModeView({
     return uniq;
   }, [nodeById, selectionElementIds]);
 
+  const pairAnchors = useMemo(() => {
+    const uniq = Array.from(new Set(pairSelection.filter((id) => nodeById.has(id))));
+    return uniq.slice(0, 2);
+  }, [nodeById, pairSelection]);
+
   const canInsertIntermediates = useMemo(() => {
-    return insertAnchors.length === 2 && addRelated.enabledTypes.length > 0;
-  }, [addRelated.enabledTypes.length, insertAnchors.length]);
+    // Prefer the local pair selection; fall back to global selection if it happens to include 2 sandbox nodes.
+    const anchors = pairAnchors.length ? pairAnchors : insertAnchors;
+    return anchors.length === 2 && addRelated.enabledTypes.length > 0;
+  }, [addRelated.enabledTypes.length, insertAnchors, pairAnchors]);
 
   const canAddRelated = useMemo(() => {
     return addRelatedAnchors.length > 0 && addRelated.enabledTypes.length > 0;
@@ -357,15 +370,16 @@ export function SandboxModeView({
   );
 
   const onInsert = useCallback(() => {
-    if (insertAnchors.length !== 2) return;
-    const [a, b] = insertAnchors;
+    const anchors = pairAnchors.length ? pairAnchors : insertAnchors;
+    if (anchors.length !== 2) return;
+    const [a, b] = anchors;
     onInsertIntermediatesBetween(a, b, {
       mode: insertMode,
       k: insertK,
       maxHops: insertMaxHops,
       direction: insertDirection,
     });
-  }, [insertAnchors, insertDirection, insertK, insertMaxHops, insertMode, onInsertIntermediatesBetween]);
+  }, [insertAnchors, insertDirection, insertK, insertMaxHops, insertMode, onInsertIntermediatesBetween, pairAnchors]);
 
   const onInsertFromSelectedEdge = useCallback(() => {
     if (!selectedEdge) return;
@@ -376,6 +390,46 @@ export function SandboxModeView({
       direction: insertDirection,
     });
   }, [insertDirection, insertK, insertMaxHops, insertMode, onInsertIntermediatesBetween, selectedEdge]);
+
+  const onCanvasClick = useCallback(
+    (e: MouseEvent<SVGSVGElement>) => {
+      // Only treat clicks on the SVG background as "clear selection".
+      if (e.target !== e.currentTarget) return;
+      setSelectedEdgeId(null);
+      setPairSelection([]);
+      onClearSelection();
+    },
+    [onClearSelection]
+  );
+
+  const onClickNode = useCallback(
+    (e: MouseEvent<SVGGElement>, elementId: string) => {
+      e.stopPropagation();
+      setSelectedEdgeId(null);
+
+      if (e.shiftKey) {
+        setPairSelection((prev) => {
+          const cur = prev.filter(Boolean);
+          if (cur.length === 0) return [elementId];
+          if (cur.length === 1) {
+            return cur[0] === elementId ? [] : [cur[0], elementId];
+          }
+
+          const [a, b] = cur;
+          if (elementId === a) return [b];
+          if (elementId === b) return [a];
+          // Replace the secondary selection but keep the primary stable.
+          return [a, elementId];
+        });
+      } else {
+        // Normal click sets a single local selection (primary).
+        setPairSelection([elementId]);
+      }
+
+      onSelectElement(elementId);
+    },
+    [onSelectElement]
+  );
 
   return (
     <div className="crudSection">
@@ -760,9 +814,9 @@ export function SandboxModeView({
               disabled={!canInsertIntermediates}
               aria-disabled={!canInsertIntermediates}
               title={
-                insertAnchors.length === 2
+                (pairAnchors.length ? pairAnchors : insertAnchors).length === 2
                   ? 'Insert intermediate elements between the two selected sandbox nodes'
-                  : 'Select exactly two sandbox nodes (elements) to insert intermediates'
+                  : 'Pick two sandbox nodes: click first, then Shift-click second'
               }
             >
               Insert between selection
@@ -781,9 +835,9 @@ export function SandboxModeView({
           </div>
 
           <p className="crudHint" style={{ margin: 0 }}>
-            {insertAnchors.length !== 2
-              ? `Selection: ${insertAnchors.length} node(s) · Tip: multi-select two elements in the Navigator and then return here.`
-              : `Between: ${insertAnchors[0]} → ${insertAnchors[1]}${selectedEdge ? ` · Edge: ${selectedEdge.type}` : ''}`}
+            {(pairAnchors.length ? pairAnchors : insertAnchors).length !== 2
+              ? `Pick two sandbox nodes: click first, then Shift-click second. Click background to clear.`
+              : `Between: ${(pairAnchors.length ? pairAnchors : insertAnchors)[0]} → ${(pairAnchors.length ? pairAnchors : insertAnchors)[1]}${selectedEdge ? ` · Edge: ${selectedEdge.type}` : ''}`}
           </p>
 
           <p className="crudHint" style={{ margin: 0 }}>
@@ -803,7 +857,7 @@ export function SandboxModeView({
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
-          onClick={() => setSelectedEdgeId(null)}
+          onClick={onCanvasClick}
           role="img"
           aria-label="Sandbox canvas"
         >
@@ -869,17 +923,21 @@ export function SandboxModeView({
             const el = model.elements[n.elementId];
             if (!el) return null;
             const isSelected = selectedElementId === n.elementId;
+            const isPairPrimary = pairAnchors[0] === n.elementId;
+            const isPairSecondary = pairAnchors[1] === n.elementId;
             const label = el.name || '(unnamed)';
             const secondary = el.type;
 
             return (
               <g
                 key={n.elementId}
-                className={`analysisSandboxNode ${isSelected ? 'isSelected' : ''}`}
+                className={`analysisSandboxNode ${isSelected ? 'isSelected' : ''} ${
+                  isPairPrimary || isPairSecondary ? 'isPairSelected' : ''
+                } ${isPairPrimary ? 'isPairPrimary' : ''} ${isPairSecondary ? 'isPairSecondary' : ''}`}
                 transform={`translate(${n.x}, ${n.y})`}
                 onPointerDown={(e) => onPointerDownNode(e, n.elementId)}
                 onDoubleClick={() => onSelectElement(n.elementId)}
-                onClick={() => onSelectElement(n.elementId)}
+                onClick={(e) => onClickNode(e, n.elementId)}
                 role="button"
                 tabIndex={0}
                 aria-label={label}

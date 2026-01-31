@@ -19,6 +19,7 @@ import { dataTransferHasElement, readDraggedElementId } from '../../diagram/drag
 import '../../../styles/analysisSandbox.css';
 
 import { SaveSandboxAsDiagramDialog } from './SaveSandboxAsDiagramDialog';
+import { SandboxInsertBetweenDialog } from './SandboxInsertBetweenDialog';
 
 const NODE_W = 180;
 const NODE_H = 56;
@@ -133,6 +134,8 @@ export function SandboxModeView({
   const [insertDirection, setInsertDirection] = useState<SandboxAddRelatedDirection>('both');
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [insertBetweenDialogOpen, setInsertBetweenDialogOpen] = useState(false);
+  const [insertBetweenEndpoints, setInsertBetweenEndpoints] = useState<[string, string] | null>(null);
 
   const selectedElementId = useMemo(() => getSelectedElementId(selection), [selection]);
 
@@ -369,17 +372,12 @@ export function SandboxModeView({
     [model.elements, onAddNodeAt, onSelectElement]
   );
 
-  const onInsert = useCallback(() => {
+  const onOpenInsertBetweenDialog = useCallback(() => {
     const anchors = pairAnchors.length ? pairAnchors : insertAnchors;
     if (anchors.length !== 2) return;
-    const [a, b] = anchors;
-    onInsertIntermediatesBetween(a, b, {
-      mode: insertMode,
-      k: insertK,
-      maxHops: insertMaxHops,
-      direction: insertDirection,
-    });
-  }, [insertAnchors, insertDirection, insertK, insertMaxHops, insertMode, onInsertIntermediatesBetween, pairAnchors]);
+    setInsertBetweenEndpoints([anchors[0], anchors[1]]);
+    setInsertBetweenDialogOpen(true);
+  }, [insertAnchors, pairAnchors]);
 
   const onInsertFromSelectedEdge = useCallback(() => {
     if (!selectedEdge) return;
@@ -810,14 +808,12 @@ export function SandboxModeView({
             <button
               type="button"
               className="miniLinkButton"
-              onClick={onInsert}
+              onClick={onOpenInsertBetweenDialog}
               disabled={!canInsertIntermediates}
               aria-disabled={!canInsertIntermediates}
-              title={
-                (pairAnchors.length ? pairAnchors : insertAnchors).length === 2
-                  ? 'Insert intermediate elements between the two selected sandbox nodes'
-                  : 'Pick two sandbox nodes: click first, then Shift-click second'
-              }
+              title={(pairAnchors.length ? pairAnchors : insertAnchors).length === 2
+                ? 'Preview and insert intermediate elements between the two selected sandbox nodes'
+                : 'Pick two sandbox nodes: click first, then Shift-click second'}
             >
               Insert between selection
             </button>
@@ -954,6 +950,38 @@ export function SandboxModeView({
           })}
         </svg>
       </div>
+
+      <SandboxInsertBetweenDialog
+        isOpen={insertBetweenDialogOpen}
+        model={model}
+        sourceElementId={insertBetweenEndpoints?.[0] ?? ''}
+        targetElementId={insertBetweenEndpoints?.[1] ?? ''}
+        existingElementIds={nodes.map((n) => n.elementId)}
+        allRelationshipTypes={allRelationshipTypes}
+        initialEnabledRelationshipTypes={addRelated.enabledTypes}
+        initialOptions={{
+          mode: insertMode,
+          k: insertK,
+          maxHops: insertMaxHops,
+          direction: insertDirection,
+        }}
+        onCancel={() => setInsertBetweenDialogOpen(false)}
+        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
+          setInsertBetweenDialogOpen(false);
+          setInsertMode(options.mode);
+          setInsertK(options.k);
+          setInsertMaxHops(options.maxHops);
+          setInsertDirection(options.direction);
+
+          // Keep traversal settings consistent with the insert preview.
+          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
+
+          const src = insertBetweenEndpoints?.[0];
+          const dst = insertBetweenEndpoints?.[1];
+          if (!src || !dst) return;
+          onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
+        }}
+      />
 
       <SaveSandboxAsDiagramDialog
         isOpen={saveDialogOpen}

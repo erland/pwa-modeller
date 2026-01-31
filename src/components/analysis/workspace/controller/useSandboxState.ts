@@ -21,6 +21,12 @@ export type SandboxInsertIntermediatesOptions = {
   k: number;
   maxHops: number;
   direction: SandboxAddRelatedDirection;
+
+  /**
+   * Optional allow-list of element ids to insert (typically chosen in a preview dialog).
+   * When omitted, all computed intermediate elements are inserted.
+   */
+  allowedElementIds?: string[];
 };
 
 export type SandboxRelationshipsState = {
@@ -162,12 +168,12 @@ function collectAllRelationshipTypes(model: Model): string[] {
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
-type Adjacency = {
+export type Adjacency = {
   out: Map<string, { to: string; type: string }[]>;
   in: Map<string, { to: string; type: string }[]>;
 };
 
-function buildAdjacency(model: Model, allowedTypes: Set<string>): Adjacency {
+export function buildAdjacency(model: Model, allowedTypes: Set<string>): Adjacency {
   const out = new Map<string, { to: string; type: string }[]>();
   const _in = new Map<string, { to: string; type: string }[]>();
   for (const r of Object.values(model.relationships)) {
@@ -195,7 +201,7 @@ function getNeighbors(args: { adjacency: Adjacency; id: string; direction: Sandb
   return out;
 }
 
-function bfsShortestPath(args: {
+export function bfsShortestPath(args: {
   startId: string;
   targetId: string;
   adjacency: Adjacency;
@@ -239,7 +245,7 @@ function bfsShortestPath(args: {
   return path;
 }
 
-function bfsKShortestPaths(args: {
+export function bfsKShortestPaths(args: {
   startId: string;
   targetId: string;
   adjacency: Adjacency;
@@ -739,6 +745,7 @@ export function useSandboxState(args: {
       const maxHops = clampInt(options.maxHops, 1, 16);
       const mode = options.mode;
       const k = clampInt(options.k, 1, 10);
+      const allowedElementIdSet = options.allowedElementIds ? new Set(options.allowedElementIds) : null;
 
       const adjacency = buildAdjacency(model, allowedTypes);
 
@@ -785,6 +792,7 @@ export function useSandboxState(args: {
           const offset = (pIdx - (paths.length - 1) / 2) * 84;
           for (let i = 0; i < m; i++) {
             const elementId = intermediates[i];
+            if (allowedElementIdSet && !allowedElementIdSet.has(elementId)) continue;
             if (added.has(elementId)) continue;
             if (positioned.has(elementId)) continue;
             const t = (i + 1) / (m + 1);

@@ -199,6 +199,7 @@ export function AnalysisWorkspace({
               nodes={sandbox.state.nodes}
               relationships={sandbox.state.relationships}
               addRelated={sandbox.state.addRelated}
+              ui={sandbox.state.ui}
               selection={selection}
               selectionElementIds={selectionElementIds}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
@@ -218,6 +219,9 @@ export function AnalysisWorkspace({
               onAddRelatedFromSelection={(anchorIds) => sandbox.actions.addRelatedFromSelection(anchorIds)}
               onInsertIntermediatesBetween={(a, b, options) => sandbox.actions.insertIntermediatesBetween(a, b, options)}
               onSaveAsDiagram={onSaveSandboxAsDiagram}
+              onAutoLayout={() => sandbox.actions.autoLayout()}
+              onSetPersistEnabled={(enabled) => sandbox.actions.setPersistEnabled(enabled)}
+              onClearWarning={() => sandbox.actions.clearWarning()}
             />
           ) : mode === 'matrix' ? (
             <MatrixModeView

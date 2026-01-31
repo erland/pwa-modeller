@@ -10,6 +10,7 @@ import type {
   SandboxInsertIntermediatesOptions,
   SandboxRelationshipVisibilityMode,
   SandboxRelationshipsState,
+  SandboxUiState,
   SandboxState,
 } from '../workspace/controller/useSandboxState';
 
@@ -56,6 +57,7 @@ export function SandboxModeView({
   nodes,
   relationships,
   addRelated,
+  ui,
   selection,
   selectionElementIds,
   onSelectElement,
@@ -75,11 +77,15 @@ export function SandboxModeView({
   onAddRelatedFromSelection,
   onInsertIntermediatesBetween,
   onSaveAsDiagram,
+  onAutoLayout,
+  onSetPersistEnabled,
+  onClearWarning,
 }: {
   model: Model;
   nodes: SandboxNode[];
   relationships: SandboxRelationshipsState;
   addRelated: SandboxState['addRelated'];
+  ui: SandboxUiState;
   selection: Selection;
   selectionElementIds: string[];
   onSelectElement: (elementId: string) => void;
@@ -103,11 +109,17 @@ export function SandboxModeView({
     options: SandboxInsertIntermediatesOptions
   ) => void;
   onSaveAsDiagram: (name: string, visibleRelationshipIds: string[]) => void;
+  onAutoLayout: () => void;
+  onSetPersistEnabled: (enabled: boolean) => void;
+  onClearWarning: () => void;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [edgeCapDismissed, setEdgeCapDismissed] = useState(false);
+
+  const [viewBox, setViewBox] = useState<string | undefined>(undefined);
 
   const [insertMode, setInsertMode] = useState<SandboxInsertIntermediatesMode>('shortest');
   const [insertK, setInsertK] = useState(3);
@@ -216,6 +228,51 @@ export function SandboxModeView({
     // explicit ids
     return baseVisibleRelationships.filter((r) => explicitIdSet.has(r.id));
   }, [baseVisibleRelationships, enabledTypeSet, explicitIdSet, relationships.mode, relationships.show]);
+
+  const relationshipCap = ui.maxEdges;
+  const edgeOverflow = useMemo(() => {
+    if (!relationships.show) return 0;
+    return Math.max(0, visibleRelationships.length - relationshipCap);
+  }, [relationshipCap, relationships.show, visibleRelationships.length]);
+
+  useEffect(() => {
+    if (edgeOverflow > 0) setEdgeCapDismissed(false);
+  }, [edgeOverflow]);
+
+  const renderedRelationships = useMemo(() => {
+    if (edgeOverflow <= 0) return visibleRelationships;
+    return visibleRelationships.slice(0, relationshipCap);
+  }, [edgeOverflow, relationshipCap, visibleRelationships]);
+
+  const fitToContent = useCallback(() => {
+    if (!nodes.length) {
+      setViewBox(undefined);
+      return;
+    }
+    let minX = nodes[0].x;
+    let minY = nodes[0].y;
+    let maxX = nodes[0].x + NODE_W;
+    let maxY = nodes[0].y + NODE_H;
+    for (const n of nodes) {
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + NODE_W);
+      maxY = Math.max(maxY, n.y + NODE_H);
+    }
+    const margin = 80;
+    const vbX = Math.floor(minX - margin);
+    const vbY = Math.floor(minY - margin);
+    const vbW = Math.ceil(Math.max(320, maxX - minX + margin * 2));
+    const vbH = Math.ceil(Math.max(240, maxY - minY + margin * 2));
+    setViewBox(`${vbX} ${vbY} ${vbW} ${vbH}`);
+  }, [nodes]);
+
+  // Initial convenience: after the first node appears, zoom out to show it.
+  useEffect(() => {
+    if (viewBox) return;
+    if (nodes.length === 0) return;
+    fitToContent();
+  }, [fitToContent, nodes.length, viewBox]);
 
   const selectedEdge = useMemo(() => {
     if (!selectedEdgeId) return null;
@@ -374,6 +431,43 @@ export function SandboxModeView({
         </div>
       </div>
 
+      {ui.warning || (edgeOverflow > 0 && !edgeCapDismissed) ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: 10,
+            padding: '10px 12px',
+            border: '1px solid var(--border-1)',
+            borderRadius: 6,
+            background: 'rgba(255, 204, 0, 0.12)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ fontSize: 12, lineHeight: 1.4 }}>
+            {ui.warning ? <div>{ui.warning}</div> : null}
+            {edgeOverflow > 0 && !edgeCapDismissed ? (
+              <div>
+                Relationship rendering capped at {ui.maxEdges}. Hidden {edgeOverflow} relationship(s).
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={() => {
+              onClearWarning();
+              setEdgeCapDismissed(true);
+            }}
+            title="Dismiss warnings"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       <div className="toolbar" style={{ marginTop: 10 }}>
         <div className="toolbarGroup" style={{ minWidth: 240 }}>
           <label>Relationships</label>
@@ -400,9 +494,54 @@ export function SandboxModeView({
           <p className="crudHint" style={{ margin: 0 }}>
             {relationships.show
               ? relationships.mode === 'explicit'
-                ? `${baseVisibleRelationships.length} relationships between ${nodes.length} node(s) · explicit: ${relationships.explicitIds.length} id(s)`
-                : `${baseVisibleRelationships.length} relationships between ${nodes.length} node(s)`
+                ? `${baseVisibleRelationships.length} relationships between ${nodes.length}/${ui.maxNodes} node(s) · explicit: ${relationships.explicitIds.length} id(s)`
+                : `${baseVisibleRelationships.length} relationships between ${nodes.length}/${ui.maxNodes} node(s)`
               : 'Relationships are hidden'}
+          </p>
+        </div>
+
+        <div className="toolbarGroup" style={{ minWidth: 220 }}>
+          <label>Layout</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={onAutoLayout}
+              disabled={!nodes.length}
+              aria-disabled={!nodes.length}
+              title="Auto layout sandbox nodes"
+            >
+              Auto layout
+            </button>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={fitToContent}
+              disabled={!nodes.length}
+              aria-disabled={!nodes.length}
+              title="Fit the canvas to the current sandbox content"
+            >
+              Fit to content
+            </button>
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={() => setViewBox(undefined)}
+              title="Reset canvas view"
+            >
+              Reset view
+            </button>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 }}>
+            <input
+              type="checkbox"
+              checked={ui.persistEnabled}
+              onChange={(e) => onSetPersistEnabled(e.currentTarget.checked)}
+            />
+            <span>Persist sandbox in session</span>
+          </label>
+          <p className="crudHint" style={{ margin: 0 }}>
+            Caps: {ui.maxNodes} nodes / {ui.maxEdges} relationships
           </p>
         </div>
 
@@ -657,6 +796,8 @@ export function SandboxModeView({
         <svg
           ref={svgRef}
           className={`analysisSandboxSvg ${isDropTarget ? 'isDropTarget' : ''}`}
+          viewBox={viewBox}
+          preserveAspectRatio={viewBox ? 'xMinYMin meet' : undefined}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onDragOver={onDragOver}
@@ -691,7 +832,7 @@ export function SandboxModeView({
             </g>
           ) : null}
 
-          {visibleRelationships.map((r) => {
+          {renderedRelationships.map((r) => {
             const sId = r.sourceElementId as string;
             const tId = r.targetElementId as string;
             const s = nodeById.get(sId);
@@ -762,7 +903,7 @@ export function SandboxModeView({
         onCancel={() => setSaveDialogOpen(false)}
         onConfirm={(name) => {
           setSaveDialogOpen(false);
-          const ids = visibleRelationships.map((r) => r.id);
+          const ids = renderedRelationships.map((r) => r.id);
           onSaveAsDiagram(name, ids);
         }}
       />

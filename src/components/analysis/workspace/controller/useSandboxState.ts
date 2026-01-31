@@ -39,6 +39,25 @@ export type SandboxRelationshipsState = {
   explicitIds: string[];
 };
 
+export type SandboxUiState = {
+  /**
+   * User-facing warning banner text (best-effort). Cleared on model change.
+   */
+  warning: string | null;
+  /**
+   * Hard cap to avoid UI freezes.
+   */
+  maxNodes: number;
+  /**
+   * Rendering cap for relationships (applied in the view layer).
+   */
+  maxEdges: number;
+  /**
+   * Optional sessionStorage persistence.
+   */
+  persistEnabled: boolean;
+};
+
 export type SandboxState = {
   nodes: SandboxNode[];
   relationships: SandboxRelationshipsState;
@@ -51,6 +70,7 @@ export type SandboxState = {
      */
     enabledTypes: string[];
   };
+  ui: SandboxUiState;
 };
 
 export type SandboxActions = {
@@ -61,6 +81,14 @@ export type SandboxActions = {
   clear: () => void;
 
   seedFromView: (viewId: string) => void;
+
+  /**
+   * Sandbox-only auto layout. Does not mutate the model.
+   */
+  autoLayout: () => void;
+
+  setPersistEnabled: (enabled: boolean) => void;
+  clearWarning: () => void;
 
 
   /**
@@ -99,6 +127,10 @@ export type SandboxActions = {
 
 const DEFAULT_SEED_POS = { x: 260, y: 180 };
 
+// Step 9 caps (polish + safety).
+const SANDBOX_MAX_NODES_DEFAULT = 300;
+const SANDBOX_MAX_EDGES_DEFAULT = 2000;
+
 // Simple layout for batches of added nodes.
 const GRID_X = 220;
 const GRID_Y = 92;
@@ -107,6 +139,7 @@ const GRID_COLS = 4;
 // Must match the rendered node size in SandboxModeView.
 const SANDBOX_NODE_W = 180;
 const SANDBOX_NODE_H = 56;
+
 
 const RELATED_RADIUS_STEP = 240;
 const RELATED_MIN_SEPARATION = 160;
@@ -287,6 +320,32 @@ function uniqSortedStrings(values: string[]): string[] {
   return Array.from(new Set(values.filter((x) => typeof x === 'string' && x.length > 0))).sort((a, b) => a.localeCompare(b));
 }
 
+function safeGetSessionStorage(): Storage | null {
+  try {
+    // In unit tests or non-browser environments, window/sessionStorage may not exist.
+    if (typeof window === 'undefined') return null;
+    return window.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function SANDBOX_STATE_KEY(modelId: string): string {
+  return `eaModeller.analysisSandbox.state.${modelId}.v1`;
+}
+
+function applyNodeCap(args: {
+  prev: SandboxNode[];
+  toAdd: SandboxNode[];
+  maxNodes: number;
+}): { next: SandboxNode[]; dropped: number } {
+  const { prev, toAdd, maxNodes } = args;
+  const merged = uniqByElementId([...prev, ...toAdd]);
+  if (merged.length <= maxNodes) return { next: merged, dropped: 0 };
+  const next = merged.slice(0, maxNodes);
+  return { next, dropped: merged.length - next.length };
+}
+
 /**
  * Owns Analysis Sandbox state.
  *
@@ -310,11 +369,17 @@ export function useSandboxState(args: {
 }) {
   const { model, modelId, mode, selectionElementIds } = args;
 
+  const maxNodes = SANDBOX_MAX_NODES_DEFAULT;
+  const maxEdges = SANDBOX_MAX_EDGES_DEFAULT;
+
   const [nodes, setNodes] = useState<SandboxNode[]>([]);
   const [showRelationships, setShowRelationships] = useState(true);
   const [relationshipMode, setRelationshipMode] = useState<SandboxRelationshipVisibilityMode>('all');
   const [enabledRelationshipTypes, setEnabledRelationshipTypes] = useState<string[]>([]);
   const [explicitRelationshipIds, setExplicitRelationshipIds] = useState<string[]>([]);
+
+  const [warning, setWarning] = useState<string | null>(null);
+  const [persistEnabled, setPersistEnabled] = useState(false);
 
   const [addRelatedDepth, setAddRelatedDepth] = useState(1);
   const [addRelatedDirection, setAddRelatedDirection] = useState<SandboxAddRelatedDirection>('both');
@@ -328,10 +393,98 @@ export function useSandboxState(args: {
     setEnabledRelationshipTypes([]);
     setExplicitRelationshipIds([]);
 
+    setWarning(null);
+    setPersistEnabled(false);
+
     setAddRelatedDepth(1);
     setAddRelatedDirection('both');
     setAddRelatedEnabledTypes([]);
   }, [modelId]);
+
+  const emitWarning = useCallback((msg: string) => {
+    setWarning((prev) => (prev === msg ? prev : msg));
+  }, []);
+
+  const clearWarning = useCallback(() => setWarning(null), []);
+
+  const hydrateFromPersisted = useCallback(() => {
+    if (!model) return;
+    const ss = safeGetSessionStorage();
+    if (!ss) return;
+    const raw = ss.getItem(SANDBOX_STATE_KEY(modelId));
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as any;
+      if (!parsed || parsed.v !== 1) return;
+      const inNodes: any[] = Array.isArray(parsed.nodes) ? parsed.nodes : [];
+      const nextNodesRaw: SandboxNode[] = inNodes
+        .filter((n) => n && typeof n.elementId === 'string' && typeof n.x === 'number' && typeof n.y === 'number')
+        .map((n) => ({ elementId: n.elementId, x: n.x, y: n.y, pinned: Boolean(n.pinned) }))
+        .filter((n) => Boolean(model.elements[n.elementId]));
+
+      const capped = applyNodeCap({ prev: [], toAdd: nextNodesRaw, maxNodes });
+      if (capped.dropped > 0) {
+        emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
+      }
+
+      setNodes(capped.next);
+
+      const rel = parsed.relationships ?? {};
+      const relShow = Boolean(rel.show);
+      const relMode = (rel.mode as SandboxRelationshipVisibilityMode) ?? 'all';
+      const relEnabledTypes = Array.isArray(rel.enabledTypes)
+        ? rel.enabledTypes.filter((t: any) => typeof t === 'string' && t.length > 0)
+        : [];
+      const relExplicitIds = Array.isArray(rel.explicitIds)
+        ? rel.explicitIds.filter((id: any) => typeof id === 'string' && id.length > 0)
+        : [];
+
+      setShowRelationships(relShow);
+      setRelationshipMode(relMode);
+      setEnabledRelationshipTypes(uniqSortedStrings(relEnabledTypes));
+      setExplicitRelationshipIds(uniqSortedStrings(relExplicitIds));
+
+      const ar = parsed.addRelated ?? {};
+      const arDepth = typeof ar.depth === 'number' ? ar.depth : 1;
+      const arDir = (ar.direction as SandboxAddRelatedDirection) ?? 'both';
+      const arTypes = Array.isArray(ar.enabledTypes)
+        ? ar.enabledTypes.filter((t: any) => typeof t === 'string' && t.length > 0)
+        : [];
+      setAddRelatedDepth(clampInt(arDepth, 1, 6));
+      setAddRelatedDirection(arDir);
+      setAddRelatedEnabledTypes(uniqSortedStrings(arTypes));
+    } catch {
+      // ignore corrupted persisted state
+    }
+  }, [emitWarning, model, modelId, maxNodes]);
+
+  // Persist sandbox state to sessionStorage if enabled.
+  useEffect(() => {
+    if (!persistEnabled) return;
+    if (!model) return;
+    const ss = safeGetSessionStorage();
+    if (!ss) return;
+    try {
+      const payload = {
+        v: 1,
+        nodes,
+        relationships: {
+          show: showRelationships,
+          mode: relationshipMode,
+          enabledTypes: enabledRelationshipTypes,
+          explicitIds: explicitRelationshipIds,
+        },
+        addRelated: {
+          depth: addRelatedDepth,
+          direction: addRelatedDirection,
+          enabledTypes: addRelatedEnabledTypes,
+        },
+      };
+      ss.setItem(SANDBOX_STATE_KEY(modelId), JSON.stringify(payload));
+    } catch {
+      // ignore quota or JSON errors
+    }
+  }, [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, explicitRelationshipIds, model, modelId, nodes, persistEnabled, relationshipMode, showRelationships]);
 
   const allRelationshipTypesForModel = useMemo(() => {
     if (!model) return [];
@@ -373,10 +526,14 @@ export function useSandboxState(args: {
           };
         });
 
-        return uniqByElementId([...prev, ...newNodes]);
+        const capped = applyNodeCap({ prev, toAdd: newNodes, maxNodes });
+        if (capped.dropped > 0) {
+          emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
+        }
+        return capped.next;
       });
     },
-    [model]
+    [emitWarning, maxNodes, model]
   );
 
   const addIfMissing = useCallback(
@@ -396,7 +553,31 @@ export function useSandboxState(args: {
     setNodes((prev) => prev.filter((n) => !remove.has(n.elementId)));
   }, []);
 
-  const clear = useCallback(() => setNodes([]), []);
+  const clear = useCallback(() => {
+    setNodes([]);
+    setWarning(null);
+  }, []);
+
+  const setPersistEnabledSafe = useCallback(
+    (enabled: boolean) => {
+      setPersistEnabled(enabled);
+      const ss = safeGetSessionStorage();
+      if (!ss) return;
+      if (!enabled) {
+        try {
+          ss.removeItem(SANDBOX_STATE_KEY(modelId));
+        } catch {
+          // ignore
+        }
+        return;
+      }
+      // Only hydrate if the current sandbox is empty, to avoid surprising overwrites.
+      if (nodes.length === 0) {
+        hydrateFromPersisted();
+      }
+    },
+    [hydrateFromPersisted, modelId, nodes.length]
+  );
 
   // Auto-seed from selection when entering Sandbox and it is empty.
   useEffect(() => {
@@ -535,10 +716,14 @@ export function useSandboxState(args: {
         }
 
         if (newNodes.length === 0) return prev;
-        return uniqByElementId([...prev, ...newNodes]);
+        const capped = applyNodeCap({ prev, toAdd: newNodes, maxNodes });
+        if (capped.dropped > 0) {
+          emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
+        }
+        return capped.next;
       });
     },
-    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, model]
+    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, emitWarning, maxNodes, model]
   );
 
   const insertIntermediatesBetween = useCallback(
@@ -614,10 +799,14 @@ export function useSandboxState(args: {
         for (const [elementId, pos] of positioned.entries()) {
           newNodes.push({ elementId, x: pos.x, y: pos.y });
         }
-        return uniqByElementId([...prev, ...newNodes]);
+        const capped = applyNodeCap({ prev, toAdd: newNodes, maxNodes });
+        if (capped.dropped > 0) {
+          emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
+        }
+        return capped.next;
       });
     },
-    [addRelatedEnabledTypes, model]
+    [addRelatedEnabledTypes, emitWarning, maxNodes, model]
   );
 
   
@@ -696,7 +885,11 @@ export function useSandboxState(args: {
         }
       }
 
-      setNodes(nextNodes);
+      const capped = applyNodeCap({ prev: [], toAdd: nextNodes, maxNodes });
+      if (capped.dropped > 0) {
+        emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
+      }
+      setNodes(capped.next);
 
       // Seed relationship visibility to match the source context.
       setShowRelationships(true);
@@ -719,7 +912,7 @@ export function useSandboxState(args: {
         setExplicitRelationshipIds([]);
       }
     },
-    [model]
+    [emitWarning, maxNodes, model]
   );
 
 const seedFromView = useCallback((viewId: string) => {
@@ -759,8 +952,129 @@ const seedFromView = useCallback((viewId: string) => {
     }
 
     if (next.length === 0) return;
-    setNodes(next);
-  }, [model]);
+    const capped = applyNodeCap({ prev: [], toAdd: next, maxNodes });
+    if (capped.dropped > 0) {
+      emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
+    }
+    setNodes(capped.next);
+  }, [emitWarning, maxNodes, model]);
+
+  const autoLayout = useCallback(() => {
+    if (!model) return;
+    setNodes((prev) => {
+      if (prev.length === 0) return prev;
+
+      const ids = prev.map((n) => n.elementId);
+      const idSet = new Set(ids);
+
+      const isEdgeAllowed = (r: any): boolean => {
+        if (!showRelationships) return false;
+        if (!r || !r.id || !r.type) return false;
+        if (!r.sourceElementId || !r.targetElementId) return false;
+        if (!idSet.has(r.sourceElementId) || !idSet.has(r.targetElementId)) return false;
+        if (relationshipMode === 'all') return true;
+        if (relationshipMode === 'types') return enabledRelationshipTypes.includes(r.type);
+        // explicit
+        return explicitRelationshipIds.includes(r.id);
+      };
+
+      const adj = new Map<string, string[]>();
+      for (const id of ids) adj.set(id, []);
+      for (const r of Object.values(model.relationships)) {
+        if (!isEdgeAllowed(r)) continue;
+        const s = (r as any).sourceElementId as string;
+        const t = (r as any).targetElementId as string;
+        adj.get(s)?.push(t);
+        adj.get(t)?.push(s);
+      }
+
+      const nameOf = (id: string): string => {
+        const el = model.elements[id] as any;
+        const nm = el?.name;
+        return typeof nm === 'string' && nm.length ? nm : id;
+      };
+
+      const unvisited = new Set(ids);
+      const components: Array<{ levels: Map<number, string[]> }> = [];
+
+      while (unvisited.size) {
+        const root = Array.from(unvisited).sort((a, b) => nameOf(a).localeCompare(nameOf(b)))[0];
+        if (!root) break;
+        unvisited.delete(root);
+
+        const q: Array<{ id: string; lvl: number }> = [{ id: root, lvl: 0 }];
+        const visited = new Set<string>([root]);
+        const levels = new Map<number, string[]>();
+        levels.set(0, [root]);
+
+        while (q.length) {
+          const cur = q.shift();
+          if (!cur) break;
+          const nextLvl = cur.lvl + 1;
+          for (const nb of adj.get(cur.id) ?? []) {
+            if (visited.has(nb)) continue;
+            if (!idSet.has(nb)) continue;
+            visited.add(nb);
+            unvisited.delete(nb);
+            if (!levels.has(nextLvl)) levels.set(nextLvl, []);
+            levels.get(nextLvl)!.push(nb);
+            q.push({ id: nb, lvl: nextLvl });
+          }
+        }
+
+        // For isolated nodes (no edges), ensure they still exist in this component.
+        for (const id of visited) {
+          // already in some level
+          void id;
+        }
+        components.push({ levels });
+      }
+
+      // Layout: stack components vertically to avoid overlap.
+      const MARGIN_X = 120;
+      let baseY = 120;
+      const pos = new Map<string, { x: number; y: number }>();
+
+      for (const comp of components) {
+        const lvlKeys = Array.from(comp.levels.keys()).sort((a, b) => a - b);
+        let maxRows = 1;
+        for (const lvl of lvlKeys) {
+          const arr = comp.levels.get(lvl) ?? [];
+          arr.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+          maxRows = Math.max(maxRows, arr.length);
+          for (let i = 0; i < arr.length; i++) {
+            pos.set(arr[i], {
+              x: MARGIN_X + lvl * GRID_X,
+              y: baseY + i * GRID_Y,
+            });
+          }
+        }
+        baseY += maxRows * GRID_Y + 200;
+      }
+
+      // Any ids not placed (e.g. because relationships were hidden) -> grid fallback.
+      const notPlaced = ids.filter((id) => !pos.has(id));
+      for (let i = 0; i < notPlaced.length; i++) {
+        const id = notPlaced[i];
+        const col = i % GRID_COLS;
+        const row = Math.floor(i / GRID_COLS);
+        pos.set(id, { x: MARGIN_X + col * GRID_X, y: 120 + row * GRID_Y });
+      }
+
+      const pinnedById = new Map<string, { x: number; y: number }>();
+      for (const n of prev) {
+        if (n.pinned) pinnedById.set(n.elementId, { x: n.x, y: n.y });
+      }
+
+      return prev.map((n) => {
+        const pinned = pinnedById.get(n.elementId);
+        if (pinned) return { ...n, x: pinned.x, y: pinned.y };
+        const p = pos.get(n.elementId);
+        if (!p) return n;
+        return { ...n, x: p.x, y: p.y };
+      });
+    });
+  }, [enabledRelationshipTypes, explicitRelationshipIds, model, relationshipMode, showRelationships]);
 
   const state: SandboxState = useMemo(
     () => ({
@@ -776,8 +1090,14 @@ const seedFromView = useCallback((viewId: string) => {
         direction: addRelatedDirection,
         enabledTypes: addRelatedEnabledTypes,
       },
+      ui: {
+        warning,
+        maxNodes,
+        maxEdges,
+        persistEnabled,
+      },
     }),
-    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, explicitRelationshipIds, nodes, relationshipMode, showRelationships]
+    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, explicitRelationshipIds, maxEdges, maxNodes, nodes, persistEnabled, relationshipMode, showRelationships, warning]
   );
 
   const actions: SandboxActions = useMemo(
@@ -788,6 +1108,11 @@ const seedFromView = useCallback((viewId: string) => {
       removeMany,
       clear,
       seedFromView,
+
+      autoLayout,
+      setPersistEnabled: setPersistEnabledSafe,
+      clearWarning,
+
       seedFromElements,
       setShowRelationships,
       setRelationshipMode,
@@ -807,10 +1132,13 @@ const seedFromView = useCallback((viewId: string) => {
       addIfMissing,
       addManyIfMissing,
       addRelatedFromSelection,
+      autoLayout,
       clear,
+      clearWarning,
       seedFromView,
       seedFromElements,
       removeMany,
+      setPersistEnabledSafe,
       setAddRelatedDepthSafe,
       setAddRelatedEnabledTypesSafe,
       setNodePosition,

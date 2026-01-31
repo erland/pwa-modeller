@@ -845,6 +845,7 @@ export function SandboxModeView({
 	        kind="intermediates"
         isOpen={insertBetweenDialogOpen}
         model={model}
+        maxNodes={ui.maxNodes}
         sourceElementId={insertBetweenEndpoints?.[0] ?? ''}
         targetElementId={insertBetweenEndpoints?.[1] ?? ''}
         contextLabel="Between"
@@ -879,6 +880,7 @@ export function SandboxModeView({
 	        kind="intermediates"
         isOpen={insertFromEdgeDialogOpen}
         model={model}
+        maxNodes={ui.maxNodes}
         sourceElementId={insertFromEdgeEndpoints?.[0] ?? ''}
         targetElementId={insertFromEdgeEndpoints?.[1] ?? ''}
         contextLabel="From relationship"
@@ -914,6 +916,7 @@ export function SandboxModeView({
 	        kind="related"
 	        isOpen={addRelatedDialogOpen}
 	        model={model}
+	        maxNodes={ui.maxNodes}
 	        anchorElementIds={addRelatedDialogAnchors}
 	        existingElementIds={nodes.map((n) => n.elementId)}
 	        allRelationshipTypes={allRelationshipTypes}

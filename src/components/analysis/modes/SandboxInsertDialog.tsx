@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Model } from '../../../domain';
 import type {
@@ -35,6 +35,18 @@ type PreviewRelated = {
 };
 
 type PreviewState = PreviewIntermediates | PreviewRelated;
+
+function normalizeText(v: string): string {
+  return (v || '').trim().toLowerCase();
+}
+
+function matchesCandidate(args: { c: Candidate; q: string }): boolean {
+  const q = normalizeText(args.q);
+  if (!q) return true;
+  const c = args.c;
+  const hay = `${c.name} ${c.type} ${c.id}`.toLowerCase();
+  return hay.includes(q);
+}
 
 function clampInt(v: number, min: number, max: number): number {
   if (!Number.isFinite(v)) return min;
@@ -98,6 +110,8 @@ type BaseProps = {
   isOpen: boolean;
   model: Model;
   existingElementIds: string[];
+  /** Optional node cap; used only for dialog warnings (actual cap is enforced by sandbox state). */
+  maxNodes?: number;
   allRelationshipTypes: string[];
   initialEnabledRelationshipTypes: string[];
   onCancel: () => void;
@@ -133,12 +147,24 @@ export function SandboxInsertDialog(props: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
+  // List usability
+  const [search, setSearch] = useState('');
+  const [showNewOnly, setShowNewOnly] = useState(true);
+  const selectedIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
+
   useEffect(() => {
     if (!isOpen) return;
     setEnabledTypes(initialEnabledRelationshipTypes.length ? initialEnabledRelationshipTypes : allRelationshipTypes);
     setPreview(null);
     setSelectedIds(new Set());
     setError(null);
+
+    setSearch('');
+    setShowNewOnly(true);
 
     if (props.kind === 'intermediates') {
       setMode(props.initialOptions.mode);
@@ -233,9 +259,12 @@ export function SandboxInsertDialog(props: Props) {
       const candidates = Array.from(candidateMap.values()).sort(
         (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
       );
+      const prevSelected = selectedIdsRef.current;
       const nextSelected = new Set<string>();
       for (const c of candidates) {
-        if (!c.alreadyInSandbox) nextSelected.add(c.id);
+        if (c.alreadyInSandbox) continue;
+        // Preserve explicit user selection if possible. If no prior selection, default to selecting all new.
+        if (prevSelected.size === 0 || prevSelected.has(c.id)) nextSelected.add(c.id);
       }
 
       setPreview({ kind: 'intermediates', paths: previewPaths, candidates });
@@ -298,20 +327,72 @@ export function SandboxInsertDialog(props: Props) {
     const candidates = Array.from(candidateMap.values()).sort(
       (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
     );
+    const prevSelected = selectedIdsRef.current;
     const nextSelected = new Set<string>();
     for (const c of candidates) {
-      if (!c.alreadyInSandbox) nextSelected.add(c.id);
+      if (c.alreadyInSandbox) continue;
+      if (prevSelected.size === 0 || prevSelected.has(c.id)) nextSelected.add(c.id);
     }
 
     setPreview({ kind: 'related', byDepth: groups, candidates });
     setSelectedIds(nextSelected);
   }, [depth, direction, enabledTypes, existingSet, isOpen, k, maxHops, mode, model, props]);
 
+  // Auto-preview on open + whenever settings change, so the user does not have to click Preview manually.
+  useEffect(() => {
+    if (!isOpen) return;
+    // Avoid flashing "Select at least one relationship type" while the open effect initializes.
+    if (enabledTypes.length === 0) return;
+    const t = window.setTimeout(() => {
+      computePreview();
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [computePreview, enabledTypes.length, isOpen]);
+
   const selectedCount = selectedIds.size;
   const candidatesCount = preview?.candidates.length ?? 0;
   const canInsert = preview !== null && selectedCount > 0 && enabledTypes.length > 0;
 
   const title = props.kind === 'related' ? 'Add related elements' : 'Insert intermediate elements';
+
+  const maxNodes = props.maxNodes;
+  const maxNewNodes = maxNodes ? Math.max(0, maxNodes - existingElementIds.length) : null;
+
+  const candidateById = useMemo(() => {
+    const m = new Map<string, Candidate>();
+    for (const c of preview?.candidates ?? []) m.set(c.id, c);
+    return m;
+  }, [preview]);
+
+  const visibleCandidateIds = useMemo(() => {
+    if (!preview) return new Set<string>();
+    const ids = new Set<string>();
+    for (const c of preview.candidates) {
+      if (showNewOnly && c.alreadyInSandbox) continue;
+      if (!matchesCandidate({ c, q: search })) continue;
+      ids.add(c.id);
+    }
+    return ids;
+  }, [preview, search, showNewOnly]);
+
+  const selectedNewCount = useMemo(() => {
+    if (!preview) return 0;
+    let n = 0;
+    for (const id of selectedIds) {
+      const c = candidateById.get(id);
+      if (c && !c.alreadyInSandbox) n++;
+    }
+    return n;
+  }, [candidateById, preview, selectedIds]);
+
+  const selectedVisibleCount = useMemo(() => {
+    if (!preview) return 0;
+    let n = 0;
+    for (const id of selectedIds) {
+      if (visibleCandidateIds.has(id)) n++;
+    }
+    return n;
+  }, [preview, selectedIds, visibleCandidateIds]);
 
   return (
     <Dialog
@@ -322,9 +403,6 @@ export function SandboxInsertDialog(props: Props) {
         <>
           <button type="button" className="shellButton" onClick={onCancel}>
             Cancel
-          </button>
-          <button type="button" className="shellButton" onClick={computePreview}>
-            Preview
           </button>
           <button
             type="button"
@@ -514,153 +592,237 @@ export function SandboxInsertDialog(props: Props) {
       <div style={{ marginTop: 12 }}>
         {error ? <p className="crudHint">{error}</p> : null}
 
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+          <input
+            className="textInput"
+            style={{ maxWidth: 320 }}
+            value={search}
+            placeholder="Search candidates…"
+            onChange={(e) => setSearch(e.currentTarget.value)}
+          />
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+            <input type="checkbox" checked={showNewOnly} onChange={() => setShowNewOnly((v) => !v)} />
+            <span>New only</span>
+          </label>
+          <span className="crudHint" style={{ margin: 0 }}>
+            Preview updates automatically
+          </span>
+        </div>
+
         {preview ? (
           <>
             <div
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 8,
+                position: 'sticky',
+                top: 0,
+                zIndex: 2,
+                background: 'var(--panel)',
+                padding: '8px 0',
+                borderBottom: '1px solid var(--border)',
+                marginBottom: 8,
               }}
             >
-              <p className="crudHint" style={{ margin: 0 }}>
-                Preview: {candidatesCount} candidate element(s) · Selected: {selectedCount}
-              </p>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  type="button"
-                  className="miniLinkButton"
-                  onClick={() => {
-                    const next = new Set<string>();
-                    for (const c of preview.candidates) {
-                      if (!c.alreadyInSandbox) next.add(c.id);
-                    }
-                    setSelectedIds(next);
-                  }}
-                >
-                  Select all new
-                </button>
-                <button type="button" className="miniLinkButton" onClick={() => setSelectedIds(new Set())}>
-                  Select none
-                </button>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                }}
+              >
+                <p className="crudHint" style={{ margin: 0 }}>
+                  Candidates: {candidatesCount} (visible {visibleCandidateIds.size}) · Selected: {selectedCount}{' '}
+                  (visible {selectedVisibleCount})
+                </p>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="miniLinkButton"
+                    onClick={() => {
+                      const next = new Set<string>(selectedIds);
+                      for (const id of visibleCandidateIds) {
+                        if (existingSet.has(id)) continue;
+                        next.add(id);
+                      }
+                      setSelectedIds(next);
+                    }}
+                  >
+                    Select all visible
+                  </button>
+                  <button
+                    type="button"
+                    className="miniLinkButton"
+                    onClick={() => {
+                      const next = new Set<string>(selectedIds);
+                      for (const id of visibleCandidateIds) next.delete(id);
+                      setSelectedIds(next);
+                    }}
+                  >
+                    Clear visible
+                  </button>
+                  <button type="button" className="miniLinkButton" onClick={() => setSelectedIds(new Set())}>
+                    Select none
+                  </button>
+                </div>
               </div>
+              {maxNewNodes !== null && selectedNewCount > maxNewNodes ? (
+                <p className="crudHint" style={{ margin: 0, marginTop: 6 }}>
+                  Selection exceeds node cap: will add up to {maxNewNodes} new node(s).
+                </p>
+              ) : null}
             </div>
 
             {preview.kind === 'intermediates' ? (
-              <div style={{ marginTop: 8 }}>
-                {preview.paths.map((p, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      marginBottom: 10,
-                      padding: 8,
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                    }}
-                  >
-                    <p className="crudHint" style={{ margin: 0, marginBottom: 6 }}>
-                      Path {idx + 1}: {p.path.length} node(s)
-                    </p>
-                    {p.intermediates.length ? (
-                      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
-                        {p.intermediates.map((id) => {
-                          const el = model.elements[id];
-                          if (!el) return null;
-                          const already = existingSet.has(id);
-                          const checked = selectedIds.has(id);
-                          return (
-                            <li key={`${idx}-${id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                disabled={already}
-                                aria-disabled={already}
-                                onChange={() =>
-                                  setSelectedIds((prev) => {
-                                    const next = new Set(prev);
-                                    if (next.has(id)) next.delete(id);
-                                    else next.add(id);
-                                    return next;
-                                  })
-                                }
-                              />
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span>{el.name || '(unnamed)'}</span>
-                                <span className="crudHint" style={{ margin: 0 }}>
-                                  {el.type}
-                                  {already ? ' · already in sandbox' : ''}
-                                </span>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <p className="crudHint" style={{ margin: 0 }}>
-                        No intermediate elements in this path.
-                      </p>
-                    )}
-                  </div>
-                ))}
+              <div style={{ marginTop: 8, maxHeight: 420, overflow: 'auto', paddingRight: 6 }}>
+                {preview.paths.map((p, idx) => {
+                  const visibleIntermediates = p.intermediates.filter((id) => {
+                    const c = candidateById.get(id);
+                    if (!c) return false;
+                    if (showNewOnly && c.alreadyInSandbox) return false;
+                    return matchesCandidate({ c, q: search });
+                  });
+
+                  const totalNew = p.intermediates.filter((id) => !existingSet.has(id)).length;
+                  const visibleNew = visibleIntermediates.filter((id) => !existingSet.has(id)).length;
+
+                  return (
+                    <details
+                      key={idx}
+                      open
+                      style={{
+                        marginBottom: 10,
+                        padding: 8,
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <summary style={{ cursor: 'pointer' }}>
+                        <span className="crudHint" style={{ margin: 0 }}>
+                          Path {idx + 1}: {p.path.length} node(s) · intermediates {p.intermediates.length} (new{' '}
+                          {totalNew}, visible new {visibleNew})
+                        </span>
+                      </summary>
+
+                      {visibleIntermediates.length ? (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6, marginTop: 8 }}>
+                          {visibleIntermediates.map((id) => {
+                            const el = model.elements[id];
+                            if (!el) return null;
+                            const already = existingSet.has(id);
+                            const checked = selectedIds.has(id);
+                            return (
+                              <li key={`${idx}-${id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={already}
+                                  aria-disabled={already}
+                                  onChange={() =>
+                                    setSelectedIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(id)) next.delete(id);
+                                      else next.add(id);
+                                      return next;
+                                    })
+                                  }
+                                />
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span>{el.name || '(unnamed)'}</span>
+                                  <span className="crudHint" style={{ margin: 0 }}>
+                                    {el.type}
+                                    {already ? ' · already in sandbox' : ''}
+                                  </span>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="crudHint" style={{ margin: 0, marginTop: 8 }}>
+                          No intermediate candidates match the current filters.
+                        </p>
+                      )}
+                    </details>
+                  );
+                })}
               </div>
             ) : (
-              <div style={{ marginTop: 8 }}>
-                {preview.byDepth.map((g) => (
-                  <div
-                    key={g.depth}
-                    style={{
-                      marginBottom: 10,
-                      padding: 8,
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                    }}
-                  >
-                    <p className="crudHint" style={{ margin: 0, marginBottom: 6 }}>
-                      Depth {g.depth}: {g.elementIds.length} element(s)
-                    </p>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
-                      {g.elementIds.map((id) => {
-                        const el = model.elements[id];
-                        if (!el) return null;
-                        const already = existingSet.has(id);
-                        const checked = selectedIds.has(id);
-                        return (
-                          <li key={`${g.depth}-${id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={already}
-                              aria-disabled={already}
-                              onChange={() =>
-                                setSelectedIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(id)) next.delete(id);
-                                  else next.add(id);
-                                  return next;
-                                })
-                              }
-                            />
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span>{el.name || '(unnamed)'}</span>
-                              <span className="crudHint" style={{ margin: 0 }}>
-                                {el.type}
-                                {already ? ' · already in sandbox' : ''}
-                              </span>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ))}
+              <div style={{ marginTop: 8, maxHeight: 420, overflow: 'auto', paddingRight: 6 }}>
+                {preview.byDepth.map((g) => {
+                  const visibleIds = g.elementIds.filter((id) => {
+                    const c = candidateById.get(id);
+                    if (!c) return false;
+                    if (showNewOnly && c.alreadyInSandbox) return false;
+                    return matchesCandidate({ c, q: search });
+                  });
+                  const totalNew = g.elementIds.filter((id) => !existingSet.has(id)).length;
+                  const visibleNew = visibleIds.filter((id) => !existingSet.has(id)).length;
+
+                  return (
+                    <details
+                      key={g.depth}
+                      open
+                      style={{
+                        marginBottom: 10,
+                        padding: 8,
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <summary style={{ cursor: 'pointer' }}>
+                        <span className="crudHint" style={{ margin: 0 }}>
+                          Depth {g.depth}: {g.elementIds.length} element(s) · new {totalNew} (visible new {visibleNew})
+                        </span>
+                      </summary>
+                      {visibleIds.length ? (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6, marginTop: 8 }}>
+                          {visibleIds.map((id) => {
+                            const el = model.elements[id];
+                            if (!el) return null;
+                            const already = existingSet.has(id);
+                            const checked = selectedIds.has(id);
+                            return (
+                              <li key={`${g.depth}-${id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={already}
+                                  aria-disabled={already}
+                                  onChange={() =>
+                                    setSelectedIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(id)) next.delete(id);
+                                      else next.add(id);
+                                      return next;
+                                    })
+                                  }
+                                />
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span>{el.name || '(unnamed)'}</span>
+                                  <span className="crudHint" style={{ margin: 0 }}>
+                                    {el.type}
+                                    {already ? ' · already in sandbox' : ''}
+                                  </span>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="crudHint" style={{ margin: 0, marginTop: 8 }}>
+                          No related candidates match the current filters.
+                        </p>
+                      )}
+                    </details>
+                  );
+                })}
               </div>
             )}
           </>
         ) : (
           <p className="crudHint" style={{ marginTop: 8 }}>
-            Click “Preview” to see which elements will be inserted.
+            Computing preview…
           </p>
         )}
       </div>

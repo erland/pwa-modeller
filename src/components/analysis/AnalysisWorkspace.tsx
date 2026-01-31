@@ -222,6 +222,7 @@ export function AnalysisWorkspace({
               onAutoLayout={() => sandbox.actions.autoLayout()}
               onSetPersistEnabled={(enabled) => sandbox.actions.setPersistEnabled(enabled)}
               onClearWarning={() => sandbox.actions.clearWarning()}
+              onUndoLastInsert={() => sandbox.actions.undoLastInsert()}
             />
           ) : mode === 'matrix' ? (
             <MatrixModeView

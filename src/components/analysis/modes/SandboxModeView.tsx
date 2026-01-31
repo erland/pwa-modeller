@@ -81,6 +81,7 @@ export function SandboxModeView({
   onAutoLayout,
   onSetPersistEnabled,
   onClearWarning,
+  onUndoLastInsert,
 }: {
   model: Model;
   nodes: SandboxNode[];
@@ -113,6 +114,7 @@ export function SandboxModeView({
   onAutoLayout: () => void;
   onSetPersistEnabled: (enabled: boolean) => void;
   onClearWarning: () => void;
+  onUndoLastInsert: () => void;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -524,6 +526,35 @@ export function SandboxModeView({
             title="Dismiss warnings"
           >
             Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {ui.lastInsertedElementIds.length > 0 ? (
+        <div
+          role="status"
+          style={{
+            marginTop: 10,
+            padding: '8px 12px',
+            border: '1px solid var(--border-1)',
+            borderRadius: 6,
+            background: 'rgba(0, 128, 255, 0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ fontSize: 12, lineHeight: 1.4 }}>
+            Inserted {ui.lastInsertedElementIds.length} element(s).
+          </div>
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={onUndoLastInsert}
+            title="Undo last insert"
+          >
+            Undo
           </button>
         </div>
       ) : null}

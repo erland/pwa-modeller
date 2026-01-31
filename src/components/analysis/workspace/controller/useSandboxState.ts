@@ -62,6 +62,12 @@ export type SandboxUiState = {
    * Optional sessionStorage persistence.
    */
   persistEnabled: boolean;
+
+  /**
+   * Element ids inserted by the most recent insert/add action (newly added only).
+   * Used for one-click undo. Not persisted.
+   */
+  lastInsertedElementIds: string[];
 };
 
 export type SandboxState = {
@@ -85,6 +91,11 @@ export type SandboxActions = {
   addManyIfMissing: (elementIds: string[], baseX?: number, baseY?: number) => void;
   removeMany: (elementIds: string[]) => void;
   clear: () => void;
+
+  /**
+   * Removes the nodes added by the most recent insert/add action.
+   */
+  undoLastInsert: () => void;
 
   seedFromView: (viewId: string) => void;
 
@@ -390,6 +401,7 @@ export function useSandboxState(args: {
 
   const [warning, setWarning] = useState<string | null>(null);
   const [persistEnabled, setPersistEnabled] = useState(false);
+  const [lastInsertedElementIds, setLastInsertedElementIds] = useState<string[]>([]);
 
   const [addRelatedDepth, setAddRelatedDepth] = useState(1);
   const [addRelatedDirection, setAddRelatedDirection] = useState<SandboxAddRelatedDirection>('both');
@@ -405,6 +417,7 @@ export function useSandboxState(args: {
 
     setWarning(null);
     setPersistEnabled(false);
+    setLastInsertedElementIds([]);
 
     setAddRelatedDepth(1);
     setAddRelatedDirection('both');
@@ -438,6 +451,8 @@ export function useSandboxState(args: {
       }
 
       setNodes(capped.next);
+      setLastInsertedElementIds([]);
+      setLastInsertedElementIds([]);
 
       const rel = parsed.relationships ?? {};
       const relShow = Boolean(rel.show);
@@ -516,6 +531,7 @@ export function useSandboxState(args: {
       const valid = elementIds.filter((id) => Boolean(model.elements[id]));
       if (!valid.length) return;
 
+      let insertedIds: string[] = [];
       setNodes((prev) => {
         const existing = new Set(prev.map((n) => n.elementId));
         const toAdd = valid.filter((id) => !existing.has(id));
@@ -540,8 +556,14 @@ export function useSandboxState(args: {
         if (capped.dropped > 0) {
           emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
         }
+        insertedIds = capped.next
+          .filter((n) => !existing.has(n.elementId))
+          .map((n) => n.elementId);
         return capped.next;
       });
+
+      // Record undo info for the most recent insertion.
+      setLastInsertedElementIds(insertedIds);
     },
     [emitWarning, maxNodes, model]
   );
@@ -561,12 +583,21 @@ export function useSandboxState(args: {
     if (!elementIds.length) return;
     const remove = new Set(elementIds);
     setNodes((prev) => prev.filter((n) => !remove.has(n.elementId)));
+    setLastInsertedElementIds([]);
   }, []);
 
   const clear = useCallback(() => {
     setNodes([]);
     setWarning(null);
+    setLastInsertedElementIds([]);
   }, []);
+
+  const undoLastInsert = useCallback(() => {
+    if (lastInsertedElementIds.length === 0) return;
+    const remove = new Set(lastInsertedElementIds);
+    setNodes((prev) => prev.filter((n) => !remove.has(n.elementId)));
+    setLastInsertedElementIds([]);
+  }, [lastInsertedElementIds]);
 
   const setPersistEnabledSafe = useCallback(
     (enabled: boolean) => {
@@ -626,7 +657,9 @@ export function useSandboxState(args: {
       const adjacency = buildAdjacency(model, allowedTypes);
       const depthLimit = clampInt(addRelatedDepth, 1, 6);
 
+      let insertedIds: string[] = [];
       setNodes((prev) => {
+        const existing = new Set(prev.map((n) => n.elementId));
         const existingById = new Map<string, SandboxNode>();
         for (const n of prev) existingById.set(n.elementId, n);
 
@@ -758,8 +791,11 @@ export function useSandboxState(args: {
         if (capped.dropped > 0) {
           emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
         }
+        insertedIds = capped.next.filter((n) => !existing.has(n.elementId)).map((n) => n.elementId);
         return capped.next;
       });
+
+      setLastInsertedElementIds(insertedIds);
     },
     [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, emitWarning, maxNodes, model]
   );
@@ -791,7 +827,9 @@ export function useSandboxState(args: {
 
       if (paths.length === 0) return;
 
+      let insertedIds: string[] = [];
       setNodes((prev) => {
+        const existing = new Set(prev.map((n) => n.elementId));
         const existingById = new Map<string, SandboxNode>();
         for (const n of prev) existingById.set(n.elementId, n);
 
@@ -843,8 +881,11 @@ export function useSandboxState(args: {
         if (capped.dropped > 0) {
           emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
         }
+        insertedIds = capped.next.filter((n) => !existing.has(n.elementId)).map((n) => n.elementId);
         return capped.next;
       });
+
+      setLastInsertedElementIds(insertedIds);
     },
     [addRelatedEnabledTypes, emitWarning, maxNodes, model]
   );
@@ -997,6 +1038,7 @@ const seedFromView = useCallback((viewId: string) => {
       emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
     }
     setNodes(capped.next);
+    setLastInsertedElementIds([]);
   }, [emitWarning, maxNodes, model]);
 
   const autoLayout = useCallback(() => {
@@ -1135,9 +1177,10 @@ const seedFromView = useCallback((viewId: string) => {
         maxNodes,
         maxEdges,
         persistEnabled,
+        lastInsertedElementIds,
       },
     }),
-    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, explicitRelationshipIds, maxEdges, maxNodes, nodes, persistEnabled, relationshipMode, showRelationships, warning]
+    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, explicitRelationshipIds, lastInsertedElementIds, maxEdges, maxNodes, nodes, persistEnabled, relationshipMode, showRelationships, warning]
   );
 
   const actions: SandboxActions = useMemo(
@@ -1147,6 +1190,7 @@ const seedFromView = useCallback((viewId: string) => {
       addManyIfMissing,
       removeMany,
       clear,
+      undoLastInsert,
       seedFromView,
 
       autoLayout,
@@ -1174,6 +1218,7 @@ const seedFromView = useCallback((viewId: string) => {
       addRelatedFromSelection,
       autoLayout,
       clear,
+      undoLastInsert,
       clearWarning,
       seedFromView,
       seedFromElements,

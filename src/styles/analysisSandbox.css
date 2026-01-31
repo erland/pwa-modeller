@@ -7,6 +7,8 @@
   width: 100%;
   height: 100%;
   background: #fff;
+  /* Allow the sandbox to implement its own pan/pinch gestures in a PWA (incl. iOS). */
+  touch-action: none;
 }
 
 .analysisSandboxEdge line {

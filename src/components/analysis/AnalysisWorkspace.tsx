@@ -203,6 +203,7 @@ export function AnalysisWorkspace({
               selection={selection}
               selectionElementIds={selectionElementIds}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+              onSelectRelationship={(relationshipId) => onSelect({ kind: 'relationship', relationshipId })}
               onClearSelection={() => onSelect({ kind: 'none' })}
               onMoveNode={(elementId, x, y) => sandbox.actions.setNodePosition(elementId, x, y)}
               onAddSelected={() => sandbox.actions.addManyIfMissing(selectionElementIds)}

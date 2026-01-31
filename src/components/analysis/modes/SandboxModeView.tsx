@@ -96,6 +96,7 @@ export function SandboxModeView({
   selection,
   selectionElementIds,
   onSelectElement,
+  onSelectRelationship,
   onClearSelection,
   onMoveNode,
   onAddSelected,
@@ -126,6 +127,7 @@ export function SandboxModeView({
   selection: Selection;
   selectionElementIds: string[];
   onSelectElement: (elementId: string) => void;
+  onSelectRelationship: (relationshipId: string) => void;
   onClearSelection: () => void;
   onMoveNode: (elementId: string, x: number, y: number) => void;
   onAddSelected: () => void;
@@ -191,11 +193,23 @@ useEffect(() => {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [edgeCapDismissed, setEdgeCapDismissed] = useState(false);
 
   // Sandbox-local pair selection for "Insert between selection".
   // Keeps sandbox operations independent from the global single-selection UX.
   const [pairSelection, setPairSelection] = useState<string[]>([]);
+
+  // Keep local edge highlight in sync with global selection so the PropertiesPanel
+  // can drive relationship selection.
+  useEffect(() => {
+    if (selection.kind === 'relationship') {
+      setSelectedEdgeId(selection.relationshipId);
+      setPairSelection([]);
+      return;
+    }
+    setSelectedEdgeId(null);
+  }, [selection]);
+
+  const [edgeCapDismissed, setEdgeCapDismissed] = useState(false);
 
   const [viewport, setViewport] = useState<SandboxViewport | null>(null);
   const viewBox = useMemo(() => (viewport ? `${viewport.x} ${viewport.y} ${viewport.w} ${viewport.h}` : undefined), [viewport]);
@@ -1075,6 +1089,8 @@ useEffect(() => {
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedEdgeId(r.id);
+                  setPairSelection([]);
+                  onSelectRelationship(r.id);
                 }}
                 role="button"
                 tabIndex={0}

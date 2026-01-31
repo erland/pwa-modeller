@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Model } from '../../../domain';
+import { getElementTypeLabel, getRelationshipTypeLabel, getRelationshipTypesForKind, kindFromTypeId } from '../../../domain';
 import type {
   SandboxAddRelatedDirection,
   SandboxInsertIntermediatesMode,
@@ -61,6 +62,10 @@ function toggleString(values: string[], v: string): string[] {
   if (set.has(v)) set.delete(v);
   else set.add(v);
   return Array.from(set);
+}
+
+function uniqSortedStrings(values: string[]): string[] {
+  return Array.from(new Set(values)).filter((v) => typeof v === 'string' && v.length > 0).sort((a, b) => a.localeCompare(b));
 }
 
 function getNeighbors(args: {
@@ -131,9 +136,44 @@ export function SandboxInsertDialog(props: Props) {
 
   const existingSet = useMemo(() => new Set(existingElementIds), [existingElementIds]);
 
+  const allElementTypesForModel = useMemo(() => {
+    const types = Object.values(model.elements).map((e) => String(e.type ?? ''));
+    return uniqSortedStrings(types);
+  }, [model]);
+
+  const relationshipTypesForDialog = useMemo(() => {
+    const kinds = new Set<string>();
+    if (props.kind === 'intermediates') {
+      const s = model.elements[props.sourceElementId];
+      const t = model.elements[props.targetElementId];
+      if (s) kinds.add(kindFromTypeId(s.type));
+      if (t) kinds.add(kindFromTypeId(t.type));
+    } else {
+      for (const id of props.anchorElementIds) {
+        const el = model.elements[id];
+        if (!el) continue;
+        kinds.add(kindFromTypeId(el.type));
+      }
+    }
+
+    // If we can infer kinds from the selection, only show relationship types compatible with those kinds.
+    // Always keep it restricted to what actually exists in the model.
+    const allowed = new Set<string>();
+    for (const k of kinds) {
+      if (k === 'uml' || k === 'bpmn' || k === 'archimate') {
+        for (const rt of getRelationshipTypesForKind(k as any)) allowed.add(rt);
+      }
+    }
+
+    const base = Array.isArray(allRelationshipTypes) ? allRelationshipTypes : [];
+    if (allowed.size === 0) return base;
+    return base.filter((t) => allowed.has(t));
+  }, [allRelationshipTypes, model, props]);
+
   // Shared settings
   const [direction, setDirection] = useState<SandboxAddRelatedDirection>('both');
   const [enabledTypes, setEnabledTypes] = useState<string[]>([]);
+  const [enabledElementTypes, setEnabledElementTypes] = useState<string[]>([]);
 
   // Intermediates settings
   const [mode, setMode] = useState<SandboxInsertIntermediatesMode>('shortest');
@@ -155,9 +195,16 @@ export function SandboxInsertDialog(props: Props) {
     selectedIdsRef.current = selectedIds;
   }, [selectedIds]);
 
+  const enabledElementTypesSet = useMemo(() => new Set(enabledElementTypes), [enabledElementTypes]);
+
   useEffect(() => {
     if (!isOpen) return;
-    setEnabledTypes(initialEnabledRelationshipTypes.length ? initialEnabledRelationshipTypes : allRelationshipTypes);
+    const allowedRelSet = new Set(relationshipTypesForDialog);
+    const initRel = (initialEnabledRelationshipTypes.length ? initialEnabledRelationshipTypes : relationshipTypesForDialog).filter((t) =>
+      allowedRelSet.has(t)
+    );
+    setEnabledTypes(initRel.length ? initRel : relationshipTypesForDialog);
+    setEnabledElementTypes(allElementTypesForModel);
     setPreview(null);
     setSelectedIds(new Set());
     setError(null);
@@ -173,7 +220,18 @@ export function SandboxInsertDialog(props: Props) {
       setDepth(clampInt(props.initialOptions.depth, 1, 6));
       setDirection(props.initialOptions.direction);
     }
-  }, [allRelationshipTypes, initialEnabledRelationshipTypes, isOpen, props]);
+  }, [allElementTypesForModel, initialEnabledRelationshipTypes, isOpen, props, relationshipTypesForDialog]);
+
+  // Keep enabled relationship types valid if the inferred compatible types change (e.g. different selection).
+  useEffect(() => {
+    if (!isOpen) return;
+    const allowed = new Set(relationshipTypesForDialog);
+    setEnabledTypes((prev) => {
+      const next = prev.filter((t) => allowed.has(t));
+      // If nothing is left, default to all compatible relationship types for the current selection.
+      return next.length ? next : relationshipTypesForDialog;
+    });
+  }, [isOpen, relationshipTypesForDialog]);
 
   const computePreview = useCallback(() => {
     if (!isOpen) return;
@@ -245,6 +303,7 @@ export function SandboxInsertDialog(props: Props) {
           if (candidateMap.has(id)) continue;
           const el = model.elements[id];
           if (!el) continue;
+          if (!enabledElementTypesSet.has(el.type)) continue;
           if (existingSet.has(id)) continue;
           candidateMap.set(id, {
             id,
@@ -315,13 +374,14 @@ export function SandboxInsertDialog(props: Props) {
       for (const id of g.elementIds) {
         const el = model.elements[id];
         if (!el) continue;
+        if (!enabledElementTypesSet.has(el.type)) continue;
         if (existingSet.has(id)) continue;
-          candidateMap.set(id, {
-            id,
-            name: el.name || '(unnamed)',
-            type: el.type,
-            alreadyInSandbox: false,
-          });
+        candidateMap.set(id, {
+          id,
+          name: el.name || '(unnamed)',
+          type: el.type,
+          alreadyInSandbox: false,
+        });
       }
     }
     const candidates = Array.from(candidateMap.values()).sort(
@@ -336,7 +396,7 @@ export function SandboxInsertDialog(props: Props) {
 
     setPreview({ kind: 'related', byDepth: groups, candidates });
     setSelectedIds(nextSelected);
-  }, [depth, direction, enabledTypes, existingSet, isOpen, k, maxHops, mode, model, props]);
+  }, [depth, direction, enabledElementTypesSet, enabledTypes, existingSet, isOpen, k, maxHops, mode, model, props]);
 
   // Auto-preview on open + whenever settings change, so the user does not have to click Preview manually.
   useEffect(() => {
@@ -594,9 +654,9 @@ export function SandboxInsertDialog(props: Props) {
         <button
           type="button"
           className="miniLinkButton"
-          onClick={() => setEnabledTypes(allRelationshipTypes)}
-          disabled={allRelationshipTypes.length === 0}
-          aria-disabled={allRelationshipTypes.length === 0}
+          onClick={() => setEnabledTypes(relationshipTypesForDialog)}
+          disabled={relationshipTypesForDialog.length === 0}
+          aria-disabled={relationshipTypesForDialog.length === 0}
         >
           All
         </button>
@@ -604,17 +664,17 @@ export function SandboxInsertDialog(props: Props) {
           type="button"
           className="miniLinkButton"
           onClick={() => setEnabledTypes([])}
-          disabled={allRelationshipTypes.length === 0}
-          aria-disabled={allRelationshipTypes.length === 0}
+          disabled={relationshipTypesForDialog.length === 0}
+          aria-disabled={relationshipTypesForDialog.length === 0}
         >
           None
         </button>
         <span className="crudHint" style={{ margin: 0 }}>
-          {enabledTypes.length}/{allRelationshipTypes.length}
+          {enabledTypes.length}/{relationshipTypesForDialog.length}
         </span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-        {allRelationshipTypes.map((t) => {
+        {relationshipTypesForDialog.map((t) => {
           const checked = enabledTypes.includes(t);
           return (
             <label key={t} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
@@ -623,7 +683,49 @@ export function SandboxInsertDialog(props: Props) {
                 checked={checked}
                 onChange={() => setEnabledTypes((prev) => toggleString(prev, t))}
               />
-              <span>{t}</span>
+              <span>{getRelationshipTypeLabel(t)}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+
+    <div className="formRow">
+      <label>Element types</label>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="miniLinkButton"
+          onClick={() => setEnabledElementTypes(allElementTypesForModel)}
+          disabled={allElementTypesForModel.length === 0}
+          aria-disabled={allElementTypesForModel.length === 0}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          className="miniLinkButton"
+          onClick={() => setEnabledElementTypes([])}
+          disabled={allElementTypesForModel.length === 0}
+          aria-disabled={allElementTypesForModel.length === 0}
+        >
+          None
+        </button>
+        <span className="crudHint" style={{ margin: 0 }}>
+          {enabledElementTypes.length}/{allElementTypesForModel.length}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
+        {allElementTypesForModel.map((t) => {
+          const checked = enabledElementTypes.includes(t);
+          return (
+            <label key={t} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => setEnabledElementTypes((prev) => toggleString(prev, t))}
+              />
+              <span>{getElementTypeLabel(t)}</span>
             </label>
           );
         })}

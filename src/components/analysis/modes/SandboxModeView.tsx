@@ -136,6 +136,8 @@ export function SandboxModeView({
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [insertBetweenDialogOpen, setInsertBetweenDialogOpen] = useState(false);
   const [insertBetweenEndpoints, setInsertBetweenEndpoints] = useState<[string, string] | null>(null);
+  const [insertFromEdgeDialogOpen, setInsertFromEdgeDialogOpen] = useState(false);
+  const [insertFromEdgeEndpoints, setInsertFromEdgeEndpoints] = useState<[string, string] | null>(null);
 
   const selectedElementId = useMemo(() => getSelectedElementId(selection), [selection]);
 
@@ -193,8 +195,9 @@ export function SandboxModeView({
   const canInsertIntermediates = useMemo(() => {
     // Prefer the local pair selection; fall back to global selection if it happens to include 2 sandbox nodes.
     const anchors = pairAnchors.length ? pairAnchors : insertAnchors;
-    return anchors.length === 2 && addRelated.enabledTypes.length > 0;
-  }, [addRelated.enabledTypes.length, insertAnchors, pairAnchors]);
+    // Relationship type filtering is configured in the dialog; don't block opening it.
+    return anchors.length === 2;
+  }, [insertAnchors, pairAnchors]);
 
   const canAddRelated = useMemo(() => {
     return addRelatedAnchors.length > 0 && addRelated.enabledTypes.length > 0;
@@ -379,15 +382,11 @@ export function SandboxModeView({
     setInsertBetweenDialogOpen(true);
   }, [insertAnchors, pairAnchors]);
 
-  const onInsertFromSelectedEdge = useCallback(() => {
+  const onOpenInsertFromSelectedEdgeDialog = useCallback(() => {
     if (!selectedEdge) return;
-    onInsertIntermediatesBetween(selectedEdge.sourceElementId, selectedEdge.targetElementId, {
-      mode: insertMode,
-      k: insertK,
-      maxHops: insertMaxHops,
-      direction: insertDirection,
-    });
-  }, [insertDirection, insertK, insertMaxHops, insertMode, onInsertIntermediatesBetween, selectedEdge]);
+    setInsertFromEdgeEndpoints([selectedEdge.sourceElementId, selectedEdge.targetElementId]);
+    setInsertFromEdgeDialogOpen(true);
+  }, [selectedEdge]);
 
   const onCanvasClick = useCallback(
     (e: MouseEvent<SVGSVGElement>) => {
@@ -821,10 +820,10 @@ export function SandboxModeView({
             <button
               type="button"
               className="miniLinkButton"
-              onClick={onInsertFromSelectedEdge}
-              disabled={!selectedEdge || addRelated.enabledTypes.length === 0}
-              aria-disabled={!selectedEdge || addRelated.enabledTypes.length === 0}
-              title={selectedEdge ? 'Insert intermediate elements between the selected relationship endpoints' : 'Click a relationship line to select it'}
+              onClick={onOpenInsertFromSelectedEdgeDialog}
+              disabled={!selectedEdge}
+              aria-disabled={!selectedEdge}
+              title={selectedEdge ? 'Preview and insert intermediate elements between the selected relationship endpoints' : 'Click a relationship line to select it'}
             >
               Insert from selected relationship
             </button>
@@ -956,6 +955,7 @@ export function SandboxModeView({
         model={model}
         sourceElementId={insertBetweenEndpoints?.[0] ?? ''}
         targetElementId={insertBetweenEndpoints?.[1] ?? ''}
+        contextLabel="Between"
         existingElementIds={nodes.map((n) => n.elementId)}
         allRelationshipTypes={allRelationshipTypes}
         initialEnabledRelationshipTypes={addRelated.enabledTypes}
@@ -978,6 +978,40 @@ export function SandboxModeView({
 
           const src = insertBetweenEndpoints?.[0];
           const dst = insertBetweenEndpoints?.[1];
+          if (!src || !dst) return;
+          onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
+        }}
+      />
+
+      <SandboxInsertBetweenDialog
+        isOpen={insertFromEdgeDialogOpen}
+        model={model}
+        sourceElementId={insertFromEdgeEndpoints?.[0] ?? ''}
+        targetElementId={insertFromEdgeEndpoints?.[1] ?? ''}
+        contextLabel="From relationship"
+        contextRelationshipType={selectedEdge?.type}
+        existingElementIds={nodes.map((n) => n.elementId)}
+        allRelationshipTypes={allRelationshipTypes}
+        initialEnabledRelationshipTypes={addRelated.enabledTypes}
+        initialOptions={{
+          mode: insertMode,
+          k: insertK,
+          maxHops: insertMaxHops,
+          direction: insertDirection,
+        }}
+        onCancel={() => setInsertFromEdgeDialogOpen(false)}
+        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
+          setInsertFromEdgeDialogOpen(false);
+          setInsertMode(options.mode);
+          setInsertK(options.k);
+          setInsertMaxHops(options.maxHops);
+          setInsertDirection(options.direction);
+
+          // Keep traversal settings consistent with the insert preview.
+          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
+
+          const src = insertFromEdgeEndpoints?.[0];
+          const dst = insertFromEdgeEndpoints?.[1];
           if (!src || !dst) return;
           onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
         }}

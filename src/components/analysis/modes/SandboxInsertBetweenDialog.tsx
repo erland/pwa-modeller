@@ -47,6 +47,10 @@ type Props = {
   model: Model;
   sourceElementId: string;
   targetElementId: string;
+  /** Label for the endpoint row (e.g. "Between" or "From relationship"). */
+  contextLabel?: string;
+  /** Optional relationship type label shown next to the endpoint row. */
+  contextRelationshipType?: string;
   existingElementIds: string[];
   allRelationshipTypes: string[];
   initialEnabledRelationshipTypes: string[];
@@ -64,6 +68,8 @@ export function SandboxInsertBetweenDialog({
   model,
   sourceElementId,
   targetElementId,
+  contextLabel,
+  contextRelationshipType,
   existingElementIds,
   allRelationshipTypes,
   initialEnabledRelationshipTypes,
@@ -217,7 +223,7 @@ export function SandboxInsertBetweenDialog({
     >
       <div className="formGrid">
         <div className="formRow">
-          <label>Between</label>
+          <label>{contextLabel || 'Between'}</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span className="crudHint" style={{ margin: 0 }}>
               {model.elements[sourceElementId]?.name || sourceElementId}
@@ -228,6 +234,11 @@ export function SandboxInsertBetweenDialog({
             <span className="crudHint" style={{ margin: 0 }}>
               {model.elements[targetElementId]?.name || targetElementId}
             </span>
+            {contextRelationshipType ? (
+              <span className="crudHint" style={{ margin: 0 }}>
+                · {contextRelationshipType}
+              </span>
+            ) : null}
           </div>
         </div>
 

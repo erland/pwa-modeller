@@ -456,26 +456,6 @@ export function SandboxModeView({
           <button
             type="button"
             className="miniLinkButton"
-            onClick={onAddSelected}
-            disabled={!canAddSelected}
-            aria-disabled={!canAddSelected}
-            title="Add the currently selected element(s) to the sandbox"
-          >
-            Add selected
-          </button>
-          <button
-            type="button"
-            className="miniLinkButton"
-            onClick={onRemoveSelected}
-            disabled={!canRemoveSelected}
-            aria-disabled={!canRemoveSelected}
-            title="Remove the currently selected element(s) from the sandbox"
-          >
-            Remove selected
-          </button>
-          <button
-            type="button"
-            className="miniLinkButton"
             onClick={onClear}
             disabled={!nodes.length}
             aria-disabled={!nodes.length}
@@ -697,6 +677,28 @@ export function SandboxModeView({
           <button
             type="button"
             className="miniLinkButton"
+            onClick={onAddSelected}
+            disabled={!canAddSelected}
+            aria-disabled={!canAddSelected}
+            title="Add the currently selected element(s) to the sandbox"
+          >
+            Add selected
+          </button>
+
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={onRemoveSelected}
+            disabled={!canRemoveSelected}
+            aria-disabled={!canRemoveSelected}
+            title="Remove the currently selected element(s) from the sandbox"
+          >
+            Remove selected
+          </button>
+
+          <button
+            type="button"
+            className="miniLinkButton"
             onClick={onOpenAddRelatedDialog}
             disabled={!canAddRelated}
             aria-disabled={!canAddRelated}
@@ -708,25 +710,24 @@ export function SandboxModeView({
           <button
             type="button"
             className="miniLinkButton"
-            onClick={onOpenInsertBetweenDialog}
-            disabled={!canInsertIntermediates}
-            aria-disabled={!canInsertIntermediates}
-            title={(pairAnchors.length ? pairAnchors : insertAnchors).length === 2
-              ? 'Preview and insert intermediate elements between the two selected sandbox nodes'
-              : 'Pick two sandbox nodes: click first, then Shift-click second'}
+            onClick={() => {
+              if (selectedEdge) {
+                onOpenInsertFromSelectedEdgeDialog();
+              } else {
+                onOpenInsertBetweenDialog();
+              }
+            }}
+            disabled={!selectedEdge && !canInsertIntermediates}
+            aria-disabled={!selectedEdge && !canInsertIntermediates}
+            title={
+              selectedEdge
+                ? 'Preview and insert intermediate elements between the selected relationship endpoints'
+                : (pairAnchors.length ? pairAnchors : insertAnchors).length === 2
+                  ? 'Preview and insert intermediate elements between the two selected sandbox nodes'
+                  : 'Pick two sandbox nodes: click first, then Shift-click second'
+            }
           >
-            Insert intermediate elements…
-          </button>
-
-          <button
-            type="button"
-            className="miniLinkButton"
-            onClick={onOpenInsertFromSelectedEdgeDialog}
-            disabled={!selectedEdge}
-            aria-disabled={!selectedEdge}
-            title={selectedEdge ? 'Preview and insert intermediate elements between the selected relationship endpoints' : 'Click a relationship line to select it'}
-          >
-            Insert from selected relationship…
+            Insert intermediate…
           </button>
         </div>
       </div>

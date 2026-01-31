@@ -531,7 +531,6 @@ export function useSandboxState(args: {
       const valid = elementIds.filter((id) => Boolean(model.elements[id]));
       if (!valid.length) return;
 
-      let insertedIds: string[] = [];
       setNodes((prev) => {
         const existing = new Set(prev.map((n) => n.elementId));
         const toAdd = valid.filter((id) => !existing.has(id));
@@ -556,14 +555,12 @@ export function useSandboxState(args: {
         if (capped.dropped > 0) {
           emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
         }
-        insertedIds = capped.next
-          .filter((n) => !existing.has(n.elementId))
-          .map((n) => n.elementId);
+
+        // Record undo info for the most recent insertion.
+        const insertedIds = capped.next.filter((n) => !existing.has(n.elementId)).map((n) => n.elementId);
+        setLastInsertedElementIds(insertedIds);
         return capped.next;
       });
-
-      // Record undo info for the most recent insertion.
-      setLastInsertedElementIds(insertedIds);
     },
     [emitWarning, maxNodes, model]
   );
@@ -657,7 +654,6 @@ export function useSandboxState(args: {
       const adjacency = buildAdjacency(model, allowedTypes);
       const depthLimit = clampInt(addRelatedDepth, 1, 6);
 
-      let insertedIds: string[] = [];
       setNodes((prev) => {
         const existing = new Set(prev.map((n) => n.elementId));
         const existingById = new Map<string, SandboxNode>();
@@ -791,11 +787,11 @@ export function useSandboxState(args: {
         if (capped.dropped > 0) {
           emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
         }
-        insertedIds = capped.next.filter((n) => !existing.has(n.elementId)).map((n) => n.elementId);
+        const insertedIds = capped.next.filter((n) => !existing.has(n.elementId)).map((n) => n.elementId);
+        // Track last insert batch for one-click undo.
+        setLastInsertedElementIds(insertedIds);
         return capped.next;
       });
-
-      setLastInsertedElementIds(insertedIds);
     },
     [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, emitWarning, maxNodes, model]
   );
@@ -827,7 +823,6 @@ export function useSandboxState(args: {
 
       if (paths.length === 0) return;
 
-      let insertedIds: string[] = [];
       setNodes((prev) => {
         const existing = new Set(prev.map((n) => n.elementId));
         const existingById = new Map<string, SandboxNode>();
@@ -881,11 +876,11 @@ export function useSandboxState(args: {
         if (capped.dropped > 0) {
           emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
         }
-        insertedIds = capped.next.filter((n) => !existing.has(n.elementId)).map((n) => n.elementId);
+        const insertedIds = capped.next.filter((n) => !existing.has(n.elementId)).map((n) => n.elementId);
+        // Track last insert batch for one-click undo.
+        setLastInsertedElementIds(insertedIds);
         return capped.next;
       });
-
-      setLastInsertedElementIds(insertedIds);
     },
     [addRelatedEnabledTypes, emitWarning, maxNodes, model]
   );

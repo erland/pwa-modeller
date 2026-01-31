@@ -174,13 +174,6 @@ export function SandboxModeView({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [model.relationships]);
 
-  const addRelatedEnabledTypeSet = useMemo(() => new Set(addRelated.enabledTypes), [addRelated.enabledTypes]);
-
-  const addRelatedSelectedTypeCount = useMemo(() => {
-    if (allRelationshipTypes.length === 0) return 0;
-    return allRelationshipTypes.filter((t) => addRelatedEnabledTypeSet.has(t)).length;
-  }, [addRelatedEnabledTypeSet, allRelationshipTypes]);
-
   const addRelatedAnchors = useMemo(() => {
     const raw = pairSelection.length ? pairSelection : selectionElementIds;
     const uniq = Array.from(new Set(raw.filter((id) => nodeById.has(id))));
@@ -490,6 +483,16 @@ export function SandboxModeView({
           >
             Clear
           </button>
+          {ui.lastInsertedElementIds.length > 0 ? (
+            <button
+              type="button"
+              className="miniLinkButton"
+              onClick={onUndoLastInsert}
+              title="Undo the last insertion batch"
+            >
+              Undo
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -690,124 +693,41 @@ export function SandboxModeView({
       </div>
 
       <div className="toolbar" style={{ marginTop: 10 }}>
-	        <div className="toolbarGroup" style={{ minWidth: 260 }}>
-	          <label>Add related elements</label>
-	          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-	            <button
-	              type="button"
-	              className="miniLinkButton"
-	              onClick={onOpenAddRelatedDialog}
-	              disabled={!canAddRelated}
-	              aria-disabled={!canAddRelated}
-	              title={addRelatedAnchors.length ? 'Add related elements around the selected sandbox node(s)' : 'Select one or more sandbox nodes to expand'}
-	            >
-	              Add related…
-	            </button>
-	            <span className="crudHint" style={{ margin: 0 }}>
-	              depth {addRelated.depth} · {addRelatedSelectedTypeCount}/{allRelationshipTypes.length} types
-	            </span>
-	          </div>
-	          <p className="crudHint" style={{ margin: 0 }}>
-	            {addRelatedAnchors.length === 0 ? 'Select a sandbox node to expand.' : `Anchors: ${addRelatedAnchors.length}`}
-	          </p>
-	        </div>
-      </div>
+        <div className="toolbarGroup" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={onOpenAddRelatedDialog}
+            disabled={!canAddRelated}
+            aria-disabled={!canAddRelated}
+            title={addRelatedAnchors.length ? 'Add related elements around the selected sandbox node(s)' : 'Select one or more sandbox nodes to expand'}
+          >
+            Add related…
+          </button>
 
-      <div className="toolbar" style={{ marginTop: 10 }}>
-        <div className="toolbarGroup" style={{ minWidth: 280 }}>
-          <label>Insert intermediate elements</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <label style={{ fontSize: 12, opacity: 0.9 }}>
-              Mode
-              <select
-                className="selectInput"
-                value={insertMode}
-                onChange={(e) => setInsertMode(e.currentTarget.value as SandboxInsertIntermediatesMode)}
-                style={{ marginLeft: 8 }}
-                aria-label="Insert intermediates mode"
-              >
-                <option value="shortest">Shortest path</option>
-                <option value="topk">Top-K shortest paths</option>
-              </select>
-            </label>
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={onOpenInsertBetweenDialog}
+            disabled={!canInsertIntermediates}
+            aria-disabled={!canInsertIntermediates}
+            title={(pairAnchors.length ? pairAnchors : insertAnchors).length === 2
+              ? 'Preview and insert intermediate elements between the two selected sandbox nodes'
+              : 'Pick two sandbox nodes: click first, then Shift-click second'}
+          >
+            Insert intermediate elements…
+          </button>
 
-            <label style={{ fontSize: 12, opacity: 0.9 }}>
-              K
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={insertK}
-                disabled={insertMode !== 'topk'}
-                aria-disabled={insertMode !== 'topk'}
-                onChange={(e) => setInsertK(Number(e.currentTarget.value))}
-                style={{ width: 70, marginLeft: 8 }}
-              />
-            </label>
-
-            <label style={{ fontSize: 12, opacity: 0.9 }}>
-              Max hops
-              <input
-                type="number"
-                min={1}
-                max={16}
-                value={insertMaxHops}
-                onChange={(e) => setInsertMaxHops(Number(e.currentTarget.value))}
-                style={{ width: 78, marginLeft: 8 }}
-              />
-            </label>
-
-            <label style={{ fontSize: 12, opacity: 0.9 }}>
-              Direction
-              <select
-                className="selectInput"
-                value={insertDirection}
-                onChange={(e) => setInsertDirection(e.currentTarget.value as SandboxAddRelatedDirection)}
-                style={{ marginLeft: 8 }}
-                aria-label="Insert intermediates direction"
-              >
-                <option value="both">Both</option>
-                <option value="outgoing">Outgoing</option>
-                <option value="incoming">Incoming</option>
-              </select>
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={onOpenInsertBetweenDialog}
-              disabled={!canInsertIntermediates}
-              aria-disabled={!canInsertIntermediates}
-              title={(pairAnchors.length ? pairAnchors : insertAnchors).length === 2
-                ? 'Preview and insert intermediate elements between the two selected sandbox nodes'
-                : 'Pick two sandbox nodes: click first, then Shift-click second'}
-            >
-              Insert between selection
-            </button>
-
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={onOpenInsertFromSelectedEdgeDialog}
-              disabled={!selectedEdge}
-              aria-disabled={!selectedEdge}
-              title={selectedEdge ? 'Preview and insert intermediate elements between the selected relationship endpoints' : 'Click a relationship line to select it'}
-            >
-              Insert from selected relationship
-            </button>
-          </div>
-
-          <p className="crudHint" style={{ margin: 0 }}>
-            {(pairAnchors.length ? pairAnchors : insertAnchors).length !== 2
-              ? `Pick two sandbox nodes: click first, then Shift-click second. Click background to clear.`
-              : `Between: ${(pairAnchors.length ? pairAnchors : insertAnchors)[0]} → ${(pairAnchors.length ? pairAnchors : insertAnchors)[1]}${selectedEdge ? ` · Edge: ${selectedEdge.type}` : ''}`}
-          </p>
-
-          <p className="crudHint" style={{ margin: 0 }}>
-            Uses the “Traversal types” filter above.
-          </p>
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={onOpenInsertFromSelectedEdgeDialog}
+            disabled={!selectedEdge}
+            aria-disabled={!selectedEdge}
+            title={selectedEdge ? 'Preview and insert intermediate elements between the selected relationship endpoints' : 'Click a relationship line to select it'}
+          >
+            Insert from selected relationship…
+          </button>
         </div>
       </div>
 

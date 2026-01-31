@@ -122,7 +122,11 @@ export type SandboxActions = {
   setAddRelatedDirection: (direction: SandboxAddRelatedDirection) => void;
   setAddRelatedEnabledTypes: (types: string[]) => void;
   toggleAddRelatedEnabledType: (type: string) => void;
-  addRelatedFromSelection: (anchorElementIds: string[]) => void;
+  /**
+   * Adds related elements around the given anchor sandbox nodes.
+   * When `allowedElementIds` is provided, no traversal is performed; the caller supplies the element set.
+   */
+  addRelatedFromSelection: (anchorElementIds: string[], allowedElementIds?: string[]) => void;
 
   insertIntermediatesBetween: (
     sourceElementId: string,
@@ -614,7 +618,7 @@ export function useSandboxState(args: {
   }, []);
 
   const addRelatedFromSelection = useCallback(
-    (anchorElementIds: string[]) => {
+    (anchorElementIds: string[], allowedElementIds?: string[]) => {
       if (!model) return;
       const allowedTypes = new Set(addRelatedEnabledTypes);
       if (allowedTypes.size === 0) return;
@@ -638,6 +642,57 @@ export function useSandboxState(args: {
           y: n.y + SANDBOX_NODE_H / 2,
         }));
 
+        const placeAroundAnchor = (args: {
+          anchorIndex: number;
+          anchorId: string;
+          anchorCenter: { x: number; y: number };
+          elementIds: string[];
+        }): void => {
+          const { anchorIndex, anchorCenter, elementIds } = args;
+          if (elementIds.length === 0) return;
+
+          // Distribute in rings around the anchor.
+          const ringSize = 12;
+          const angleOffset = (anchorIndex / Math.max(1, anchors.length)) * Math.PI * 0.4;
+
+          for (let i = 0; i < elementIds.length; i++) {
+            const elementId = elementIds[i];
+
+            const ring = Math.floor(i / ringSize) + 1;
+            const radius = RELATED_RADIUS_STEP * ring;
+            const idxInRing = i % ringSize;
+            const denom = Math.min(ringSize, elementIds.length - (ring - 1) * ringSize);
+            const baseAngle = (2 * Math.PI * idxInRing) / Math.max(1, denom) + angleOffset;
+
+            let placed = false;
+            let attempt = 0;
+            let angle = baseAngle;
+            let r = radius;
+
+            while (!placed && attempt < RELATED_MAX_ATTEMPTS) {
+              const cx = anchorCenter.x + r * Math.cos(angle);
+              const cy = anchorCenter.y + r * Math.sin(angle);
+              const center = { x: cx, y: cy };
+
+              const tooClose = occupiedCenters.some((c) => dist2(c, center) < RELATED_MIN_SEPARATION * RELATED_MIN_SEPARATION);
+              if (!tooClose) {
+                occupiedCenters.push(center);
+                newNodes.push({
+                  elementId,
+                  x: cx - SANDBOX_NODE_W / 2,
+                  y: cy - SANDBOX_NODE_H / 2,
+                });
+                placed = true;
+                break;
+              }
+
+              attempt++;
+              angle = baseAngle + attempt * 0.35;
+              r = radius + attempt * 26;
+            }
+          }
+        };
+
         for (let aIdx = 0; aIdx < anchors.length; aIdx++) {
           const anchorId = anchors[aIdx];
           const anchorNode = existingById.get(anchorId);
@@ -648,75 +703,52 @@ export function useSandboxState(args: {
             y: anchorNode.y + SANDBOX_NODE_H / 2,
           };
 
-          const visited = new Set<string>([anchorId]);
-          const byDepth = new Map<number, string[]>();
-          const q: Array<{ id: string; depth: number }> = [{ id: anchorId, depth: 0 }];
+          if (allowedElementIds && allowedElementIds.length > 0) {
+            // Caller-supplied set (preview dialog). Place around anchors, respecting global uniqueness.
+            const toPlace = allowedElementIds
+              .filter((id) => Boolean(model.elements[id]))
+              .filter((id) => !alreadyPresent.has(id) && !globallyAdded.has(id));
+            for (const id of toPlace) globallyAdded.add(id);
 
-          while (q.length) {
-            const cur = q.shift();
-            if (!cur) break;
-            if (cur.depth >= depthLimit) continue;
+            // Distribute between anchors round-robin by letting each anchor place its slice.
+            const slice = toPlace.filter((_, idx) => idx % anchors.length === aIdx);
+            placeAroundAnchor({ anchorIndex: aIdx, anchorId, anchorCenter, elementIds: slice });
+          } else {
+            // Traverse from the anchor according to the current settings.
+            const visited = new Set<string>([anchorId]);
+            const byDepth = new Map<number, string[]>();
+            const q: Array<{ id: string; depth: number }> = [{ id: anchorId, depth: 0 }];
 
-            const neighbors: string[] = [];
-            if (addRelatedDirection === 'both' || addRelatedDirection === 'outgoing') {
-              for (const e of adjacency.out.get(cur.id) ?? []) neighbors.push(e.to);
-            }
-            if (addRelatedDirection === 'both' || addRelatedDirection === 'incoming') {
-              for (const e of adjacency.in.get(cur.id) ?? []) neighbors.push(e.to);
-            }
+            while (q.length) {
+              const cur = q.shift();
+              if (!cur) break;
+              if (cur.depth >= depthLimit) continue;
 
-            const nextDepth = cur.depth + 1;
-            for (const nb of neighbors) {
-              if (visited.has(nb)) continue;
-              if (!model.elements[nb]) continue;
-              visited.add(nb);
-              if (!byDepth.has(nextDepth)) byDepth.set(nextDepth, []);
-              byDepth.get(nextDepth)!.push(nb);
-              q.push({ id: nb, depth: nextDepth });
-            }
-          }
-
-          for (let d = 1; d <= depthLimit; d++) {
-            const raw = byDepth.get(d) ?? [];
-            const toPlace = raw.filter((id) => !alreadyPresent.has(id) && !globallyAdded.has(id));
-            if (toPlace.length === 0) continue;
-
-            const radius = RELATED_RADIUS_STEP * d;
-            const angleOffset = (aIdx / Math.max(1, anchors.length)) * Math.PI * 0.4;
-
-            for (let i = 0; i < toPlace.length; i++) {
-              const elementId = toPlace[i];
-              globallyAdded.add(elementId);
-
-              // Evenly distribute around the anchor.
-              const baseAngle = (2 * Math.PI * i) / Math.max(1, toPlace.length) + angleOffset;
-              let placed = false;
-              let attempt = 0;
-              let angle = baseAngle;
-              let r = radius;
-
-              while (!placed && attempt < RELATED_MAX_ATTEMPTS) {
-                const cx = anchorCenter.x + r * Math.cos(angle);
-                const cy = anchorCenter.y + r * Math.sin(angle);
-                const center = { x: cx, y: cy };
-
-                const tooClose = occupiedCenters.some((c) => dist2(c, center) < RELATED_MIN_SEPARATION * RELATED_MIN_SEPARATION);
-                if (!tooClose) {
-                  occupiedCenters.push(center);
-                  newNodes.push({
-                    elementId,
-                    x: cx - SANDBOX_NODE_W / 2,
-                    y: cy - SANDBOX_NODE_H / 2,
-                  });
-                  placed = true;
-                  break;
-                }
-
-                attempt++;
-                // Spiral outward a little and rotate to find a free spot.
-                angle = baseAngle + attempt * 0.35;
-                r = radius + attempt * 26;
+              const neighbors: string[] = [];
+              if (addRelatedDirection === 'both' || addRelatedDirection === 'outgoing') {
+                for (const e of adjacency.out.get(cur.id) ?? []) neighbors.push(e.to);
               }
+              if (addRelatedDirection === 'both' || addRelatedDirection === 'incoming') {
+                for (const e of adjacency.in.get(cur.id) ?? []) neighbors.push(e.to);
+              }
+
+              const nextDepth = cur.depth + 1;
+              for (const nb of neighbors) {
+                if (visited.has(nb)) continue;
+                if (!model.elements[nb]) continue;
+                visited.add(nb);
+                if (!byDepth.has(nextDepth)) byDepth.set(nextDepth, []);
+                byDepth.get(nextDepth)!.push(nb);
+                q.push({ id: nb, depth: nextDepth });
+              }
+            }
+
+            for (let d = 1; d <= depthLimit; d++) {
+              const raw = byDepth.get(d) ?? [];
+              const toPlace = raw.filter((id) => !alreadyPresent.has(id) && !globallyAdded.has(id));
+              if (toPlace.length === 0) continue;
+              for (const id of toPlace) globallyAdded.add(id);
+              placeAroundAnchor({ anchorIndex: aIdx, anchorId, anchorCenter, elementIds: toPlace });
             }
           }
         }

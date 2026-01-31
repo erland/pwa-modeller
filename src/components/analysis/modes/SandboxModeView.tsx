@@ -19,7 +19,7 @@ import { dataTransferHasElement, readDraggedElementId } from '../../diagram/drag
 import '../../../styles/analysisSandbox.css';
 
 import { SaveSandboxAsDiagramDialog } from './SaveSandboxAsDiagramDialog';
-import { SandboxInsertBetweenDialog } from './SandboxInsertBetweenDialog';
+import { SandboxInsertDialog } from './SandboxInsertDialog';
 
 const NODE_W = 180;
 const NODE_H = 56;
@@ -75,7 +75,6 @@ export function SandboxModeView({
   onSetAddRelatedDepth,
   onSetAddRelatedDirection,
   onSetAddRelatedEnabledTypes,
-  onToggleAddRelatedEnabledType,
   onAddRelatedFromSelection,
   onInsertIntermediatesBetween,
   onSaveAsDiagram,
@@ -104,8 +103,7 @@ export function SandboxModeView({
   onSetAddRelatedDepth: (depth: number) => void;
   onSetAddRelatedDirection: (direction: SandboxAddRelatedDirection) => void;
   onSetAddRelatedEnabledTypes: (types: string[]) => void;
-  onToggleAddRelatedEnabledType: (type: string) => void;
-  onAddRelatedFromSelection: (anchorElementIds: string[]) => void;
+  onAddRelatedFromSelection: (anchorElementIds: string[], allowedElementIds?: string[]) => void;
   onInsertIntermediatesBetween: (
     sourceElementId: string,
     targetElementId: string,
@@ -138,6 +136,9 @@ export function SandboxModeView({
   const [insertBetweenEndpoints, setInsertBetweenEndpoints] = useState<[string, string] | null>(null);
   const [insertFromEdgeDialogOpen, setInsertFromEdgeDialogOpen] = useState(false);
   const [insertFromEdgeEndpoints, setInsertFromEdgeEndpoints] = useState<[string, string] | null>(null);
+
+  const [addRelatedDialogOpen, setAddRelatedDialogOpen] = useState(false);
+  const [addRelatedDialogAnchors, setAddRelatedDialogAnchors] = useState<string[]>([]);
 
   const selectedElementId = useMemo(() => getSelectedElementId(selection), [selection]);
 
@@ -179,8 +180,10 @@ export function SandboxModeView({
   }, [addRelatedEnabledTypeSet, allRelationshipTypes]);
 
   const addRelatedAnchors = useMemo(() => {
-    return selectionElementIds.filter((id) => nodeById.has(id));
-  }, [nodeById, selectionElementIds]);
+    const raw = pairSelection.length ? pairSelection : selectionElementIds;
+    const uniq = Array.from(new Set(raw.filter((id) => nodeById.has(id))));
+    return uniq;
+  }, [nodeById, pairSelection, selectionElementIds]);
 
   const insertAnchors = useMemo(() => {
     const uniq = Array.from(new Set(selectionElementIds.filter((id) => nodeById.has(id))));
@@ -200,8 +203,8 @@ export function SandboxModeView({
   }, [insertAnchors, pairAnchors]);
 
   const canAddRelated = useMemo(() => {
-    return addRelatedAnchors.length > 0 && addRelated.enabledTypes.length > 0;
-  }, [addRelated.enabledTypes.length, addRelatedAnchors.length]);
+    return addRelatedAnchors.length > 0;
+  }, [addRelatedAnchors.length]);
   const baseVisibleRelationships = useMemo(() => {
     const ids = new Set(nodes.map((n) => n.elementId));
     const rels = Object.values(model.relationships).filter((r) => {
@@ -387,6 +390,12 @@ export function SandboxModeView({
     setInsertFromEdgeEndpoints([selectedEdge.sourceElementId, selectedEdge.targetElementId]);
     setInsertFromEdgeDialogOpen(true);
   }, [selectedEdge]);
+
+  const onOpenAddRelatedDialog = useCallback(() => {
+    if (addRelatedAnchors.length === 0) return;
+    setAddRelatedDialogAnchors(addRelatedAnchors);
+    setAddRelatedDialogOpen(true);
+  }, [addRelatedAnchors]);
 
   const onCanvasClick = useCallback(
     (e: MouseEvent<SVGSVGElement>) => {
@@ -650,97 +659,27 @@ export function SandboxModeView({
       </div>
 
       <div className="toolbar" style={{ marginTop: 10 }}>
-        <div className="toolbarGroup" style={{ minWidth: 260 }}>
-          <label>Add related elements</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <label style={{ fontSize: 12, opacity: 0.9 }}>
-              Depth
-              <input
-                type="number"
-                min={1}
-                max={6}
-                value={addRelated.depth}
-                onChange={(e) => onSetAddRelatedDepth(Number(e.currentTarget.value))}
-                style={{ width: 70, marginLeft: 8 }}
-              />
-            </label>
-            <label style={{ fontSize: 12, opacity: 0.9 }}>
-              Direction
-              <select
-                className="selectInput"
-                value={addRelated.direction}
-                onChange={(e) => onSetAddRelatedDirection(e.currentTarget.value as SandboxAddRelatedDirection)}
-                style={{ marginLeft: 8 }}
-                aria-label="Add related direction"
-              >
-                <option value="both">Both</option>
-                <option value="outgoing">Outgoing</option>
-                <option value="incoming">Incoming</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => onAddRelatedFromSelection(addRelatedAnchors)}
-              disabled={!canAddRelated}
-              aria-disabled={!canAddRelated}
-              title={addRelatedAnchors.length ? 'Add related elements around the selected sandbox node(s)' : 'Select one or more sandbox nodes to expand'}
-            >
-              Add related
-            </button>
-          </div>
-          <p className="crudHint" style={{ margin: 0 }}>
-            {addRelatedAnchors.length === 0
-              ? 'Select a sandbox node to expand.'
-              : `Anchors: ${addRelatedAnchors.length} · Types: ${addRelatedSelectedTypeCount}/${allRelationshipTypes.length}`}
-          </p>
-        </div>
-
-        <div className="toolbarGroup" style={{ minWidth: 260, flex: '1 1 260px' }}>
-          <label>
-            Traversal types ({addRelatedSelectedTypeCount}/{allRelationshipTypes.length})
-          </label>
-          <div
-            style={{
-              maxHeight: 160,
-              overflow: 'auto',
-              border: '1px solid var(--border-1)',
-              borderRadius: 10,
-              padding: '8px 10px',
-              background: 'rgba(255,255,255,0.02)',
-            }}
-          >
-            {allRelationshipTypes.length === 0 ? (
-              <p className="crudHint" style={{ margin: 0 }}>
-                This model has no relationships.
-              </p>
-            ) : (
-              allRelationshipTypes.map((t) => (
-                <label
-                  key={t}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
-                >
-                  <input type="checkbox" checked={addRelatedEnabledTypeSet.has(t)} onChange={() => onToggleAddRelatedEnabledType(t)} />
-                  <span title={t}>{t}</span>
-                </label>
-              ))
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => onSetAddRelatedEnabledTypes(allRelationshipTypes)}
-              disabled={allRelationshipTypes.length === 0}
-              aria-disabled={allRelationshipTypes.length === 0}
-            >
-              All
-            </button>
-            <button type="button" className="miniLinkButton" onClick={() => onSetAddRelatedEnabledTypes([])}>
-              None
-            </button>
-          </div>
-        </div>
+	        <div className="toolbarGroup" style={{ minWidth: 260 }}>
+	          <label>Add related elements</label>
+	          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+	            <button
+	              type="button"
+	              className="miniLinkButton"
+	              onClick={onOpenAddRelatedDialog}
+	              disabled={!canAddRelated}
+	              aria-disabled={!canAddRelated}
+	              title={addRelatedAnchors.length ? 'Add related elements around the selected sandbox node(s)' : 'Select one or more sandbox nodes to expand'}
+	            >
+	              Add related…
+	            </button>
+	            <span className="crudHint" style={{ margin: 0 }}>
+	              depth {addRelated.depth} · {addRelatedSelectedTypeCount}/{allRelationshipTypes.length} types
+	            </span>
+	          </div>
+	          <p className="crudHint" style={{ margin: 0 }}>
+	            {addRelatedAnchors.length === 0 ? 'Select a sandbox node to expand.' : `Anchors: ${addRelatedAnchors.length}`}
+	          </p>
+	        </div>
       </div>
 
       <div className="toolbar" style={{ marginTop: 10 }}>
@@ -950,7 +889,8 @@ export function SandboxModeView({
         </svg>
       </div>
 
-      <SandboxInsertBetweenDialog
+	      <SandboxInsertDialog
+	        kind="intermediates"
         isOpen={insertBetweenDialogOpen}
         model={model}
         sourceElementId={insertBetweenEndpoints?.[0] ?? ''}
@@ -983,7 +923,8 @@ export function SandboxModeView({
         }}
       />
 
-      <SandboxInsertBetweenDialog
+	      <SandboxInsertDialog
+	        kind="intermediates"
         isOpen={insertFromEdgeDialogOpen}
         model={model}
         sourceElementId={insertFromEdgeEndpoints?.[0] ?? ''}
@@ -1016,6 +957,27 @@ export function SandboxModeView({
           onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
         }}
       />
+
+	      <SandboxInsertDialog
+	        kind="related"
+	        isOpen={addRelatedDialogOpen}
+	        model={model}
+	        anchorElementIds={addRelatedDialogAnchors}
+	        existingElementIds={nodes.map((n) => n.elementId)}
+	        allRelationshipTypes={allRelationshipTypes}
+	        initialEnabledRelationshipTypes={addRelated.enabledTypes}
+	        initialOptions={{ depth: addRelated.depth, direction: addRelated.direction }}
+	        onCancel={() => setAddRelatedDialogOpen(false)}
+	        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
+	          setAddRelatedDialogOpen(false);
+	          // Persist settings for the next time.
+	          onSetAddRelatedDepth(options.depth);
+	          onSetAddRelatedDirection(options.direction);
+	          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
+	          if (addRelatedDialogAnchors.length === 0) return;
+	          onAddRelatedFromSelection(addRelatedDialogAnchors, selectedElementIds);
+	        }}
+	      />
 
       <SaveSandboxAsDiagramDialog
         isOpen={saveDialogOpen}

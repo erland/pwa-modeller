@@ -216,8 +216,7 @@ export function AnalysisWorkspace({
               onSetAddRelatedDepth={(depth) => sandbox.actions.setAddRelatedDepth(depth)}
               onSetAddRelatedDirection={(direction) => sandbox.actions.setAddRelatedDirection(direction)}
               onSetAddRelatedEnabledTypes={(types) => sandbox.actions.setAddRelatedEnabledTypes(types)}
-              onToggleAddRelatedEnabledType={(type) => sandbox.actions.toggleAddRelatedEnabledType(type)}
-              onAddRelatedFromSelection={(anchorIds) => sandbox.actions.addRelatedFromSelection(anchorIds)}
+              onAddRelatedFromSelection={(anchorIds, allowedIds) => sandbox.actions.addRelatedFromSelection(anchorIds, allowedIds)}
               onInsertIntermediatesBetween={(a, b, options) => sandbox.actions.insertIntermediatesBetween(a, b, options)}
               onSaveAsDiagram={onSaveSandboxAsDiagram}
               onAutoLayout={() => sandbox.actions.autoLayout()}

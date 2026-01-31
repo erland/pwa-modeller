@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent, PointerEvent } from 'react';
 
 import type { Model, ViewNodeLayout } from '../../../domain';
+import { kindFromTypeId } from '../../../domain';
+import { getNotation } from '../../../notations';
 import type { Selection } from '../../model/selection';
 import type {
   SandboxNode,
@@ -212,6 +214,11 @@ useEffect(() => {
   const [edgeCapDismissed, setEdgeCapDismissed] = useState(false);
 
   const [viewport, setViewport] = useState<SandboxViewport | null>(null);
+  // The model can contain mixed notations (e.g. ArchiMate + UML + BPMN) via qualified type ids.
+  // Infer the notation per element using its type prefix rather than relying on a global model kind.
+  const archimateNotation = useMemo(() => getNotation('archimate'), []);
+  const umlNotation = useMemo(() => getNotation('uml'), []);
+  const bpmnNotation = useMemo(() => getNotation('bpmn'), []);
   const viewBox = useMemo(() => (viewport ? `${viewport.x} ${viewport.y} ${viewport.w} ${viewport.h}` : undefined), [viewport]);
 
   const panRef = useRef<{ pointerId: number; last: Point } | null>(null);
@@ -1121,6 +1128,9 @@ useEffect(() => {
             const isPairSecondary = pairAnchors[1] === n.elementId;
             const label = el.name || '(unnamed)';
             const secondary = el.type;
+            const kind = kindFromTypeId(String(el.type));
+            const notation = kind === 'uml' ? umlNotation : kind === 'bpmn' ? bpmnNotation : archimateNotation;
+            const bgVar = notation.getElementBgVar(String(el.type));
 
             return (
               <g
@@ -1136,7 +1146,7 @@ useEffect(() => {
                 tabIndex={0}
                 aria-label={label}
               >
-                <rect width={NODE_W} height={NODE_H} rx={8} ry={8} />
+                <rect width={NODE_W} height={NODE_H} rx={8} ry={8} style={{ fill: bgVar }} />
                 <text x={10} y={22} className="analysisSandboxNodeTitle">
                   {label}
                 </text>

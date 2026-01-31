@@ -64,6 +64,12 @@ export type SandboxUiState = {
   persistEnabled: boolean;
 
   /**
+   * How relationships are rendered in the sandbox view.
+   * This is purely visual and does not affect the model.
+   */
+  edgeRouting: 'straight' | 'orthogonal';
+
+  /**
    * Element ids inserted by the most recent insert/add action (newly added only).
    * Used for one-click undo. Not persisted.
    */
@@ -105,6 +111,7 @@ export type SandboxActions = {
   autoLayout: () => void;
 
   setPersistEnabled: (enabled: boolean) => void;
+  setEdgeRouting: (routing: 'straight' | 'orthogonal') => void;
   clearWarning: () => void;
 
 
@@ -401,6 +408,7 @@ export function useSandboxState(args: {
 
   const [warning, setWarning] = useState<string | null>(null);
   const [persistEnabled, setPersistEnabled] = useState(false);
+  const [edgeRouting, setEdgeRouting] = useState<'straight' | 'orthogonal'>('straight');
   const [lastInsertedElementIds, setLastInsertedElementIds] = useState<string[]>([]);
 
   const [addRelatedDepth, setAddRelatedDepth] = useState(1);
@@ -417,6 +425,7 @@ export function useSandboxState(args: {
 
     setWarning(null);
     setPersistEnabled(false);
+    setEdgeRouting('straight');
     setLastInsertedElementIds([]);
 
     setAddRelatedDepth(1);
@@ -452,7 +461,6 @@ export function useSandboxState(args: {
 
       setNodes(capped.next);
       setLastInsertedElementIds([]);
-      setLastInsertedElementIds([]);
 
       const rel = parsed.relationships ?? {};
       const relShow = Boolean(rel.show);
@@ -478,6 +486,10 @@ export function useSandboxState(args: {
       setAddRelatedDepth(clampInt(arDepth, 1, 6));
       setAddRelatedDirection(arDir);
       setAddRelatedEnabledTypes(uniqSortedStrings(arTypes));
+
+      const ui = parsed.ui ?? {};
+      const er = ui.edgeRouting;
+      setEdgeRouting(er === 'orthogonal' ? 'orthogonal' : 'straight');
     } catch {
       // ignore corrupted persisted state
     }
@@ -504,12 +516,15 @@ export function useSandboxState(args: {
           direction: addRelatedDirection,
           enabledTypes: addRelatedEnabledTypes,
         },
+        ui: {
+          edgeRouting,
+        },
       };
       ss.setItem(SANDBOX_STATE_KEY(modelId), JSON.stringify(payload));
     } catch {
       // ignore quota or JSON errors
     }
-  }, [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, explicitRelationshipIds, model, modelId, nodes, persistEnabled, relationshipMode, showRelationships]);
+  }, [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, edgeRouting, enabledRelationshipTypes, explicitRelationshipIds, model, modelId, nodes, persistEnabled, relationshipMode, showRelationships]);
 
   const allRelationshipTypesForModel = useMemo(() => {
     if (!model) return [];
@@ -1172,10 +1187,11 @@ const seedFromView = useCallback((viewId: string) => {
         maxNodes,
         maxEdges,
         persistEnabled,
+        edgeRouting,
         lastInsertedElementIds,
       },
     }),
-    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, enabledRelationshipTypes, explicitRelationshipIds, lastInsertedElementIds, maxEdges, maxNodes, nodes, persistEnabled, relationshipMode, showRelationships, warning]
+    [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, edgeRouting, enabledRelationshipTypes, explicitRelationshipIds, lastInsertedElementIds, maxEdges, maxNodes, nodes, persistEnabled, relationshipMode, showRelationships, warning]
   );
 
   const actions: SandboxActions = useMemo(
@@ -1190,6 +1206,7 @@ const seedFromView = useCallback((viewId: string) => {
 
       autoLayout,
       setPersistEnabled: setPersistEnabledSafe,
+      setEdgeRouting,
       clearWarning,
 
       seedFromElements,
@@ -1219,6 +1236,7 @@ const seedFromView = useCallback((viewId: string) => {
       seedFromElements,
       removeMany,
       setPersistEnabledSafe,
+      setEdgeRouting,
       setAddRelatedDepthSafe,
       setAddRelatedEnabledTypesSafe,
       setNodePosition,

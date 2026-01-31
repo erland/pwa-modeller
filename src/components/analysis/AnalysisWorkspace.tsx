@@ -221,6 +221,7 @@ export function AnalysisWorkspace({
               onSaveAsDiagram={onSaveSandboxAsDiagram}
               onAutoLayout={() => sandbox.actions.autoLayout()}
               onSetPersistEnabled={(enabled) => sandbox.actions.setPersistEnabled(enabled)}
+              onSetEdgeRouting={(routing) => sandbox.actions.setEdgeRouting(routing)}
               onClearWarning={() => sandbox.actions.clearWarning()}
               onUndoLastInsert={() => sandbox.actions.undoLastInsert()}
             />

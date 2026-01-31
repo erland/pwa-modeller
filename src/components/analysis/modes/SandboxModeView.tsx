@@ -24,6 +24,99 @@ import { SandboxInsertDialog } from './SandboxInsertDialog';
 const NODE_W = 180;
 const NODE_H = 56;
 
+type Point = { x: number; y: number };
+type Rect = { x: number; y: number; w: number; h: number };
+
+function rectForNode(n: SandboxNode): Rect {
+  return { x: n.x, y: n.y, w: NODE_W, h: NODE_H };
+}
+
+function segmentIntersectsRect(a: Point, b: Point, r: Rect): boolean {
+  // Only used for orthogonal segments.
+  const rx1 = r.x;
+  const ry1 = r.y;
+  const rx2 = r.x + r.w;
+  const ry2 = r.y + r.h;
+
+  if (a.x === b.x) {
+    const x = a.x;
+    if (x < rx1 || x > rx2) return false;
+    const y1 = Math.min(a.y, b.y);
+    const y2 = Math.max(a.y, b.y);
+    return y2 >= ry1 && y1 <= ry2;
+  }
+
+  if (a.y === b.y) {
+    const y = a.y;
+    if (y < ry1 || y > ry2) return false;
+    const x1 = Math.min(a.x, b.x);
+    const x2 = Math.max(a.x, b.x);
+    return x2 >= rx1 && x1 <= rx2;
+  }
+
+  // Diagonal segment (shouldn't happen here)
+  return false;
+}
+
+function countBadIntersections(points: Point[], sourceRect: Rect, targetRect: Rect): number {
+  if (points.length < 2) return 0;
+  let bad = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    // Allow the first segment to originate from the source node and the last to terminate in the target node.
+    const allowSource = i === 0;
+    const allowTarget = i === points.length - 2;
+    if (!allowSource && segmentIntersectsRect(a, b, sourceRect)) bad++;
+    if (!allowTarget && segmentIntersectsRect(a, b, targetRect)) bad++;
+  }
+  return bad;
+}
+
+function routeOrthogonal(source: SandboxNode, target: SandboxNode): Point[] {
+  const sRect = rectForNode(source);
+  const tRect = rectForNode(target);
+
+  const sx = source.x + NODE_W / 2;
+  const sy = source.y + NODE_H / 2;
+  const tx = target.x + NODE_W / 2;
+  const ty = target.y + NODE_H / 2;
+  const dx = tx - sx;
+  const dy = ty - sy;
+
+  // Exit/entry points on node borders.
+  const horizontal = Math.abs(dx) >= Math.abs(dy);
+  const start: Point = horizontal
+    ? { x: source.x + (dx >= 0 ? NODE_W : 0), y: source.y + NODE_H / 2 }
+    : { x: source.x + NODE_W / 2, y: source.y + (dy >= 0 ? NODE_H : 0) };
+  const end: Point = horizontal
+    ? { x: target.x + (dx >= 0 ? 0 : NODE_W), y: target.y + NODE_H / 2 }
+    : { x: target.x + NODE_W / 2, y: target.y + (dy >= 0 ? 0 : NODE_H) };
+
+  const midX = Math.round((start.x + end.x) / 2);
+  const midY = Math.round((start.y + end.y) / 2);
+
+  const hv: Point[] = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
+  const vh: Point[] = [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end];
+
+  const hvBad = countBadIntersections(hv, sRect, tRect);
+  const vhBad = countBadIntersections(vh, sRect, tRect);
+  return hvBad <= vhBad ? hv : vh;
+}
+
+function labelPositionForRoute(points: Point[]): Point {
+  if (points.length < 2) return { x: 0, y: 0 };
+  if (points.length >= 4) {
+    const a = points[1];
+    const b = points[2];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+  // Fallback: middle of first segment.
+  const a = points[0];
+  const b = points[1];
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
 type DragState = {
   elementId: string;
   offsetX: number;
@@ -80,6 +173,7 @@ export function SandboxModeView({
   onSaveAsDiagram,
   onAutoLayout,
   onSetPersistEnabled,
+  onSetEdgeRouting,
   onClearWarning,
   onUndoLastInsert,
 }: {
@@ -113,6 +207,7 @@ export function SandboxModeView({
   onSaveAsDiagram: (name: string, visibleRelationshipIds: string[]) => void;
   onAutoLayout: () => void;
   onSetPersistEnabled: (enabled: boolean) => void;
+  onSetEdgeRouting: (routing: 'straight' | 'orthogonal') => void;
   onClearWarning: () => void;
   onUndoLastInsert: () => void;
 }) {
@@ -565,6 +660,19 @@ export function SandboxModeView({
               <option value="explicit">Explicit set</option>
             </select>
           ) : null}
+
+          {relationships.show ? (
+            <select
+              className="selectInput"
+              value={ui.edgeRouting}
+              onChange={(e) => onSetEdgeRouting(e.currentTarget.value as 'straight' | 'orthogonal')}
+              aria-label="Relationship routing style"
+              title="How to draw relationships in the sandbox"
+            >
+              <option value="straight">Edges: Straight</option>
+              <option value="orthogonal">Edges: Orthogonal</option>
+            </select>
+          ) : null}
           <p className="crudHint" style={{ margin: 0 }}>
             {relationships.show
               ? relationships.mode === 'explicit'
@@ -784,6 +892,9 @@ export function SandboxModeView({
             const y2 = t.y + NODE_H / 2;
             const mx = (x1 + x2) / 2;
             const my = (y1 + y2) / 2;
+
+            const orthoPoints = ui.edgeRouting === 'orthogonal' ? routeOrthogonal(s, t) : null;
+            const label = orthoPoints ? labelPositionForRoute(orthoPoints) : { x: mx, y: my };
             return (
               <g
                 key={r.id}
@@ -797,8 +908,16 @@ export function SandboxModeView({
                 aria-label={`Relationship ${r.type}`}
               >
                 <title>Click to select relationship</title>
-                <line x1={x1} y1={y1} x2={x2} y2={y2} markerEnd="url(#sandboxArrow)" />
-                <text x={mx} y={my - 6} textAnchor="middle">
+                {orthoPoints ? (
+                  <polyline
+                    points={orthoPoints.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(' ')}
+                    markerEnd="url(#sandboxArrow)"
+                    fill="none"
+                  />
+                ) : (
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} markerEnd="url(#sandboxArrow)" />
+                )}
+                <text x={label.x} y={label.y - 6} textAnchor="middle">
                   {r.type}
                 </text>
               </g>

@@ -14,11 +14,21 @@
   stroke-width: 1.2;
 }
 
+.analysisSandboxEdge polyline {
+  stroke: #444;
+  stroke-width: 1.2;
+}
+
 .analysisSandboxEdge {
   cursor: pointer;
 }
 
 .analysisSandboxEdge.isSelected line {
+  stroke: #111;
+  stroke-width: 2.2;
+}
+
+.analysisSandboxEdge.isSelected polyline {
   stroke: #111;
   stroke-width: 2.2;
 }

@@ -5,6 +5,9 @@ import type { Model, ViewNodeLayout } from '../../../domain';
 import { kindFromTypeId } from '../../../domain';
 import { getNotation } from '../../../notations';
 import type { Selection } from '../../model/selection';
+import { RelationshipMarkers } from '../../diagram/RelationshipMarkers';
+import { markerUrl } from '../../../diagram/relationships/markers';
+import { dasharrayForPattern } from '../../../diagram/relationships/style';
 import type {
   SandboxNode,
   SandboxAddRelatedDirection,
@@ -1052,21 +1055,8 @@ useEffect(() => {
           role="img"
           aria-label="Sandbox canvas"
         >
-          <defs>
-            <marker
-              id="sandboxArrow"
-              viewBox="0 0 10 10"
-              refX="10"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" />
-            </marker>
-          </defs>
-
-          {!nodes.length ? (
+          <RelationshipMarkers />
+{!nodes.length ? (
             <g className="analysisSandboxEmpty">
               <text x="50%" y="45%" textAnchor="middle">
                 Drop elements here
@@ -1078,59 +1068,87 @@ useEffect(() => {
           ) : null}
 
           {renderedRelationships.map((r) => {
-            const sId = r.sourceElementId as string;
-            const tId = r.targetElementId as string;
-            const s = nodeById.get(sId);
-            const t = nodeById.get(tId);
-            if (!s || !t) return null;
-            const x1 = s.x + NODE_W / 2;
-            const y1 = s.y + NODE_H / 2;
-            const x2 = t.x + NODE_W / 2;
-            const y2 = t.y + NODE_H / 2;
-            const mx = (x1 + x2) / 2;
-            const my = (y1 + y2) / 2;
+  const sId = r.sourceElementId as string;
+  const tId = r.targetElementId as string;
+  const s = nodeById.get(sId);
+  const t = nodeById.get(tId);
+  if (!s || !t) return null;
 
-            const orthoPoints = ui.edgeRouting === 'orthogonal' ? orthogonalPointsByRelationshipId.get(r.id) ?? null : null;
-            const label = orthoPoints ? polylineMidPoint(orthoPoints) : { x: mx, y: my };
-            return (
-              <g
-                key={r.id}
-                className={`analysisSandboxEdge ${selectedEdgeId === r.id ? 'isSelected' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Toggle relationship selection: clicking the selected edge again clears selection.
-                  if (selectedEdgeId === r.id) {
-	                    // Clear any focus ring that might linger on the clicked SVG element.
-	                    (e.currentTarget as any)?.blur?.();
-                    setSelectedEdgeId(null);
-                    setPairSelection([]);
-                    onClearSelection();
-                    return;
-                  }
-                  setSelectedEdgeId(r.id);
-                  setPairSelection([]);
-                  onSelectRelationship(r.id);
-                }}
-                role="button"
-                tabIndex={0}
-                aria-label={`Relationship ${r.type}`}
-              >
-                <title>Click to select relationship</title>
-                {orthoPoints ? (
-                  <polyline
-                    points={orthoPoints.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(' ')}
-                    markerEnd="url(#sandboxArrow)"
-                    fill="none"
-                  />
-                ) : (
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} markerEnd="url(#sandboxArrow)" />
-                )}
-                <text x={label.x} y={label.y - 6} textAnchor="middle">
-                  {r.type}
-                </text>
-              </g>
-            );
-          })}
+  const x1 = s.x + NODE_W / 2;
+  const y1 = s.y + NODE_H / 2;
+  const x2 = t.x + NODE_W / 2;
+  const y2 = t.y + NODE_H / 2;
+
+  const orthoPoints = ui.edgeRouting === 'orthogonal' ? orthogonalPointsByRelationshipId.get(r.id) ?? null : null;
+  const points: Point[] =
+    orthoPoints ??
+    [
+      { x: x1, y: y1 },
+      { x: x2, y: y2 },
+    ];
+
+  const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${Math.round(p.x)} ${Math.round(p.y)}`).join(' ');
+
+  const isSelected = selectedEdgeId === r.id || (selection.kind === 'relationship' && selection.relationshipId === r.id);
+
+  const relKind = kindFromTypeId(String(r.type));
+  const relNotation = relKind === 'uml' ? umlNotation : relKind === 'bpmn' ? bpmnNotation : archimateNotation;
+  const relStyle = relNotation.getRelationshipStyle(r as any);
+  const dasharray = relStyle.line?.dasharray ?? dasharrayForPattern(relStyle.line?.pattern);
+  const markerStart = markerUrl(relStyle.markerStart, isSelected);
+  const markerEnd = markerUrl(relStyle.markerEnd, isSelected);
+  const mid = relStyle.midLabel ? polylineMidPoint(points) : null;
+
+  return (
+    <g key={r.id} className="analysisSandboxEdge">
+      <path
+        className="diagramRelHit"
+        d={d}
+        style={{ strokeWidth: 16 }}
+        onClick={(e) => {
+          e.stopPropagation();
+
+          // Toggle relationship selection: clicking the selected edge again clears selection.
+          if (selectedEdgeId === r.id) {
+            // Clear any lingering focus ring (Safari can be sticky).
+            (document.activeElement as any)?.blur?.();
+            setSelectedEdgeId(null);
+            setPairSelection([]);
+            onClearSelection();
+            return;
+          }
+
+          setSelectedEdgeId(r.id);
+          setPairSelection([]);
+          onSelectRelationship(r.id);
+        }}
+      />
+      <path
+        className={'diagramRelLine' + (isSelected ? ' isSelected' : '')}
+        d={d}
+        markerStart={markerStart}
+        markerEnd={markerEnd}
+        strokeDasharray={dasharray ?? undefined}
+      />
+
+      {mid ? (
+        <text
+          x={mid.x}
+          y={mid.y - 6}
+          fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+          fontSize={12}
+          fontWeight={800}
+          fill="rgba(0,0,0,0.65)"
+          textAnchor="middle"
+          pointerEvents="none"
+        >
+          {relStyle.midLabel}
+        </text>
+      ) : null}
+    </g>
+  );
+})}
+
 
           {nodes.map((n) => {
             const el = model.elements[n.elementId];

@@ -683,6 +683,9 @@ useEffect(() => {
         suppressNextBackgroundClickRef.current = false;
         return;
       }
+      // Clear any focus ring that might linger on previously clicked SVG elements (notably relationships).
+      // Some browsers (e.g. Safari) can keep a focus outline even after selection state is cleared.
+      (document.activeElement as any)?.blur?.();
       setSelectedEdgeId(null);
       setPairSelection([]);
       onClearSelection();
@@ -1095,6 +1098,15 @@ useEffect(() => {
                 className={`analysisSandboxEdge ${selectedEdgeId === r.id ? 'isSelected' : ''}`}
                 onClick={(e) => {
                   e.stopPropagation();
+                  // Toggle relationship selection: clicking the selected edge again clears selection.
+                  if (selectedEdgeId === r.id) {
+	                    // Clear any focus ring that might linger on the clicked SVG element.
+	                    (e.currentTarget as any)?.blur?.();
+                    setSelectedEdgeId(null);
+                    setPairSelection([]);
+                    onClearSelection();
+                    return;
+                  }
                   setSelectedEdgeId(r.id);
                   setPairSelection([]);
                   onSelectRelationship(r.id);

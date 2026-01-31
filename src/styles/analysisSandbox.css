@@ -25,6 +25,12 @@
   cursor: pointer;
 }
 
+/* Avoid persistent browser focus outlines on SVG edges (notably in Safari) */
+.analysisSandboxEdge:focus,
+.analysisSandboxEdge:focus-visible {
+  outline: none;
+}
+
 .analysisSandboxEdge.isSelected line {
   stroke: #111;
   stroke-width: 2.2;

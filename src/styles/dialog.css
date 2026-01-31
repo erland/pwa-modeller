@@ -69,6 +69,7 @@
 .textArea,
 .selectInput {
   width: 100%;
+  box-sizing: border-box;
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid var(--border-2);
@@ -85,4 +86,52 @@
   margin: 0;
   font-size: 12px;
   opacity: 0.75;
+}
+
+/*
+ * Analysis Sandbox insert dialog
+ * Keep controls compact and avoid overlap in narrow dialog widths.
+ */
+.sandboxInsertRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.sandboxInsertField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sandboxInsertField .textInput,
+.sandboxInsertField .selectInput {
+  min-width: 0;
+}
+
+.sandboxInsertField--mode {
+  flex: 0 1 260px;
+  min-width: 180px;
+}
+
+.sandboxInsertField--k {
+  flex: 0 0 96px;
+  min-width: 96px;
+}
+
+.sandboxInsertField--maxHops {
+  flex: 0 0 120px;
+  min-width: 120px;
+}
+
+.sandboxInsertField--depth {
+  flex: 0 0 96px;
+  min-width: 96px;
+}
+
+.sandboxInsertField--direction {
+  flex: 1 1 200px;
+  min-width: 180px;
 }

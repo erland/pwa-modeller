@@ -149,7 +149,6 @@ export function SandboxInsertDialog(props: Props) {
 
   // List usability
   const [search, setSearch] = useState('');
-  const [showNewOnly, setShowNewOnly] = useState(true);
   const selectedIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -164,7 +163,6 @@ export function SandboxInsertDialog(props: Props) {
     setError(null);
 
     setSearch('');
-    setShowNewOnly(true);
 
     if (props.kind === 'intermediates') {
       setMode(props.initialOptions.mode);
@@ -247,11 +245,12 @@ export function SandboxInsertDialog(props: Props) {
           if (candidateMap.has(id)) continue;
           const el = model.elements[id];
           if (!el) continue;
+          if (existingSet.has(id)) continue;
           candidateMap.set(id, {
             id,
             name: el.name || '(unnamed)',
             type: el.type,
-            alreadyInSandbox: existingSet.has(id),
+            alreadyInSandbox: false,
           });
         }
       }
@@ -316,12 +315,13 @@ export function SandboxInsertDialog(props: Props) {
       for (const id of g.elementIds) {
         const el = model.elements[id];
         if (!el) continue;
-        candidateMap.set(id, {
-          id,
-          name: el.name || '(unnamed)',
-          type: el.type,
-          alreadyInSandbox: existingSet.has(id),
-        });
+        if (existingSet.has(id)) continue;
+          candidateMap.set(id, {
+            id,
+            name: el.name || '(unnamed)',
+            type: el.type,
+            alreadyInSandbox: false,
+          });
       }
     }
     const candidates = Array.from(candidateMap.values()).sort(
@@ -368,12 +368,11 @@ export function SandboxInsertDialog(props: Props) {
     if (!preview) return new Set<string>();
     const ids = new Set<string>();
     for (const c of preview.candidates) {
-      if (showNewOnly && c.alreadyInSandbox) continue;
       if (!matchesCandidate({ c, q: search })) continue;
       ids.add(c.id);
     }
     return ids;
-  }, [preview, search, showNewOnly]);
+  }, [preview, search]);
 
   const selectedNewCount = useMemo(() => {
     if (!preview) return 0;
@@ -474,23 +473,39 @@ export function SandboxInsertDialog(props: Props) {
           </div>
         )}
 
-        {props.kind === 'intermediates' ? (
-          <>
-            <div className="formRow">
-              <label htmlFor="sandbox-insert-mode">Mode</label>
-              <select
-                id="sandbox-insert-mode"
-                className="selectInput"
-                value={mode}
-                onChange={(e) => setMode(e.currentTarget.value as SandboxInsertIntermediatesMode)}
-              >
-                <option value="shortest">Shortest path</option>
-                <option value="topk">Top-K shortest paths</option>
-              </select>
-            </div>
+        <details
+  style={{
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    padding: 10,
+  }}
+>
+  <summary style={{ cursor: 'pointer', fontSize: 12, opacity: 0.85 }}>Filters</summary>
+  <div className="formGrid" style={{ marginTop: 10 }}>
+    {props.kind === 'intermediates' ? (
+      <div className="formRow">
+        <label>Path options</label>
+        <div className="sandboxInsertRow">
+          <div className="sandboxInsertField sandboxInsertField--mode">
+            <span className="crudHint" style={{ margin: 0 }}>
+              Mode
+            </span>
+            <select
+              id="sandbox-insert-mode"
+              className="selectInput"
+              value={mode}
+              onChange={(e) => setMode(e.currentTarget.value as SandboxInsertIntermediatesMode)}
+            >
+              <option value="shortest">Shortest path</option>
+              <option value="topk">Top-K shortest paths</option>
+            </select>
+          </div>
 
-            <div className="formRow">
-              <label htmlFor="sandbox-insert-k">K</label>
+          {mode === 'topk' ? (
+            <div className="sandboxInsertField sandboxInsertField--k">
+              <span className="crudHint" style={{ margin: 0 }}>
+                K
+              </span>
               <input
                 id="sandbox-insert-k"
                 className="textInput"
@@ -498,28 +513,51 @@ export function SandboxInsertDialog(props: Props) {
                 min={1}
                 max={10}
                 value={k}
-                disabled={mode !== 'topk'}
-                aria-disabled={mode !== 'topk'}
                 onChange={(e) => setK(Number(e.currentTarget.value))}
               />
             </div>
+          ) : null}
 
-            <div className="formRow">
-              <label htmlFor="sandbox-insert-maxhops">Max hops</label>
-              <input
-                id="sandbox-insert-maxhops"
-                className="textInput"
-                type="number"
-                min={1}
-                max={16}
-                value={maxHops}
-                onChange={(e) => setMaxHops(Number(e.currentTarget.value))}
-              />
-            </div>
-          </>
-        ) : (
-          <div className="formRow">
-            <label htmlFor="sandbox-related-depth">Depth</label>
+          <div className="sandboxInsertField sandboxInsertField--maxHops">
+            <span className="crudHint" style={{ margin: 0 }}>
+              Max hops
+            </span>
+            <input
+              id="sandbox-insert-maxhops"
+              className="textInput"
+              type="number"
+              min={1}
+              max={16}
+              value={maxHops}
+              onChange={(e) => setMaxHops(Number(e.currentTarget.value))}
+            />
+          </div>
+
+          <div className="sandboxInsertField sandboxInsertField--direction">
+            <span className="crudHint" style={{ margin: 0 }}>
+              Direction
+            </span>
+            <select
+              id="sandbox-insert-direction"
+              className="selectInput"
+              value={direction}
+              onChange={(e) => setDirection(e.currentTarget.value as SandboxAddRelatedDirection)}
+            >
+              <option value="both">Both</option>
+              <option value="outgoing">Outgoing</option>
+              <option value="incoming">Incoming</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    ) : (
+      <div className="formRow">
+        <label>Filters</label>
+        <div className="sandboxInsertRow">
+          <div className="sandboxInsertField sandboxInsertField--depth">
+            <span className="crudHint" style={{ margin: 0 }}>
+              Depth
+            </span>
             <input
               id="sandbox-related-depth"
               className="textInput"
@@ -530,63 +568,69 @@ export function SandboxInsertDialog(props: Props) {
               onChange={(e) => setDepth(Number(e.currentTarget.value))}
             />
           </div>
-        )}
 
-        <div className="formRow">
-          <label htmlFor="sandbox-insert-direction">Direction</label>
-          <select
-            id="sandbox-insert-direction"
-            className="selectInput"
-            value={direction}
-            onChange={(e) => setDirection(e.currentTarget.value as SandboxAddRelatedDirection)}
-          >
-            <option value="both">Both</option>
-            <option value="outgoing">Outgoing</option>
-            <option value="incoming">Incoming</option>
-          </select>
-        </div>
-
-        <div className="formRow">
-          <label>Relationship types</label>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => setEnabledTypes(allRelationshipTypes)}
-              disabled={allRelationshipTypes.length === 0}
-              aria-disabled={allRelationshipTypes.length === 0}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={() => setEnabledTypes([])}
-              disabled={allRelationshipTypes.length === 0}
-              aria-disabled={allRelationshipTypes.length === 0}
-            >
-              None
-            </button>
+          <div className="sandboxInsertField sandboxInsertField--direction">
             <span className="crudHint" style={{ margin: 0 }}>
-              {enabledTypes.length}/{allRelationshipTypes.length}
+              Direction
             </span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-            {allRelationshipTypes.map((t) => {
-              const checked = enabledTypes.includes(t);
-              return (
-                <label key={t} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => setEnabledTypes((prev) => toggleString(prev, t))}
-                  />
-                  <span>{t}</span>
-                </label>
-              );
-            })}
+            <select
+              id="sandbox-related-direction"
+              className="selectInput"
+              value={direction}
+              onChange={(e) => setDirection(e.currentTarget.value as SandboxAddRelatedDirection)}
+            >
+              <option value="both">Both</option>
+              <option value="outgoing">Outgoing</option>
+              <option value="incoming">Incoming</option>
+            </select>
           </div>
         </div>
+      </div>
+    )}
+
+    <div className="formRow">
+      <label>Relationship types</label>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="miniLinkButton"
+          onClick={() => setEnabledTypes(allRelationshipTypes)}
+          disabled={allRelationshipTypes.length === 0}
+          aria-disabled={allRelationshipTypes.length === 0}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          className="miniLinkButton"
+          onClick={() => setEnabledTypes([])}
+          disabled={allRelationshipTypes.length === 0}
+          aria-disabled={allRelationshipTypes.length === 0}
+        >
+          None
+        </button>
+        <span className="crudHint" style={{ margin: 0 }}>
+          {enabledTypes.length}/{allRelationshipTypes.length}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
+        {allRelationshipTypes.map((t) => {
+          const checked = enabledTypes.includes(t);
+          return (
+            <label key={t} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => setEnabledTypes((prev) => toggleString(prev, t))}
+              />
+              <span>{t}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+</details>
       </div>
 
       <div style={{ marginTop: 12 }}>
@@ -600,10 +644,6 @@ export function SandboxInsertDialog(props: Props) {
             placeholder="Search candidates…"
             onChange={(e) => setSearch(e.currentTarget.value)}
           />
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-            <input type="checkbox" checked={showNewOnly} onChange={() => setShowNewOnly((v) => !v)} />
-            <span>New only</span>
-          </label>
           <span className="crudHint" style={{ margin: 0 }}>
             Preview updates automatically
           </span>
@@ -679,7 +719,6 @@ export function SandboxInsertDialog(props: Props) {
                   const visibleIntermediates = p.intermediates.filter((id) => {
                     const c = candidateById.get(id);
                     if (!c) return false;
-                    if (showNewOnly && c.alreadyInSandbox) return false;
                     return matchesCandidate({ c, q: search });
                   });
 
@@ -753,7 +792,6 @@ export function SandboxInsertDialog(props: Props) {
                   const visibleIds = g.elementIds.filter((id) => {
                     const c = candidateById.get(id);
                     if (!c) return false;
-                    if (showNewOnly && c.alreadyInSandbox) return false;
                     return matchesCandidate({ c, q: search });
                   });
                   const totalNew = g.elementIds.filter((id) => !existingSet.has(id)).length;

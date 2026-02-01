@@ -1,5 +1,6 @@
 import type { TraversalStep } from '../../../domain';
 import type { AnalysisEdge } from '../../../domain/analysis/graph';
+import { isExplicitlyUndirected } from '../../../domain/analysis/directedness';
 
 export function docSnippet(doc: string | undefined): string {
   const t = (doc ?? '').trim();
@@ -23,8 +24,7 @@ export function escapeCsvValue(v: unknown): string {
 }
 
 export function relationshipIsExplicitlyUndirected(s: TraversalStep): boolean {
-  const attrs = s.relationship?.attrs as unknown as { isDirected?: boolean } | undefined;
-  return attrs?.isDirected === false;
+  return isExplicitlyUndirected(s.relationship?.attrs);
 }
 
 export function edgeFromStep(s: TraversalStep): AnalysisEdge {

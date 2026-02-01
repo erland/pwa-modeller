@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 
 import type { AnalysisDirection, RelationshipType, NodeMetricId, Model, PathsBetweenResult, RelatedElementsResult } from '../../domain';
-import { buildAnalysisGraph, computeNodeMetric, getElementTypeLabel, getRelationshipTypeLabel, readNumericPropertyFromElement } from '../../domain';
-import type { AnalysisEdge } from '../../domain/analysis/graph';
+import { buildAnalysisGraph, computeNodeMetric, readNumericPropertyFromElement } from '../../domain';
 import type { TraversalStep } from '../../domain/analysis/traverse';
 import type { ArchimateLayer, ElementType } from '../../domain/types';
 import type { ModelKind } from '../../domain/types';
@@ -18,6 +17,8 @@ import { useElementBgVar } from '../diagram/hooks/useElementBgVar';
 import { MiniColumnGraph } from './MiniColumnGraph';
 import type { MiniColumnGraphTooltip, MiniColumnGraphEdge, MiniColumnGraphNode } from './MiniColumnGraph';
 
+import { buildElementTooltip, buildRelationshipTooltipFromTraversalStep } from './tooltip/buildTooltips';
+
 const ARCHIMATE_LAYER_BG_VAR: Record<ArchimateLayer, string> = {
   Strategy: 'var(--arch-layer-strategy)',
   Motivation: 'var(--arch-layer-motivation)',
@@ -28,13 +29,6 @@ const ARCHIMATE_LAYER_BG_VAR: Record<ArchimateLayer, string> = {
   ImplementationMigration: 'var(--arch-layer-implementation)'
 };
 
-function docSnippet(doc: string | undefined): string {
-  const t = (doc ?? '').trim();
-  if (!t) return '';
-  if (t.length <= 240) return t;
-  return `${t.slice(0, 239)}…`;
-}
-
 function selectionToRelationshipId(sel: Selection | null | undefined): string | null {
   if (!sel) return null;
   return sel.kind === 'relationship' ? sel.relationshipId : null;
@@ -43,23 +37,6 @@ function selectionToRelationshipId(sel: Selection | null | undefined): string | 
 function selectionToElementId(sel: Selection | null | undefined): string | null {
   if (!sel) return null;
   return sel.kind === 'element' ? sel.elementId : null;
-}
-
-function relationshipIsExplicitlyUndirected(s: TraversalStep): boolean {
-  const attrs = s.relationship?.attrs as unknown as { isDirected?: boolean } | undefined;
-  return attrs?.isDirected === false;
-}
-
-function edgeFromStep(s: TraversalStep): AnalysisEdge {
-  return {
-    relationshipId: s.relationshipId,
-    relationshipType: s.relationshipType,
-    relationship: s.relationship,
-    fromId: s.fromId,
-    toId: s.toId,
-    reversed: s.reversed,
-    undirected: relationshipIsExplicitlyUndirected(s)
-  };
 }
 
 function edgeIdForStep(step: TraversalStep) {
@@ -170,47 +147,10 @@ export function AnalysisMiniGraph({
   const selectedRelationshipId = selectionToRelationshipId(selection);
   const selectedElementId = selectionToElementId(selection);
 
-  const elementTooltip = (elementId: string): MiniColumnGraphTooltip | null => {
-    const el = model.elements[elementId];
-    if (!el) return null;
+  const elementTooltip = (elementId: string): MiniColumnGraphTooltip | null => buildElementTooltip(adapter, model, elementId);
 
-    const label = labelForId(elementId);
-    const facets = adapter.getNodeFacetValues(el, model);
-
-    const lines: string[] = [];
-    lines.push(`Id: ${elementId}`);
-
-    const rawType = String((facets.type ?? facets.elementType ?? el.type) ?? '');
-    const typeLabel = rawType ? getElementTypeLabel(rawType) : '';
-    if (typeLabel) lines.push(`Type: ${typeLabel}`);
-
-    const layer = String((facets.archimateLayer ?? (el as unknown as { layer?: string }).layer) ?? '');
-    if (layer) lines.push(`Layer: ${layer}`);
-
-    const doc = docSnippet(el.documentation);
-    if (doc) lines.push(`Documentation: ${doc}`);
-
-    return { title: label || String(el.name ?? '') || '(unnamed)', lines };
-  };
-
-  const relationshipTooltip = (s: TraversalStep): MiniColumnGraphTooltip | null => {
-    const r = s.relationship;
-    if (!r) return null;
-    const src = r.sourceElementId || s.fromId;
-    const tgt = r.targetElementId || s.toId;
-    const doc = docSnippet(r.documentation);
-    const analysisEdge = edgeFromStep(s);
-    const label = adapter.getEdgeLabel(analysisEdge, model);
-    const title = r.name && r.name.trim() ? r.name : label;
-
-    const lines: string[] = [];
-    lines.push(`Type: ${r.type !== 'Unknown' ? getRelationshipTypeLabel(r.type) : r.unknownType?.name ? `Unknown: ${r.unknownType.name}` : 'Unknown'}`);
-    if (src) lines.push(`From: ${labelForId(src)}`);
-    if (tgt) lines.push(`To: ${labelForId(tgt)}`);
-    if (doc) lines.push(`Documentation: ${doc}`);
-
-    return { title: title || '(relationship)', lines };
-  };
+  const relationshipTooltip = (s: TraversalStep): MiniColumnGraphTooltip | null =>
+    buildRelationshipTooltipFromTraversalStep(adapter, model, s, labelForId);
 
   // Edge lookup for selection + tooltip.
   const edgeById = useMemo(() => {

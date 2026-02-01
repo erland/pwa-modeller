@@ -2,7 +2,9 @@ import type { AnalysisPath, Model, TraversalStep } from '../../../domain';
 import { getElementTypeLabel } from '../../../domain';
 import type { AnalysisAdapter } from '../../../analysis/adapters/AnalysisAdapter';
 
-import { docSnippet, edgeFromStep, stringFacetValue } from './analysisResultHelpers';
+import { edgeFromStep, stringFacetValue } from './analysisResultHelpers';
+
+import { buildElementTooltip } from '../tooltip/buildTooltips';
 
 export type AnalysisResultFormatters = {
   elementTooltip: (elementId: string) => { title: string; lines: string[] } | null;
@@ -14,19 +16,7 @@ export type AnalysisResultFormatters = {
 };
 
 export function createAnalysisResultFormatters(adapter: AnalysisAdapter, model: Model): AnalysisResultFormatters {
-  const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => {
-    const el = model.elements[elementId];
-    if (!el) return null;
-    const facets = adapter.getNodeFacetValues(el, model);
-    const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
-    const layer = String((facets.archimateLayer ?? el.layer) ?? '');
-    const doc = docSnippet(el.documentation);
-    const lines: string[] = [];
-    if (type) lines.push(`Type: ${type}`);
-    if (layer) lines.push(`Layer: ${layer}`);
-    if (doc) lines.push(`Documentation: ${doc}`);
-    return { title: el.name || '(unnamed)', lines };
-  };
+  const elementTooltip = (elementId: string): { title: string; lines: string[] } | null => buildElementTooltip(adapter, model, elementId);
 
   const nodeLabel = (id: string): string => {
     const el = model.elements[id];

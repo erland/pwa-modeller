@@ -1,4 +1,5 @@
 import type { Element, Model, Relationship, RelationshipType } from '../types';
+import { isExplicitlyUndirected } from './directedness';
 
 export type AnalysisEdge = {
   relationshipId: string;
@@ -22,8 +23,7 @@ export type AnalysisGraph = {
 function relationshipIsExplicitlyUndirected(r: Relationship): boolean {
   // Notation-agnostic: if the relationship has an attrs.isDirected flag and it is false,
   // treat it as undirected for traversal.
-  const attrs = r.attrs as unknown as { isDirected?: boolean } | undefined;
-  return attrs?.isDirected === false;
+  return isExplicitlyUndirected(r.attrs);
 }
 
 function pushMapArray<K, V>(m: Map<K, V[]>, k: K, v: V): void {

@@ -13,6 +13,8 @@ import type { MiniColumnGraphTooltip } from '../MiniColumnGraph';
 import { MiniColumnGraph } from '../MiniColumnGraph';
 import { AnalysisSection } from '../layout/AnalysisSection';
 
+import { buildElementTooltip, buildRelationshipTooltipFromRelationshipId } from '../tooltip/buildTooltips';
+
 type Props = {
   model: Model;
   modelKind: ModelKind;
@@ -63,43 +65,18 @@ export function TraceabilityMiniGraph({
     [model]
   );
 
-  const elementTooltip = (elementId: string): MiniColumnGraphTooltip | null => {
-    const el = model.elements[elementId];
-    if (!el) return null;
-
-    const fullLabel = labelForId(elementId);
-    const facets = adapter.getNodeFacetValues(el, model);
-    const type = String((facets.elementType ?? facets.type ?? el.type) ?? '');
-    const layer = String((facets.archimateLayer ?? (el as unknown as { layer?: string }).layer) ?? '');
-    const doc = String(el.documentation ?? '').trim();
-
-    const lines: string[] = [];
-    lines.push(`Id: ${elementId}`);
-    if (type) lines.push(`Type: ${type}`);
-    if (layer) lines.push(`Layer: ${layer}`);
-    if (doc) lines.push(`Documentation: ${doc.length > 240 ? `${doc.slice(0, 239)}…` : doc}`);
-
-    return { title: fullLabel || String(el.name ?? '') || '(unnamed)', lines };
-  };
+  const elementTooltip = (elementId: string): MiniColumnGraphTooltip | null => buildElementTooltip(adapter, model, elementId);
 
   const edgeTooltip = (edgeId: string): MiniColumnGraphTooltip | null => {
     const e = edgesById[edgeId];
     if (!e) return null;
-
-    const from = labelForId(e.from);
-    const to = labelForId(e.to);
-
-    const rel = e.relationshipId ? model.relationships[e.relationshipId] : undefined;
-    const relName = rel?.name ? String(rel.name) : '';
-    const relType = rel?.type ? String(rel.type) : (e.type ? String(e.type) : 'Relationship');
-    const relDoc = String(rel?.documentation ?? '').trim();
-
-    const title = relName ? `${relType} — ${relName}` : relType;
-    const lines: string[] = [`From: ${from}`, `To: ${to}`];
-    if (e.relationshipId) lines.push(`Id: ${e.relationshipId}`);
-    if (relDoc) lines.push(`Documentation: ${relDoc.length > 240 ? `${relDoc.slice(0, 239)}…` : relDoc}`);
-
-    return { title, lines };
+    return buildRelationshipTooltipFromRelationshipId(model, {
+      relationshipId: e.relationshipId,
+      relationshipType: e.type,
+      fromId: e.from,
+      toId: e.to,
+      labelForId
+    });
   };
 
   const renderInlineControls = (nodeId: string, nodeWidth: number) => {

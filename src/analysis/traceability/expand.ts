@@ -9,14 +9,14 @@ import {
   normalizeRelationshipTypeFilter
 } from '../../domain/analysis/filters';
 import { getTraversalSteps } from '../../domain/analysis/traverse';
+import { isExplicitlyUndirected } from '../../domain/analysis/directedness';
 import type { Element, ElementType, Model, Relationship, RelationshipType } from '../../domain/types';
 import type { ExpandRequest, TraceEdge, TraceExpansionPatch, TraceFrontier, TraceNode } from '../../domain/analysis/traceability/types';
 
 function relationshipIsExplicitlyUndirected(r: Relationship): boolean {
   // Notation-agnostic: if the relationship has an attrs.isDirected flag and it is false,
   // treat it as undirected for traversal.
-  const attrs = r.attrs as unknown as { isDirected?: boolean } | undefined;
-  return attrs?.isDirected === false;
+  return isExplicitlyUndirected(r.attrs);
 }
 
 function pushMapArray<K, V>(m: Map<K, V[]>, k: K, v: V): void {

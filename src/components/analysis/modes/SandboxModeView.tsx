@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DragEvent, MouseEvent, PointerEvent } from 'react';
 
-import type { Model, ViewNodeLayout } from '../../../domain';
+import type { Model, Relationship, ViewNodeLayout } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import { RelationshipMarkers } from '../../diagram/RelationshipMarkers';
 import type {
@@ -28,10 +28,24 @@ import '../../../styles/analysisSandbox.css';
 
 import { SaveSandboxAsDiagramDialog } from './SaveSandboxAsDiagramDialog';
 import { SandboxInsertDialog } from './SandboxInsertDialog';
+import type { SandboxRenderableRelationship } from './SandboxEdgesLayer';
 import { SandboxEdgesLayer } from './SandboxEdgesLayer';
 import { SandboxNodesLayer } from './SandboxNodesLayer';
 import { useSandboxViewport } from './useSandboxViewport';
 import { SANDBOX_GRID_SIZE, SANDBOX_NODE_H, SANDBOX_NODE_W } from './sandboxConstants';
+
+function blurDocumentActiveElement(): void {
+  const active = document.activeElement;
+  if (!active) return;
+  if (active instanceof HTMLElement) {
+    active.blur();
+    return;
+  }
+
+  // Some browsers can place focus on SVG elements; blur() isn't always typed on Element.
+  const maybe = active as unknown as { blur?: () => void };
+  if (typeof maybe.blur === 'function') maybe.blur();
+}
 
 function layoutForSandboxNode(n: SandboxNode): ViewNodeLayout {
   return { elementId: n.elementId, x: n.x, y: n.y, width: SANDBOX_NODE_W, height: SANDBOX_NODE_H };
@@ -228,13 +242,24 @@ export function SandboxModeView({
   const canAddRelated = useMemo(() => {
     return addRelatedAnchors.length > 0;
   }, [addRelatedAnchors.length]);
-  const baseVisibleRelationships = useMemo(() => {
+
+  const baseVisibleRelationships = useMemo<SandboxRenderableRelationship[]>(() => {
     const ids = new Set(nodes.map((n) => n.elementId));
-    const rels = Object.values(model.relationships).filter((r) => {
-      if (!r.sourceElementId || !r.targetElementId) return false;
-      return ids.has(r.sourceElementId) && ids.has(r.targetElementId);
-    });
-    return rels.sort((a, b) => a.id.localeCompare(b.id));
+    const rels = Object.values(model.relationships).filter(
+      (r): r is Relationship & { sourceElementId: string; targetElementId: string } => {
+        if (!r.sourceElementId || !r.targetElementId) return false;
+        return ids.has(r.sourceElementId) && ids.has(r.targetElementId);
+      }
+    );
+
+    return rels
+      .map((r) => ({
+        id: r.id,
+        type: String(r.type),
+        sourceElementId: r.sourceElementId,
+        targetElementId: r.targetElementId,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
   }, [model.relationships, nodes]);
 
   const availableRelationshipTypes = useMemo(() => {
@@ -321,7 +346,7 @@ export function SandboxModeView({
 
       const obstacles = obstacleRects
         .filter((o) => o.id !== sId && o.id !== tId)
-        .map(({ id: _id, ...rect }) => rect);
+        .map(({ x, y, w, h }) => ({ x, y, w, h }));
 
       obstaclesById.set(r.id, obstacles);
 
@@ -352,12 +377,17 @@ export function SandboxModeView({
 
   const selectedEdge = useMemo(() => {
     if (!selectedEdgeId) return null;
-    const r = (model.relationships as Record<string, any>)[selectedEdgeId];
+    const r = (model.relationships as Record<string, Relationship | undefined>)[selectedEdgeId];
     if (!r) return null;
     if (!r.sourceElementId || !r.targetElementId) return null;
     if (!nodeById.has(r.sourceElementId)) return null;
     if (!nodeById.has(r.targetElementId)) return null;
-    return r as { id: string; type: string; sourceElementId: string; targetElementId: string };
+    return {
+      id: r.id,
+      type: String(r.type),
+      sourceElementId: r.sourceElementId,
+      targetElementId: r.targetElementId,
+    };
   }, [model.relationships, nodeById, selectedEdgeId]);
 
   const onEdgeHitClick = useCallback(
@@ -367,7 +397,7 @@ export function SandboxModeView({
       // Toggle relationship selection: clicking the selected edge again clears selection.
       if (selectedEdgeId === relationshipId) {
         // Clear any lingering focus ring (Safari can be sticky).
-        (document.activeElement as any)?.blur?.();
+        blurDocumentActiveElement();
         setSelectedEdgeId(null);
         setPairSelection([]);
         onClearSelection();
@@ -453,7 +483,7 @@ export function SandboxModeView({
       onAddNodeAt(id, x, y);
       onSelectElement(id);
     },
-    [model.elements, onAddNodeAt, onSelectElement]
+    [clientToWorld, model.elements, onAddNodeAt, onSelectElement]
   );
 
   const onOpenInsertBetweenDialog = useCallback(() => {
@@ -482,12 +512,12 @@ export function SandboxModeView({
       if (consumeSuppressNextBackgroundClick()) return;
       // Clear any focus ring that might linger on previously clicked SVG elements (notably relationships).
       // Some browsers (e.g. Safari) can keep a focus outline even after selection state is cleared.
-      (document.activeElement as any)?.blur?.();
+      blurDocumentActiveElement();
       setSelectedEdgeId(null);
       setPairSelection([]);
       onClearSelection();
     },
-    [onClearSelection]
+    [consumeSuppressNextBackgroundClick, onClearSelection]
   );
 
   const onClickNode = useCallback(
@@ -862,7 +892,7 @@ export function SandboxModeView({
           ) : null}
 
           <SandboxEdgesLayer
-            renderedRelationships={renderedRelationships as any}
+            renderedRelationships={renderedRelationships}
             nodeById={nodeById}
             edgeRouting={ui.edgeRouting}
             orthogonalPointsByRelationshipId={orthogonalPointsByRelationshipId}

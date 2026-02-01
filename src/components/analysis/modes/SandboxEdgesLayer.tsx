@@ -16,6 +16,7 @@ export type SandboxRenderableRelationship = {
   type: string;
   sourceElementId: string;
   targetElementId: string;
+  attrs?: unknown;
 };
 
 export function SandboxEdgesLayer({
@@ -68,7 +69,7 @@ export function SandboxEdgesLayer({
 
         const relKind = kindFromTypeId(String(r.type));
         const relNotation = relKind === 'uml' ? umlNotation : relKind === 'bpmn' ? bpmnNotation : archimateNotation;
-        const relStyle = relNotation.getRelationshipStyle(r as any);
+        const relStyle = relNotation.getRelationshipStyle({ type: String(r.type), attrs: r.attrs });
         const dasharray = relStyle.line?.dasharray ?? dasharrayForPattern(relStyle.line?.pattern);
         const markerStart = markerUrl(relStyle.markerStart, isSelected);
         const markerEnd = markerUrl(relStyle.markerEnd, isSelected);

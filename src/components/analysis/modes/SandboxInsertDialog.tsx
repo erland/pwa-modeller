@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Model } from '../../../domain';
+import type { Model, ModelKind } from '../../../domain';
 import {
   getElementTypeLabel,
   getRelationshipTypeLabel,
@@ -87,7 +87,7 @@ export function SandboxInsertDialog(props: Props) {
   }, [model]);
 
   const relationshipTypesForDialog = useMemo(() => {
-    const kinds = new Set<string>();
+    const kinds = new Set<ModelKind>();
     if (props.kind === 'intermediates') {
       const s = model.elements[props.sourceElementId];
       const t = model.elements[props.targetElementId];
@@ -106,7 +106,7 @@ export function SandboxInsertDialog(props: Props) {
     const allowed = new Set<string>();
     for (const k of kinds) {
       if (k === 'uml' || k === 'bpmn' || k === 'archimate') {
-        for (const rt of getRelationshipTypesForKind(k as any)) allowed.add(rt);
+        for (const rt of getRelationshipTypesForKind(k)) allowed.add(rt);
       }
     }
 

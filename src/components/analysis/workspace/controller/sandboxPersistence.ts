@@ -47,6 +47,20 @@ function uniqSortedStrings(values: unknown): string[] {
   return out;
 }
 
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function asRelationshipVisibilityMode(value: unknown): SandboxRelationshipVisibilityMode {
+  return value === 'all' || value === 'types' || value === 'explicit' ? value : 'all';
+}
+
+function asAddRelatedDirection(value: unknown): SandboxAddRelatedDirection {
+  return value === 'both' || value === 'incoming' || value === 'outgoing' ? value : 'both';
+}
+
+
 export function loadPersistedSandboxState(modelId: string): PersistedSandboxStateV1 | null {
   const ss = safeGetSessionStorage();
   if (!ss) return null;
@@ -54,30 +68,41 @@ export function loadPersistedSandboxState(modelId: string): PersistedSandboxStat
   if (!raw) return null;
 
   try {
-    const parsed = JSON.parse(raw) as any;
-    if (!parsed || parsed.v !== 1) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed) || parsed['v'] !== 1) return null;
 
-    const inNodes: any[] = Array.isArray(parsed.nodes) ? parsed.nodes : [];
+    const inNodes: unknown[] = Array.isArray(parsed['nodes']) ? (parsed['nodes'] as unknown[]) : [];
     const nodes: SandboxNode[] = inNodes
-      .filter((n) => n && typeof n.elementId === 'string' && typeof n.x === 'number' && typeof n.y === 'number')
-      .map((n) => ({ elementId: n.elementId, x: n.x, y: n.y, pinned: Boolean(n.pinned) }));
+      .filter(
+        (n): n is Record<string, unknown> =>
+          isRecord(n) &&
+          typeof n['elementId'] === 'string' &&
+          typeof n['x'] === 'number' &&
+          typeof n['y'] === 'number'
+      )
+      .map((n) => ({
+        elementId: n['elementId'] as string,
+        x: n['x'] as number,
+        y: n['y'] as number,
+        pinned: Boolean(n['pinned']),
+      }));
 
-    const rel = parsed.relationships ?? {};
+    const rel = isRecord(parsed['relationships']) ? (parsed['relationships'] as Record<string, unknown>) : {};
     const relationships = {
       show: Boolean(rel.show),
-      mode: (rel.mode as SandboxRelationshipVisibilityMode) ?? 'all',
+      mode: asRelationshipVisibilityMode(rel['mode']),
       enabledTypes: uniqSortedStrings(rel.enabledTypes),
       explicitIds: uniqSortedStrings(rel.explicitIds),
     };
 
-    const ar = parsed.addRelated ?? {};
+    const ar = isRecord(parsed['addRelated']) ? (parsed['addRelated'] as Record<string, unknown>) : {};
     const addRelated = {
       depth: typeof ar.depth === 'number' ? ar.depth : 1,
-      direction: (ar.direction as SandboxAddRelatedDirection) ?? 'both',
+      direction: asAddRelatedDirection(ar['direction']),
       enabledTypes: uniqSortedStrings(ar.enabledTypes),
     };
 
-    const ui = parsed.ui ?? {};
+    const ui = isRecord(parsed['ui']) ? (parsed['ui'] as Record<string, unknown>) : {};
     const er = ui.edgeRouting;
     const uiState = { edgeRouting: er === 'orthogonal' ? 'orthogonal' : 'straight' } as const;
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { Model } from '../../../../domain';
+import type { Element, Model, Relationship } from '../../../../domain';
 import { bfsKShortestPaths, bfsShortestPath, buildAdjacency } from '../../../../domain';
 import type { AnalysisMode } from '../../AnalysisQueryPanel';
 
@@ -697,7 +697,7 @@ export function useSandboxState(args: {
       const relationshipTypes = args.relationshipTypes ? uniqSortedStrings(args.relationshipTypes) : [];
 
       if (relationshipIds.length > 0) {
-        const validRelIds = relationshipIds.filter((id) => Boolean((model.relationships as Record<string, any>)[id]));
+        const validRelIds = relationshipIds.filter((id) => Boolean((model.relationships as Record<string, Relationship | undefined>)[id]));
         setRelationshipMode('explicit');
         setExplicitRelationshipIds(validRelIds);
         // Keep type filter as-is (not used in explicit mode).
@@ -767,7 +767,7 @@ const seedFromView = useCallback((viewId: string) => {
       const ids = prev.map((n) => n.elementId);
       const idSet = new Set(ids);
 
-      const isEdgeAllowed = (r: any): boolean => {
+      const isEdgeAllowed = (r: Relationship | undefined): boolean => {
         if (!showRelationships) return false;
         if (!r || !r.id || !r.type) return false;
         if (!r.sourceElementId || !r.targetElementId) return false;
@@ -782,14 +782,14 @@ const seedFromView = useCallback((viewId: string) => {
       for (const id of ids) adj.set(id, []);
       for (const r of Object.values(model.relationships)) {
         if (!isEdgeAllowed(r)) continue;
-        const s = (r as any).sourceElementId as string;
-        const t = (r as any).targetElementId as string;
+        const s = r.sourceElementId as string;
+        const t = r.targetElementId as string;
         adj.get(s)?.push(t);
         adj.get(t)?.push(s);
       }
 
       const nameOf = (id: string): string => {
-        const el = model.elements[id] as any;
+        const el = model.elements[id] as Element | undefined;
         const nm = el?.name;
         return typeof nm === 'string' && nm.length ? nm : id;
       };

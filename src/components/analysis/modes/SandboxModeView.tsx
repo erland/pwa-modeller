@@ -3,7 +3,6 @@ import type { DragEvent, MouseEvent, PointerEvent } from 'react';
 
 import type { Model, Relationship } from '../../../domain';
 import type { Selection } from '../../model/selection';
-import { RelationshipMarkers } from '../../diagram/RelationshipMarkers';
 import type {
   SandboxNode,
   SandboxAddRelatedDirection,
@@ -25,8 +24,9 @@ import '../../../styles/analysisSandbox.css';
 
 import { SaveSandboxAsDiagramDialog } from './SaveSandboxAsDiagramDialog';
 import { SandboxInsertDialog } from './SandboxInsertDialog';
-import { SandboxEdgesLayer } from './SandboxEdgesLayer';
-import { SandboxNodesLayer } from './SandboxNodesLayer';
+import { SandboxCanvas } from './SandboxCanvas';
+import { SandboxRelationshipsPanel } from './SandboxRelationshipsPanel';
+import { SandboxToolbar } from './SandboxToolbar';
 import { useSandboxViewport } from './useSandboxViewport';
 import { useSandboxRelationships } from './useSandboxRelationships';
 import { SANDBOX_GRID_SIZE, SANDBOX_NODE_H, SANDBOX_NODE_W } from './sandboxConstants';
@@ -250,10 +250,6 @@ export function SandboxModeView({
     onSetEnabledRelationshipTypes,
   });
 
-  const enabledTypeSet = useMemo(() => {
-    return new Set(relationships.enabledTypes);
-  }, [relationships.enabledTypes]);
-
   useEffect(() => {
     if (edgeOverflow > 0) setEdgeCapDismissed(false);
   }, [edgeOverflow]);
@@ -447,259 +443,27 @@ export function SandboxModeView({
 
   return (
     <div className="crudSection">
-      <div className="crudHeader">
-        <div>
-          <p className="crudTitle">Sandbox</p>
-          <p className="crudHint">
-            Drag elements from the Model Navigator into the canvas, or use the buttons to add and remove the current
-            selection.
-          </p>
-        </div>
-        <div className="rowActions">
-          <button
-            type="button"
-            className="miniLinkButton"
-            onClick={() => setSaveDialogOpen(true)}
-            disabled={!nodes.length}
-            aria-disabled={!nodes.length}
-            title="Create a new model diagram from the current sandbox layout"
-          >
-            Save as diagram…
-          </button>
-          <button
-            type="button"
-            className="miniLinkButton"
-            onClick={onClear}
-            disabled={!nodes.length}
-            aria-disabled={!nodes.length}
-            title="Clear all sandbox nodes"
-          >
-            Clear
-          </button>
-          {ui.lastInsertedElementIds.length > 0 ? (
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={onUndoLastInsert}
-              title="Undo the last insertion batch"
-            >
-              Undo
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {ui.warning || (edgeOverflow > 0 && !edgeCapDismissed) ? (
-        <div
-          role="alert"
-          style={{
-            marginTop: 10,
-            padding: '10px 12px',
-            border: '1px solid var(--border-1)',
-            borderRadius: 6,
-            background: 'rgba(255, 204, 0, 0.12)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <div style={{ fontSize: 12, lineHeight: 1.4 }}>
-            {ui.warning ? <div>{ui.warning}</div> : null}
-            {edgeOverflow > 0 && !edgeCapDismissed ? (
-              <div>
-                Relationship rendering capped at {ui.maxEdges}. Hidden {edgeOverflow} relationship(s).
-              </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className="miniLinkButton"
-            onClick={() => {
-              onClearWarning();
-              setEdgeCapDismissed(true);
-            }}
-            title="Dismiss warnings"
-          >
-            Dismiss
-          </button>
-        </div>
-      ) : null}
-
-      {ui.lastInsertedElementIds.length > 0 ? (
-        <div
-          role="status"
-          style={{
-            marginTop: 10,
-            padding: '8px 12px',
-            border: '1px solid var(--border-1)',
-            borderRadius: 6,
-            background: 'rgba(0, 128, 255, 0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-          }}
-        >
-          <div style={{ fontSize: 12, lineHeight: 1.4 }}>
-            Inserted {ui.lastInsertedElementIds.length} element(s).
-          </div>
-          <button
-            type="button"
-            className="miniLinkButton"
-            onClick={onUndoLastInsert}
-            title="Undo last insert"
-          >
-            Undo
-          </button>
-        </div>
-      ) : null}
-
-      <div className="toolbar" style={{ marginTop: 10 }}>
-        <div className="toolbarGroup" style={{ minWidth: 240 }}>
-          <label>Relationships</label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 }}>
-            <input
-              type="checkbox"
-              checked={relationships.show}
-              onChange={(e) => onSetShowRelationships(e.currentTarget.checked)}
-            />
-            <span>Show relationships</span>
-          </label>
-          {relationships.show ? (
-            <select
-              className="selectInput"
-              value={relationships.mode}
-              onChange={(e) => onSetRelationshipMode(e.currentTarget.value as SandboxRelationshipVisibilityMode)}
-              aria-label="Relationship visibility mode"
-            >
-              <option value="all">All</option>
-              <option value="types">Filter by type</option>
-              <option value="explicit">Explicit set</option>
-            </select>
-          ) : null}
-
-          {relationships.show ? (
-            <select
-              className="selectInput"
-              value={ui.edgeRouting}
-              onChange={(e) => onSetEdgeRouting(e.currentTarget.value as 'straight' | 'orthogonal')}
-              aria-label="Relationship routing style"
-              title="How to draw relationships in the sandbox"
-            >
-              <option value="straight">Edges: Straight</option>
-              <option value="orthogonal">Edges: Orthogonal</option>
-            </select>
-          ) : null}
-          <p className="crudHint" style={{ margin: 0 }}>
-            {relationships.show
-              ? relationships.mode === 'explicit'
-                ? `${baseVisibleRelationships.length} relationships between ${nodes.length}/${ui.maxNodes} node(s) · explicit: ${relationships.explicitIds.length} id(s)`
-                : `${baseVisibleRelationships.length} relationships between ${nodes.length}/${ui.maxNodes} node(s)`
-              : 'Relationships are hidden'}
-          </p>
-        </div>
-
-        <div className="toolbarGroup" style={{ minWidth: 220 }}>
-          <label>Layout</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={onAutoLayout}
-              disabled={!nodes.length}
-              aria-disabled={!nodes.length}
-              title="Auto layout sandbox nodes"
-            >
-              Auto layout
-            </button>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={fitToContent}
-              disabled={!nodes.length}
-              aria-disabled={!nodes.length}
-              title="Fit the canvas to the current sandbox content"
-            >
-              Fit to content
-            </button>
-            <button
-              type="button"
-              className="miniLinkButton"
-              onClick={resetView}
-              title="Reset canvas view"
-            >
-              Reset view
-            </button>
-          </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9 }}>
-            <input
-              type="checkbox"
-              checked={ui.persistEnabled}
-              onChange={(e) => onSetPersistEnabled(e.currentTarget.checked)}
-            />
-            <span>Persist sandbox in session</span>
-          </label>
-          <p className="crudHint" style={{ margin: 0 }}>
-            Caps: {ui.maxNodes} nodes / {ui.maxEdges} relationships
-          </p>
-        </div>
-
-        {relationships.show && relationships.mode === 'types' ? (
-          <div className="toolbarGroup" style={{ minWidth: 260, flex: '1 1 260px' }}>
-            <label>
-              Types ({selectedTypeCount}/{availableRelationshipTypes.length})
-            </label>
-            <div
-              style={{
-                maxHeight: 160,
-                overflow: 'auto',
-                border: '1px solid var(--border-1)',
-                borderRadius: 10,
-                padding: '8px 10px',
-                background: 'rgba(255,255,255,0.02)',
-              }}
-            >
-              {availableRelationshipTypes.length === 0 ? (
-                <p className="crudHint" style={{ margin: 0 }}>
-                  No relationships found between sandbox nodes.
-                </p>
-              ) : (
-                availableRelationshipTypes.map((t) => (
-                  <label
-                    key={t}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.9, marginBottom: 6 }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={enabledTypeSet.has(t)}
-                      onChange={() => onToggleEnabledRelationshipType(t)}
-                    />
-                    <span title={t}>{t}</span>
-                  </label>
-                ))
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="miniLinkButton"
-                onClick={() => onSetEnabledRelationshipTypes(availableRelationshipTypes)}
-                disabled={availableRelationshipTypes.length === 0}
-                aria-disabled={availableRelationshipTypes.length === 0}
-              >
-                All
-              </button>
-              <button type="button" className="miniLinkButton" onClick={() => onSetEnabledRelationshipTypes([])}>
-                None
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="toolbar" style={{ marginTop: 10 }}>
-        <div className="toolbarGroup" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+      <SandboxToolbar
+        nodesCount={nodes.length}
+        ui={ui}
+        edgeOverflow={edgeOverflow}
+        edgeCapDismissed={edgeCapDismissed}
+        onDismissWarnings={() => {
+          onClearWarning();
+          setEdgeCapDismissed(true);
+        }}
+        onSaveAsDiagram={() => setSaveDialogOpen(true)}
+        onClear={onClear}
+        onUndoLastInsert={onUndoLastInsert}
+        onAutoLayout={onAutoLayout}
+        onFitToContent={fitToContent}
+        onResetView={resetView}
+        onSetPersistEnabled={onSetPersistEnabled}
+        canAddSelected={canAddSelected}
+        canRemoveSelected={canRemoveSelected}
+        canAddRelated={canAddRelated}
+        canInsertIntermediates={canInsertIntermediates}
+        addSelectedButton={
           <button
             type="button"
             className="miniLinkButton"
@@ -710,7 +474,8 @@ export function SandboxModeView({
           >
             Add selected
           </button>
-
+        }
+        removeSelectedButton={
           <button
             type="button"
             className="miniLinkButton"
@@ -721,18 +486,24 @@ export function SandboxModeView({
           >
             Remove selected
           </button>
-
+        }
+        addRelatedButton={
           <button
             type="button"
             className="miniLinkButton"
             onClick={onOpenAddRelatedDialog}
             disabled={!canAddRelated}
             aria-disabled={!canAddRelated}
-            title={addRelatedAnchors.length ? 'Add related elements around the selected sandbox node(s)' : 'Select one or more sandbox nodes to expand'}
+            title={
+              addRelatedAnchors.length
+                ? 'Add related elements around the selected sandbox node(s)'
+                : 'Select one or more sandbox nodes to expand'
+            }
           >
             Add related…
           </button>
-
+        }
+        insertIntermediatesButton={
           <button
             type="button"
             className="miniLinkButton"
@@ -755,61 +526,52 @@ export function SandboxModeView({
           >
             Insert intermediate…
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="analysisSandboxRoot" aria-label="Analysis sandbox">
-        <svg
-          ref={svgRef}
-          className={`analysisSandboxSvg ${isDropTarget ? 'isDropTarget' : ''}`}
-          viewBox={viewBox}
-          preserveAspectRatio={viewBox ? 'xMinYMin meet' : undefined}
-          onPointerDown={onPointerDownCanvas}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUpOrCancel}
-          onPointerCancel={onPointerUpOrCancel}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          onClick={onCanvasClick}
-          role="img"
-          aria-label="Sandbox canvas"
-        >
-          <RelationshipMarkers />
-          {!nodes.length ? (
-            <g className="analysisSandboxEmpty">
-              <text x="50%" y="45%" textAnchor="middle">
-                Drop elements here
-              </text>
-              <text x="50%" y="55%" textAnchor="middle">
-                Tip: you can also select an element and press “Add selected”
-              </text>
-            </g>
-          ) : null}
+      <SandboxRelationshipsPanel
+        nodesCount={nodes.length}
+        maxNodes={ui.maxNodes}
+        relationships={relationships}
+        edgeRouting={ui.edgeRouting}
+        baseVisibleRelationshipsCount={baseVisibleRelationships.length}
+        availableRelationshipTypes={availableRelationshipTypes}
+        selectedTypeCount={selectedTypeCount}
+        enabledTypes={relationships.enabledTypes}
+        explicitIdsCount={relationships.explicitIds.length}
+        onSetShowRelationships={onSetShowRelationships}
+        onSetRelationshipMode={onSetRelationshipMode}
+        onSetEdgeRouting={onSetEdgeRouting}
+        onToggleEnabledRelationshipType={onToggleEnabledRelationshipType}
+        onSetEnabledRelationshipTypes={onSetEnabledRelationshipTypes}
+      />
 
-          <SandboxEdgesLayer
-            renderedRelationships={renderedRelationships}
-            nodeById={nodeById}
-            edgeRouting={ui.edgeRouting}
-            orthogonalPointsByRelationshipId={orthogonalPointsByRelationshipId}
-            selectedEdgeId={selectedEdgeId}
-            isRelationshipSelected={(relationshipId) => selection.kind === 'relationship' && selection.relationshipId === relationshipId}
-            onEdgeHitClick={onEdgeHitClick}
-          />
-
-
-          <SandboxNodesLayer
-            model={model}
-            nodes={nodes}
-            selectedElementId={selectedElementId}
-            pairAnchors={pairAnchors}
-            onPointerDownNode={onPointerDownNode}
-            onClickNode={onClickNode}
-            onDoubleClickNode={onSelectElement}
-          />
-
-        </svg>
-      </div>
+      <SandboxCanvas
+        svgRef={svgRef}
+        viewBox={viewBox ?? null}
+        isDropTarget={isDropTarget}
+        nodes={nodes}
+        model={model}
+        selectedElementId={selectedElementId}
+        pairAnchors={pairAnchors}
+        selection={selection}
+        nodeById={nodeById}
+        renderedRelationships={renderedRelationships}
+        edgeRouting={ui.edgeRouting}
+        orthogonalPointsByRelationshipId={orthogonalPointsByRelationshipId}
+        selectedEdgeId={selectedEdgeId}
+        onPointerDownCanvas={onPointerDownCanvas}
+        onPointerMove={onPointerMove}
+        onPointerUpOrCancel={onPointerUpOrCancel}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        onCanvasClick={onCanvasClick}
+        onEdgeHitClick={onEdgeHitClick}
+        onPointerDownNode={onPointerDownNode}
+        onClickNode={onClickNode}
+        onDoubleClickNode={onSelectElement}
+      />
 
       <SandboxInsertDialog
         kind="intermediates"

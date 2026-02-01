@@ -8,10 +8,7 @@ import type {
   SandboxNode,
   SandboxRelationshipVisibilityMode,
   SandboxAddRelatedDirection,
-  SandboxInsertIntermediatesMode,
   SandboxInsertIntermediatesOptions,
-  SandboxRelationshipsState,
-  SandboxUiState,
   SandboxState,
   SandboxActions
 } from './sandboxTypes';

@@ -509,7 +509,6 @@ export function SandboxInsertBetweenDialog(props: Props) {
           setEnabledTypes={setEnabledTypes}
           columns={2}
         />
-        </div>
       </div>
 
       <div style={{ marginTop: 12 }}>

@@ -18,7 +18,7 @@ import { Dialog } from '../../dialog/Dialog';
 import { computeIntermediatesPreview, computeRelatedPreview } from './sandboxInsert/computePreview';
 import { SandboxInsertElementList } from './sandboxInsert/SandboxInsertElementList';
 import { SandboxInsertRelationshipTypePicker } from './sandboxInsert/SandboxInsertRelationshipTypePicker';
-import type { Candidate, PreviewPath, PreviewState } from './sandboxInsert/types';
+import type { Candidate, PreviewState } from './sandboxInsert/types';
 import { clampInt, normalizeText, toggleString, uniqSortedStrings } from './sandboxInsert/utils';
 
 function matchesCandidate(args: { c: Candidate; q: string }): boolean {

@@ -31,10 +31,10 @@ import { SandboxInsertDialog } from './SandboxInsertDialog';
 import { SandboxEdgesLayer } from './SandboxEdgesLayer';
 import { SandboxNodesLayer } from './SandboxNodesLayer';
 import { useSandboxViewport } from './useSandboxViewport';
-import { SANDBOX_SANDBOX_GRID_SIZE, SANDBOX_SANDBOX_NODE_H, SANDBOX_SANDBOX_NODE_W } from './sandboxConstants';
+import { SANDBOX_GRID_SIZE, SANDBOX_NODE_H, SANDBOX_NODE_W } from './sandboxConstants';
 
 function layoutForSandboxNode(n: SandboxNode): ViewNodeLayout {
-  return { elementId: n.elementId, x: n.x, y: n.y, width: SANDBOX_SANDBOX_NODE_W, height: SANDBOX_SANDBOX_NODE_H };
+  return { elementId: n.elementId, x: n.x, y: n.y, width: SANDBOX_NODE_W, height: SANDBOX_NODE_H };
 }
 
 type DragState = {
@@ -125,7 +125,6 @@ export function SandboxModeView({
 }) {
   const {
     svgRef,
-    viewport,
     viewBox,
     fitToContent,
     resetView,
@@ -886,8 +885,8 @@ export function SandboxModeView({
         </svg>
       </div>
 
-	      <SandboxInsertDialog
-	        kind="intermediates"
+      <SandboxInsertDialog
+        kind="intermediates"
         isOpen={insertBetweenDialogOpen}
         model={model}
         maxNodes={ui.maxNodes}
@@ -896,15 +895,40 @@ export function SandboxModeView({
         contextLabel="Between"
         existingElementIds={nodes.map((n) => n.elementId)}
         allRelationshipTypes={allRelationshipTypes}
-           <SandboxNodesLayer
-            model={model}
-            nodes={nodes}
-            selectedElementId={selectedElementId}
-            pairAnchors={pairAnchors}
-            onPointerDownNode={onPointerDownNode}
-            onClickNode={onClickNode}
-            onDoubleClickNode={onSelectElement}
-          />
+        initialEnabledRelationshipTypes={addRelated.enabledTypes}
+        initialOptions={{ mode: insertMode, k: insertK, maxHops: insertMaxHops, direction: insertDirection }}
+        onCancel={() => setInsertBetweenDialogOpen(false)}
+        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
+          setInsertBetweenDialogOpen(false);
+          setInsertMode(options.mode);
+          setInsertK(options.k);
+          setInsertMaxHops(options.maxHops);
+          setInsertDirection(options.direction);
+
+          // Keep traversal settings consistent with the insert preview.
+          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
+
+          const src = insertBetweenEndpoints?.[0];
+          const dst = insertBetweenEndpoints?.[1];
+          if (!src || !dst) return;
+          onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
+        }}
+      />
+
+      <SandboxInsertDialog
+        kind="intermediates"
+        isOpen={insertFromEdgeDialogOpen}
+        model={model}
+        maxNodes={ui.maxNodes}
+        sourceElementId={insertFromEdgeEndpoints?.[0] ?? ''}
+        targetElementId={insertFromEdgeEndpoints?.[1] ?? ''}
+        contextLabel="From relationship"
+        contextRelationshipType={selectedEdge?.type}
+        existingElementIds={nodes.map((n) => n.elementId)}
+        allRelationshipTypes={allRelationshipTypes}
+        initialEnabledRelationshipTypes={addRelated.enabledTypes}
+        initialOptions={{ mode: insertMode, k: insertK, maxHops: insertMaxHops, direction: insertDirection }}
+        onCancel={() => setInsertFromEdgeDialogOpen(false)}
         onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
           setInsertFromEdgeDialogOpen(false);
           setInsertMode(options.mode);
@@ -921,7 +945,6 @@ export function SandboxModeView({
           onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
         }}
       />
-
 	      <SandboxInsertDialog
 	        kind="related"
 	        isOpen={addRelatedDialogOpen}

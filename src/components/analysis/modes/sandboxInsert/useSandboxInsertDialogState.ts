@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Model, ModelKind } from '../../../../domain';
-import {
-  getRelationshipTypesForKind,
-  kindFromTypeId,
-} from '../../../../domain';
+import type { Model } from '../../../../domain';
 import type {
   SandboxAddRelatedDirection,
   SandboxInsertIntermediatesMode,
@@ -12,16 +8,17 @@ import type {
 } from '../../workspace/controller/sandboxTypes';
 
 import { computeIntermediatesPreview, computeRelatedPreview } from './computePreview';
+import { buildCandidateById, computeVisibleCandidateIds, countSelectedNew, countSelectedVisible } from './sandboxInsertCandidates';
+import {
+  computeAllElementTypesForModel,
+  computeDefaultSelectedIds,
+  computeInitialEnabledRelationshipTypes,
+  computeRelationshipTypesForDialog,
+  keepEnabledRelationshipTypesValid,
+  normalizeIntermediatesOptions,
+  normalizeRelatedOptions,
+} from './sandboxInsertPolicy';
 import type { Candidate, PreviewState } from './types';
-import { clampInt, normalizeText, uniqSortedStrings } from './utils';
-
-function matchesCandidate(args: { c: Candidate; q: string }): boolean {
-  const q = normalizeText(args.q);
-  if (!q) return true;
-  const c = args.c;
-  const hay = `${c.name} ${c.type} ${c.id}`.toLowerCase();
-  return hay.includes(q);
-}
 
 type IntermediatesProps = {
   kind: 'intermediates';
@@ -120,46 +117,21 @@ export type SandboxInsertDialogViewModel = {
 };
 
 export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): SandboxInsertDialogViewModel {
-  const {
-    isOpen,
-    model,
-    existingElementIds,
-    allRelationshipTypes,
-    initialEnabledRelationshipTypes,
-  } = props;
+  const { isOpen, model, existingElementIds, allRelationshipTypes, initialEnabledRelationshipTypes } = props;
 
   const existingSet = useMemo(() => new Set(existingElementIds), [existingElementIds]);
 
-  const allElementTypesForModel = useMemo(() => {
-    const types = Object.values(model.elements).map((e) => String(e.type ?? ''));
-    return uniqSortedStrings(types);
-  }, [model]);
+  const allElementTypesForModel = useMemo(() => computeAllElementTypesForModel(model), [model]);
 
   const relationshipTypesForDialog = useMemo(() => {
-    const kinds = new Set<ModelKind>();
-    if (props.kind === 'intermediates') {
-      const s = model.elements[props.sourceElementId];
-      const t = model.elements[props.targetElementId];
-      if (s) kinds.add(kindFromTypeId(s.type));
-      if (t) kinds.add(kindFromTypeId(t.type));
-    } else {
-      for (const id of props.anchorElementIds) {
-        const el = model.elements[id];
-        if (!el) continue;
-        kinds.add(kindFromTypeId(el.type));
-      }
-    }
-
-    const allowed = new Set<string>();
-    for (const k of kinds) {
-      if (k === 'uml' || k === 'bpmn' || k === 'archimate') {
-        for (const rt of getRelationshipTypesForKind(k)) allowed.add(rt);
-      }
-    }
-
-    const base = Array.isArray(allRelationshipTypes) ? allRelationshipTypes : [];
-    if (allowed.size === 0) return base;
-    return base.filter((t) => allowed.has(t));
+    return computeRelationshipTypesForDialog({
+      model,
+      kind: props.kind,
+      sourceElementId: props.kind === 'intermediates' ? props.sourceElementId : undefined,
+      targetElementId: props.kind === 'intermediates' ? props.targetElementId : undefined,
+      anchorElementIds: props.kind === 'related' ? props.anchorElementIds : undefined,
+      allRelationshipTypes,
+    });
   }, [allRelationshipTypes, model, props]);
 
   // Shared settings
@@ -190,13 +162,13 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
 
   useEffect(() => {
     if (!isOpen) return;
-    const allowedRelSet = new Set(relationshipTypesForDialog);
-    const initRel = (initialEnabledRelationshipTypes.length
-      ? initialEnabledRelationshipTypes
-      : relationshipTypesForDialog
-    ).filter((t) => allowedRelSet.has(t));
 
-    setEnabledTypes(initRel.length ? initRel : relationshipTypesForDialog);
+    setEnabledTypes(
+      computeInitialEnabledRelationshipTypes({
+        relationshipTypesForDialog,
+        initialEnabledRelationshipTypes,
+      }),
+    );
     setEnabledElementTypes(allElementTypesForModel);
     setPreview(null);
     setSelectedIds(new Set());
@@ -204,14 +176,16 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
     setSearch('');
 
     if (props.kind === 'intermediates') {
-      setMode(props.initialOptions.mode);
-      setK(clampInt(props.initialOptions.k, 1, 10));
-      setMaxHops(clampInt(props.initialOptions.maxHops, 1, 16));
-      setDirection(props.initialOptions.direction);
+      const o = normalizeIntermediatesOptions(props.initialOptions);
+      setMode(o.mode);
+      setK(o.k);
+      setMaxHops(o.maxHops);
+      setDirection(o.direction);
       setDepth(1);
     } else {
-      setDepth(clampInt(props.initialOptions.depth, 1, 6));
-      setDirection(props.initialOptions.direction);
+      const o = normalizeRelatedOptions(props.initialOptions);
+      setDepth(o.depth);
+      setDirection(o.direction);
       setMode('shortest');
       setK(3);
       setMaxHops(8);
@@ -220,12 +194,9 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
 
   // Keep enabled relationship types valid when compatible types change.
   useEffect(() => {
-    if (!isOpen) return;
-    const allowed = new Set(relationshipTypesForDialog);
-    setEnabledTypes((prev) => {
-      const next = prev.filter((t) => allowed.has(t));
-      return next.length ? next : relationshipTypesForDialog;
-    });
+    setEnabledTypes((prev) =>
+      keepEnabledRelationshipTypesValid({ isOpen, enabledTypes: prev, relationshipTypesForDialog }),
+    );
   }, [isOpen, relationshipTypesForDialog]);
 
   const computePreview = useCallback(() => {
@@ -272,11 +243,10 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
         return;
       }
 
-      const prevSelected = selectedIdsRef.current;
-      const nextSelected = new Set<string>();
-      for (const c of res.candidates) {
-        if (prevSelected.size === 0 || prevSelected.has(c.id)) nextSelected.add(c.id);
-      }
+      const nextSelected = computeDefaultSelectedIds({
+        prevSelected: selectedIdsRef.current,
+        candidates: res.candidates,
+      });
 
       setPreview({ kind: 'intermediates', paths: res.paths, candidates: res.candidates });
       setSelectedIds(nextSelected);
@@ -301,11 +271,10 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
       direction,
     });
 
-    const prevSelected = selectedIdsRef.current;
-    const nextSelected = new Set<string>();
-    for (const c of res.candidates) {
-      if (prevSelected.size === 0 || prevSelected.has(c.id)) nextSelected.add(c.id);
-    }
+    const nextSelected = computeDefaultSelectedIds({
+      prevSelected: selectedIdsRef.current,
+      candidates: res.candidates,
+    });
 
     if (res.candidates.length === 0) {
       setError('No related elements found for the current settings.');
@@ -313,7 +282,7 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
 
     setPreview({ kind: 'related', groups: res.groups, candidates: res.candidates });
     setSelectedIds(nextSelected);
-  }, [depth, direction, enabledElementTypesSet, enabledTypes, existingSet, isOpen, k, maxHops, mode, model, props, setSelectedIds]);
+  }, [depth, direction, enabledElementTypesSet, enabledTypes, existingSet, isOpen, k, maxHops, mode, model, props]);
 
   // Auto-preview on open + whenever settings change.
   useEffect(() => {
@@ -330,42 +299,21 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
   const maxNodes = props.maxNodes;
   const maxNewNodes = maxNodes ? Math.max(0, maxNodes - existingElementIds.length) : null;
 
-  const candidateById = useMemo(() => {
-    const m = new Map<string, Candidate>();
-    for (const c of preview?.candidates ?? []) m.set(c.id, c);
-    return m;
-  }, [preview]);
+  const candidateById = useMemo(() => buildCandidateById(preview), [preview]);
 
-  const visibleCandidateIds = useMemo(() => {
-    if (!preview) return new Set<string>();
-    const ids = new Set<string>();
-    for (const c of preview.candidates) {
-      if (!matchesCandidate({ c, q: search })) continue;
-      ids.add(c.id);
-    }
-    return ids;
-  }, [preview, search]);
+  const visibleCandidateIds = useMemo(() => computeVisibleCandidateIds(preview, search), [preview, search]);
 
   const selectedCount = selectedIds.size;
   const candidatesCount = preview?.candidates.length ?? 0;
 
   const selectedNewCount = useMemo(() => {
     if (!preview) return 0;
-    let n = 0;
-    for (const id of selectedIds) {
-      const c = candidateById.get(id);
-      if (c && !c.alreadyInSandbox) n++;
-    }
-    return n;
+    return countSelectedNew({ candidateById, selectedIds });
   }, [candidateById, preview, selectedIds]);
 
   const selectedVisibleCount = useMemo(() => {
     if (!preview) return 0;
-    let n = 0;
-    for (const id of selectedIds) {
-      if (visibleCandidateIds.has(id)) n++;
-    }
-    return n;
+    return countSelectedVisible({ selectedIds, visibleCandidateIds });
   }, [preview, selectedIds, visibleCandidateIds]);
 
   const canInsert = preview !== null && selectedCount > 0 && enabledTypes.length > 0;
@@ -407,18 +355,13 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
     if (props.kind === 'intermediates') {
       props.onConfirm({
         enabledRelationshipTypes: enabledTypes,
-        options: {
-          mode,
-          k: clampInt(k, 1, 10),
-          maxHops: clampInt(maxHops, 1, 16),
-          direction,
-        },
+        options: normalizeIntermediatesOptions({ mode, k, maxHops, direction }),
         selectedElementIds,
       });
     } else {
       props.onConfirm({
         enabledRelationshipTypes: enabledTypes,
-        options: { depth: clampInt(depth, 1, 6), direction },
+        options: normalizeRelatedOptions({ depth, direction }),
         selectedElementIds,
       });
     }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DragEvent, MouseEvent, PointerEvent } from 'react';
 
-import type { Model, Relationship, ViewNodeLayout } from '../../../domain';
+import type { Model, Relationship } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import { RelationshipMarkers } from '../../diagram/RelationshipMarkers';
 import type {
@@ -18,20 +18,17 @@ import type {
 import { dataTransferHasElement, readDraggedElementId } from '../../diagram/dragDrop';
 
 import type { Point } from '../../diagram/geometry';
-import { rectAlignedOrthogonalAnchorsWithEndpointAnchors } from '../../diagram/geometry';
-import { orthogonalRoutingHintsFromAnchors } from '../../diagram/orthogonalHints';
-import { adjustOrthogonalConnectionEndpoints } from '../../diagram/adjustConnectionEndpoints';
-import { getConnectionPath } from '../../diagram/connectionPath';
-import { applyLaneOffsetsSafely } from '../../diagram/connectionLanes';
+
+import { computeSandboxOrthogonalPointsByRelationshipId } from './sandboxRouting';
 
 import '../../../styles/analysisSandbox.css';
 
 import { SaveSandboxAsDiagramDialog } from './SaveSandboxAsDiagramDialog';
 import { SandboxInsertDialog } from './SandboxInsertDialog';
-import type { SandboxRenderableRelationship } from './SandboxEdgesLayer';
 import { SandboxEdgesLayer } from './SandboxEdgesLayer';
 import { SandboxNodesLayer } from './SandboxNodesLayer';
 import { useSandboxViewport } from './useSandboxViewport';
+import { useSandboxRelationships } from './useSandboxRelationships';
 import { SANDBOX_GRID_SIZE, SANDBOX_NODE_H, SANDBOX_NODE_W } from './sandboxConstants';
 
 function blurDocumentActiveElement(): void {
@@ -45,10 +42,6 @@ function blurDocumentActiveElement(): void {
   // Some browsers can place focus on SVG elements; blur() isn't always typed on Element.
   const maybe = active as unknown as { blur?: () => void };
   if (typeof maybe.blur === 'function') maybe.blur();
-}
-
-function layoutForSandboxNode(n: SandboxNode): ViewNodeLayout {
-  return { elementId: n.elementId, x: n.x, y: n.y, width: SANDBOX_NODE_W, height: SANDBOX_NODE_H };
 }
 
 type DragState = {
@@ -243,136 +236,39 @@ export function SandboxModeView({
     return addRelatedAnchors.length > 0;
   }, [addRelatedAnchors.length]);
 
-  const baseVisibleRelationships = useMemo<SandboxRenderableRelationship[]>(() => {
-    const ids = new Set(nodes.map((n) => n.elementId));
-    const rels = Object.values(model.relationships).filter(
-      (r): r is Relationship & { sourceElementId: string; targetElementId: string } => {
-        if (!r.sourceElementId || !r.targetElementId) return false;
-        return ids.has(r.sourceElementId) && ids.has(r.targetElementId);
-      }
-    );
-
-    return rels
-      .map((r) => ({
-        id: r.id,
-        type: String(r.type),
-        sourceElementId: r.sourceElementId,
-        targetElementId: r.targetElementId,
-      }))
-      .sort((a, b) => a.id.localeCompare(b.id));
-  }, [model.relationships, nodes]);
-
-  const availableRelationshipTypes = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of baseVisibleRelationships) set.add(r.type);
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [baseVisibleRelationships]);
-
-  const enabledTypeSet = useMemo(() => new Set(relationships.enabledTypes), [relationships.enabledTypes]);
-  const explicitIdSet = useMemo(() => new Set(relationships.explicitIds), [relationships.explicitIds]);
-
-  // When switching to type filtering, default to enabling all available types.
-  useEffect(() => {
-    if (!relationships.show) return;
-    if (relationships.mode !== 'types') return;
-    if (relationships.enabledTypes.length > 0) return;
-    if (availableRelationshipTypes.length === 0) return;
-    onSetEnabledRelationshipTypes(availableRelationshipTypes);
-  }, [
+  const {
+    baseVisibleRelationships,
     availableRelationshipTypes,
+    selectedTypeCount,
+    edgeOverflow,
+    renderedRelationships,
+  } = useSandboxRelationships({
+    modelRelationships: model.relationships,
+    nodes,
+    relationships,
+    maxEdges: ui.maxEdges,
     onSetEnabledRelationshipTypes,
-    relationships.enabledTypes.length,
-    relationships.mode,
-    relationships.show,
-  ]);
+  });
 
-  const selectedTypeCount = useMemo(() => {
-    if (availableRelationshipTypes.length === 0) return 0;
-    return availableRelationshipTypes.filter((t) => enabledTypeSet.has(t)).length;
-  }, [availableRelationshipTypes, enabledTypeSet]);
-
-  const visibleRelationships = useMemo(() => {
-    if (!relationships.show) return [];
-    if (relationships.mode === 'all') return baseVisibleRelationships;
-    if (relationships.mode === 'types') return baseVisibleRelationships.filter((r) => enabledTypeSet.has(r.type));
-    // explicit ids
-    return baseVisibleRelationships.filter((r) => explicitIdSet.has(r.id));
-  }, [baseVisibleRelationships, enabledTypeSet, explicitIdSet, relationships.mode, relationships.show]);
-
-  const relationshipCap = ui.maxEdges;
-  const edgeOverflow = useMemo(() => {
-    if (!relationships.show) return 0;
-    return Math.max(0, visibleRelationships.length - relationshipCap);
-  }, [relationshipCap, relationships.show, visibleRelationships.length]);
+  const enabledTypeSet = useMemo(() => {
+    return new Set(relationships.enabledTypes);
+  }, [relationships.enabledTypes]);
 
   useEffect(() => {
     if (edgeOverflow > 0) setEdgeCapDismissed(false);
   }, [edgeOverflow]);
 
-  const renderedRelationships = useMemo(() => {
-    if (edgeOverflow <= 0) return visibleRelationships;
-    return visibleRelationships.slice(0, relationshipCap);
-  }, [edgeOverflow, relationshipCap, visibleRelationships]);
-
   const orthogonalPointsByRelationshipId = useMemo(() => {
     if (ui.edgeRouting !== 'orthogonal') return new Map<string, Point[]>();
     if (!relationships.show) return new Map<string, Point[]>();
     if (renderedRelationships.length === 0) return new Map<string, Point[]>();
-
-    const layoutsByElementId = new Map<string, ViewNodeLayout>();
-    for (const n of nodes) {
-      layoutsByElementId.set(n.elementId, layoutForSandboxNode(n));
-    }
-
-    const obstacleRects: Array<{ id: string; x: number; y: number; w: number; h: number }> = nodes.map((n) => ({
-      id: n.elementId,
-      x: n.x,
-      y: n.y,
-      w: SANDBOX_NODE_W,
-      h: SANDBOX_NODE_H,
-    }));
-
-    const laneItems: Array<{ id: string; points: Point[] }> = [];
-    const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
-
-    for (const r of renderedRelationships) {
-      const sId = r.sourceElementId as string;
-      const tId = r.targetElementId as string;
-      const s = layoutsByElementId.get(sId);
-      const t = layoutsByElementId.get(tId);
-      if (!s || !t) continue;
-
-      const { start, end } = rectAlignedOrthogonalAnchorsWithEndpointAnchors(s, t);
-
-      const obstacles = obstacleRects
-        .filter((o) => o.id !== sId && o.id !== tId)
-        .map(({ x, y, w, h }) => ({ x, y, w, h }));
-
-      obstaclesById.set(r.id, obstacles);
-
-      const hints = {
-        ...orthogonalRoutingHintsFromAnchors(s, start, t, end, SANDBOX_GRID_SIZE),
-        obstacles,
-        obstacleMargin: SANDBOX_GRID_SIZE / 2,
-        laneSpacing: SANDBOX_GRID_SIZE / 2,
-        maxChannelShiftSteps: 10,
-      };
-
-      let points = getConnectionPath({ route: { kind: 'orthogonal' }, points: undefined }, { a: start, b: end, hints }).points;
-      points = adjustOrthogonalConnectionEndpoints(points, s, t, { stubLength: SANDBOX_GRID_SIZE / 2 });
-
-      laneItems.push({ id: r.id, points });
-    }
-
-    const adjusted = applyLaneOffsetsSafely(laneItems, {
+    return computeSandboxOrthogonalPointsByRelationshipId({
+      nodes,
+      renderedRelationships,
+      nodeW: SANDBOX_NODE_W,
+      nodeH: SANDBOX_NODE_H,
       gridSize: SANDBOX_GRID_SIZE,
-      obstaclesById,
-      obstacleMargin: SANDBOX_GRID_SIZE / 2,
     });
-
-    const map = new Map<string, Point[]>();
-    for (const it of adjusted) map.set(it.id, it.points);
-    return map;
   }, [nodes, renderedRelationships, relationships.show, ui.edgeRouting]);
 
   const selectedEdge = useMemo(() => {

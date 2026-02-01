@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { DragEvent, MouseEvent, PointerEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import type { Model, Relationship } from '../../../domain';
+import type { Model } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import type {
   SandboxNode,
@@ -13,8 +12,6 @@ import type {
   SandboxUiState,
   SandboxState,
 } from '../workspace/controller/sandboxTypes';
-
-import { dataTransferHasElement, readDraggedElementId } from '../../diagram/dragDrop';
 
 import type { Point } from '../../diagram/geometry';
 
@@ -29,39 +26,10 @@ import { SandboxRelationshipsPanel } from './SandboxRelationshipsPanel';
 import { SandboxToolbar } from './SandboxToolbar';
 import { useSandboxViewport } from './useSandboxViewport';
 import { useSandboxRelationships } from './useSandboxRelationships';
+import { useSandboxSelectionController } from './useSandboxSelectionController';
+import { useSandboxDialogController } from './useSandboxDialogController';
+import { useSandboxDragController } from './useSandboxDragController';
 import { SANDBOX_GRID_SIZE, SANDBOX_NODE_H, SANDBOX_NODE_W } from './sandboxConstants';
-
-function blurDocumentActiveElement(): void {
-  const active = document.activeElement;
-  if (!active) return;
-  if (active instanceof HTMLElement) {
-    active.blur();
-    return;
-  }
-
-  // Some browsers can place focus on SVG elements; blur() isn't always typed on Element.
-  const maybe = active as unknown as { blur?: () => void };
-  if (typeof maybe.blur === 'function') maybe.blur();
-}
-
-type DragState = {
-  elementId: string;
-  offsetX: number;
-  offsetY: number;
-};
-
-function getSelectedElementId(selection: Selection): string | null {
-  switch (selection.kind) {
-    case 'element':
-      return selection.elementId;
-    case 'viewNode':
-      return selection.elementId;
-    case 'viewNodes':
-      return selection.elementIds[0] ?? null;
-    default:
-      return null;
-  }
-}
 
 export function SandboxModeView({
   model,
@@ -142,25 +110,6 @@ export function SandboxModeView({
     onPointerUpOrCancelCanvas,
   } = useSandboxViewport({ nodes, nodeW: SANDBOX_NODE_W, nodeH: SANDBOX_NODE_H });
 
-  const [drag, setDrag] = useState<DragState | null>(null);
-  const [isDropTarget, setIsDropTarget] = useState(false);
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-
-  // Sandbox-local pair selection for "Insert between selection".
-  // Keeps sandbox operations independent from the global single-selection UX.
-  const [pairSelection, setPairSelection] = useState<string[]>([]);
-
-  // Keep local edge highlight in sync with global selection so the PropertiesPanel
-  // can drive relationship selection.
-  useEffect(() => {
-    if (selection.kind === 'relationship') {
-      setSelectedEdgeId(selection.relationshipId);
-      setPairSelection([]);
-      return;
-    }
-    setSelectedEdgeId(null);
-  }, [selection]);
-
   const [edgeCapDismissed, setEdgeCapDismissed] = useState(false);
 
   const [insertMode, setInsertMode] = useState<SandboxInsertIntermediatesMode>('shortest');
@@ -168,22 +117,54 @@ export function SandboxModeView({
   const [insertMaxHops, setInsertMaxHops] = useState(8);
   const [insertDirection, setInsertDirection] = useState<SandboxAddRelatedDirection>('both');
 
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [insertBetweenDialogOpen, setInsertBetweenDialogOpen] = useState(false);
-  const [insertBetweenEndpoints, setInsertBetweenEndpoints] = useState<[string, string] | null>(null);
-  const [insertFromEdgeDialogOpen, setInsertFromEdgeDialogOpen] = useState(false);
-  const [insertFromEdgeEndpoints, setInsertFromEdgeEndpoints] = useState<[string, string] | null>(null);
-
-  const [addRelatedDialogOpen, setAddRelatedDialogOpen] = useState(false);
-  const [addRelatedDialogAnchors, setAddRelatedDialogAnchors] = useState<string[]>([]);
-
-  const selectedElementId = useMemo(() => getSelectedElementId(selection), [selection]);
-
   const nodeById = useMemo(() => {
     const m = new Map<string, SandboxNode>();
     for (const n of nodes) m.set(n.elementId, n);
     return m;
   }, [nodes]);
+
+  const {
+    selectedElementId,
+    selectedEdgeId,
+    selectedEdge,
+    pairAnchors,
+    addRelatedAnchors,
+    insertAnchors,
+    onEdgeHitClick,
+    onCanvasClick,
+    onClickNode,
+  } = useSandboxSelectionController({
+    selection,
+    selectionElementIds,
+    nodeById,
+    modelRelationships: model.relationships,
+    consumeSuppressNextBackgroundClick,
+    onSelectElement,
+    onSelectRelationship,
+    onClearSelection,
+  });
+
+  const {
+    saveDialogOpen,
+    setSaveDialogOpen,
+    insertBetweenDialogOpen,
+    insertBetweenEndpoints,
+    openInsertBetweenDialog,
+    closeInsertBetweenDialog,
+    insertFromEdgeDialogOpen,
+    insertFromEdgeEndpoints,
+    openInsertFromSelectedEdgeDialog,
+    closeInsertFromEdgeDialog,
+    addRelatedDialogOpen,
+    addRelatedDialogAnchors,
+    openAddRelatedDialog,
+    closeAddRelatedDialog,
+  } = useSandboxDialogController({
+    pairAnchors,
+    insertAnchors,
+    addRelatedAnchors,
+    selectedEdge,
+  });
 
   const canAddSelected = useMemo(() => {
     for (const id of selectionElementIds) {
@@ -209,21 +190,26 @@ export function SandboxModeView({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [model.relationships]);
 
-  const addRelatedAnchors = useMemo(() => {
-    const raw = pairSelection.length ? pairSelection : selectionElementIds;
-    const uniq = Array.from(new Set(raw.filter((id) => nodeById.has(id))));
-    return uniq;
-  }, [nodeById, pairSelection, selectionElementIds]);
-
-  const insertAnchors = useMemo(() => {
-    const uniq = Array.from(new Set(selectionElementIds.filter((id) => nodeById.has(id))));
-    return uniq;
-  }, [nodeById, selectionElementIds]);
-
-  const pairAnchors = useMemo(() => {
-    const uniq = Array.from(new Set(pairSelection.filter((id) => nodeById.has(id))));
-    return uniq.slice(0, 2);
-  }, [nodeById, pairSelection]);
+  const {
+    isDropTarget,
+    onPointerDownNode,
+    onPointerMove,
+    onPointerUpOrCancel,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+  } = useSandboxDragController({
+    nodeById,
+    model,
+    clientToWorld,
+    onMoveNode,
+    onPointerMoveCanvas,
+    onPointerUpOrCancelCanvas,
+    nodeW: SANDBOX_NODE_W,
+    nodeH: SANDBOX_NODE_H,
+    onAddNodeAt,
+    onSelectElement,
+  });
 
   const canInsertIntermediates = useMemo(() => {
     // Prefer the local pair selection; fall back to global selection if it happens to include 2 sandbox nodes.
@@ -267,179 +253,7 @@ export function SandboxModeView({
     });
   }, [nodes, renderedRelationships, relationships.show, ui.edgeRouting]);
 
-  const selectedEdge = useMemo(() => {
-    if (!selectedEdgeId) return null;
-    const r = (model.relationships as Record<string, Relationship | undefined>)[selectedEdgeId];
-    if (!r) return null;
-    if (!r.sourceElementId || !r.targetElementId) return null;
-    if (!nodeById.has(r.sourceElementId)) return null;
-    if (!nodeById.has(r.targetElementId)) return null;
-    return {
-      id: r.id,
-      type: String(r.type),
-      sourceElementId: r.sourceElementId,
-      targetElementId: r.targetElementId,
-    };
-  }, [model.relationships, nodeById, selectedEdgeId]);
 
-  const onEdgeHitClick = useCallback(
-    (e: MouseEvent<SVGPathElement>, relationshipId: string) => {
-      e.stopPropagation();
-
-      // Toggle relationship selection: clicking the selected edge again clears selection.
-      if (selectedEdgeId === relationshipId) {
-        // Clear any lingering focus ring (Safari can be sticky).
-        blurDocumentActiveElement();
-        setSelectedEdgeId(null);
-        setPairSelection([]);
-        onClearSelection();
-        return;
-      }
-
-      setSelectedEdgeId(relationshipId);
-      setPairSelection([]);
-      onSelectRelationship(relationshipId);
-    },
-    [onClearSelection, onSelectRelationship, selectedEdgeId]
-  );
-
-  const onPointerDownNode = useCallback(
-    (e: PointerEvent<SVGGElement>, elementId: string) => {
-      const node = nodeById.get(elementId);
-      if (!node) return;
-      const p = clientToWorld(e.clientX, e.clientY);
-      setDrag({ elementId, offsetX: p.x - node.x, offsetY: p.y - node.y });
-      (e.currentTarget as SVGGElement).setPointerCapture(e.pointerId);
-      e.preventDefault();
-    },
-    [clientToWorld, nodeById]
-  );
-
-  const onPointerMove = useCallback(
-    (e: PointerEvent<SVGSVGElement>) => {
-      // Node drag has priority.
-      if (drag) {
-        const p = clientToWorld(e.clientX, e.clientY);
-        const nx = p.x - drag.offsetX;
-        const ny = p.y - drag.offsetY;
-        onMoveNode(drag.elementId, nx, ny);
-        e.preventDefault();
-        return;
-      }
-
-      onPointerMoveCanvas(e);
-    },
-    [clientToWorld, drag, onMoveNode, onPointerMoveCanvas]
-  );
-
-  const onPointerUpOrCancel = useCallback(
-    (e: PointerEvent<SVGSVGElement>) => {
-      if (drag) {
-        setDrag(null);
-        try {
-          (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId);
-        } catch {
-          // ignore
-        }
-        return;
-      }
-
-      onPointerUpOrCancelCanvas(e);
-    },
-    [drag, onPointerUpOrCancelCanvas]
-  );
-
-  const onDragOver = useCallback((e: DragEvent<SVGSVGElement>) => {
-    if (!dataTransferHasElement(e.dataTransfer)) return;
-    e.preventDefault();
-    setIsDropTarget(true);
-  }, []);
-
-  const onDragLeave = useCallback(() => {
-    setIsDropTarget(false);
-  }, []);
-
-  const onDrop = useCallback(
-    (e: DragEvent<SVGSVGElement>) => {
-      setIsDropTarget(false);
-      if (!dataTransferHasElement(e.dataTransfer)) return;
-      e.preventDefault();
-
-      const id = readDraggedElementId(e.dataTransfer);
-      if (!id) return;
-      if (!model.elements[id]) return;
-
-      const p = clientToWorld(e.clientX, e.clientY);
-      const x = p.x - SANDBOX_NODE_W / 2;
-      const y = p.y - SANDBOX_NODE_H / 2;
-      onAddNodeAt(id, x, y);
-      onSelectElement(id);
-    },
-    [clientToWorld, model.elements, onAddNodeAt, onSelectElement]
-  );
-
-  const onOpenInsertBetweenDialog = useCallback(() => {
-    const anchors = pairAnchors.length ? pairAnchors : insertAnchors;
-    if (anchors.length !== 2) return;
-    setInsertBetweenEndpoints([anchors[0], anchors[1]]);
-    setInsertBetweenDialogOpen(true);
-  }, [insertAnchors, pairAnchors]);
-
-  const onOpenInsertFromSelectedEdgeDialog = useCallback(() => {
-    if (!selectedEdge) return;
-    setInsertFromEdgeEndpoints([selectedEdge.sourceElementId, selectedEdge.targetElementId]);
-    setInsertFromEdgeDialogOpen(true);
-  }, [selectedEdge]);
-
-  const onOpenAddRelatedDialog = useCallback(() => {
-    if (addRelatedAnchors.length === 0) return;
-    setAddRelatedDialogAnchors(addRelatedAnchors);
-    setAddRelatedDialogOpen(true);
-  }, [addRelatedAnchors]);
-
-  const onCanvasClick = useCallback(
-    (e: MouseEvent<SVGSVGElement>) => {
-      // Only treat clicks on the SVG background as "clear selection".
-      if (e.target !== e.currentTarget) return;
-      if (consumeSuppressNextBackgroundClick()) return;
-      // Clear any focus ring that might linger on previously clicked SVG elements (notably relationships).
-      // Some browsers (e.g. Safari) can keep a focus outline even after selection state is cleared.
-      blurDocumentActiveElement();
-      setSelectedEdgeId(null);
-      setPairSelection([]);
-      onClearSelection();
-    },
-    [consumeSuppressNextBackgroundClick, onClearSelection]
-  );
-
-  const onClickNode = useCallback(
-    (e: MouseEvent<SVGGElement>, elementId: string) => {
-      e.stopPropagation();
-      setSelectedEdgeId(null);
-
-      if (e.shiftKey) {
-        setPairSelection((prev) => {
-          const cur = prev.filter(Boolean);
-          if (cur.length === 0) return [elementId];
-          if (cur.length === 1) {
-            return cur[0] === elementId ? [] : [cur[0], elementId];
-          }
-
-          const [a, b] = cur;
-          if (elementId === a) return [b];
-          if (elementId === b) return [a];
-          // Replace the secondary selection but keep the primary stable.
-          return [a, elementId];
-        });
-      } else {
-        // Normal click sets a single local selection (primary).
-        setPairSelection([elementId]);
-      }
-
-      onSelectElement(elementId);
-    },
-    [onSelectElement]
-  );
 
   return (
     <div className="crudSection">
@@ -491,7 +305,7 @@ export function SandboxModeView({
           <button
             type="button"
             className="miniLinkButton"
-            onClick={onOpenAddRelatedDialog}
+            onClick={openAddRelatedDialog}
             disabled={!canAddRelated}
             aria-disabled={!canAddRelated}
             title={
@@ -509,9 +323,9 @@ export function SandboxModeView({
             className="miniLinkButton"
             onClick={() => {
               if (selectedEdge) {
-                onOpenInsertFromSelectedEdgeDialog();
+                openInsertFromSelectedEdgeDialog();
               } else {
-                onOpenInsertBetweenDialog();
+                openInsertBetweenDialog();
               }
             }}
             disabled={!selectedEdge && !canInsertIntermediates}
@@ -585,9 +399,9 @@ export function SandboxModeView({
         allRelationshipTypes={allRelationshipTypes}
         initialEnabledRelationshipTypes={addRelated.enabledTypes}
         initialOptions={{ mode: insertMode, k: insertK, maxHops: insertMaxHops, direction: insertDirection }}
-        onCancel={() => setInsertBetweenDialogOpen(false)}
+        onCancel={closeInsertBetweenDialog}
         onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
-          setInsertBetweenDialogOpen(false);
+          closeInsertBetweenDialog();
           setInsertMode(options.mode);
           setInsertK(options.k);
           setInsertMaxHops(options.maxHops);
@@ -616,9 +430,9 @@ export function SandboxModeView({
         allRelationshipTypes={allRelationshipTypes}
         initialEnabledRelationshipTypes={addRelated.enabledTypes}
         initialOptions={{ mode: insertMode, k: insertK, maxHops: insertMaxHops, direction: insertDirection }}
-        onCancel={() => setInsertFromEdgeDialogOpen(false)}
+        onCancel={closeInsertFromEdgeDialog}
         onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
-          setInsertFromEdgeDialogOpen(false);
+          closeInsertFromEdgeDialog();
           setInsertMode(options.mode);
           setInsertK(options.k);
           setInsertMaxHops(options.maxHops);
@@ -633,27 +447,28 @@ export function SandboxModeView({
           onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
         }}
       />
-	      <SandboxInsertDialog
-	        kind="related"
-	        isOpen={addRelatedDialogOpen}
-	        model={model}
-	        maxNodes={ui.maxNodes}
-	        anchorElementIds={addRelatedDialogAnchors}
-	        existingElementIds={nodes.map((n) => n.elementId)}
-	        allRelationshipTypes={allRelationshipTypes}
-	        initialEnabledRelationshipTypes={addRelated.enabledTypes}
-	        initialOptions={{ depth: addRelated.depth, direction: addRelated.direction }}
-	        onCancel={() => setAddRelatedDialogOpen(false)}
-	        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
-	          setAddRelatedDialogOpen(false);
-	          // Persist settings for the next time.
-	          onSetAddRelatedDepth(options.depth);
-	          onSetAddRelatedDirection(options.direction);
-	          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
-	          if (addRelatedDialogAnchors.length === 0) return;
-	          onAddRelatedFromSelection(addRelatedDialogAnchors, selectedElementIds);
-	        }}
-	      />
+
+      <SandboxInsertDialog
+        kind="related"
+        isOpen={addRelatedDialogOpen}
+        model={model}
+        maxNodes={ui.maxNodes}
+        anchorElementIds={addRelatedDialogAnchors}
+        existingElementIds={nodes.map((n) => n.elementId)}
+        allRelationshipTypes={allRelationshipTypes}
+        initialEnabledRelationshipTypes={addRelated.enabledTypes}
+        initialOptions={{ depth: addRelated.depth, direction: addRelated.direction }}
+        onCancel={closeAddRelatedDialog}
+        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
+          closeAddRelatedDialog();
+          // Persist settings for the next time.
+          onSetAddRelatedDepth(options.depth);
+          onSetAddRelatedDirection(options.direction);
+          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
+          if (addRelatedDialogAnchors.length === 0) return;
+          onAddRelatedFromSelection(addRelatedDialogAnchors, selectedElementIds);
+        }}
+      />
 
       <SaveSandboxAsDiagramDialog
         isOpen={saveDialogOpen}

@@ -4,155 +4,35 @@ import type { Model } from '../../../../domain';
 import { bfsKShortestPaths, bfsShortestPath, buildAdjacency } from '../../../../domain';
 import type { AnalysisMode } from '../../AnalysisQueryPanel';
 
-export type SandboxNode = {
-  elementId: string;
-  x: number;
-  y: number;
-  pinned?: boolean;
-};
+import type {
+  SandboxNode,
+  SandboxRelationshipVisibilityMode,
+  SandboxAddRelatedDirection,
+  SandboxInsertIntermediatesMode,
+  SandboxInsertIntermediatesOptions,
+  SandboxRelationshipsState,
+  SandboxUiState,
+  SandboxState,
+  SandboxActions
+} from './sandboxTypes';
+export type {
+  SandboxNode,
+  SandboxRelationshipVisibilityMode,
+  SandboxAddRelatedDirection,
+  SandboxInsertIntermediatesMode,
+  SandboxInsertIntermediatesOptions,
+  SandboxRelationshipsState,
+  SandboxUiState,
+  SandboxState,
+  SandboxActions
+} from './sandboxTypes';
 
-export type SandboxRelationshipVisibilityMode = 'all' | 'types' | 'explicit';
-
-export type SandboxAddRelatedDirection = 'both' | 'outgoing' | 'incoming';
-
-export type SandboxInsertIntermediatesMode = 'shortest' | 'topk';
-
-export type SandboxInsertIntermediatesOptions = {
-  mode: SandboxInsertIntermediatesMode;
-  k: number;
-  maxHops: number;
-  direction: SandboxAddRelatedDirection;
-
-  /**
-   * Optional allow-list of element ids to insert (typically chosen in a preview dialog).
-   * When omitted, all computed intermediate elements are inserted.
-   */
-  allowedElementIds?: string[];
-};
-
-export type SandboxRelationshipsState = {
-  show: boolean;
-  mode: SandboxRelationshipVisibilityMode;
-  /**
-   * Enabled relationship type strings when mode === 'types'.
-   * When empty, no relationships are shown.
-   */
-  enabledTypes: string[];
-
-  /**
-   * When mode === 'explicit', only relationship ids in this list are shown
-   * (in addition to the global `show` toggle).
-   */
-  explicitIds: string[];
-};
-
-export type SandboxUiState = {
-  /**
-   * User-facing warning banner text (best-effort). Cleared on model change.
-   */
-  warning: string | null;
-  /**
-   * Hard cap to avoid UI freezes.
-   */
-  maxNodes: number;
-  /**
-   * Rendering cap for relationships (applied in the view layer).
-   */
-  maxEdges: number;
-  /**
-   * Optional sessionStorage persistence.
-   */
-  persistEnabled: boolean;
-
-  /**
-   * How relationships are rendered in the sandbox view.
-   * This is purely visual and does not affect the model.
-   */
-  edgeRouting: 'straight' | 'orthogonal';
-
-  /**
-   * Element ids inserted by the most recent insert/add action (newly added only).
-   * Used for one-click undo. Not persisted.
-   */
-  lastInsertedElementIds: string[];
-};
-
-export type SandboxState = {
-  nodes: SandboxNode[];
-  relationships: SandboxRelationshipsState;
-  addRelated: {
-    depth: number;
-    direction: SandboxAddRelatedDirection;
-    /**
-     * Enabled relationship types used for traversal when adding related elements.
-     * When empty, no related elements are added.
-     */
-    enabledTypes: string[];
-  };
-  ui: SandboxUiState;
-};
-
-export type SandboxActions = {
-  setNodePosition: (elementId: string, x: number, y: number) => void;
-  addIfMissing: (elementId: string, x?: number, y?: number) => void;
-  addManyIfMissing: (elementIds: string[], baseX?: number, baseY?: number) => void;
-  removeMany: (elementIds: string[]) => void;
-  clear: () => void;
-
-  /**
-   * Removes the nodes added by the most recent insert/add action.
-   */
-  undoLastInsert: () => void;
-
-  seedFromView: (viewId: string) => void;
-
-  /**
-   * Sandbox-only auto layout. Does not mutate the model.
-   */
-  autoLayout: () => void;
-
-  setPersistEnabled: (enabled: boolean) => void;
-  setEdgeRouting: (routing: 'straight' | 'orthogonal') => void;
-  clearWarning: () => void;
-
-
-  /**
-   * Replace sandbox contents from an arbitrary element set (used by Step 8: open sandbox from analysis results).
-   */
-  seedFromElements: (args: {
-    elementIds: string[];
-    relationshipIds?: string[];
-    relationshipTypes?: string[];
-    layout?: {
-      mode: 'grid' | 'distance' | 'levels';
-      levelById?: Record<string, number>;
-      orderById?: Record<string, number>;
-    };
-  }) => void;
-
-
-  setShowRelationships: (show: boolean) => void;
-  setRelationshipMode: (mode: SandboxRelationshipVisibilityMode) => void;
-  setEnabledRelationshipTypes: (types: string[]) => void;
-  setExplicitRelationshipIds: (relationshipIds: string[]) => void;
-  toggleEnabledRelationshipType: (type: string) => void;
-
-  setAddRelatedDepth: (depth: number) => void;
-  setAddRelatedDirection: (direction: SandboxAddRelatedDirection) => void;
-  setAddRelatedEnabledTypes: (types: string[]) => void;
-  toggleAddRelatedEnabledType: (type: string) => void;
-  /**
-   * Adds related elements around the given anchor sandbox nodes.
-   * When `allowedElementIds` is provided, no traversal is performed; the caller supplies the element set.
-   */
-  addRelatedFromSelection: (anchorElementIds: string[], allowedElementIds?: string[]) => void;
-
-  insertIntermediatesBetween: (
-    sourceElementId: string,
-    targetElementId: string,
-    options: SandboxInsertIntermediatesOptions
-  ) => void;
-};
+import type { PersistedSandboxStateV1 } from './sandboxPersistence';
+import {
+  clearPersistedSandboxState,
+  loadPersistedSandboxState,
+  savePersistedSandboxState,
+} from './sandboxPersistence';
 
 const DEFAULT_SEED_POS = { x: 260, y: 180 };
 
@@ -230,19 +110,6 @@ function uniqSortedStrings(values: string[]): string[] {
   return Array.from(new Set(values.filter((x) => typeof x === 'string' && x.length > 0))).sort((a, b) => a.localeCompare(b));
 }
 
-function safeGetSessionStorage(): Storage | null {
-  try {
-    // In unit tests or non-browser environments, window/sessionStorage may not exist.
-    if (typeof window === 'undefined') return null;
-    return window.sessionStorage ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function SANDBOX_STATE_KEY(modelId: string): string {
-  return `eaModeller.analysisSandbox.state.${modelId}.v1`;
-}
 
 function applyNodeCap(args: {
   prev: SandboxNode[];
@@ -323,90 +190,58 @@ export function useSandboxState(args: {
 
   const hydrateFromPersisted = useCallback(() => {
     if (!model) return;
-    const ss = safeGetSessionStorage();
-    if (!ss) return;
-    const raw = ss.getItem(SANDBOX_STATE_KEY(modelId));
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as any;
-      if (!parsed || parsed.v !== 1) return;
-      const inNodes: any[] = Array.isArray(parsed.nodes) ? parsed.nodes : [];
-      const nextNodesRaw: SandboxNode[] = inNodes
-        .filter((n) => n && typeof n.elementId === 'string' && typeof n.x === 'number' && typeof n.y === 'number')
-        .map((n) => ({ elementId: n.elementId, x: n.x, y: n.y, pinned: Boolean(n.pinned) }))
-        .filter((n) => Boolean(model.elements[n.elementId]));
+    const persisted = loadPersistedSandboxState(modelId);
+    if (!persisted) return;
 
-      const capped = applyNodeCap({ prev: [], toAdd: nextNodesRaw, maxNodes });
-      if (capped.dropped > 0) {
-        emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
-      }
-
-      setNodes(capped.next);
-      setLastInsertedElementIds([]);
-
-      const rel = parsed.relationships ?? {};
-      const relShow = Boolean(rel.show);
-      const relMode = (rel.mode as SandboxRelationshipVisibilityMode) ?? 'all';
-      const relEnabledTypes = Array.isArray(rel.enabledTypes)
-        ? rel.enabledTypes.filter((t: any) => typeof t === 'string' && t.length > 0)
-        : [];
-      const relExplicitIds = Array.isArray(rel.explicitIds)
-        ? rel.explicitIds.filter((id: any) => typeof id === 'string' && id.length > 0)
-        : [];
-
-      setShowRelationships(relShow);
-      setRelationshipMode(relMode);
-      setEnabledRelationshipTypes(uniqSortedStrings(relEnabledTypes));
-      setExplicitRelationshipIds(uniqSortedStrings(relExplicitIds));
-
-      const ar = parsed.addRelated ?? {};
-      const arDepth = typeof ar.depth === 'number' ? ar.depth : 1;
-      const arDir = (ar.direction as SandboxAddRelatedDirection) ?? 'both';
-      const arTypes = Array.isArray(ar.enabledTypes)
-        ? ar.enabledTypes.filter((t: any) => typeof t === 'string' && t.length > 0)
-        : [];
-      setAddRelatedDepth(clampInt(arDepth, 1, 6));
-      setAddRelatedDirection(arDir);
-      setAddRelatedEnabledTypes(uniqSortedStrings(arTypes));
-
-      const ui = parsed.ui ?? {};
-      const er = ui.edgeRouting;
-      setEdgeRouting(er === 'orthogonal' ? 'orthogonal' : 'straight');
-    } catch {
-      // ignore corrupted persisted state
+    const nextNodesRaw: SandboxNode[] = persisted.nodes.filter((n) => Boolean(model.elements[n.elementId]));
+    const capped = applyNodeCap({ prev: [], toAdd: nextNodesRaw, maxNodes });
+    if (capped.dropped > 0) {
+      emitWarning(`Sandbox node cap reached (${maxNodes}). Skipped ${capped.dropped} element(s).`);
     }
+
+    setNodes(capped.next);
+    setLastInsertedElementIds([]);
+
+    setShowRelationships(persisted.relationships.show);
+    setRelationshipMode(persisted.relationships.mode ?? 'all');
+    setEnabledRelationshipTypes(uniqSortedStrings(persisted.relationships.enabledTypes));
+    setExplicitRelationshipIds(uniqSortedStrings(persisted.relationships.explicitIds));
+
+    setAddRelatedDepth(clampInt(persisted.addRelated.depth, 1, 6));
+    setAddRelatedDirection(persisted.addRelated.direction ?? 'both');
+    setAddRelatedEnabledTypes(uniqSortedStrings(persisted.addRelated.enabledTypes));
+
+    setEdgeRouting(persisted.ui.edgeRouting === 'orthogonal' ? 'orthogonal' : 'straight');
   }, [emitWarning, model, modelId, maxNodes]);
+
 
   // Persist sandbox state to sessionStorage if enabled.
   useEffect(() => {
     if (!persistEnabled) return;
     if (!model) return;
-    const ss = safeGetSessionStorage();
-    if (!ss) return;
-    try {
-      const payload = {
-        v: 1,
-        nodes,
-        relationships: {
-          show: showRelationships,
-          mode: relationshipMode,
-          enabledTypes: enabledRelationshipTypes,
-          explicitIds: explicitRelationshipIds,
-        },
-        addRelated: {
-          depth: addRelatedDepth,
-          direction: addRelatedDirection,
-          enabledTypes: addRelatedEnabledTypes,
-        },
-        ui: {
-          edgeRouting,
-        },
-      };
-      ss.setItem(SANDBOX_STATE_KEY(modelId), JSON.stringify(payload));
-    } catch {
-      // ignore quota or JSON errors
-    }
+
+    const payload: PersistedSandboxStateV1 = {
+      v: 1,
+      nodes,
+      relationships: {
+        show: showRelationships,
+        mode: relationshipMode,
+        enabledTypes: enabledRelationshipTypes,
+        explicitIds: explicitRelationshipIds,
+      },
+      addRelated: {
+        depth: addRelatedDepth,
+        direction: addRelatedDirection,
+        enabledTypes: addRelatedEnabledTypes,
+      },
+      ui: {
+        edgeRouting,
+      },
+    };
+
+    savePersistedSandboxState(modelId, payload);
   }, [addRelatedDepth, addRelatedDirection, addRelatedEnabledTypes, edgeRouting, enabledRelationshipTypes, explicitRelationshipIds, model, modelId, nodes, persistEnabled, relationshipMode, showRelationships]);
+
 
   const allRelationshipTypesForModel = useMemo(() => {
     if (!model) return [];
@@ -496,14 +331,8 @@ export function useSandboxState(args: {
   const setPersistEnabledSafe = useCallback(
     (enabled: boolean) => {
       setPersistEnabled(enabled);
-      const ss = safeGetSessionStorage();
-      if (!ss) return;
       if (!enabled) {
-        try {
-          ss.removeItem(SANDBOX_STATE_KEY(modelId));
-        } catch {
-          // ignore
-        }
+        clearPersistedSandboxState(modelId);
         return;
       }
       // Only hydrate if the current sandbox is empty, to avoid surprising overwrites.

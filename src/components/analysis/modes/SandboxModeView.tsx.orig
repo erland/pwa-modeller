@@ -3,7 +3,7 @@ import type { DragEvent, PointerEvent } from 'react';
 
 import type { Model } from '../../../domain';
 import type { Selection } from '../../model/selection';
-import type { SandboxNode } from '../workspace/controller/useSandboxState';
+import type { SandboxNode } from '../workspace/controller/sandboxTypes';
 
 import { dataTransferHasElement, readDraggedElementId } from '../../diagram/dragDrop';
 

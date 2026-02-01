@@ -17,7 +17,7 @@ import type {
   SandboxRelationshipsState,
   SandboxUiState,
   SandboxState,
-} from '../workspace/controller/useSandboxState';
+} from '../workspace/controller/sandboxTypes';
 
 import { dataTransferHasElement, readDraggedElementId } from '../../diagram/dragDrop';
 

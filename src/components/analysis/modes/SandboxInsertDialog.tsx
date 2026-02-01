@@ -14,7 +14,7 @@ import type {
   SandboxAddRelatedDirection,
   SandboxInsertIntermediatesMode,
   SandboxInsertIntermediatesOptions,
-} from '../workspace/controller/useSandboxState';
+} from '../workspace/controller/sandboxTypes';
 
 import { Dialog } from '../../dialog/Dialog';
 

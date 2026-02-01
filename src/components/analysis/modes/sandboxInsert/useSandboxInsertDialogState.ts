@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import type { Model } from '../../../../domain';
 import type {
@@ -7,18 +7,11 @@ import type {
   SandboxInsertIntermediatesOptions,
 } from '../../workspace/controller/sandboxTypes';
 
-import { computeIntermediatesPreview, computeRelatedPreview } from './computePreview';
-import { buildCandidateById, computeVisibleCandidateIds, countSelectedNew, countSelectedVisible } from './sandboxInsertCandidates';
-import {
-  computeAllElementTypesForModel,
-  computeDefaultSelectedIds,
-  computeInitialEnabledRelationshipTypes,
-  computeRelationshipTypesForDialog,
-  keepEnabledRelationshipTypesValid,
-  normalizeIntermediatesOptions,
-  normalizeRelatedOptions,
-} from './sandboxInsertPolicy';
+import { computeRelationshipTypesForDialog, normalizeIntermediatesOptions, normalizeRelatedOptions } from './sandboxInsertPolicy';
 import type { Candidate, PreviewState } from './types';
+import { useSandboxInsertOptionsState } from './useSandboxInsertOptionsState';
+import { useSandboxInsertPreviewState } from './useSandboxInsertPreviewState';
+import { useSandboxInsertSelectionState } from './useSandboxInsertSelectionState';
 
 type IntermediatesProps = {
   kind: 'intermediates';
@@ -121,296 +114,183 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
 
   const existingSet = useMemo(() => new Set(existingElementIds), [existingElementIds]);
 
-  const allElementTypesForModel = useMemo(() => computeAllElementTypesForModel(model), [model]);
+  const kind = props.kind;
+  const sourceElementId = kind === 'intermediates' ? props.sourceElementId : undefined;
+  const targetElementId = kind === 'intermediates' ? props.targetElementId : undefined;
+  const anchorElementIds = kind === 'related' ? props.anchorElementIds : undefined;
+  const anchorKey = useMemo(() => (anchorElementIds ? anchorElementIds.join('|') : ''), [anchorElementIds]);
 
   const relationshipTypesForDialog = useMemo(() => {
     return computeRelationshipTypesForDialog({
       model,
-      kind: props.kind,
-      sourceElementId: props.kind === 'intermediates' ? props.sourceElementId : undefined,
-      targetElementId: props.kind === 'intermediates' ? props.targetElementId : undefined,
-      anchorElementIds: props.kind === 'related' ? props.anchorElementIds : undefined,
+      kind,
+      sourceElementId,
+      targetElementId,
+      anchorElementIds,
       allRelationshipTypes,
     });
-  }, [allRelationshipTypes, model, props]);
+  }, [allRelationshipTypes, anchorKey, kind, model, sourceElementId, targetElementId]);
 
-  // Shared settings
-  const [direction, setDirection] = useState<SandboxAddRelatedDirection>('both');
-  const [enabledTypes, setEnabledTypes] = useState<string[]>([]);
-  const [enabledElementTypes, setEnabledElementTypes] = useState<string[]>([]);
-
-  // Intermediates settings
-  const [mode, setMode] = useState<SandboxInsertIntermediatesMode>('shortest');
-  const [k, setK] = useState(3);
-  const [maxHops, setMaxHops] = useState(8);
-
-  // Related settings
-  const [depth, setDepth] = useState(1);
-
-  const [preview, setPreview] = useState<PreviewState | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
-
-  const [search, setSearch] = useState('');
-  const selectedIdsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    selectedIdsRef.current = selectedIds;
-  }, [selectedIds]);
-
-  const enabledElementTypesSet = useMemo(() => new Set(enabledElementTypes), [enabledElementTypes]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    setEnabledTypes(
-      computeInitialEnabledRelationshipTypes({
-        relationshipTypesForDialog,
-        initialEnabledRelationshipTypes,
-      }),
-    );
-    setEnabledElementTypes(allElementTypesForModel);
-    setPreview(null);
-    setSelectedIds(new Set());
-    setError(null);
-    setSearch('');
-
-    if (props.kind === 'intermediates') {
-      const o = normalizeIntermediatesOptions(props.initialOptions);
-      setMode(o.mode);
-      setK(o.k);
-      setMaxHops(o.maxHops);
-      setDirection(o.direction);
-      setDepth(1);
-    } else {
-      const o = normalizeRelatedOptions(props.initialOptions);
-      setDepth(o.depth);
-      setDirection(o.direction);
-      setMode('shortest');
-      setK(3);
-      setMaxHops(8);
+  const optionsArgs = useMemo(() => {
+    if (kind === 'intermediates') {
+      return {
+        kind: 'intermediates' as const,
+        initialOptions: (props as IntermediatesProps).initialOptions,
+      };
     }
-  }, [allElementTypesForModel, initialEnabledRelationshipTypes, isOpen, props, relationshipTypesForDialog]);
+    return {
+      kind: 'related' as const,
+      initialOptions: (props as RelatedProps).initialOptions,
+    };
+  }, [kind, props]);
 
-  // Keep enabled relationship types valid when compatible types change.
-  useEffect(() => {
-    setEnabledTypes((prev) =>
-      keepEnabledRelationshipTypesValid({ isOpen, enabledTypes: prev, relationshipTypesForDialog }),
-    );
-  }, [isOpen, relationshipTypesForDialog]);
+  const options = useSandboxInsertOptionsState({
+    isOpen,
+    model,
+    relationshipTypesForDialog,
+    initialEnabledRelationshipTypes,
+    ...optionsArgs,
+  });
 
-  const computePreview = useCallback(() => {
-    if (!isOpen) return;
-    setError(null);
+  const selection = useSandboxInsertSelectionState({ openNonce: options.openNonce });
 
-    if (enabledTypes.length === 0) {
-      setError('Select at least one relationship type.');
-      setPreview(null);
-      return;
+  const previewArgs = useMemo(() => {
+    if (kind === 'intermediates') {
+      return {
+        kind: 'intermediates' as const,
+        sourceElementId: (props as IntermediatesProps).sourceElementId,
+        targetElementId: (props as IntermediatesProps).targetElementId,
+      };
     }
+    return {
+      kind: 'related' as const,
+      anchorElementIds: (props as RelatedProps).anchorElementIds,
+    };
+  }, [anchorKey, kind, props]);
 
-    if (props.kind === 'intermediates') {
-      const { sourceElementId, targetElementId } = props;
-      if (!sourceElementId || !targetElementId) {
-        setError('Missing endpoints.');
-        setPreview(null);
-        return;
-      }
-      if (sourceElementId === targetElementId) {
-        setError('Endpoints must be different.');
-        setPreview(null);
-        return;
-      }
+  const previewState = useSandboxInsertPreviewState({
+    isOpen,
+    model,
+    existingSet,
+    enabledTypes: options.enabledTypes,
+    enabledElementTypesSet: options.enabledElementTypesSet,
+    openNonce: options.openNonce,
+    mode: options.mode,
+    k: options.k,
+    maxHops: options.maxHops,
+    depth: options.depth,
+    direction: options.direction,
+    search: options.search,
+    selectedIds: selection.selectedIds,
+    selectedIdsRef: selection.selectedIdsRef,
+    setSelectedIds: selection.setSelectedIds,
+    ...previewArgs,
+  });
 
-      const res = computeIntermediatesPreview({
-        model,
-        enabledRelationshipTypes: enabledTypes,
-        existingSet,
-        enabledElementTypesSet,
-        includeAlreadyInSandbox: false,
-        sourceElementId,
-        targetElementId,
-        mode,
-        k,
-        maxHops,
-        direction,
-      });
-
-      if (res.paths.length === 0) {
-        setError('No paths found for the current settings.');
-        setPreview({ kind: 'intermediates', paths: [], candidates: [] });
-        setSelectedIds(new Set());
-        return;
-      }
-
-      const nextSelected = computeDefaultSelectedIds({
-        prevSelected: selectedIdsRef.current,
-        candidates: res.candidates,
-      });
-
-      setPreview({ kind: 'intermediates', paths: res.paths, candidates: res.candidates });
-      setSelectedIds(nextSelected);
-      return;
-    }
-
-    const anchors = props.anchorElementIds.filter((id) => Boolean(model.elements[id]));
-    if (anchors.length === 0) {
-      setError('Select one or more anchor nodes.');
-      setPreview(null);
-      return;
-    }
-
-    const res = computeRelatedPreview({
-      model,
-      enabledRelationshipTypes: enabledTypes,
-      existingSet,
-      enabledElementTypesSet,
-      includeAlreadyInSandbox: false,
-      anchorElementIds: anchors,
-      depth,
-      direction,
-    });
-
-    const nextSelected = computeDefaultSelectedIds({
-      prevSelected: selectedIdsRef.current,
-      candidates: res.candidates,
-    });
-
-    if (res.candidates.length === 0) {
-      setError('No related elements found for the current settings.');
-    }
-
-    setPreview({ kind: 'related', groups: res.groups, candidates: res.candidates });
-    setSelectedIds(nextSelected);
-  }, [depth, direction, enabledElementTypesSet, enabledTypes, existingSet, isOpen, k, maxHops, mode, model, props]);
-
-  // Auto-preview on open + whenever settings change.
-  useEffect(() => {
-    if (!isOpen) return;
-    if (enabledTypes.length === 0) return;
-    const t = window.setTimeout(() => {
-      computePreview();
-    }, 120);
-    return () => window.clearTimeout(t);
-  }, [computePreview, enabledTypes.length, isOpen]);
-
-  const title = props.kind === 'related' ? 'Add related elements' : 'Insert intermediate elements';
+  const title = kind === 'related' ? 'Add related elements' : 'Insert intermediate elements';
 
   const maxNodes = props.maxNodes;
   const maxNewNodes = maxNodes ? Math.max(0, maxNodes - existingElementIds.length) : null;
 
-  const candidateById = useMemo(() => buildCandidateById(preview), [preview]);
-
-  const visibleCandidateIds = useMemo(() => computeVisibleCandidateIds(preview, search), [preview, search]);
-
-  const selectedCount = selectedIds.size;
-  const candidatesCount = preview?.candidates.length ?? 0;
-
-  const selectedNewCount = useMemo(() => {
-    if (!preview) return 0;
-    return countSelectedNew({ candidateById, selectedIds });
-  }, [candidateById, preview, selectedIds]);
-
-  const selectedVisibleCount = useMemo(() => {
-    if (!preview) return 0;
-    return countSelectedVisible({ selectedIds, visibleCandidateIds });
-  }, [preview, selectedIds, visibleCandidateIds]);
-
-  const canInsert = preview !== null && selectedCount > 0 && enabledTypes.length > 0;
-
-  const toggleSelectedId = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const selectedCount = selection.selectedIds.size;
+  const canInsert = previewState.preview !== null && selectedCount > 0 && options.enabledTypes.length > 0;
 
   const selectAllVisible = useCallback(() => {
-    setSelectedIds((prev) => {
+    selection.setSelectedIds((prev) => {
       const next = new Set<string>(prev);
-      for (const id of visibleCandidateIds) {
+      for (const id of previewState.visibleCandidateIds) {
         if (existingSet.has(id)) continue;
         next.add(id);
       }
       return next;
     });
-  }, [existingSet, visibleCandidateIds]);
+  }, [existingSet, previewState.visibleCandidateIds, selection]);
 
   const clearVisible = useCallback(() => {
-    setSelectedIds((prev) => {
+    selection.setSelectedIds((prev) => {
       const next = new Set<string>(prev);
-      for (const id of visibleCandidateIds) next.delete(id);
+      for (const id of previewState.visibleCandidateIds) next.delete(id);
       return next;
     });
-  }, [visibleCandidateIds]);
-
-  const selectNone = useCallback(() => {
-    setSelectedIds(new Set());
-  }, []);
+  }, [previewState.visibleCandidateIds, selection]);
 
   const onConfirmClick = useCallback(() => {
-    const selectedElementIds = Array.from(selectedIds);
-    if (props.kind === 'intermediates') {
-      props.onConfirm({
-        enabledRelationshipTypes: enabledTypes,
-        options: normalizeIntermediatesOptions({ mode, k, maxHops, direction }),
+    const selectedElementIds = Array.from(selection.selectedIds);
+    if (kind === 'intermediates') {
+      (props as IntermediatesProps).onConfirm({
+        enabledRelationshipTypes: options.enabledTypes,
+        options: normalizeIntermediatesOptions({
+          mode: options.mode,
+          k: options.k,
+          maxHops: options.maxHops,
+          direction: options.direction,
+        }),
         selectedElementIds,
       });
     } else {
-      props.onConfirm({
-        enabledRelationshipTypes: enabledTypes,
-        options: normalizeRelatedOptions({ depth, direction }),
+      (props as RelatedProps).onConfirm({
+        enabledRelationshipTypes: options.enabledTypes,
+        options: normalizeRelatedOptions({ depth: options.depth, direction: options.direction }),
         selectedElementIds,
       });
     }
-  }, [depth, direction, enabledTypes, k, maxHops, mode, props, selectedIds]);
+  }, [kind, options, props, selection.selectedIds]);
 
   return {
     title,
     isOpen,
     model,
-    kind: props.kind,
-    sourceElementId: props.kind === 'intermediates' ? props.sourceElementId : undefined,
-    targetElementId: props.kind === 'intermediates' ? props.targetElementId : undefined,
-    anchorElementIds: props.kind === 'related' ? props.anchorElementIds : undefined,
-    contextLabel: props.kind === 'intermediates' ? props.contextLabel : undefined,
-    contextRelationshipType: props.kind === 'intermediates' ? props.contextRelationshipType : undefined,
-    allElementTypesForModel,
+    kind,
+    sourceElementId,
+    targetElementId,
+    anchorElementIds,
+    contextLabel: kind === 'intermediates' ? (props as IntermediatesProps).contextLabel : undefined,
+    contextRelationshipType: kind === 'intermediates' ? (props as IntermediatesProps).contextRelationshipType : undefined,
+
+    allElementTypesForModel: options.allElementTypesForModel,
     relationshipTypesForDialog,
-    mode,
-    setMode,
-    k,
-    setK,
-    maxHops,
-    setMaxHops,
-    depth,
-    setDepth,
-    direction,
-    setDirection,
-    enabledTypes,
-    setEnabledTypes,
-    enabledElementTypes,
-    setEnabledElementTypes,
-    preview,
-    error,
-    search,
-    setSearch,
+
+    mode: options.mode,
+    setMode: options.setMode,
+    k: options.k,
+    setK: options.setK,
+    maxHops: options.maxHops,
+    setMaxHops: options.setMaxHops,
+    depth: options.depth,
+    setDepth: options.setDepth,
+    direction: options.direction,
+    setDirection: options.setDirection,
+
+    enabledTypes: options.enabledTypes,
+    setEnabledTypes: options.setEnabledTypes,
+    enabledElementTypes: options.enabledElementTypes,
+    setEnabledElementTypes: options.setEnabledElementTypes,
+
+    preview: previewState.preview,
+    error: previewState.error,
+
+    search: options.search,
+    setSearch: options.setSearch,
+
     existingSet,
-    selectedIds,
-    toggleSelectedId,
-    candidateById,
-    visibleCandidateIds,
+    selectedIds: selection.selectedIds,
+    toggleSelectedId: selection.toggleSelectedId,
+
+    candidateById: previewState.candidateById,
+    visibleCandidateIds: previewState.visibleCandidateIds,
+
     selectedCount,
-    candidatesCount,
-    selectedVisibleCount,
-    selectedNewCount,
+    candidatesCount: previewState.candidatesCount,
+    selectedVisibleCount: previewState.selectedVisibleCount,
+    selectedNewCount: previewState.selectedNewCount,
     maxNewNodes,
+
     canInsert,
+
     selectAllVisible,
     clearVisible,
-    selectNone,
+    selectNone: selection.selectNone,
+
     onCancel: props.onCancel,
     onConfirmClick,
   };

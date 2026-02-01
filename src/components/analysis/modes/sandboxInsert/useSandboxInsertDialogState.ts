@@ -118,7 +118,6 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
   const sourceElementId = kind === 'intermediates' ? props.sourceElementId : undefined;
   const targetElementId = kind === 'intermediates' ? props.targetElementId : undefined;
   const anchorElementIds = kind === 'related' ? props.anchorElementIds : undefined;
-  const anchorKey = useMemo(() => (anchorElementIds ? anchorElementIds.join('|') : ''), [anchorElementIds]);
 
   const relationshipTypesForDialog = useMemo(() => {
     return computeRelationshipTypesForDialog({
@@ -129,7 +128,7 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
       anchorElementIds,
       allRelationshipTypes,
     });
-  }, [allRelationshipTypes, anchorKey, kind, model, sourceElementId, targetElementId]);
+  }, [allRelationshipTypes, anchorElementIds, kind, model, sourceElementId, targetElementId]);
 
   const optionsArgs = useMemo(() => {
     if (kind === 'intermediates') {
@@ -166,7 +165,7 @@ export function useSandboxInsertDialogState(props: SandboxInsertDialogProps): Sa
       kind: 'related' as const,
       anchorElementIds: (props as RelatedProps).anchorElementIds,
     };
-  }, [anchorKey, kind, props]);
+  }, [kind, props]);
 
   const previewState = useSandboxInsertPreviewState({
     isOpen,

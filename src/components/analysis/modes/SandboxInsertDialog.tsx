@@ -2,9 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Model } from '../../../domain';
 import {
-  bfsKShortestPaths,
-  bfsShortestPath,
-  buildAdjacency,
   getElementTypeLabel,
   getRelationshipTypeLabel,
   getRelationshipTypesForKind,
@@ -18,35 +15,11 @@ import type {
 
 import { Dialog } from '../../dialog/Dialog';
 
-type Candidate = {
-  id: string;
-  name: string;
-  type: string;
-  alreadyInSandbox: boolean;
-};
-
-type PreviewPath = {
-  path: string[];
-  intermediates: string[];
-};
-
-type PreviewIntermediates = {
-  kind: 'intermediates';
-  paths: PreviewPath[];
-  candidates: Candidate[];
-};
-
-type PreviewRelated = {
-  kind: 'related';
-  byDepth: Array<{ depth: number; elementIds: string[] }>;
-  candidates: Candidate[];
-};
-
-type PreviewState = PreviewIntermediates | PreviewRelated;
-
-function normalizeText(v: string): string {
-  return (v || '').trim().toLowerCase();
-}
+import { computeIntermediatesPreview, computeRelatedPreview } from './sandboxInsert/computePreview';
+import { SandboxInsertElementList } from './sandboxInsert/SandboxInsertElementList';
+import { SandboxInsertRelationshipTypePicker } from './sandboxInsert/SandboxInsertRelationshipTypePicker';
+import type { Candidate, PreviewPath, PreviewState } from './sandboxInsert/types';
+import { clampInt, normalizeText, toggleString, uniqSortedStrings } from './sandboxInsert/utils';
 
 function matchesCandidate(args: { c: Candidate; q: string }): boolean {
   const q = normalizeText(args.q);
@@ -54,41 +27,6 @@ function matchesCandidate(args: { c: Candidate; q: string }): boolean {
   const c = args.c;
   const hay = `${c.name} ${c.type} ${c.id}`.toLowerCase();
   return hay.includes(q);
-}
-
-function clampInt(v: number, min: number, max: number): number {
-  if (!Number.isFinite(v)) return min;
-  const iv = Math.round(v);
-  if (iv < min) return min;
-  if (iv > max) return max;
-  return iv;
-}
-
-function toggleString(values: string[], v: string): string[] {
-  const set = new Set(values);
-  if (set.has(v)) set.delete(v);
-  else set.add(v);
-  return Array.from(set);
-}
-
-function uniqSortedStrings(values: string[]): string[] {
-  return Array.from(new Set(values)).filter((v) => typeof v === 'string' && v.length > 0).sort((a, b) => a.localeCompare(b));
-}
-
-function getNeighbors(args: {
-  adjacency: ReturnType<typeof buildAdjacency>;
-  id: string;
-  direction: SandboxAddRelatedDirection;
-}): string[] {
-  const { adjacency, id, direction } = args;
-  const out: string[] = [];
-  if (direction === 'both' || direction === 'outgoing') {
-    for (const e of adjacency.out.get(id) ?? []) out.push(e.to);
-  }
-  if (direction === 'both' || direction === 'incoming') {
-    for (const e of adjacency.in.get(id) ?? []) out.push(e.to);
-  }
-  return out;
 }
 
 type IntermediatesProps = {
@@ -250,9 +188,6 @@ export function SandboxInsertDialog(props: Props) {
       return;
     }
 
-    const allowedTypes = new Set(enabledTypes);
-    const adjacency = buildAdjacency(model, allowedTypes);
-
     if (props.kind === 'intermediates') {
       const { sourceElementId, targetElementId } = props;
       if (!sourceElementId || !targetElementId) {
@@ -266,73 +201,35 @@ export function SandboxInsertDialog(props: Props) {
         return;
       }
 
-      const maxH = clampInt(maxHops, 1, 16);
-      const kk = clampInt(k, 1, 10);
+      const res = computeIntermediatesPreview({
+        model,
+        enabledRelationshipTypes: enabledTypes,
+        existingSet,
+        enabledElementTypesSet,
+        includeAlreadyInSandbox: false,
+        sourceElementId,
+        targetElementId,
+        mode,
+        k,
+        maxHops,
+        direction,
+      });
 
-      const paths: string[][] =
-        mode === 'topk'
-          ? bfsKShortestPaths({
-              startId: sourceElementId,
-              targetId: targetElementId,
-              adjacency,
-              direction,
-              maxHops: maxH,
-              k: kk,
-            })
-          : (() => {
-              const p = bfsShortestPath({
-                startId: sourceElementId,
-                targetId: targetElementId,
-                adjacency,
-                direction,
-                maxHops: maxH,
-              });
-              return p ? [p] : [];
-            })();
-
-      if (paths.length === 0) {
+      if (res.paths.length === 0) {
         setError('No paths found for the current settings.');
         setPreview({ kind: 'intermediates', paths: [], candidates: [] });
         setSelectedIds(new Set());
         return;
       }
 
-      const previewPaths: PreviewPath[] = paths.map((p) => {
-        const intermediates = p
-          .slice(1, -1)
-          .filter((id) => typeof id === 'string' && id.length > 0 && Boolean(model.elements[id]));
-        return { path: p, intermediates };
-      });
-
-      const candidateMap = new Map<string, Candidate>();
-      for (const pp of previewPaths) {
-        for (const id of pp.intermediates) {
-          if (candidateMap.has(id)) continue;
-          const el = model.elements[id];
-          if (!el) continue;
-          if (!enabledElementTypesSet.has(el.type)) continue;
-          if (existingSet.has(id)) continue;
-          candidateMap.set(id, {
-            id,
-            name: el.name || '(unnamed)',
-            type: el.type,
-            alreadyInSandbox: false,
-          });
-        }
-      }
-
-      const candidates = Array.from(candidateMap.values()).sort(
-        (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
-      );
       const prevSelected = selectedIdsRef.current;
       const nextSelected = new Set<string>();
-      for (const c of candidates) {
-        if (c.alreadyInSandbox) continue;
+      for (const c of res.candidates) {
         // Preserve explicit user selection if possible. If no prior selection, default to selecting all new.
         if (prevSelected.size === 0 || prevSelected.has(c.id)) nextSelected.add(c.id);
       }
 
-      setPreview({ kind: 'intermediates', paths: previewPaths, candidates });
+      setPreview({ kind: 'intermediates', paths: res.paths, candidates: res.candidates });
       setSelectedIds(nextSelected);
       return;
     }
@@ -345,63 +242,28 @@ export function SandboxInsertDialog(props: Props) {
       return;
     }
 
-    const depthLimit = clampInt(depth, 1, 6);
-    const visited = new Set<string>(anchors);
-    const q: Array<{ id: string; depth: number }> = anchors.map((id) => ({ id, depth: 0 }));
-    const depthById = new Map<string, number>();
+    const res = computeRelatedPreview({
+      model,
+      enabledRelationshipTypes: enabledTypes,
+      existingSet,
+      enabledElementTypesSet,
+      includeAlreadyInSandbox: false,
+      anchorElementIds: anchors,
+      depth,
+      direction,
+    });
 
-    while (q.length) {
-      const cur = q.shift();
-      if (!cur) break;
-      if (cur.depth >= depthLimit) continue;
-      const nextDepth = cur.depth + 1;
-      for (const nb of getNeighbors({ adjacency, id: cur.id, direction })) {
-        if (visited.has(nb)) continue;
-        if (!model.elements[nb]) continue;
-        visited.add(nb);
-        depthById.set(nb, nextDepth);
-        q.push({ id: nb, depth: nextDepth });
-      }
-    }
-
-    const byDepth = new Map<number, string[]>();
-    for (const [id, d] of depthById.entries()) {
-      if (!byDepth.has(d)) byDepth.set(d, []);
-      byDepth.get(d)!.push(id);
-    }
-    const groups = Array.from(byDepth.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([d, ids]) => ({
-        depth: d,
-        elementIds: ids.slice().sort((a, b) => a.localeCompare(b)),
-      }));
-
-    const candidateMap = new Map<string, Candidate>();
-    for (const g of groups) {
-      for (const id of g.elementIds) {
-        const el = model.elements[id];
-        if (!el) continue;
-        if (!enabledElementTypesSet.has(el.type)) continue;
-        if (existingSet.has(id)) continue;
-        candidateMap.set(id, {
-          id,
-          name: el.name || '(unnamed)',
-          type: el.type,
-          alreadyInSandbox: false,
-        });
-      }
-    }
-    const candidates = Array.from(candidateMap.values()).sort(
-      (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)
-    );
     const prevSelected = selectedIdsRef.current;
     const nextSelected = new Set<string>();
-    for (const c of candidates) {
-      if (c.alreadyInSandbox) continue;
+    for (const c of res.candidates) {
       if (prevSelected.size === 0 || prevSelected.has(c.id)) nextSelected.add(c.id);
     }
 
-    setPreview({ kind: 'related', byDepth: groups, candidates });
+    if (res.candidates.length === 0) {
+      setError('No related elements found for the current settings.');
+    }
+
+    setPreview({ kind: 'related', groups: res.groups, candidates: res.candidates });
     setSelectedIds(nextSelected);
   }, [depth, direction, enabledElementTypesSet, enabledTypes, existingSet, isOpen, k, maxHops, mode, model, props]);
 
@@ -459,6 +321,15 @@ export function SandboxInsertDialog(props: Props) {
     }
     return n;
   }, [preview, selectedIds, visibleCandidateIds]);
+
+  const toggleSelectedId = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   return (
     <Dialog
@@ -655,49 +526,14 @@ export function SandboxInsertDialog(props: Props) {
       </div>
     )}
 
-    <div className="formRow">
-      <label>Relationship types</label>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          className="miniLinkButton"
-          onClick={() => setEnabledTypes(relationshipTypesForDialog)}
-          disabled={relationshipTypesForDialog.length === 0}
-          aria-disabled={relationshipTypesForDialog.length === 0}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          className="miniLinkButton"
-          onClick={() => setEnabledTypes([])}
-          disabled={relationshipTypesForDialog.length === 0}
-          aria-disabled={relationshipTypesForDialog.length === 0}
-        >
-          None
-        </button>
-        <span className="crudHint" style={{ margin: 0 }}>
-          {enabledTypes.length}/{relationshipTypesForDialog.length}
-        </span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-        {relationshipTypesForDialog.map((t) => {
-          const checked = enabledTypes.includes(t);
-          return (
-            <label key={t} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12 }}>
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => setEnabledTypes((prev) => toggleString(prev, t))}
-              />
-              <span>{getRelationshipTypeLabel(t)}</span>
-            </label>
-          );
-        })}
-      </div>
-    </div>
-
-    <div className="formRow">
+    <SandboxInsertRelationshipTypePicker
+      allTypes={relationshipTypesForDialog}
+      enabledTypes={enabledTypes}
+      setEnabledTypes={setEnabledTypes}
+      labelForType={getRelationshipTypeLabel}
+      columns={2}
+    />
+<div className="formRow">
       <label>Element types</label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
@@ -853,39 +689,16 @@ export function SandboxInsertDialog(props: Props) {
                       </summary>
 
                       {visibleIntermediates.length ? (
-                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6, marginTop: 8 }}>
-                          {visibleIntermediates.map((id) => {
-                            const el = model.elements[id];
-                            if (!el) return null;
-                            const already = existingSet.has(id);
-                            const checked = selectedIds.has(id);
-                            return (
-                              <li key={`${idx}-${id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  disabled={already}
-                                  aria-disabled={already}
-                                  onChange={() =>
-                                    setSelectedIds((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(id)) next.delete(id);
-                                      else next.add(id);
-                                      return next;
-                                    })
-                                  }
-                                />
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span>{el.name || '(unnamed)'}</span>
-                                  <span className="crudHint" style={{ margin: 0 }}>
-                                    {el.type}
-                                    {already ? ' · already in sandbox' : ''}
-                                  </span>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
+                        <div style={{ marginTop: 8 }}>
+                          <SandboxInsertElementList
+                            model={model}
+                            elementIds={visibleIntermediates}
+                            existingSet={existingSet}
+                            selectedIds={selectedIds}
+                            onToggleId={toggleSelectedId}
+                            disableExisting={false}
+                          />
+                        </div>
                       ) : (
                         <p className="crudHint" style={{ margin: 0, marginTop: 8 }}>
                           No intermediate candidates match the current filters.
@@ -897,7 +710,7 @@ export function SandboxInsertDialog(props: Props) {
               </div>
             ) : (
               <div style={{ marginTop: 8, maxHeight: 420, overflow: 'auto', paddingRight: 6 }}>
-                {preview.byDepth.map((g) => {
+                {preview.groups.map((g) => {
                   const visibleIds = g.elementIds.filter((id) => {
                     const c = candidateById.get(id);
                     if (!c) return false;
@@ -923,39 +736,16 @@ export function SandboxInsertDialog(props: Props) {
                         </span>
                       </summary>
                       {visibleIds.length ? (
-                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6, marginTop: 8 }}>
-                          {visibleIds.map((id) => {
-                            const el = model.elements[id];
-                            if (!el) return null;
-                            const already = existingSet.has(id);
-                            const checked = selectedIds.has(id);
-                            return (
-                              <li key={`${g.depth}-${id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  disabled={already}
-                                  aria-disabled={already}
-                                  onChange={() =>
-                                    setSelectedIds((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(id)) next.delete(id);
-                                      else next.add(id);
-                                      return next;
-                                    })
-                                  }
-                                />
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span>{el.name || '(unnamed)'}</span>
-                                  <span className="crudHint" style={{ margin: 0 }}>
-                                    {el.type}
-                                    {already ? ' · already in sandbox' : ''}
-                                  </span>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
+                        <div style={{ marginTop: 8 }}>
+                        <SandboxInsertElementList
+                          model={model}
+                          elementIds={visibleIds}
+                          existingSet={existingSet}
+                          selectedIds={selectedIds}
+                          onToggleId={toggleSelectedId}
+                          disableExisting={false}
+                        />
+                      </div>
                       ) : (
                         <p className="crudHint" style={{ margin: 0, marginTop: 8 }}>
                           No related candidates match the current filters.

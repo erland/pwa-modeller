@@ -3,6 +3,7 @@ export * from './graph';
 export * from './traverse';
 export * from './miniGraph';
 export * from './relationshipMatrix';
+export * from './sandboxGraph';
 export * from './metrics';
 export * from './queries/relatedElements';
 export * from './queries/pathsBetween';

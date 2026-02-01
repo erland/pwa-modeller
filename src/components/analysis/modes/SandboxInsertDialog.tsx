@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Model } from '../../../domain';
-import { getElementTypeLabel, getRelationshipTypeLabel, getRelationshipTypesForKind, kindFromTypeId } from '../../../domain';
+import {
+  bfsKShortestPaths,
+  bfsShortestPath,
+  buildAdjacency,
+  getElementTypeLabel,
+  getRelationshipTypeLabel,
+  getRelationshipTypesForKind,
+  kindFromTypeId,
+} from '../../../domain';
 import type {
   SandboxAddRelatedDirection,
   SandboxInsertIntermediatesMode,
   SandboxInsertIntermediatesOptions,
 } from '../workspace/controller/useSandboxState';
-import { bfsKShortestPaths, bfsShortestPath, buildAdjacency } from '../workspace/controller/useSandboxState';
 
 import { Dialog } from '../../dialog/Dialog';
 

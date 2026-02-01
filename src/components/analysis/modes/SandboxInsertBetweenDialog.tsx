@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { Model } from '../../../domain';
+import { bfsKShortestPaths, bfsShortestPath, buildAdjacency } from '../../../domain';
 import type {
   SandboxAddRelatedDirection,
   SandboxInsertIntermediatesMode,
   SandboxInsertIntermediatesOptions,
 } from '../workspace/controller/useSandboxState';
-import { bfsKShortestPaths, bfsShortestPath, buildAdjacency } from '../workspace/controller/useSandboxState';
-
 import { Dialog } from '../../dialog/Dialog';
 
 type PreviewPath = {

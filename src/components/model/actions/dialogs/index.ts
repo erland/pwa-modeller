@@ -4,5 +4,7 @@ export * from './SaveAsDialog';
 export * from './ImportDialog';
 export * from './ImportReportDialog';
 export * from './OverlayImportDialog';
+export * from './OverlaySurveyExportDialog';
+export * from './OverlaySurveyImportDialog';
 export * from './OverlayResolveReportDialog';
 export * from './OverlayManageDialog';

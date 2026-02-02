@@ -15,7 +15,12 @@ import {
   type OverlayImportWarning,
   parseOverlayJson,
   serializeOverlayStoreToJson,
-  importOverlayFileToStore
+  importOverlayFileToStore,
+  type SurveyExportOptions,
+  type SurveyImportOptions,
+  type SurveyTargetSet,
+  importOverlaySurveyCsvToStore,
+  serializeOverlaySurveyCsv
 } from '../../../store/overlay';
 import { useOverlayStore } from '../../../store/overlay';
 
@@ -80,10 +85,20 @@ function warningToText(w: OverlayImportWarning): string {
  */
 export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHandlersArgs) {
   const overlayLoadInputRef = useRef<HTMLInputElement | null>(null);
+  const overlaySurveyLoadInputRef = useRef<HTMLInputElement | null>(null);
 
   const [overlayImportDialogOpen, setOverlayImportDialogOpen] = useState(false);
   const [overlayImporting, setOverlayImporting] = useState(false);
   const [overlayImportError, setOverlayImportError] = useState<string | null>(null);
+
+  const [surveyExportDialogOpen, setSurveyExportDialogOpen] = useState(false);
+  const [surveyImportDialogOpen, setSurveyImportDialogOpen] = useState(false);
+  const [surveyImporting, setSurveyImporting] = useState(false);
+  const [surveyImportError, setSurveyImportError] = useState<string | null>(null);
+
+  const [surveyTargetSet, setSurveyTargetSet] = useState<SurveyTargetSet>('elements');
+  const [surveyTagKeysText, setSurveyTagKeysText] = useState<string>('');
+  const [surveyImportOptions, setSurveyImportOptions] = useState<SurveyImportOptions>({ blankMode: 'ignore' });
 
   const [overlayReportOpen, setOverlayReportOpen] = useState(false);
   const [lastOverlayImport, setLastOverlayImport] = useState<LastOverlayImportInfo | null>(null);
@@ -120,6 +135,13 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     el.click();
   }, []);
 
+  const triggerOverlaySurveyLoadFilePicker = useCallback(() => {
+    const el = overlaySurveyLoadInputRef.current;
+    if (!el) return;
+    el.value = '';
+    el.click();
+  }, []);
+
   const doOverlayImport = useCallback(() => {
     if (!model) {
       setToast({ kind: 'warn', message: 'Load a model first before importing an overlay.' });
@@ -127,6 +149,23 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     }
     setOverlayImportError(null);
     setOverlayImportDialogOpen(true);
+  }, [model]);
+
+  const doOverlaySurveyExport = useCallback(() => {
+    if (!model) {
+      setToast({ kind: 'warn', message: 'Load a model first before exporting a survey.' });
+      return;
+    }
+    setSurveyExportDialogOpen(true);
+  }, [model]);
+
+  const doOverlaySurveyImport = useCallback(() => {
+    if (!model) {
+      setToast({ kind: 'warn', message: 'Load a model first before importing a survey.' });
+      return;
+    }
+    setSurveyImportError(null);
+    setSurveyImportDialogOpen(true);
   }, [model]);
 
   const doOverlayExport = useCallback(() => {
@@ -140,6 +179,64 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     downloadTextFile(sanitizeFileNameWithExtension(`${base}-overlay`, 'json'), json, 'application/json');
     setToast({ kind: 'success', message: 'Overlay exported.' });
   }, [fileName, model]);
+
+  const doOverlaySurveyExportNow = useCallback(() => {
+    if (!model) return;
+    const base = defaultOverlayFileBase(model, fileName);
+
+    const tagKeys = surveyTagKeysText
+      .split(/[\n,]/g)
+      .map((s) => s.trim())
+      .filter((s) => !!s);
+
+    const options: SurveyExportOptions = {
+      targetSet: surveyTargetSet,
+      tagKeys,
+      prefillFromEffectiveTags: true
+    };
+
+    const csv = serializeOverlaySurveyCsv({ model, overlayStore, options });
+    downloadTextFile(sanitizeFileNameWithExtension(`${base}-overlay-survey`, 'csv'), csv, 'text/csv');
+    setToast({ kind: 'success', message: 'Overlay survey exported.' });
+    setSurveyExportDialogOpen(false);
+  }, [fileName, model, surveyTagKeysText, surveyTargetSet]);
+
+  const suggestSurveyKeys = useCallback(() => {
+    if (!model) return;
+
+    const set = new Set<string>();
+
+    // Overlay keys
+    for (const e of overlayStore.listEntries()) {
+      for (const k0 of Object.keys(e.tags ?? {})) {
+        const k = (k0 ?? '').toString().trim();
+        if (k) set.add(k);
+      }
+    }
+
+    // Core tagged values keys
+    for (const el of Object.values(model.elements ?? {})) {
+      for (const tv of (el as any).taggedValues ?? []) {
+        const k = (tv?.key ?? '').toString().trim();
+        if (k) set.add(k);
+      }
+    }
+    for (const rel of Object.values(model.relationships ?? {})) {
+      for (const tv of (rel as any).taggedValues ?? []) {
+        const k = (tv?.key ?? '').toString().trim();
+        if (k) set.add(k);
+      }
+    }
+
+    const keys = [...set.values()]
+      .map((s) => s.trim())
+      .filter((s) => !!s)
+      .sort()
+      .slice(0, 40);
+
+    setSurveyTagKeysText(keys.join('\n'));
+    setToast({ kind: 'info', message: keys.length ? `Suggested ${keys.length} keys.` : 'No tag keys found to suggest.' });
+  }, [model]);
 
   const onOverlayFileChosen = useCallback(
     async (file: File | null) => {
@@ -176,6 +273,41 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
       }
     },
     [model]
+  );
+
+  const onOverlaySurveyFileChosen = useCallback(
+    async (file: File | null) => {
+      if (!file) return;
+      if (!model) return;
+
+      setSurveyImporting(true);
+      setSurveyImportError(null);
+      try {
+        const text = await readFileAsText(file);
+
+        const result = importOverlaySurveyCsvToStore({ model, overlayStore, csvText: text, options: surveyImportOptions });
+
+        const report = result.resolveReport;
+        const warnings = result.warnings;
+
+        setLastOverlayImport({ fileName: file.name || 'overlay-survey.csv', warnings, report });
+        setSurveyImportDialogOpen(false);
+
+        const warnSuffix = summarizeWarnings(warnings);
+        const msg = `Survey imported: ${resolveSummary(report)}${warnSuffix}.`;
+        setToast({ kind: warnings.length || report.counts.orphan || report.counts.ambiguous ? 'warn' : 'success', message: msg });
+
+        if (warnings.length > 0 || report.counts.orphan > 0 || report.counts.ambiguous > 0) {
+          setOverlayReportOpen(true);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setSurveyImportError(msg);
+      } finally {
+        setSurveyImporting(false);
+      }
+    },
+    [model, surveyImportOptions]
   );
 
   const doOverlayReport = useCallback(() => {
@@ -252,13 +384,32 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
 
   return {
     overlayLoadInputRef,
+    overlaySurveyLoadInputRef,
     onOverlayFileChosen,
+    onOverlaySurveyFileChosen,
     triggerOverlayLoadFilePicker,
+    triggerOverlaySurveyLoadFilePicker,
 
     overlayImportDialogOpen,
     setOverlayImportDialogOpen,
     overlayImporting,
     overlayImportError,
+
+    surveyExportDialogOpen,
+    setSurveyExportDialogOpen,
+    surveyTargetSet,
+    setSurveyTargetSet,
+    surveyTagKeysText,
+    setSurveyTagKeysText,
+    doOverlaySurveyExportNow,
+    suggestSurveyKeys,
+
+    surveyImportDialogOpen,
+    setSurveyImportDialogOpen,
+    surveyImporting,
+    surveyImportError,
+    surveyImportOptions,
+    setSurveyImportOptions,
 
     overlayReportOpen,
     setOverlayReportOpen,
@@ -268,6 +419,8 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
 
     doOverlayImport,
     doOverlayExport,
+    doOverlaySurveyExport,
+    doOverlaySurveyImport,
     doOverlayReport,
     doOverlayManage,
     downloadOverlayResolveReport,

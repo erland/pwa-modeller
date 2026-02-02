@@ -8,6 +8,8 @@ import {
   ImportReportDialog,
   NewModelDialog,
   OverlayImportDialog,
+  OverlaySurveyExportDialog,
+  OverlaySurveyImportDialog,
   OverlayManageDialog,
   OverlayResolveReportDialog,
   SaveAsDialog,
@@ -42,6 +44,8 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onSaveAs: ctrl.doSaveAs,
         onOverlayExport: overlayCtrl.doOverlayExport,
         onOverlayImport: overlayCtrl.doOverlayImport,
+        onOverlaySurveyExport: overlayCtrl.doOverlaySurveyExport,
+        onOverlaySurveyImport: overlayCtrl.doOverlaySurveyImport,
         onOverlayReport: overlayCtrl.doOverlayReport,
         onOverlayManage: overlayCtrl.doOverlayManage,
         onModel: ctrl.doProperties,
@@ -60,6 +64,8 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       overlayCtrl.overlayReportAvailable,
       overlayCtrl.doOverlayExport,
       overlayCtrl.doOverlayImport,
+      overlayCtrl.doOverlaySurveyExport,
+      overlayCtrl.doOverlaySurveyImport,
       overlayCtrl.doOverlayReport,
       overlayCtrl.doOverlayManage,
       ctrl.doAbout
@@ -103,6 +109,19 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         }}
       />
 
+      <input
+        ref={overlayCtrl.overlaySurveyLoadInputRef}
+        data-testid="load-overlay-survey-input"
+        type="file"
+        accept=".csv,text/csv"
+        style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
+        onChange={(e) => {
+          const f = e.currentTarget.files?.[0] ?? null;
+          e.currentTarget.value = '';
+          void overlayCtrl.onOverlaySurveyFileChosen(f);
+        }}
+      />
+
       <ActionsMenuDialog
         isOpen={ctrl.overflowOpen}
         onClose={() => ctrl.setOverflowOpen(false)}
@@ -142,6 +161,26 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onChooseFile={overlayCtrl.triggerOverlayLoadFilePicker}
       />
 
+      <OverlaySurveyExportDialog
+        isOpen={overlayCtrl.surveyExportDialogOpen}
+        onClose={() => overlayCtrl.setSurveyExportDialogOpen(false)}
+        targetSet={overlayCtrl.surveyTargetSet}
+        setTargetSet={overlayCtrl.setSurveyTargetSet}
+        tagKeysText={overlayCtrl.surveyTagKeysText}
+        setTagKeysText={overlayCtrl.setSurveyTagKeysText}
+        onSuggestKeys={overlayCtrl.suggestSurveyKeys}
+        onExport={overlayCtrl.doOverlaySurveyExportNow}
+      />
+
+      <OverlaySurveyImportDialog
+        isOpen={overlayCtrl.surveyImportDialogOpen}
+        onClose={() => overlayCtrl.setSurveyImportDialogOpen(false)}
+        importing={overlayCtrl.surveyImporting}
+        error={overlayCtrl.surveyImportError}
+        options={overlayCtrl.surveyImportOptions}
+        setOptions={overlayCtrl.setSurveyImportOptions}
+        onChooseFile={overlayCtrl.triggerOverlaySurveyLoadFilePicker}
+      />
 
       <OverlayResolveReportDialog
         isOpen={overlayCtrl.overlayReportOpen}

@@ -6,6 +6,8 @@ export type ModelActionId =
   | 'saveAs'
   | 'overlayExport'
   | 'overlayImport'
+  | 'overlaySurveyExport'
+  | 'overlaySurveyImport'
   | 'overlayReport'
   | 'overlayManage'
   | 'model'
@@ -32,6 +34,8 @@ type BuildRegistryArgs = {
   onSaveAs: () => void;
   onOverlayExport: () => void;
   onOverlayImport: () => void;
+  onOverlaySurveyExport: () => void;
+  onOverlaySurveyImport: () => void;
   onOverlayReport: () => void;
   onOverlayManage: () => void;
   onModel: () => void;
@@ -84,9 +88,23 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       title: !modelLoaded ? 'No model loaded' : !overlayHasEntries ? 'No overlay entries to export' : undefined
     },
     {
+      id: 'overlaySurveyExport',
+      label: 'Export overlay survey…',
+      run: args.onOverlaySurveyExport,
+      disabled: !modelLoaded,
+      title: !modelLoaded ? 'No model loaded' : undefined
+    },
+    {
       id: 'overlayImport',
       label: 'Import overlay…',
       run: args.onOverlayImport,
+      disabled: !modelLoaded,
+      title: !modelLoaded ? 'No model loaded' : undefined
+    },
+    {
+      id: 'overlaySurveyImport',
+      label: 'Import overlay survey…',
+      run: args.onOverlaySurveyImport,
       disabled: !modelLoaded,
       title: !modelLoaded ? 'No model loaded' : undefined
     },

@@ -5,5 +5,6 @@ export * from './persistence';
 export * from './initOverlayPersistence';
 export * from './effectiveTags';
 export * from './io/jsonOverlay';
+export * from './io/surveyWideCsv';
 export * from './hooks';
 export * from './rebind';

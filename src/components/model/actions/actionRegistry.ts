@@ -4,6 +4,12 @@ export type ModelActionId =
   | 'properties'
   | 'save'
   | 'saveAs'
+  | 'overlayExport'
+  | 'overlayExportCsvLong'
+  | 'overlayImport'
+  | 'overlayImportCsvLong'
+  | 'overlayReport'
+  | 'overlayManage'
   | 'model'
   | 'about';
 
@@ -18,11 +24,20 @@ export type ModelAction = {
 type BuildRegistryArgs = {
   modelLoaded: boolean;
   isDirty: boolean;
+  overlayHasEntries: boolean;
+  overlayReportAvailable: boolean;
+  overlayHasIssues: boolean;
   onNew: () => void;
   onLoad: () => void;
   onProperties: () => void;
   onSave: () => void;
   onSaveAs: () => void;
+  onOverlayExport: () => void;
+  onOverlayExportCsvLong: () => void;
+  onOverlayImport: () => void;
+  onOverlayImportCsvLong: () => void;
+  onOverlayReport: () => void;
+  onOverlayManage: () => void;
   onModel: () => void;
   onAbout: () => void;
 };
@@ -32,7 +47,7 @@ type BuildRegistryArgs = {
  * Keeps UI components (menus/toolbars/shortcuts) consistent.
  */
 export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[] {
-  const { modelLoaded, isDirty } = args;
+  const { modelLoaded, isDirty, overlayHasEntries, overlayReportAvailable, overlayHasIssues } = args;
 
   return [
     {
@@ -64,6 +79,54 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       label: 'Download As',
       run: args.onSaveAs,
       disabled: !modelLoaded
+    },
+    {
+      id: 'overlayExport',
+      label: 'Export overlay…',
+      run: args.onOverlayExport,
+      disabled: !modelLoaded || !overlayHasEntries,
+      title: !modelLoaded ? 'No model loaded' : !overlayHasEntries ? 'No overlay entries to export' : undefined
+    },
+    {
+      id: 'overlayExportCsvLong',
+      label: 'Export overlay (CSV long)…',
+      run: args.onOverlayExportCsvLong,
+      disabled: !modelLoaded || !overlayHasEntries,
+      title: !modelLoaded ? 'No model loaded' : !overlayHasEntries ? 'No overlay entries to export' : undefined
+    },
+    {
+      id: 'overlayImport',
+      label: 'Import overlay…',
+      run: args.onOverlayImport,
+      disabled: !modelLoaded,
+      title: !modelLoaded ? 'No model loaded' : undefined
+    },
+    {
+      id: 'overlayImportCsvLong',
+      label: 'Import overlay (CSV long)…',
+      run: args.onOverlayImportCsvLong,
+      disabled: !modelLoaded,
+      title: !modelLoaded ? 'No model loaded' : undefined
+    },
+    {
+      id: 'overlayReport',
+      label: 'Overlay resolve report…',
+      run: args.onOverlayReport,
+      disabled: !modelLoaded || !overlayReportAvailable,
+      title: !modelLoaded ? 'No model loaded' : !overlayReportAvailable ? 'No overlay import run yet' : undefined
+    },
+    {
+      id: 'overlayManage',
+      label: 'Manage overlay…',
+      run: args.onOverlayManage,
+      disabled: !modelLoaded || !overlayHasEntries,
+      title: !modelLoaded
+        ? 'No model loaded'
+        : !overlayHasEntries
+          ? 'No overlay entries'
+          : overlayHasIssues
+            ? 'Resolve orphans and ambiguous entries'
+            : 'Review overlay entries'
     },
     // NOTE: kept for backward compatibility with existing UI that had both "Properties" and "Model".
     {

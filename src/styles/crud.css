@@ -125,3 +125,20 @@
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
+
+.crudCard {
+  width: 100%;
+  border: 1px solid var(--border-1);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.crudCard:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.crudCardActive {
+  outline: 2px solid rgba(120, 170, 255, 0.45);
+  outline-offset: 1px;
+}

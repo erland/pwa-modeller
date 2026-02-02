@@ -18,6 +18,7 @@ import { NameEditorRow } from '../editors/NameEditorRow';
 import { DocumentationEditorRow } from '../editors/DocumentationEditorRow';
 import { PropertyRow } from '../editors/PropertyRow';
 import { ExternalIdsSection } from '../sections/ExternalIdsSection';
+import { OverlayTagsSection } from '../sections/OverlayTagsSection';
 import { TaggedValuesSection } from '../sections/TaggedValuesSection';
 
 type Props = {
@@ -263,6 +264,8 @@ export function CommonRelationshipProperties({
       ) : null}
 
       <ExternalIdsSection externalIds={rel.externalIds} />
+
+      <OverlayTagsSection kind="relationship" displayName={rel.name || rel.id} externalIds={rel.externalIds} />
 
       <TaggedValuesSection
         taggedValues={rel.taggedValues}

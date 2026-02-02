@@ -7,9 +7,14 @@ import {
   ImportDialog,
   ImportReportDialog,
   NewModelDialog,
+  OverlayImportDialog,
+  OverlayCsvImportDialog,
+  OverlayManageDialog,
+  OverlayResolveReportDialog,
   SaveAsDialog,
   buildModelActionRegistry,
-  useModelActionHandlers
+  useModelActionHandlers,
+  useOverlayActionHandlers
 } from './actions';
 
 type ModelActionsProps = {
@@ -21,17 +26,27 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
   const { model, fileName, isDirty } = useModelStore((s) => s);
 
   const ctrl = useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps });
+  const overlayCtrl = useOverlayActionHandlers({ model, fileName });
 
   const actions = useMemo(
     () =>
       buildModelActionRegistry({
         modelLoaded: !!model,
         isDirty,
+        overlayHasEntries: overlayCtrl.overlayHasEntries,
+        overlayReportAvailable: overlayCtrl.overlayReportAvailable,
+        overlayHasIssues: overlayCtrl.overlayHasIssues,
         onNew: ctrl.doNewModel,
         onLoad: ctrl.doLoad,
         onProperties: ctrl.doProperties,
         onSave: ctrl.doSave,
         onSaveAs: ctrl.doSaveAs,
+        onOverlayExport: overlayCtrl.doOverlayExport,
+        onOverlayExportCsvLong: overlayCtrl.doOverlayExportCsvLong,
+        onOverlayImport: overlayCtrl.doOverlayImport,
+        onOverlayImportCsvLong: overlayCtrl.doOverlayImportCsvLong,
+        onOverlayReport: overlayCtrl.doOverlayReport,
+        onOverlayManage: overlayCtrl.doOverlayManage,
         onModel: ctrl.doProperties,
         onAbout: ctrl.doAbout
       }),
@@ -43,6 +58,15 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       ctrl.doProperties,
       ctrl.doSave,
       ctrl.doSaveAs,
+      overlayCtrl.overlayHasEntries,
+      overlayCtrl.overlayHasIssues,
+      overlayCtrl.overlayReportAvailable,
+      overlayCtrl.doOverlayExport,
+      overlayCtrl.doOverlayExportCsvLong,
+      overlayCtrl.doOverlayImport,
+      overlayCtrl.doOverlayImportCsvLong,
+      overlayCtrl.doOverlayReport,
+      overlayCtrl.doOverlayManage,
       ctrl.doAbout
     ]
   );
@@ -68,6 +92,32 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
           // Allow choosing the same file again.
           e.currentTarget.value = '';
           void ctrl.onLoadFileChosen(f);
+        }}
+      />
+
+      <input
+        ref={overlayCtrl.overlayLoadInputRef}
+        data-testid="load-overlay-input"
+        type="file"
+        accept=".json,application/json"
+        style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
+        onChange={(e) => {
+          const f = e.currentTarget.files?.[0] ?? null;
+          e.currentTarget.value = '';
+          void overlayCtrl.onOverlayFileChosen(f);
+        }}
+      />
+
+      <input
+        ref={overlayCtrl.overlayCsvLoadInputRef}
+        data-testid="load-overlay-csv-input"
+        type="file"
+        accept=".csv,text/csv"
+        style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
+        onChange={(e) => {
+          const f = e.currentTarget.files?.[0] ?? null;
+          e.currentTarget.value = '';
+          void overlayCtrl.onOverlayCsvFileChosen(f);
         }}
       />
 
@@ -102,12 +152,65 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onChooseFile={ctrl.triggerLoadFilePicker}
       />
 
+      <OverlayImportDialog
+        isOpen={overlayCtrl.overlayImportDialogOpen}
+        onClose={() => overlayCtrl.setOverlayImportDialogOpen(false)}
+        importing={overlayCtrl.overlayImporting}
+        error={overlayCtrl.overlayImportError}
+        onChooseFile={overlayCtrl.triggerOverlayLoadFilePicker}
+      />
+
+      <OverlayCsvImportDialog
+        isOpen={overlayCtrl.overlayCsvImportDialogOpen}
+        onClose={() => overlayCtrl.setOverlayCsvImportDialogOpen(false)}
+        importing={overlayCtrl.overlayCsvImporting}
+        error={overlayCtrl.overlayCsvImportError}
+        onChooseFile={overlayCtrl.triggerOverlayCsvLoadFilePicker}
+      />
+
+      <OverlayResolveReportDialog
+        isOpen={overlayCtrl.overlayReportOpen}
+        onClose={() => overlayCtrl.setOverlayReportOpen(false)}
+        sourceFileName={overlayCtrl.lastOverlayImport?.fileName ?? 'overlay.json'}
+        warnings={overlayCtrl.lastOverlayImport?.warnings ?? []}
+        report={
+          overlayCtrl.lastOverlayImport?.report ?? {
+            total: 0,
+            attached: [],
+            orphan: [],
+            ambiguous: [],
+            counts: { attached: 0, orphan: 0, ambiguous: 0 }
+          }
+        }
+        onDownloadReport={overlayCtrl.downloadOverlayResolveReport}
+      />
+
+      {model ? (
+        <OverlayManageDialog
+          isOpen={overlayCtrl.overlayManageOpen}
+          onClose={() => overlayCtrl.setOverlayManageOpen(false)}
+          model={model}
+          onToast={overlayCtrl.setToast}
+        />
+      ) : null}
+
       <ImportReportDialog
         isOpen={ctrl.importReportOpen}
         onClose={() => ctrl.setImportReportOpen(false)}
         lastImport={ctrl.lastImport}
         onDownloadReport={ctrl.downloadImportReport}
       />
+
+      {overlayCtrl.toast ? (
+        <div className={`toast toast-${overlayCtrl.toast.kind}`} role="status" aria-live="polite">
+          <div className="toastRow">
+            <div className="toastMsg">{overlayCtrl.toast.message}</div>
+            <button type="button" className="shellIconButton" aria-label="Dismiss" onClick={() => overlayCtrl.setToast(null)}>
+              ✕
+            </button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

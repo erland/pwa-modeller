@@ -13,6 +13,8 @@ export * from './unknownTypeReport';
 export * from './externalIds';
 export * from './externalIdIndex';
 
+export * from './overlay';
+
 export * from './config/viewpoints';
 export * from './config/catalog';
 

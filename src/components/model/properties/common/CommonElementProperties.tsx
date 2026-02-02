@@ -8,6 +8,7 @@ import { PropertiesPanelHost, type PropertiesSection } from './PropertiesPanelHo
 import { findFolderContaining } from '../utils';
 import { CreateRelationshipDialog } from '../../navigator/dialogs/CreateRelationshipDialog';
 import { ExternalIdsSection } from '../sections/ExternalIdsSection';
+import { OverlayTagsSection } from '../sections/OverlayTagsSection';
 import { TaggedValuesSection } from '../sections/TaggedValuesSection';
 import { ElementBasicsSection } from './sections/ElementBasicsSection';
 import { ElementRelationshipsSection } from './sections/ElementRelationshipsSection';
@@ -74,6 +75,8 @@ export function CommonElementProperties({ model, elementId, actions, elementFold
       {notationSections ? <PropertiesPanelHost sections={notationSections} /> : null}
 
       <ExternalIdsSection externalIds={el.externalIds} />
+
+      <OverlayTagsSection kind="element" displayName={el.name || el.id} externalIds={el.externalIds} />
 
       <TaggedValuesSection
         taggedValues={el.taggedValues}

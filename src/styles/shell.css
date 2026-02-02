@@ -192,6 +192,50 @@ body {
   line-height: 1;
 }
 
+/* Lightweight toast notifications (used for overlay import/export feedback) */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: min(560px, calc(100vw - 24px));
+  border-radius: 12px;
+  border: 1px solid var(--border-1);
+  background: var(--surface-3);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  padding: 10px 12px;
+}
+
+.toastRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.toastMsg {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.toast-warn {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.toast-success {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.toast-error {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.toast-error {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
 .shellBody {
   flex: 1;
   display: grid;

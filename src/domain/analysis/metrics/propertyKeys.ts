@@ -1,5 +1,17 @@
 import type { Element, Model, TaggedValue } from '../../types';
 
+export type TaggedValuesProvider = (el: Element) => TaggedValue[] | undefined;
+
+export type NumericPropertyOptions = {
+  /**
+   * Optional tagged-values provider.
+   *
+   * This is useful when consumers want to read *effective* tagged values
+   * (e.g. overlay tags overriding core tags).
+   */
+  getTaggedValues?: TaggedValuesProvider;
+};
+
 /**
  * Parse a property key.
  *
@@ -40,13 +52,17 @@ function getTaggedValueNumber(tag: TaggedValue): number | undefined {
  * 1) Tagged values (supports "ns:key" or just "key")
  * 2) attrs lookup (only for plain "key", supports dotted paths like "a.b.c")
  */
-export function readNumericPropertyFromElement(el: Element | undefined, propertyKey: string): number | undefined {
+export function readNumericPropertyFromElement(
+  el: Element | undefined,
+  propertyKey: string,
+  opts?: NumericPropertyOptions
+): number | undefined {
   if (!el) return undefined;
 
   const { ns, key } = parsePropertyKey(propertyKey);
   if (!key) return undefined;
 
-  const tags = el.taggedValues ?? [];
+  const tags = opts?.getTaggedValues?.(el) ?? el.taggedValues ?? [];
   if (tags.length) {
     if (ns) {
       const match = tags.find((t) => (t.ns ?? '').trim() === ns && (t.key ?? '').trim() === key);
@@ -84,7 +100,7 @@ export function readNumericPropertyFromElement(el: Element | undefined, property
  *
  * Returned values may include both "key" and "ns:key" forms.
  */
-export function discoverNumericPropertyKeys(model: Model): string[] {
+export function discoverNumericPropertyKeys(model: Model, opts?: NumericPropertyOptions): string[] {
   const out = new Set<string>();
 
   const pushKey = (k: string | undefined) => {
@@ -94,7 +110,8 @@ export function discoverNumericPropertyKeys(model: Model): string[] {
 
   for (const el of Object.values(model.elements ?? {})) {
     // tagged values
-    for (const tv of el.taggedValues ?? []) {
+    const tags = opts?.getTaggedValues?.(el) ?? el.taggedValues ?? [];
+    for (const tv of tags) {
       const key = (tv.key ?? '').trim();
       if (!key) continue;
       const n = getTaggedValueNumber(tv);

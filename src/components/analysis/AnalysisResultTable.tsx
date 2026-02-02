@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { AnalysisDirection, Model, PathsBetweenResult, RelatedElementsResult, RelationshipType } from '../../domain';
 import { discoverNumericPropertyKeys } from '../../domain';
 import type { ModelKind } from '../../domain/types';
+import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../store/overlay';
 import type { AnalysisMode } from './AnalysisQueryPanel';
 import type { Selection } from '../model/selection';
 
@@ -60,8 +61,16 @@ export function AnalysisResultTable({
   const modelId = model.id ?? '';
   const modelName = model.metadata?.name || 'model';
 
+  const overlayVersion = useOverlayStore((s) => s.getVersion());
+
   const { graphOptions, setGraphOptions } = useMiniGraphOptionsForModel(modelId);
-  const availablePropertyKeys = useMemo(() => discoverNumericPropertyKeys(model), [model]);
+  const availablePropertyKeys = useMemo(
+    () =>
+      discoverNumericPropertyKeys(model, {
+        getTaggedValues: (el) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues
+      }),
+    [model, overlayVersion]
+  );
   const formatters = useMemo(() => createAnalysisResultFormatters(adapter, model), [adapter, model]);
 
   const [showGraph, setShowGraph] = useState(false);

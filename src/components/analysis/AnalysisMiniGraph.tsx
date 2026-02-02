@@ -11,6 +11,7 @@ import type { AnalysisMode } from './AnalysisQueryPanel';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildMiniGraphData, MINI_GRAPH_MAX_EDGES, MINI_GRAPH_MAX_NODES } from '../../domain/analysis/miniGraph';
 import type { MiniGraphData, MiniGraphMode } from '../../domain/analysis/miniGraph';
+import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../store/overlay';
 
 import { useElementBgVar } from '../diagram/hooks/useElementBgVar';
 
@@ -86,6 +87,7 @@ export function AnalysisMiniGraph({
   }) => void;
 }) {
   const adapter = getAnalysisAdapter(modelKind);
+  const overlayVersion = useOverlayStore((s) => s.getVersion());
   const { getElementBgVar } = useElementBgVar();
 
   const labelForId = useMemo(() => {
@@ -133,7 +135,10 @@ export function AnalysisMiniGraph({
       return computeNodeMetric(analysisGraph, 'nodePropertyNumber', {
         key,
         nodeIds,
-        getValueByNodeId: (nodeId, k) => readNumericPropertyFromElement(model.elements[nodeId], k)
+        getValueByNodeId: (nodeId, k) =>
+          readNumericPropertyFromElement(model.elements[nodeId], k, {
+            getTaggedValues: (el) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues
+          })
       });
     }
 
@@ -142,7 +147,7 @@ export function AnalysisMiniGraph({
       relationshipTypes,
       nodeIds
     });
-  }, [analysisGraph, nodeOverlayMetricId, nodeOverlayReachDepth, nodeOverlayPropertyKey, overlayDirection, overlayRelationshipTypes, safeData.nodes, model.elements]);
+  }, [analysisGraph, nodeOverlayMetricId, nodeOverlayReachDepth, nodeOverlayPropertyKey, overlayDirection, overlayRelationshipTypes, safeData.nodes, model, model.elements, overlayVersion]);
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
   const selectedElementId = selectionToElementId(selection);

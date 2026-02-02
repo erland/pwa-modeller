@@ -6,6 +6,7 @@ import type { Selection } from '../model/selection';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildPortfolioPopulation } from '../../domain/analysis';
 import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
+import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../store/overlay';
 import { rowsToCsv } from '../../domain';
 
 import { collectFacetValues, sortElementTypesForDisplay } from './queryPanel/utils';
@@ -25,6 +26,7 @@ export type Props = {
 };
 
 export function PortfolioAnalysisView({ model, modelKind, selection, onSelectElement }: Props) {
+  const overlayVersion = useOverlayStore((s) => s.getVersion());
   const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
   const facetDefs = useMemo(() => adapter.getFacetDefinitions(model), [adapter, model]);
   const hasLayerFacet = facetDefs.some((d) => d.id === 'archimateLayer');
@@ -68,7 +70,13 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     if (next.length !== ui.types.length) ui.setTypes(next);
   }, [availableElementTypes, hasElementTypeFacet, ui]);
 
-  const availablePropertyKeys = useMemo(() => discoverNumericPropertyKeys(model), [model]);
+  const availablePropertyKeys = useMemo(
+    () =>
+      discoverNumericPropertyKeys(model, {
+        getTaggedValues: (el) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues
+      }),
+    [model, overlayVersion]
+  );
 
   const computed = usePortfolioComputedData({
     model,

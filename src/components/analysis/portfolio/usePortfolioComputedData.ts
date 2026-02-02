@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 
-import type { Model } from '../../../domain';
+import type { Element, Model } from '../../../domain';
 import { readNumericPropertyFromElement } from '../../../domain';
 import { buildAnalysisGraph, buildPortfolioPopulation, computeNodeMetric } from '../../../domain/analysis';
 import type { AnalysisAdapter } from '../../../analysis/adapters/AnalysisAdapter';
+import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../../store/overlay';
 
 import type { GroupBy, SortDir, SortKey } from './types';
 import { percentRounded } from './utils';
@@ -40,6 +41,7 @@ export function usePortfolioComputedData({
   groupBy,
   hasLayerFacet
 }: Args) {
+  const overlayVersion = useOverlayStore((s) => s.getVersion());
   const rows = useMemo(
     () =>
       buildPortfolioPopulation({
@@ -59,11 +61,12 @@ export function usePortfolioComputedData({
   const valueByElementId = useMemo(() => {
     if (!metricKey) return {} as Record<string, number | undefined>;
     const out: Record<string, number | undefined> = {};
+    const getTaggedValues = (el: Element) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues;
     for (const r of rows) {
-      out[r.elementId] = readNumericPropertyFromElement(model.elements?.[r.elementId], metricKey);
+      out[r.elementId] = readNumericPropertyFromElement(model.elements?.[r.elementId], metricKey, { getTaggedValues });
     }
     return out;
-  }, [metricKey, model, rows]);
+  }, [metricKey, model, rows, overlayVersion]);
 
   const metricRange = useMemo(() => {
     if (!metricKey) return null;

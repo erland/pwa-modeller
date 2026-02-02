@@ -2,7 +2,8 @@ import { useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 
-import type { ElementType, Model } from '../../../domain';
+import type { AnalysisDirection, ElementType, Model, NodeMetricId, RelationshipType } from '../../../domain';
+import { buildAnalysisGraph, computeNodeMetric, readNumericPropertyFromElement } from '../../../domain';
 import type { ModelKind } from '../../../domain/types';
 import type { TraceEdge, TraceNode, TraceSelection } from '../../../domain/analysis/traceability/types';
 
@@ -14,6 +15,8 @@ import { MiniColumnGraph } from '../MiniColumnGraph';
 import { AnalysisSection } from '../layout/AnalysisSection';
 
 import { buildElementTooltip, buildRelationshipTooltipFromRelationshipId } from '../tooltip/buildTooltips';
+
+import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../../store/overlay';
 
 type Props = {
   model: Model;
@@ -28,6 +31,15 @@ type Props = {
 
   wrapLabels?: boolean;
   autoFitColumns?: boolean;
+
+  // Node overlay metric (same semantics as AnalysisMiniGraph).
+  nodeOverlayMetricId?: 'off' | NodeMetricId;
+  nodeOverlayReachDepth?: 2 | 3 | 4;
+  nodeOverlayPropertyKey?: string;
+  scaleNodesByOverlayScore?: boolean;
+
+  overlayDirection?: AnalysisDirection;
+  overlayRelationshipTypes?: RelationshipType[];
 
   /**
    * If false, renders only the graph (no surrounding AnalysisSection).
@@ -50,11 +62,18 @@ export function TraceabilityMiniGraph({
   onTogglePin,
   wrapLabels = true,
   autoFitColumns = true,
+  nodeOverlayMetricId = 'off',
+  nodeOverlayReachDepth = 3,
+  nodeOverlayPropertyKey = '',
+  scaleNodesByOverlayScore = false,
+  overlayDirection = 'both',
+  overlayRelationshipTypes,
   wrapInSection = true,
   headerControls
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const { getElementBgVar } = useElementBgVar();
+  const overlayVersion = useOverlayStore((s) => s.getVersion());
   const labelForId = useCallback(
     (id: string) => {
       const el = model.elements[id];
@@ -153,18 +172,90 @@ export function TraceabilityMiniGraph({
     );
   };
 
+  const analysisGraph = useMemo(() => {
+    if (nodeOverlayMetricId === 'off') return null;
+    return buildAnalysisGraph(model);
+  }, [model, nodeOverlayMetricId]);
+
+  const nodeOverlayScores = useMemo(() => {
+    if (nodeOverlayMetricId === 'off') return null;
+    if (!analysisGraph) return null;
+
+    const nodeIds = Object.values(nodesById)
+      .filter((n) => !n.hidden)
+      .map((n) => n.id);
+
+    const relationshipTypes = overlayRelationshipTypes && overlayRelationshipTypes.length ? overlayRelationshipTypes : undefined;
+
+    if (nodeOverlayMetricId === 'nodeReach') {
+      return computeNodeMetric(analysisGraph, 'nodeReach', {
+        direction: overlayDirection,
+        relationshipTypes,
+        maxDepth: nodeOverlayReachDepth,
+        nodeIds,
+        // Defensive cap: avoids worst-case blowups on dense graphs.
+        maxVisited: 5000
+      });
+    }
+
+    if (nodeOverlayMetricId === 'nodePropertyNumber') {
+      const key = (nodeOverlayPropertyKey ?? '').trim();
+      if (!key) return {};
+      return computeNodeMetric(analysisGraph, 'nodePropertyNumber', {
+        key,
+        nodeIds,
+        getValueByNodeId: (nodeId, k) =>
+          readNumericPropertyFromElement(model.elements[nodeId], k, {
+            getTaggedValues: (el) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues
+          })
+      });
+    }
+
+    return computeNodeMetric(analysisGraph, nodeOverlayMetricId, {
+      direction: overlayDirection,
+      relationshipTypes,
+      nodeIds
+    });
+  }, [analysisGraph, nodeOverlayMetricId, nodeOverlayReachDepth, nodeOverlayPropertyKey, overlayDirection, overlayRelationshipTypes, nodesById, model, overlayVersion]);
+
   const graphNodes = useMemo(() => {
-    const list: Array<{ id: string; label: string; level: number; bg?: string; hidden?: boolean }> = [];
+    const shouldScale = Boolean(scaleNodesByOverlayScore && nodeOverlayMetricId !== 'off' && nodeOverlayScores);
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    if (shouldScale) {
+      for (const n of Object.values(nodesById)) {
+        if (n.hidden) continue;
+        const v = nodeOverlayScores ? nodeOverlayScores[n.id] : undefined;
+        if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+    }
+
+    const computeScale = (score: number | undefined): number | undefined => {
+      if (!shouldScale) return undefined;
+      if (typeof score !== 'number' || !Number.isFinite(score)) return 1;
+      if (!(max > min)) return 1;
+      const t = (score - min) / (max - min);
+      // Clamp to a subtle range to avoid layout blowups.
+      return 0.85 + Math.max(0, Math.min(1, t)) * (1.25 - 0.85);
+    };
+
+    const list: Array<{ id: string; label: string; level: number; bg?: string; badge?: string; sizeScale?: number; hidden?: boolean }> = [];
     for (const n of Object.values(nodesById)) {
       const label = labelForId(n.id);
       const el = model.elements[n.id];
       const facets = el ? adapter.getNodeFacetValues(el, model) : {};
       const et = (facets.elementType ?? facets.type ?? el?.type) as unknown as ElementType | undefined;
       const bg = et ? getElementBgVar(et) : 'var(--arch-layer-business)';
-      list.push({ id: n.id, label, level: n.depth, bg, hidden: n.hidden });
+
+      const score = nodeOverlayScores ? nodeOverlayScores[n.id] : undefined;
+      const badge = typeof score === 'number' ? String(score) : undefined;
+      const sizeScale = computeScale(score);
+      list.push({ id: n.id, label, level: n.depth, bg, badge, sizeScale, hidden: n.hidden });
     }
     return list;
-  }, [adapter, getElementBgVar, labelForId, model, nodesById]);
+  }, [adapter, getElementBgVar, labelForId, model, nodesById, nodeOverlayScores, nodeOverlayMetricId, scaleNodesByOverlayScore]);
 
   const graphEdges = useMemo(() => {
     return Object.values(edgesById).map((e) => ({ id: e.id, from: e.from, to: e.to, hidden: e.hidden }));

@@ -12,6 +12,9 @@ type Props = {
 
   graphOptions: MiniGraphOptions;
   onChangeGraphOptions: (next: MiniGraphOptions) => void;
+
+  /** Optional numeric property keys for overlay autocomplete. */
+  availablePropertyKeys?: string[];
 };
 
 export function TraceabilitySettingsDialog({
@@ -20,7 +23,8 @@ export function TraceabilitySettingsDialog({
   autoExpand,
   onChangeAutoExpand,
   graphOptions,
-  onChangeGraphOptions
+  onChangeGraphOptions,
+  availablePropertyKeys
 }: Props) {
   return (
     <Dialog
@@ -54,7 +58,13 @@ export function TraceabilitySettingsDialog({
           <div className="crudTitle" style={{ fontSize: 13 }}>
             Display
           </div>
-          <MiniGraphOptionsToggles options={graphOptions} onChange={onChangeGraphOptions} style={{ gap: 16 }} checkboxStyle={{ gap: 8 }} />
+          <MiniGraphOptionsToggles
+            options={graphOptions}
+            onChange={onChangeGraphOptions}
+            availablePropertyKeys={availablePropertyKeys}
+            style={{ gap: 16 }}
+            checkboxStyle={{ gap: 8 }}
+          />
         </div>
       </div>
     </Dialog>

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import type { AnalysisDirection, RelationshipType, Model, RelatedElementsResult } from '../../../domain';
 import type { ModelKind } from '../../../domain/types';
 import type { Selection } from '../../model/selection';
@@ -5,7 +7,7 @@ import type { Selection } from '../../model/selection';
 import { AnalysisMiniGraph } from '../AnalysisMiniGraph';
 import type { AnalysisMode } from '../AnalysisQueryPanel';
 import type { MiniGraphOptions } from '../MiniGraphOptions';
-import { MiniGraphOptionsToggles } from '../MiniGraphOptions';
+import { OverlaySettingsDialog } from '../OverlaySettingsDialog';
 import type { AnalysisResultFormatters } from './analysisResultFormatters';
 import { exportRelatedCsv } from './analysisResultExport';
 
@@ -45,6 +47,7 @@ export type RelatedResultsSectionProps = {
 };
 
 export function RelatedResultsSection(props: RelatedResultsSectionProps) {
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const {
     model,
     modelName,
@@ -71,6 +74,7 @@ export function RelatedResultsSection(props: RelatedResultsSectionProps) {
   const startId = relatedResult?.startElementId;
 
   return (
+    <>
     <AnalysisSection
       title="Results"
       hint={startId ? `Elements related to “${formatters.nodeLabel(startId)}”.` : 'Run an analysis to see results.'}
@@ -86,11 +90,9 @@ export function RelatedResultsSection(props: RelatedResultsSectionProps) {
             {showGraph ? 'Hide graph' : 'Show graph'}
           </button>
 
-          <MiniGraphOptionsToggles
-            options={graphOptions}
-            onChange={(next) => setGraphOptions(next)}
-            availablePropertyKeys={availablePropertyKeys}
-          />
+          <button type="button" className="miniLinkButton" onClick={() => setIsOverlayOpen(true)} aria-label="Overlay settings">
+            Overlay
+          </button>
 
           <button
             type="button"
@@ -213,5 +215,14 @@ export function RelatedResultsSection(props: RelatedResultsSectionProps) {
         />
       ) : null}
     </AnalysisSection>
+
+    <OverlaySettingsDialog
+      isOpen={isOverlayOpen}
+      onClose={() => setIsOverlayOpen(false)}
+      graphOptions={graphOptions}
+      onChangeGraphOptions={(next) => setGraphOptions(next)}
+      availablePropertyKeys={availablePropertyKeys}
+    />
+    </>
   );
 }

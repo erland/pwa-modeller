@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import type { AnalysisDirection, RelationshipType, PathsBetweenResult } from '../../../domain';
 import type { Model } from '../../../domain';
 import type { ModelKind } from '../../../domain/types';
@@ -6,7 +8,7 @@ import type { Selection } from '../../model/selection';
 import type { AnalysisMode } from '../AnalysisQueryPanel';
 import { AnalysisMiniGraph } from '../AnalysisMiniGraph';
 import type { MiniGraphOptions } from '../MiniGraphOptions';
-import { MiniGraphOptionsToggles } from '../MiniGraphOptions';
+import { OverlaySettingsDialog } from '../OverlaySettingsDialog';
 import { AnalysisSection } from '../layout/AnalysisSection';
 
 import type { AnalysisResultFormatters } from './analysisResultFormatters';
@@ -82,6 +84,7 @@ export function PathsResultsSection(props: PathsResultsSectionProps) {
   const sourceId = res?.sourceElementId;
   const targetId = res?.targetElementId;
   const shortest = res?.shortestDistance;
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
 
   const safeSelectedIndex =
     selectedPathIndex === null ? null : selectedPathIndex >= 0 && selectedPathIndex < paths.length ? selectedPathIndex : null;
@@ -96,6 +99,7 @@ export function PathsResultsSection(props: PathsResultsSectionProps) {
           : res;
 
   return (
+    <>
     <AnalysisSection
       title="Results"
       hint={
@@ -157,11 +161,9 @@ export function PathsResultsSection(props: PathsResultsSectionProps) {
             </label>
           ) : null}
 
-          <MiniGraphOptionsToggles
-            options={graphOptions}
-            onChange={(next) => setGraphOptions(next)}
-            availablePropertyKeys={availablePropertyKeys}
-          />
+          <button type="button" className="miniLinkButton" onClick={() => setIsOverlayOpen(true)} aria-label="Overlay settings">
+            Overlay
+          </button>
 
           {sourceId ? (
             <button type="button" className="miniLinkButton" onClick={() => onOpenTraceability(sourceId)}>
@@ -281,5 +283,14 @@ export function PathsResultsSection(props: PathsResultsSectionProps) {
         />
       ) : null}
     </AnalysisSection>
+
+    <OverlaySettingsDialog
+      isOpen={isOverlayOpen}
+      onClose={() => setIsOverlayOpen(false)}
+      graphOptions={graphOptions}
+      onChangeGraphOptions={(next) => setGraphOptions(next)}
+      availablePropertyKeys={availablePropertyKeys}
+    />
+    </>
   );
 }

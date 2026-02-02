@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 
-import type { ElementType, Model, RelationshipType } from '../../domain';
+import type { Element, ElementType, Model, RelationshipType } from '../../domain';
+import { discoverNumericPropertyKeys } from '../../domain';
 import type { ModelKind } from '../../domain/types';
 import type { AnalysisDirection } from '../../domain/analysis/filters';
 
@@ -10,9 +11,11 @@ import { expandFromNode } from '../../analysis/traceability/expand';
 import { createTraceabilityExplorerState, traceabilityReducer } from './traceability/traceabilityReducer';
 import { TraceabilityMiniGraph } from './traceability/TraceabilityMiniGraph';
 import { defaultMiniGraphOptions } from './MiniGraphOptions';
-import { TraceabilitySettingsDialog } from './traceability/TraceabilitySettingsDialog';
+import { OverlaySettingsDialog } from './OverlaySettingsDialog';
 import { TraceabilitySessionsDialog } from './traceability/TraceabilitySessionsDialog';
 import { AnalysisSection } from './layout/AnalysisSection';
+
+import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../store/overlay';
 
 import {
   deleteTraceabilitySession,
@@ -73,7 +76,7 @@ export function TraceabilityExplorer({
   const [sessions, setSessions] = useState<Array<{ name: string; savedAt: string }>>([]);
   const [selectedSessionName, setSelectedSessionName] = useState<string>('');
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
 
   const [state, dispatch] = useReducer(
@@ -97,6 +100,19 @@ export function TraceabilityExplorer({
   useEffect(() => {
     dispatch({ type: 'setFilters', filters: toTraceFilters({ direction, relationshipTypes, layers, elementTypes }) });
   }, [direction, relationshipTypes, layers, elementTypes]);
+
+  // Used for numeric-property autocomplete in the overlay dialog.
+  // Recompute when overlay changes so keys discovered from *effective* tags stay up to date.
+  const overlayVersion = useOverlayStore((s) => s.getVersion());
+  const availablePropertyKeys = useMemo(() => {
+    // Avoid scanning the entire model unless the user is actually interacting
+    // with the overlay-property UI (autocomplete) or the overlay is active.
+    if (!isOverlayOpen && graphOptions.nodeOverlayMetricId !== 'nodePropertyNumber') return [];
+
+    return discoverNumericPropertyKeys(model, {
+      getTaggedValues: (el: Element) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues
+    });
+  }, [model, overlayVersion, isOverlayOpen, graphOptions.nodeOverlayMetricId]);
 
 
   const selectNode = (id: string) => {
@@ -176,9 +192,10 @@ export function TraceabilityExplorer({
 
   const headerActions = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <button type="button" className="miniLinkButton" onClick={() => setIsSettingsOpen(true)} aria-label="Traceability settings">
-        ⚙︎ Settings
-      </button>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.9 }} title="When enabled, selecting a node auto-expands it">
+        <input type="checkbox" checked={autoExpand} onChange={(e) => setAutoExpand(e.currentTarget.checked)} />
+        Expand on select
+      </label>
       <button type="button" className="miniLinkButton" onClick={() => setIsSessionsOpen(true)} aria-label="Traceability sessions">
         Sessions
       </button>
@@ -254,6 +271,14 @@ export function TraceabilityExplorer({
       >
         Reset
       </button>
+
+      <span aria-hidden="true" style={{ opacity: 0.4, padding: '0 2px' }}>
+        |
+      </span>
+
+      <button type="button" className="miniLinkButton" onClick={() => setIsOverlayOpen(true)} aria-label="Overlay settings">
+        Overlay
+      </button>
     </div>
   );
 
@@ -284,13 +309,17 @@ export function TraceabilityExplorer({
         actions={resultsActions}
       >
         <TraceabilityMiniGraph
-          wrapLabels={true}
-          autoFitColumns={true}
+          wrapLabels={graphOptions.wrapLabels}
+          autoFitColumns={graphOptions.autoFitColumns}
           wrapInSection={false}
           model={model}
           modelKind={modelKind}
           nodesById={state.nodesById}
           edgesById={state.edgesById}
+          nodeOverlayMetricId={graphOptions.nodeOverlayMetricId}
+          nodeOverlayReachDepth={graphOptions.nodeOverlayReachDepth}
+          nodeOverlayPropertyKey={graphOptions.nodeOverlayPropertyKey}
+          scaleNodesByOverlayScore={graphOptions.scaleNodesByOverlayScore}
           selection={state.selection}
           onSelectNode={(id) => {
             selectNode(id);
@@ -308,14 +337,12 @@ export function TraceabilityExplorer({
         />
       </AnalysisSection>
 
-
-      <TraceabilitySettingsDialog
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        autoExpand={autoExpand}
-        onChangeAutoExpand={setAutoExpand}
+      <OverlaySettingsDialog
+        isOpen={isOverlayOpen}
+        onClose={() => setIsOverlayOpen(false)}
         graphOptions={graphOptions}
         onChangeGraphOptions={setGraphOptions}
+        availablePropertyKeys={availablePropertyKeys}
       />
 
       <TraceabilitySessionsDialog

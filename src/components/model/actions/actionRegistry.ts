@@ -5,9 +5,7 @@ export type ModelActionId =
   | 'save'
   | 'saveAs'
   | 'overlayExport'
-  | 'overlayExportCsvLong'
   | 'overlayImport'
-  | 'overlayImportCsvLong'
   | 'overlayReport'
   | 'overlayManage'
   | 'model'
@@ -33,9 +31,7 @@ type BuildRegistryArgs = {
   onSave: () => void;
   onSaveAs: () => void;
   onOverlayExport: () => void;
-  onOverlayExportCsvLong: () => void;
   onOverlayImport: () => void;
-  onOverlayImportCsvLong: () => void;
   onOverlayReport: () => void;
   onOverlayManage: () => void;
   onModel: () => void;
@@ -88,23 +84,9 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       title: !modelLoaded ? 'No model loaded' : !overlayHasEntries ? 'No overlay entries to export' : undefined
     },
     {
-      id: 'overlayExportCsvLong',
-      label: 'Export overlay (CSV long)…',
-      run: args.onOverlayExportCsvLong,
-      disabled: !modelLoaded || !overlayHasEntries,
-      title: !modelLoaded ? 'No model loaded' : !overlayHasEntries ? 'No overlay entries to export' : undefined
-    },
-    {
       id: 'overlayImport',
       label: 'Import overlay…',
       run: args.onOverlayImport,
-      disabled: !modelLoaded,
-      title: !modelLoaded ? 'No model loaded' : undefined
-    },
-    {
-      id: 'overlayImportCsvLong',
-      label: 'Import overlay (CSV long)…',
-      run: args.onOverlayImportCsvLong,
       disabled: !modelLoaded,
       title: !modelLoaded ? 'No model loaded' : undefined
     },

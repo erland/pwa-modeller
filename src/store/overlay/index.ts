@@ -5,6 +5,5 @@ export * from './persistence';
 export * from './initOverlayPersistence';
 export * from './effectiveTags';
 export * from './io/jsonOverlay';
-export * from './io/csvLong';
 export * from './hooks';
 export * from './rebind';

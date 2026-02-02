@@ -13,8 +13,6 @@ import type { ResolveReport } from '../../../store/overlay/resolve';
 import { resolveOverlayAgainstModel } from '../../../store/overlay/resolve';
 import {
   type OverlayImportWarning,
-  importCsvLongToStore,
-  serializeOverlayStoreToCsvLong,
   parseOverlayJson,
   serializeOverlayStoreToJson,
   importOverlayFileToStore
@@ -82,15 +80,10 @@ function warningToText(w: OverlayImportWarning): string {
  */
 export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHandlersArgs) {
   const overlayLoadInputRef = useRef<HTMLInputElement | null>(null);
-  const overlayCsvLoadInputRef = useRef<HTMLInputElement | null>(null);
 
   const [overlayImportDialogOpen, setOverlayImportDialogOpen] = useState(false);
   const [overlayImporting, setOverlayImporting] = useState(false);
   const [overlayImportError, setOverlayImportError] = useState<string | null>(null);
-
-  const [overlayCsvImportDialogOpen, setOverlayCsvImportDialogOpen] = useState(false);
-  const [overlayCsvImporting, setOverlayCsvImporting] = useState(false);
-  const [overlayCsvImportError, setOverlayCsvImportError] = useState<string | null>(null);
 
   const [overlayReportOpen, setOverlayReportOpen] = useState(false);
   const [lastOverlayImport, setLastOverlayImport] = useState<LastOverlayImportInfo | null>(null);
@@ -104,13 +97,15 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
 
   const liveReport = useMemo(() => {
     if (!model) return null;
-    if (!overlayHasEntries) return {
-      total: 0,
-      attached: [],
-      orphan: [],
-      ambiguous: [],
-      counts: { attached: 0, orphan: 0, ambiguous: 0 }
-    } as ResolveReport;
+    if (!overlayHasEntries) {
+      return {
+        total: 0,
+        attached: [],
+        orphan: [],
+        ambiguous: [],
+        counts: { attached: 0, orphan: 0, ambiguous: 0 }
+      } as ResolveReport;
+    }
     const idx = buildOverlayModelExternalIdIndex(model);
     return resolveOverlayAgainstModel(overlayStore.listEntries(), idx);
   }, [model, overlayHasEntries, overlayEntryCount]);
@@ -125,13 +120,6 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     el.click();
   }, []);
 
-  const triggerOverlayCsvLoadFilePicker = useCallback(() => {
-    const el = overlayCsvLoadInputRef.current;
-    if (!el) return;
-    el.value = '';
-    el.click();
-  }, []);
-
   const doOverlayImport = useCallback(() => {
     if (!model) {
       setToast({ kind: 'warn', message: 'Load a model first before importing an overlay.' });
@@ -139,15 +127,6 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     }
     setOverlayImportError(null);
     setOverlayImportDialogOpen(true);
-  }, [model]);
-
-  const doOverlayImportCsvLong = useCallback(() => {
-    if (!model) {
-      setToast({ kind: 'warn', message: 'Load a model first before importing an overlay.' });
-      return;
-    }
-    setOverlayCsvImportError(null);
-    setOverlayCsvImportDialogOpen(true);
   }, [model]);
 
   const doOverlayExport = useCallback(() => {
@@ -161,22 +140,6 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     downloadTextFile(sanitizeFileNameWithExtension(`${base}-overlay`, 'json'), json, 'application/json');
     setToast({ kind: 'success', message: 'Overlay exported.' });
   }, [fileName, model]);
-
-  const doOverlayExportCsvLong = useCallback(() => {
-    if (!model) {
-      setToast({ kind: 'warn', message: 'Load a model first before exporting an overlay.' });
-      return;
-    }
-    if (!overlayHasEntries) {
-      setToast({ kind: 'info', message: 'No overlay entries to export.' });
-      return;
-    }
-
-    const base = defaultOverlayFileBase(model, fileName);
-    const csv = serializeOverlayStoreToCsvLong({ overlayStore, model });
-    downloadTextFile(sanitizeFileNameWithExtension(`${base}-overlay-long`, 'csv'), csv, 'text/csv');
-    setToast({ kind: 'success', message: 'Overlay exported (CSV long).' });
-  }, [fileName, model, overlayHasEntries]);
 
   const onOverlayFileChosen = useCallback(
     async (file: File | null) => {
@@ -215,40 +178,6 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     [model]
   );
 
-  const onOverlayCsvFileChosen = useCallback(
-    async (file: File | null) => {
-      if (!file) return;
-      if (!model) return;
-
-      setOverlayCsvImporting(true);
-      setOverlayCsvImportError(null);
-      try {
-        const text = await readFileAsText(file);
-        const result = importCsvLongToStore({ overlayStore, model, csvText: text });
-
-        const report = result.report;
-        const warnings = result.warnings;
-
-        setLastOverlayImport({ fileName: file.name || 'overlay.csv', warnings, report });
-        setOverlayCsvImportDialogOpen(false);
-
-        const warnSuffix = summarizeWarnings(warnings);
-        const msg = `Overlay imported (CSV long): ${resolveSummary(report)}${warnSuffix}.`;
-        setToast({ kind: warnings.length || report.counts.orphan || report.counts.ambiguous ? 'warn' : 'success', message: msg });
-
-        if (warnings.length > 0 || report.counts.orphan > 0 || report.counts.ambiguous > 0) {
-          setOverlayReportOpen(true);
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setOverlayCsvImportError(msg);
-      } finally {
-        setOverlayCsvImporting(false);
-      }
-    },
-    [model]
-  );
-
   const doOverlayReport = useCallback(() => {
     if (!lastOverlayImport) return;
     setOverlayReportOpen(true);
@@ -278,7 +207,9 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     lines.push('');
     lines.push(`- Source file: ${srcName}`);
     lines.push(`- Model signature: ${sig}`);
-    lines.push(`- Totals: total=${report.total}, attached=${report.counts.attached}, orphan=${report.counts.orphan}, ambiguous=${report.counts.ambiguous}`);
+    lines.push(
+      `- Totals: total=${report.total}, attached=${report.counts.attached}, orphan=${report.counts.orphan}, ambiguous=${report.counts.ambiguous}`
+    );
     if (warnings.length) {
       lines.push('');
       lines.push('## Warnings');
@@ -321,21 +252,13 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
 
   return {
     overlayLoadInputRef,
-    overlayCsvLoadInputRef,
     onOverlayFileChosen,
-    onOverlayCsvFileChosen,
     triggerOverlayLoadFilePicker,
-    triggerOverlayCsvLoadFilePicker,
 
     overlayImportDialogOpen,
     setOverlayImportDialogOpen,
     overlayImporting,
     overlayImportError,
-
-    overlayCsvImportDialogOpen,
-    setOverlayCsvImportDialogOpen,
-    overlayCsvImporting,
-    overlayCsvImportError,
 
     overlayReportOpen,
     setOverlayReportOpen,
@@ -344,9 +267,7 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     lastOverlayImport,
 
     doOverlayImport,
-    doOverlayImportCsvLong,
     doOverlayExport,
-    doOverlayExportCsvLong,
     doOverlayReport,
     doOverlayManage,
     downloadOverlayResolveReport,

@@ -8,7 +8,6 @@ import {
   ImportReportDialog,
   NewModelDialog,
   OverlayImportDialog,
-  OverlayCsvImportDialog,
   OverlayManageDialog,
   OverlayResolveReportDialog,
   SaveAsDialog,
@@ -42,9 +41,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onSave: ctrl.doSave,
         onSaveAs: ctrl.doSaveAs,
         onOverlayExport: overlayCtrl.doOverlayExport,
-        onOverlayExportCsvLong: overlayCtrl.doOverlayExportCsvLong,
         onOverlayImport: overlayCtrl.doOverlayImport,
-        onOverlayImportCsvLong: overlayCtrl.doOverlayImportCsvLong,
         onOverlayReport: overlayCtrl.doOverlayReport,
         onOverlayManage: overlayCtrl.doOverlayManage,
         onModel: ctrl.doProperties,
@@ -62,9 +59,7 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       overlayCtrl.overlayHasIssues,
       overlayCtrl.overlayReportAvailable,
       overlayCtrl.doOverlayExport,
-      overlayCtrl.doOverlayExportCsvLong,
       overlayCtrl.doOverlayImport,
-      overlayCtrl.doOverlayImportCsvLong,
       overlayCtrl.doOverlayReport,
       overlayCtrl.doOverlayManage,
       ctrl.doAbout
@@ -108,19 +103,6 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         }}
       />
 
-      <input
-        ref={overlayCtrl.overlayCsvLoadInputRef}
-        data-testid="load-overlay-csv-input"
-        type="file"
-        accept=".csv,text/csv"
-        style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
-        onChange={(e) => {
-          const f = e.currentTarget.files?.[0] ?? null;
-          e.currentTarget.value = '';
-          void overlayCtrl.onOverlayCsvFileChosen(f);
-        }}
-      />
-
       <ActionsMenuDialog
         isOpen={ctrl.overflowOpen}
         onClose={() => ctrl.setOverflowOpen(false)}
@@ -160,13 +142,6 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onChooseFile={overlayCtrl.triggerOverlayLoadFilePicker}
       />
 
-      <OverlayCsvImportDialog
-        isOpen={overlayCtrl.overlayCsvImportDialogOpen}
-        onClose={() => overlayCtrl.setOverlayCsvImportDialogOpen(false)}
-        importing={overlayCtrl.overlayCsvImporting}
-        error={overlayCtrl.overlayCsvImportError}
-        onChooseFile={overlayCtrl.triggerOverlayCsvLoadFilePicker}
-      />
 
       <OverlayResolveReportDialog
         isOpen={overlayCtrl.overlayReportOpen}

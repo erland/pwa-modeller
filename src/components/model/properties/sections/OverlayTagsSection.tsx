@@ -4,7 +4,7 @@ import type { ExternalIdRef, TaggedValue } from '../../../../domain';
 import { dedupeExternalIds, externalKey } from '../../../../domain/externalIds';
 import { Dialog } from '../../../dialog/Dialog';
 import { TaggedValuesEditor } from '../TaggedValuesEditor';
-import type { OverlayStoreEntry } from '../../../../store/overlay';
+import type { OverlayStore, OverlayStoreEntry } from '../../../../store/overlay';
 import { overlayStore, useOverlayStore } from '../../../../store/overlay';
 import { normalizeOverlayRefs, toOverlayExternalRef, overlayTagsToTaggedValues, taggedValuesToOverlayTags } from '../../../../domain/overlay';
 
@@ -19,13 +19,12 @@ type MatchInfo = {
   entries: OverlayStoreEntry[];
 };
 
-function buildMatchInfo(kind: 'element' | 'relationship', externalIds: ExternalIdRef[] | undefined): MatchInfo {
-  const ids = dedupeExternalIds(externalIds);
-  const keys = ids.map((r) => externalKey(r));
+function buildMatchInfo(store: OverlayStore, kind: 'element' | 'relationship', ids: ExternalIdRef[]): MatchInfo {
+  const keys = ids.map((r) => externalKey(r)).filter(Boolean);
 
   const found = new Set<string>();
   for (const k of keys) {
-    for (const entryId of overlayStore.findEntryIdsByExternalKey(k)) {
+    for (const entryId of store.findEntryIdsByExternalKey(k)) {
       found.add(entryId);
     }
   }
@@ -33,7 +32,7 @@ function buildMatchInfo(kind: 'element' | 'relationship', externalIds: ExternalI
   const entryIds = [...found.values()].sort();
   const entries: OverlayStoreEntry[] = [];
   for (const entryId of entryIds) {
-    const e = overlayStore.getEntry(entryId);
+    const e = store.getEntry(entryId);
     if (!e) continue;
     if (e.target.kind !== kind) continue;
     entries.push(e);
@@ -49,10 +48,22 @@ function describeEntry(e: OverlayStoreEntry): string {
 }
 
 export function OverlayTagsSection({ kind, displayName, externalIds }: Props) {
-  // Subscribe so this component re-renders when overlay changes.
-  const match = useOverlayStore(() => buildMatchInfo(kind, externalIds));
+  const dedupedExternalIds = useMemo(() => dedupeExternalIds(externalIds), [externalIds]);
 
-  const hasExternalIds = useMemo(() => dedupeExternalIds(externalIds).length > 0, [externalIds]);
+  // Use a stable cache key derived from the current target refs so the snapshot
+  // recomputes when the selection changes, even if the overlay store doesn't.
+  const cacheKey = useMemo(() => {
+    const keys = dedupedExternalIds
+      .map((r) => externalKey(r))
+      .filter(Boolean)
+      .sort();
+    return `${kind}|${keys.join(',')}`;
+  }, [dedupedExternalIds, kind]);
+
+  // Subscribe so this component re-renders when overlay changes.
+  const match = useOverlayStore((s) => buildMatchInfo(s, kind, dedupedExternalIds), cacheKey);
+
+  const hasExternalIds = useMemo(() => dedupedExternalIds.length > 0, [dedupedExternalIds]);
 
   const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -86,9 +97,8 @@ export function OverlayTagsSection({ kind, displayName, externalIds }: Props) {
   }, [match.entries.length, hasExternalIds]);
 
   const createEntryFromTarget = (): string | null => {
-    const ids = dedupeExternalIds(externalIds);
-    if (!ids.length) return null;
-    const refs = normalizeOverlayRefs(ids.map((r) => toOverlayExternalRef(r)));
+    if (!dedupedExternalIds.length) return null;
+    const refs = normalizeOverlayRefs(dedupedExternalIds.map((r) => toOverlayExternalRef(r)));
     if (!refs.length) return null;
     const entryId = overlayStore.upsertEntry({ kind, externalRefs: refs, tags: {} });
     return entryId;

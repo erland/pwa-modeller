@@ -70,4 +70,26 @@ describe('survey wide csv io', () => {
     const res = importOverlaySurveyCsvToStore({ model, overlayStore: store, csvText: csv, options: { blankMode: 'ignore' } });
     expect(res.warnings.some((w) => w.includes('signature mismatch'))).toBe(true);
   });
+
+  test('import supports semicolon and tab separators', () => {
+    const model = makeModel();
+    const store = new OverlayStore();
+
+    const run = (sep: string) => {
+      store.clear();
+      store.upsertEntry({ kind: 'element', externalRefs: [{ scheme: 'xmi', value: 'EAID_1' }], tags: { owner: 'old' } });
+      const lines = [
+        ['kind', 'target_id', 'ref_scheme', 'ref_scope', 'ref_value', 'name', 'type', 'owner'].join(sep),
+        ['#model_signature', computeModelSignature(model), '', '', '', '', '', ''].join(sep),
+        ['element', 'e1', 'xmi', '', 'EAID_1', 'E1', 'BusinessActor', 'bob'].join(sep)
+      ].join('\n');
+      const res = importOverlaySurveyCsvToStore({ model, overlayStore: store, csvText: lines, options: { blankMode: 'ignore' } });
+      const entry = store.listEntries()[0];
+      expect(entry.tags.owner).toBe('bob');
+      expect(res.resolveReport.counts.attached).toBeGreaterThanOrEqual(1);
+    };
+
+    run(';');
+    run('\t');
+  });
 });

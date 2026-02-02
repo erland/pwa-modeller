@@ -97,6 +97,8 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
   const [surveyImportError, setSurveyImportError] = useState<string | null>(null);
 
   const [surveyTargetSet, setSurveyTargetSet] = useState<SurveyTargetSet>('elements');
+  const [surveyElementTypes, setSurveyElementTypes] = useState<string[]>([]);
+  const [surveyRelationshipTypes, setSurveyRelationshipTypes] = useState<string[]>([]);
   const [surveyTagKeysText, setSurveyTagKeysText] = useState<string>('');
   const [surveyImportOptions, setSurveyImportOptions] = useState<SurveyImportOptions>({ blankMode: 'ignore' });
 
@@ -109,6 +111,26 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
 
   const overlayEntryCount = useOverlayStore((s) => s.size);
   const overlayHasEntries = overlayEntryCount > 0;
+
+  const availableSurveyElementTypes = useMemo(() => {
+    if (!model) return [] as string[];
+    const set = new Set<string>();
+    for (const el of Object.values(model.elements ?? {})) {
+      const t = String((el as any).type ?? '').trim();
+      if (t) set.add(t);
+    }
+    return [...set.values()].sort();
+  }, [model]);
+
+  const availableSurveyRelationshipTypes = useMemo(() => {
+    if (!model) return [] as string[];
+    const set = new Set<string>();
+    for (const rel of Object.values(model.relationships ?? {})) {
+      const t = String((rel as any).type ?? '').trim();
+      if (t) set.add(t);
+    }
+    return [...set.values()].sort();
+  }, [model]);
 
   const liveReport = useMemo(() => {
     if (!model) return null;
@@ -151,6 +173,12 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     setOverlayImportDialogOpen(true);
   }, [model]);
 
+  useEffect(() => {
+    // When a new model is loaded/imported, reset survey type filters to "all".
+    setSurveyElementTypes([]);
+    setSurveyRelationshipTypes([]);
+  }, [model ? computeModelSignature(model) : '']);
+
   const doOverlaySurveyExport = useCallback(() => {
     if (!model) {
       setToast({ kind: 'warn', message: 'Load a model first before exporting a survey.' });
@@ -191,6 +219,8 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
 
     const options: SurveyExportOptions = {
       targetSet: surveyTargetSet,
+      elementTypes: surveyElementTypes,
+      relationshipTypes: surveyRelationshipTypes,
       tagKeys,
       prefillFromEffectiveTags: true
     };
@@ -199,7 +229,7 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     downloadTextFile(sanitizeFileNameWithExtension(`${base}-overlay-survey`, 'csv'), csv, 'text/csv');
     setToast({ kind: 'success', message: 'Overlay survey exported.' });
     setSurveyExportDialogOpen(false);
-  }, [fileName, model, surveyTagKeysText, surveyTargetSet]);
+  }, [fileName, model, surveyTagKeysText, surveyTargetSet, surveyElementTypes, surveyRelationshipTypes]);
 
   const suggestSurveyKeys = useCallback(() => {
     if (!model) return;
@@ -399,6 +429,12 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     setSurveyExportDialogOpen,
     surveyTargetSet,
     setSurveyTargetSet,
+    availableSurveyElementTypes,
+    availableSurveyRelationshipTypes,
+    surveyElementTypes,
+    setSurveyElementTypes,
+    surveyRelationshipTypes,
+    setSurveyRelationshipTypes,
     surveyTagKeysText,
     setSurveyTagKeysText,
     doOverlaySurveyExportNow,

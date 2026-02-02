@@ -19,6 +19,10 @@ export type SurveyTargetSet = 'elements' | 'relationships' | 'both';
 
 export type SurveyExportOptions = {
   targetSet: SurveyTargetSet;
+  /** If set, include only elements whose type is in this list. Empty/undefined means include all. */
+  elementTypes?: string[];
+  /** If set, include only relationships whose type is in this list. Empty/undefined means include all. */
+  relationshipTypes?: string[];
   /** Tag keys (columns) to include (normalized, no namespaces). */
   tagKeys: string[];
   /** If true, prefill export values from effective tags (overlay if present else core). */
@@ -53,10 +57,58 @@ function toCsvLine(cells: string[]): string {
   return cells.map(escapeCsvCell).join(',');
 }
 
-/** Minimal CSV parser (RFC4180-ish). Handles quoted fields, commas, CRLF/LF. */
-export function parseCsv(text: string): string[][] {
+type CsvDelimiter = ',' | ';' | '\t';
+
+function countDelimsInSample(sample: string, delim: CsvDelimiter): number {
+  let count = 0;
+  let inQuotes = false;
+  for (let i = 0; i < sample.length; i++) {
+    const ch = sample[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        const next = sample[i + 1];
+        if (next === '"') {
+          i++;
+          continue;
+        }
+        inQuotes = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === delim) count++;
+    if (ch === '\n' || ch === '\r') break;
+  }
+  return count;
+}
+
+function detectDelimiter(text: string): CsvDelimiter {
+  const s = (text ?? '').toString();
+  // Use the first non-empty line as the sample (usually the header).
+  const lines = s.split(/\r?\n/);
+  const sample = (lines.find((l) => l.trim().length > 0) ?? '').toString();
+  const candidates: CsvDelimiter[] = [',', ';', '\t'];
+  let best: CsvDelimiter = ',';
+  let bestCount = -1;
+  for (const d of candidates) {
+    const c = countDelimsInSample(sample, d);
+    if (c > bestCount) {
+      bestCount = c;
+      best = d;
+    }
+  }
+  return best;
+}
+
+/** Minimal CSV parser (RFC4180-ish). Handles quoted fields, commas/semicolons/tabs, CRLF/LF. */
+export function parseCsv(text: string, delimiter?: CsvDelimiter): string[][] {
   const out: string[][] = [];
   const s = (text ?? '').toString();
+
+  const delim: CsvDelimiter = delimiter ?? detectDelimiter(s);
 
   let row: string[] = [];
   let cell = '';
@@ -102,7 +154,7 @@ export function parseCsv(text: string): string[][] {
       continue;
     }
 
-    if (ch === ',') {
+    if (ch === delim) {
       pushCell();
       i++;
       continue;
@@ -164,13 +216,29 @@ function pickPrimaryExternalRef(externalIds: any): { scheme: string; scope: stri
   return { scheme, scope, value, ref: toOverlayExternalRef(first) };
 }
 
-function modelTargets(model: Model, targetSet: SurveyTargetSet): Array<{ kind: 'element' | 'relationship'; obj: Element | Relationship }> {
+function modelTargets(
+  model: Model,
+  options: Pick<SurveyExportOptions, 'targetSet' | 'elementTypes' | 'relationshipTypes'>
+): Array<{ kind: 'element' | 'relationship'; obj: Element | Relationship }> {
   const out: Array<{ kind: 'element' | 'relationship'; obj: any }> = [];
+  const targetSet = options.targetSet;
+
+  const elTypes = (options.elementTypes ?? []).filter((t) => !!t);
+  const relTypes = (options.relationshipTypes ?? []).filter((t) => !!t);
+
   if (targetSet === 'elements' || targetSet === 'both') {
-    for (const el of Object.values(model.elements ?? {})) out.push({ kind: 'element', obj: el });
+    for (const el of Object.values(model.elements ?? {})) {
+      const t = (el as any).type ?? '';
+      if (elTypes.length > 0 && !elTypes.includes(String(t))) continue;
+      out.push({ kind: 'element', obj: el });
+    }
   }
   if (targetSet === 'relationships' || targetSet === 'both') {
-    for (const rel of Object.values(model.relationships ?? {})) out.push({ kind: 'relationship', obj: rel });
+    for (const rel of Object.values(model.relationships ?? {})) {
+      const t = (rel as any).type ?? '';
+      if (relTypes.length > 0 && !relTypes.includes(String(t))) continue;
+      out.push({ kind: 'relationship', obj: rel });
+    }
   }
   return out;
 }
@@ -192,7 +260,7 @@ export function serializeOverlaySurveyCsv(args: {
   const sig = computeModelSignature(model);
   lines.push(toCsvLine(['#model_signature', sig, '', '', '', '', '', ...tagKeys.map(() => '')]));
 
-  const targets = modelTargets(model, options.targetSet);
+  const targets = modelTargets(model, options);
   for (const t of targets) {
     const kind = t.kind;
     const id = (t.obj as any).id ?? '';

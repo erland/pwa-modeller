@@ -166,6 +166,12 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onClose={() => overlayCtrl.setSurveyExportDialogOpen(false)}
         targetSet={overlayCtrl.surveyTargetSet}
         setTargetSet={overlayCtrl.setSurveyTargetSet}
+        availableElementTypes={overlayCtrl.availableSurveyElementTypes}
+        availableRelationshipTypes={overlayCtrl.availableSurveyRelationshipTypes}
+        selectedElementTypes={overlayCtrl.surveyElementTypes}
+        setSelectedElementTypes={overlayCtrl.setSurveyElementTypes}
+        selectedRelationshipTypes={overlayCtrl.surveyRelationshipTypes}
+        setSelectedRelationshipTypes={overlayCtrl.setSurveyRelationshipTypes}
         tagKeysText={overlayCtrl.surveyTagKeysText}
         setTagKeysText={overlayCtrl.setSurveyTagKeysText}
         onSuggestKeys={overlayCtrl.suggestSurveyKeys}

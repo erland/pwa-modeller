@@ -11,6 +11,8 @@ import {
   useOverlayStore
 } from '../../store/overlay';
 
+import { TypeMultiSelect } from './shared/TypeMultiSelect';
+
 function normalizeKey(k: string): string {
   return (k ?? '').toString().trim().toLowerCase();
 }
@@ -43,16 +45,45 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
   const [requiredText, setRequiredText] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<string>('');
 
+  // Type filters (undefined means all; [] means none)
+  const [selectedElementTypes, setSelectedElementTypes] = useState<string[]>([]);
+  const [selectedRelationshipTypes, setSelectedRelationshipTypes] = useState<string[]>([]);
+
   useEffect(() => {
     if (!signature) {
       setRequiredText('');
       setLastSavedAt('');
+      setSelectedElementTypes(undefined);
+      setSelectedRelationshipTypes(undefined);
       return;
     }
     const meta = loadRequiredTags(signature);
     setRequiredText((meta.tags ?? []).join('\n'));
     setLastSavedAt(meta.updatedAt);
+    // Reset type filters when model changes (new signature).
+    setSelectedElementTypes(undefined);
+    setSelectedRelationshipTypes(undefined);
   }, [signature]);
+
+  const availableElementTypes = useMemo(() => {
+    if (!model) return [] as string[];
+    const set = new Set<string>();
+    for (const el of Object.values(model.elements ?? {})) {
+      const t = String((el as any).type ?? '').trim();
+      if (t) set.add(t);
+    }
+    return [...set.values()].sort();
+  }, [model]);
+
+  const availableRelationshipTypes = useMemo(() => {
+    if (!model) return [] as string[];
+    const set = new Set<string>();
+    for (const rel of Object.values(model.relationships ?? {})) {
+      const t = String((rel as any).type ?? '').trim();
+      if (t) set.add(t);
+    }
+    return [...set.values()].sort();
+  }, [model]);
 
   const requiredKeys = useMemo(() => parseRequiredTags(requiredText), [requiredText]);
 
@@ -67,8 +98,25 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
       };
     }
 
-    const elementIds = Object.keys(model.elements ?? {}).sort();
-    const relationshipIds = Object.keys(model.relationships ?? {}).sort();
+    const elementIds = Object.keys(model.elements ?? {})
+      .filter((id) => {
+        const el = model.elements?.[id];
+        if (!el) return false;
+        if (selectedElementTypes === undefined) return true;
+        const t = String((el as any).type ?? '').trim();
+        return selectedElementTypes.includes(t);
+      })
+      .sort();
+
+    const relationshipIds = Object.keys(model.relationships ?? {})
+      .filter((id) => {
+        const rel = model.relationships?.[id];
+        if (!rel) return false;
+        if (selectedRelationshipTypes === undefined) return true;
+        const t = String((rel as any).type ?? '').trim();
+        return selectedRelationshipTypes.includes(t);
+      })
+      .sort();
 
     const perTagCounts = new Map<string, { e: number; r: number }>();
     for (const k of requiredKeys) perTagCounts.set(k, { e: 0, r: 0 });
@@ -126,7 +174,7 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
       perTag
     };
     // overlayVersion ensures recompute when overlay changes
-  }, [model, overlayStore, requiredKeys, overlayVersion]);
+  }, [model, overlayStore, requiredKeys, overlayVersion, selectedElementTypes, selectedRelationshipTypes]);
 
   const onSaveRequired = () => {
     if (!signature) return;
@@ -207,6 +255,29 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+            <div>
+              <TypeMultiSelect
+                label="Element types"
+                allTypes={availableElementTypes}
+                selectedTypes={selectedElementTypes}
+                onChange={setSelectedElementTypes}
+                filterPlaceholder="Filter element types…"
+                maxHeight={260}
+              />
+            </div>
+            <div>
+              <TypeMultiSelect
+                label="Relationship types"
+                allTypes={availableRelationshipTypes}
+                selectedTypes={selectedRelationshipTypes}
+                onChange={setSelectedRelationshipTypes}
+                filterPlaceholder="Filter relationship types…"
+                maxHeight={260}
+              />
             </div>
           </div>
 

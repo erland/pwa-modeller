@@ -25,8 +25,8 @@ export function OverlaySurveyCsvPanel(props: { model: Model | null; fileName: st
 
   // Export state
   const [targetSet, setTargetSet] = useState<SurveyTargetSet>('elements');
-  const [selectedElementTypes, setSelectedElementTypes] = useState<string[]>([]); // empty means all
-  const [selectedRelationshipTypes, setSelectedRelationshipTypes] = useState<string[]>([]); // empty means all
+  const [selectedElementTypes, setSelectedElementTypes] = useState<string[] | undefined>(undefined); // undefined means all; [] means none
+  const [selectedRelationshipTypes, setSelectedRelationshipTypes] = useState<string[] | undefined>(undefined); // undefined means all; [] means none
   const [tagKeysText, setTagKeysText] = useState<string>('');
   // (filter state lives inside TypeMultiSelect)
 
@@ -41,8 +41,8 @@ export function OverlaySurveyCsvPanel(props: { model: Model | null; fileName: st
     const sig = computeModelSignature(model);
     // Use signature in dep array, not direct effect.
     void sig;
-    setSelectedElementTypes([]);
-    setSelectedRelationshipTypes([]);
+    setSelectedElementTypes(undefined);
+    setSelectedRelationshipTypes(undefined);
   }, [model ? computeModelSignature(model) : '']);
 
   // Auto-dismiss toast

@@ -1,6 +1,7 @@
 import type { ImportReport } from '../importReport';
 import { addWarning } from '../importReport';
 import type { IRModel, IRTaggedValue, IRView, IRViewConnection, IRViewNode } from '../framework/ir';
+import { resolveViewConnectionRelationshipIds } from '../normalize/resolveViewConnectionRelationshipIds';
 
 export type NormalizeBpmn2ImportIROptions = {
   /** Optional report to append normalization warnings to. */
@@ -189,11 +190,18 @@ export function normalizeBpmn2ImportIR(ir: IRModel, opts?: NormalizeBpmn2ImportI
 
   const views = (ir.views ?? []).map((v) => normalizeView(v, elementIds, relIds, opts));
 
-  return {
+  const base: IRModel = {
     ...ir,
     folders,
     elements,
     relationships: cleanedRelationships,
     views: stableSortById(views)
   };
+
+  // Some BPMN exporters omit explicit relationship references on diagram edges.
+  // Best-effort resolve them here so later steps can build per-diagram relationship visibility.
+  return resolveViewConnectionRelationshipIds(base, {
+    report: opts?.report,
+    label: 'BPMN2'
+  });
 }

@@ -7,6 +7,7 @@ import { readBlobAsArrayBuffer } from './blobReaders';
 import { normalizeImportIR } from '../normalize/normalizeImportIR';
 import { normalizeBpmn2ImportIR } from '../bpmn2/normalizeBpmn2ImportIR';
 import { normalizeEaXmiImportIR } from '../eaXmi/normalizeEaXmiImportIR';
+import { normalizeMeffImportIR } from '../meff/normalizeMeffImportIR';
 import type { IRModel } from './ir';
 
 const DEFAULT_SNIFF_BYTES = 256 * 1024; // 256 KiB
@@ -103,6 +104,11 @@ export async function importModel(file: File): Promise<ImportResult> {
         })
       : baseIr.meta?.format === 'ea-xmi-uml'
         ? (normalizeEaXmiImportIR(baseIr, {
+            report: result.report,
+            source: result.format || pick.importer.format || pick.importer.id
+          }) ?? baseIr)
+      : baseIr.meta?.format === 'archimate-meff'
+        ? (normalizeMeffImportIR(baseIr, {
             report: result.report,
             source: result.format || pick.importer.format || pick.importer.id
           }) ?? baseIr)

@@ -9,6 +9,29 @@ import { findFirstByLocalName } from './xmlScan';
 import { parsePropertiesToRecord } from './properties';
 import { parseTaggedValues } from './taggedValues';
 
+function stripNamespace(raw: string): string {
+  const s = (raw ?? '').trim();
+  const lastColon = s.lastIndexOf(':');
+  const lastDot = s.lastIndexOf('.');
+  const lastHash = s.lastIndexOf('#');
+  const cut = Math.max(lastColon, lastDot, lastHash);
+  return cut >= 0 ? s.slice(cut + 1) : s;
+}
+
+function normalizeKey(raw: string): string {
+  return (raw ?? '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+/**
+ * Compatibility: some exporters still emit UsedByRelationship in MEFF.
+ * We import it as Serving and invert direction (A UsedBy B -> B Serving A).
+ */
+function isUsedByRelationship(rawType: string): boolean {
+  const key = normalizeKey(stripNamespace(rawType));
+  // Accept: UsedByRelationship, UsedBy, UsedByRel, etc.
+  return key === 'usedbyrelationship' || key === 'usedby';
+}
+
 /**
  * Parse <relationships> section of MEFF into IR relationships.
  */
@@ -27,14 +50,21 @@ export function parseMeffRelationships(doc: Document, report: ImportReport): IRR
       }
 
       const rawType = (getType(el) ?? '').trim();
-      const typeRes = mapRelationshipType(rawType, 'archimate-meff');
-      if (typeRes.kind === 'unknown') recordUnknownRelationshipType(report, typeRes.unknown);
+      const usedByCompat = isUsedByRelationship(rawType);
+
+      // Map type: UsedByRelationship -> Serving (direction inversion handled below).
+      const typeRes = usedByCompat ? { kind: 'known' as const, type: 'Serving' as const } : mapRelationshipType(rawType, 'archimate-meff');
+      if (!usedByCompat && typeRes.kind === 'unknown') recordUnknownRelationshipType(report, typeRes.unknown);
       const typeForIr = typeRes.kind === 'known' ? typeRes.type : 'Unknown';
 
-      const sourceId =
+      const rawSourceId =
         attrAny(el, ['source', 'sourceRef', 'sourceref', 'from']) ?? childText(el, 'source') ?? childText(el, 'sourceRef');
-      const targetId =
+      const rawTargetId =
         attrAny(el, ['target', 'targetRef', 'targetref', 'to']) ?? childText(el, 'target') ?? childText(el, 'targetRef');
+
+      // If we are importing UsedByCompatibility, invert direction when converting to Serving.
+      const sourceId = usedByCompat ? rawTargetId : rawSourceId;
+      const targetId = usedByCompat ? rawSourceId : rawTargetId;
 
       if (!sourceId || !targetId) {
         addWarning(report, `MEFF: Relationship "${id}" is missing source/target; skipped.`);
@@ -55,7 +85,14 @@ export function parseMeffRelationships(doc: Document, report: ImportReport): IRR
         taggedValues: parseTaggedValues(el),
         meta: {
           source: 'archimate-meff',
-          ...(typeRes.kind === 'unknown' ? { sourceType: typeRes.unknown.name } : {})
+          // IMPORTANT: `applyImportIR` prefers `meta.sourceType` over `rel.type` when resolving
+          // relationship types. For compatibility rewrites (UsedBy -> Serving) we *must not*
+          // set `sourceType` to the original MEFF type, otherwise the relationship will be
+          // resolved as Unknown and reported as such.
+          ...(usedByCompat
+            ? { originalType: stripNamespace(rawType) || rawType, compat: 'UsedByRelationship→Serving(inverse)' }
+            : {}),
+          ...(!usedByCompat && typeRes.kind === 'unknown' ? { sourceType: typeRes.unknown.name } : {})
         }
       });
     }

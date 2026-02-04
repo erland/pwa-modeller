@@ -85,14 +85,24 @@ export function mapRelationshipType(rawType: string, source: string): TypeMappin
     return { kind: 'unknown', type: 'Unknown', unknown: { ns: source, name: 'MissingType' } };
   }
 
+  // Compatibility: some exporters still use "UsedByRelationship" (removed from ArchiMate 3.x).
+  // We map it to "Serving" (the inverse direction semantics are handled in the importer).
+  const key = normalizeTypeToken(raw);
+  if (key === 'usedby') {
+    return { kind: 'known', type: 'Serving' };
+  }
+
   if ((RELATIONSHIP_TYPES as readonly string[]).includes(raw)) {
     return { kind: 'known', type: raw as RelationshipType };
   }
 
-  const key = normalizeTypeToken(raw);
+  // (Re-)compute the key after the compatibility check above.
+  // NOTE: keep as a separate const to avoid re-normalizing later.
+  // eslint-disable-next-line @typescript-eslint/no-shadow
+  const key2 = key;
 
   // Accept variants like "AssociationRelationship".
-  const mapped = REL_LOOKUP.get(key);
+  const mapped = REL_LOOKUP.get(key2);
   if (mapped) return { kind: 'known', type: mapped as RelationshipType };
 
   return { kind: 'unknown', type: 'Unknown', unknown: { ns: source, name: raw } };

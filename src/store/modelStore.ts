@@ -17,7 +17,7 @@ import type {
 import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode, LayoutOutput } from '../domain/layout/types';
 import { extractLayoutInputForView, fitArchiMateBoxToText, computeLayoutSignature } from '../domain/layout';
 import { adjustEdgeRoutesForMovedNodes, nudgeOverlaps, snapToGrid } from '../domain/layout/post';
-import { createEmptyModel, materializeViewConnectionsForView } from '../domain';
+import { createEmptyModel, materializeViewConnectionsForView, computeVisibleRelationshipIdsForView } from '../domain';
 import {
   connectorMutations,
   elementMutations,
@@ -332,6 +332,80 @@ export class ModelStore {
         ...view,
         relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
       };
+    });
+  };
+
+  /**
+   * Hide a specific relationship in a view.
+   *
+   * If the view currently uses implicit relationship visibility, it will be
+   * converted to explicit mode using the view's *current* visible relationships
+   * as the starting allow-list.
+   */
+  hideRelationshipInView = (viewId: string, relationshipId: string): void => {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) return;
+      if (!relationshipId || !model.relationships[relationshipId]) return;
+
+      const currentIds =
+        view.relationshipVisibility?.mode === 'explicit'
+          ? (Array.isArray(view.relationshipVisibility.relationshipIds)
+              ? view.relationshipVisibility.relationshipIds
+              : [])
+          : computeVisibleRelationshipIdsForView(model, view);
+
+      const nextIds = Array.from(
+        new Set(
+          currentIds
+            .filter((id) => typeof id === 'string' && id.length > 0)
+            .filter((id) => id !== relationshipId)
+        )
+      ).sort((a, b) => a.localeCompare(b));
+
+      const nextView: View = {
+        ...view,
+        relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
+      };
+
+      // Re-materialize connections so the hidden relationship disappears from the diagram.
+      model.views[viewId] = { ...nextView, connections: materializeViewConnectionsForView(model, nextView) };
+    });
+  };
+
+  /**
+   * Show (include) a specific relationship in a view that uses explicit visibility.
+   *
+   * If the view currently uses implicit relationship visibility, it will be
+   * converted to explicit mode using the view's *current* visible relationships
+   * as the starting allow-list.
+   */
+  showRelationshipInView = (viewId: string, relationshipId: string): void => {
+    this.updateModel((model) => {
+      const view = model.views[viewId];
+      if (!view) return;
+      if (!relationshipId || !model.relationships[relationshipId]) return;
+
+      const currentIds =
+        view.relationshipVisibility?.mode === 'explicit'
+          ? (Array.isArray(view.relationshipVisibility.relationshipIds)
+              ? view.relationshipVisibility.relationshipIds
+              : [])
+          : computeVisibleRelationshipIdsForView(model, view);
+
+      const nextIds = Array.from(
+        new Set([
+          ...currentIds.filter((id) => typeof id === 'string' && id.length > 0),
+          relationshipId,
+        ])
+      ).sort((a, b) => a.localeCompare(b));
+
+      const nextView: View = {
+        ...view,
+        relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
+      };
+
+      model.views[viewId] = { ...nextView, connections: materializeViewConnectionsForView(model, nextView) };
     });
   };
 

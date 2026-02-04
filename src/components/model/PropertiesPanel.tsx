@@ -61,6 +61,9 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props
     updateRelationship: (relationshipId, patch) => modelStore.updateRelationship(relationshipId, patch),
     deleteRelationship: (relationshipId) => modelStore.deleteRelationship(relationshipId),
 
+    hideRelationshipInView: (viewId, relationshipId) => modelStore.hideRelationshipInView(viewId, relationshipId),
+    showRelationshipInView: (viewId, relationshipId) => modelStore.showRelationshipInView(viewId, relationshipId),
+
     setViewConnectionRoute: (viewId, connectionId, kind) => modelStore.setViewConnectionRoute(viewId, connectionId, kind),
     setViewConnectionEndpointAnchors: (viewId, connectionId, patch) =>
       modelStore.setViewConnectionEndpointAnchors(viewId, connectionId, patch),

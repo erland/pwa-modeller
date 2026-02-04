@@ -40,6 +40,11 @@ export type ModelActions = {
   updateRelationship: (relationshipId: string, patch: Partial<Relationship> & { type?: RelationshipType }) => void;
   deleteRelationship: (relationshipId: string) => void;
 
+  /** Per-view visibility control for a specific relationship. */
+  hideRelationshipInView: (viewId: string, relationshipId: string) => void;
+  /** Per-view visibility control for a specific relationship. */
+  showRelationshipInView: (viewId: string, relationshipId: string) => void;
+
   /** Update per-view routing style for a ViewConnection instance. */
   setViewConnectionRoute: (viewId: string, connectionId: string, kind: ViewConnectionRouteKind) => void;
 

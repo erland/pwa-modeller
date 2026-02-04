@@ -9,7 +9,7 @@ import {
 } from '../../store';
 import { useOverlayStore } from '../../store/overlay';
 import { clearPersistedOverlay } from '../../store/overlay/persistence';
-import { clearOverlayExportMarker, setOverlayExportMarker } from '../../store/overlay/exportMarker';
+import { clearOverlayExportMarker, loadOverlayExportMarker, setOverlayExportMarker } from '../../store/overlay/exportMarker';
 import { importOverlayFileToStore, parseOverlayJson, serializeOverlayStoreToJson } from '../../store/overlay/io/jsonOverlay';
 
 import { defaultOverlayFileBase } from './overlayUiUtils';
@@ -69,6 +69,16 @@ export function OverlayActions() {
   const canExport = canUseOverlay && overlayCount > 0;
   const canClear = canUseOverlay && overlayCount > 0;
 
+  // Read from localStorage each render so the UI updates immediately after an export.
+  const exportMarker = signature ? loadOverlayExportMarker(signature) : null;
+  const isDirty = useMemo(() => {
+    if (!canUseOverlay) return false;
+    if (overlayCount === 0) return false;
+    // "Dirty" means the in-memory overlay differs from the last exported overlay file.
+    if (!exportMarker) return true;
+    return exportMarker.version !== overlayVersion;
+  }, [canUseOverlay, overlayCount, exportMarker, overlayVersion]);
+
   const triggerLoadPicker = () => {
     const el = loadInputRef.current;
     if (!el) return;
@@ -107,9 +117,12 @@ export function OverlayActions() {
       return;
     }
 
-    const ok = window.confirm(
-      'Clear all overlay entries for this model?\n\nThis will remove overlay entries from memory and local storage for the current model signature.'
-    );
+    const msg =
+      (isDirty
+        ? 'You have unsaved overlay changes.\n\n'
+        : '') +
+      'Clear all overlay entries for this model?\n\nThis will remove overlay entries from memory and local storage for the current model signature.';
+    const ok = window.confirm(msg);
     if (!ok) return;
 
     overlayStore.clear();
@@ -126,6 +139,13 @@ export function OverlayActions() {
       return;
     }
     if (!f) return;
+
+    if (isDirty && overlayCount > 0) {
+      const ok = window.confirm(
+        'You have unsaved overlay changes.\n\nLoading an overlay may change or overwrite existing overlay entries. Continue?'
+      );
+      if (!ok) return;
+    }
 
     try {
       const text = await readFileAsText(f);
@@ -175,8 +195,13 @@ export function OverlayActions() {
 
   return (
     <>
-      <button type="button" className="shellButton shellPrimaryAction" onClick={() => setMenuOpen(true)}>
-        Overlay
+      <button
+        type="button"
+        className="shellButton shellPrimaryAction"
+        onClick={() => setMenuOpen(true)}
+        title={isDirty ? 'Unsaved overlay changes' : undefined}
+      >
+        Overlay{isDirty ? ' *' : ''}
       </button>
 
       <input

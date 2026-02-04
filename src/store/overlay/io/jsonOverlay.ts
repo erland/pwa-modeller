@@ -2,10 +2,12 @@ import type { Model } from '../../../domain/types';
 import { createId } from '../../../domain/id';
 import {
   OVERLAY_FILE_FORMAT_V1,
+  OVERLAY_SCHEMA_VERSION,
   computeModelSignature,
   isOverlayFile,
   normalizeOverlayRefs
 } from '../../../domain/overlay';
+import { migrateOverlayFileToCurrent } from '../../../domain/overlay';
 import { buildOverlayModelExternalIdIndex } from '../../../domain/overlay';
 import type { ModelIndex } from '../../../domain/overlay';
 import type { OverlayEntry, OverlayFile, OverlayTargetKind } from '../../../domain/overlay';
@@ -107,6 +109,7 @@ export function serializeOverlayStoreToFile(args: {
 
   return {
     format: OVERLAY_FILE_FORMAT_V1,
+    schemaVersion: OVERLAY_SCHEMA_VERSION,
     createdAt,
     modelHint,
     entries: args.overlayStore
@@ -138,7 +141,7 @@ export function parseOverlayJson(text: string): OverlayFile {
   if (!isOverlayFile(raw)) {
     throw new Error('Overlay import failed: not a valid overlay file (format or structure mismatch)');
   }
-  return raw;
+  return migrateOverlayFileToCurrent(raw);
 }
 
 function buildModelIndexOrThrow(model: Model, provided?: ModelIndex): ModelIndex {

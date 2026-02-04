@@ -46,8 +46,8 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
   const [lastSavedAt, setLastSavedAt] = useState<string>('');
 
   // Type filters (undefined means all; [] means none)
-  const [selectedElementTypes, setSelectedElementTypes] = useState<string[]>([]);
-  const [selectedRelationshipTypes, setSelectedRelationshipTypes] = useState<string[]>([]);
+  const [selectedElementTypes, setSelectedElementTypes] = useState<string[] | undefined>(undefined);
+  const [selectedRelationshipTypes, setSelectedRelationshipTypes] = useState<string[] | undefined>(undefined);
 
   useEffect(() => {
     if (!signature) {

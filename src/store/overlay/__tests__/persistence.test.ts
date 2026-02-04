@@ -31,4 +31,29 @@ describe('overlay persistence', () => {
     clearPersistedOverlay(signature);
     expect(window.localStorage.getItem(overlayStorageKey(signature))).toBeNull();
   });
+
+  it('migrates legacy v1 persisted overlays on load', () => {
+    const signature = 'ext-legacy-0001';
+    const legacyKey = `pwa-modeller:overlayState:v1:${signature}`;
+    const entries: OverlayStoreEntry[] = [
+      {
+        entryId: 'ovlLegacy',
+        target: { kind: 'element', externalRefs: [{ scheme: 'archimate-meff', value: 'id' }] },
+        tags: { foo: 'bar' }
+      }
+    ];
+    const legacyEnvelope = {
+      v: 1,
+      signature,
+      savedAt: new Date().toISOString(),
+      entries
+    };
+    window.localStorage.setItem(legacyKey, JSON.stringify(legacyEnvelope));
+
+    const loaded = loadPersistedOverlayEntries(signature);
+    expect(loaded).toEqual(entries);
+
+    // After load, it should have been migrated to the new key and legacy removed (best-effort).
+    expect(window.localStorage.getItem(overlayStorageKey(signature))).toBeTruthy();
+  });
 });

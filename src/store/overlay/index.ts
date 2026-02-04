@@ -7,6 +7,7 @@ export * from './effectiveTags';
 export * from './io/jsonOverlay';
 export * from './io/surveyWideCsv';
 export * from './hooks';
+export * from './indexing';
 export * from './rebind';
 export * from './exportMarker';
 export * from './requiredTags';

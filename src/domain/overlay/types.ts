@@ -10,6 +10,14 @@
 export const OVERLAY_FILE_FORMAT_V1 = 'pwa-modeller-overlay@1' as const;
 
 /**
+ * Overlay schema version.
+ *
+ * This is independent from the file format id string. We keep it as a number so we can
+ * introduce migrations over time (e.g. new tag conventions, new meta fields, etc.).
+ */
+export const OVERLAY_SCHEMA_VERSION = 1 as const;
+
+/**
  * On-disk external reference used by overlay files.
  *
  * - `scheme` is typically the exporter/importer name (e.g. `archimate-meff`, `xmi`).
@@ -67,6 +75,8 @@ export type OverlayModelHint = {
 
 export type OverlayFile = {
   format: typeof OVERLAY_FILE_FORMAT_V1 | string;
+  /** Optional schema version; if missing, it is treated as version 1. */
+  schemaVersion?: number;
   createdAt: string;
   modelHint?: OverlayModelHint;
   entries: OverlayEntry[];

@@ -1,7 +1,11 @@
 import { useRef, useSyncExternalStore } from 'react';
 
+import type { Model } from '../../domain/types';
+import { computeModelSignature } from '../../domain/overlay/modelSignature';
+
 import type { OverlayStore } from './OverlayStore';
 import { overlayStore } from './overlayStoreInstance';
+import { buildOverlayAttachmentIndex, type OverlayAttachmentIndex } from './indexing';
 
 /**
  * React subscription helper for the overlay store.
@@ -37,4 +41,35 @@ export function useOverlayStore<T>(selector: (store: OverlayStore) => T, cacheKe
   };
 
   return useSyncExternalStore((listener) => overlayStore.subscribe(listener), getSnapshot, getSnapshot);
+}
+
+/**
+ * Build a fast overlay lookup index for the provided model.
+ *
+ * Recomputes when either the model signature or overlay store version changes.
+ */
+export function useOverlayAttachmentIndex(model: Model | undefined): OverlayAttachmentIndex | undefined {
+  const overlayVersion = useOverlayStore((s) => s.getVersion());
+  const lastSigRef = useRef<string | null>(null);
+  const lastVerRef = useRef<number | null>(null);
+  const lastIndexRef = useRef<OverlayAttachmentIndex | undefined>(undefined);
+
+  const sig = model ? computeModelSignature(model) : '';
+
+  if (!model) {
+    lastSigRef.current = null;
+    lastVerRef.current = null;
+    lastIndexRef.current = undefined;
+    return undefined;
+  }
+
+  if (lastSigRef.current === sig && lastVerRef.current === overlayVersion && lastIndexRef.current) {
+    return lastIndexRef.current;
+  }
+
+  const next = buildOverlayAttachmentIndex(model, overlayStore);
+  lastSigRef.current = sig;
+  lastVerRef.current = overlayVersion;
+  lastIndexRef.current = next;
+  return next;
 }

@@ -1,11 +1,21 @@
 import type { OverlayStoreEntry } from './OverlayStore';
+import { OVERLAY_SCHEMA_VERSION } from '../../domain/overlay';
 
-const STORAGE_PREFIX = 'pwa-modeller:overlayState:v1:';
+const STORAGE_PREFIX_V1 = 'pwa-modeller:overlayState:v1:';
+const STORAGE_PREFIX_V2 = 'pwa-modeller:overlayState:v2:';
 
 export type OverlayPersistedEnvelopeV1 = {
   v: 1;
   signature: string;
   savedAt: string;
+  entries: OverlayStoreEntry[];
+};
+
+export type OverlayPersistedEnvelopeV2 = {
+  v: 2;
+  signature: string;
+  savedAt: string;
+  schemaVersion: number;
   entries: OverlayStoreEntry[];
 };
 
@@ -15,26 +25,18 @@ export type OverlayPersistedMeta = {
   entryCount: number;
 };
 
+type OverlayPersistedEnvelopeAny = OverlayPersistedEnvelopeV1 | OverlayPersistedEnvelopeV2;
+
 /** Load only envelope metadata (savedAt, entryCount) for status displays. */
 export function loadPersistedOverlayMeta(signature: string): OverlayPersistedMeta | null {
   if (!hasLocalStorage()) return null;
-  const key = overlayStorageKey(signature);
-  const raw = window.localStorage.getItem(key);
-  if (!raw) return null;
-
-  const parsed = safeParse(raw);
-  if (!isRecord(parsed)) return null;
-  if (parsed['v'] !== 1) return null;
-  if (parsed['signature'] !== signature) return null;
-
-  const savedAt = typeof parsed['savedAt'] === 'string' ? parsed['savedAt'] : '';
-  const entries = parsed['entries'];
-  const entryCount = Array.isArray(entries) ? entries.length : 0;
+  const env = loadEnvelope(signature);
+  if (!env) return null;
 
   return {
     signature,
-    savedAt: savedAt || '',
-    entryCount
+    savedAt: env.savedAt || '',
+    entryCount: Array.isArray(env.entries) ? env.entries.length : 0
   };
 }
 
@@ -59,22 +61,85 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 export function overlayStorageKey(signature: string): string {
-  return `${STORAGE_PREFIX}${signature}`;
+  // New writes use v2 key.
+  return `${STORAGE_PREFIX_V2}${signature}`;
+}
+
+function overlayStorageKeyV1(signature: string): string {
+  return `${STORAGE_PREFIX_V1}${signature}`;
+}
+
+function overlayStorageKeyV2(signature: string): string {
+  return `${STORAGE_PREFIX_V2}${signature}`;
+}
+
+function loadEnvelope(signature: string): OverlayPersistedEnvelopeAny | null {
+  // Prefer v2, fall back to v1.
+  const keys = [overlayStorageKeyV2(signature), overlayStorageKeyV1(signature)];
+  for (const key of keys) {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) continue;
+    const parsed = safeParse(raw);
+    const env = coerceEnvelope(parsed, signature);
+    if (!env) continue;
+
+    // If we loaded from v1, migrate forward to v2 eagerly.
+    if (env.v === 1) {
+      try {
+        persistOverlayEntries(signature, env.entries);
+        // Keep the old key around in case the browser blocks writes; best-effort cleanup.
+        try {
+          window.localStorage.removeItem(key);
+        } catch {
+          // ignore
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return env;
+  }
+  return null;
+}
+
+function coerceEnvelope(parsed: unknown, signature: string): OverlayPersistedEnvelopeAny | null {
+  if (!isRecord(parsed)) return null;
+  const v = parsed['v'];
+  if (parsed['signature'] !== signature) return null;
+  const savedAt = typeof parsed['savedAt'] === 'string' ? parsed['savedAt'] : '';
+  const entries = parsed['entries'];
+  if (!Array.isArray(entries)) return null;
+
+  if (v === 2) {
+    const schemaVersionRaw = parsed['schemaVersion'];
+    const schemaVersion = typeof schemaVersionRaw === 'number' && Number.isFinite(schemaVersionRaw) ? schemaVersionRaw : 1;
+    return {
+      v: 2,
+      signature,
+      savedAt,
+      schemaVersion,
+      entries: entries as unknown as OverlayStoreEntry[]
+    };
+  }
+
+  if (v === 1) {
+    return {
+      v: 1,
+      signature,
+      savedAt,
+      entries: entries as unknown as OverlayStoreEntry[]
+    };
+  }
+
+  return null;
 }
 
 export function loadPersistedOverlayEntries(signature: string): OverlayStoreEntry[] | null {
   if (!hasLocalStorage()) return null;
-  const key = overlayStorageKey(signature);
-  const raw = window.localStorage.getItem(key);
-  if (!raw) return null;
+  const env = loadEnvelope(signature);
+  if (!env) return null;
 
-  const parsed = safeParse(raw);
-  if (!isRecord(parsed)) return null;
-  if (parsed['v'] !== 1) return null;
-  if (parsed['signature'] !== signature) return null;
-
-  const entries = parsed['entries'];
-  if (!Array.isArray(entries)) return null;
+  const entries = env.entries;
 
   // Light shape validation; deeper validation happens on import/export steps.
   const out: OverlayStoreEntry[] = [];
@@ -94,10 +159,11 @@ export function loadPersistedOverlayEntries(signature: string): OverlayStoreEntr
 export function persistOverlayEntries(signature: string, entries: OverlayStoreEntry[]): void {
   if (!hasLocalStorage()) return;
   const key = overlayStorageKey(signature);
-  const envelope: OverlayPersistedEnvelopeV1 = {
-    v: 1,
+  const envelope: OverlayPersistedEnvelopeV2 = {
+    v: 2,
     signature,
     savedAt: new Date().toISOString(),
+    schemaVersion: OVERLAY_SCHEMA_VERSION,
     entries
   };
   try {
@@ -109,9 +175,9 @@ export function persistOverlayEntries(signature: string, entries: OverlayStoreEn
 
 export function clearPersistedOverlay(signature: string): void {
   if (!hasLocalStorage()) return;
-  const key = overlayStorageKey(signature);
   try {
-    window.localStorage.removeItem(key);
+    window.localStorage.removeItem(overlayStorageKeyV2(signature));
+    window.localStorage.removeItem(overlayStorageKeyV1(signature));
   } catch {
     // ignore
   }

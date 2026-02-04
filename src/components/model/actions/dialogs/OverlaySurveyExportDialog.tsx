@@ -12,9 +12,9 @@ type OverlaySurveyExportDialogProps = {
   availableElementTypes: string[];
   availableRelationshipTypes: string[];
   selectedElementTypes?: string[]; // undefined means all; [] means none
-  setSelectedElementTypes: (v: string[]) => void;
+  setSelectedElementTypes: (v: string[] | undefined) => void;
   selectedRelationshipTypes?: string[]; // undefined means all; [] means none
-  setSelectedRelationshipTypes: (v: string[]) => void;
+  setSelectedRelationshipTypes: (v: string[] | undefined) => void;
   tagKeysText: string;
   setTagKeysText: (v: string) => void;
   onSuggestKeys: () => void;

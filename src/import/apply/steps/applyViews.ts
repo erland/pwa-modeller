@@ -1,6 +1,6 @@
 import type { ApplyImportContext } from '../applyImportTypes';
 import type { View, ViewNodeLayout, ViewObject, ViewObjectType, ViewRelationshipLayout } from '../../../domain';
-import { createId, createView, createViewObject } from '../../../domain';
+import { createId, createView, createViewObject, materializeViewConnectionsForView } from '../../../domain';
 import { modelStore } from '../../../store';
 import { pushWarning, resolveViewpointId, toExternalIds, toTaggedValues } from '../applyImportHelpers';
 import { fixViewZOrder } from '../postprocess/fixViewZOrder';
@@ -134,24 +134,45 @@ export function applyViews(ctx: ApplyImportContext): void {
       try {
         const latest = modelStore.getState().model?.views[internalId];
         const existingNodes = latest?.layout?.nodes ?? [];
-        modelStore.updateView(internalId, { layout: { nodes: existingNodes, relationships: relLayouts } });
+        // Import-time default: treat imported diagram connections as the authoritative set of
+        // relationships that should be visible in this view. Without this, the default implicit
+        // mode would render *all* model relationships whose endpoints exist in the view, which
+        // often results in extra lines compared to the source tool's diagram.
+        const explicitIds = Array.from(new Set(relLayouts.map((r) => r.relationshipId)));
+        modelStore.updateView(internalId, {
+          layout: { nodes: existingNodes, relationships: relLayouts },
+          relationshipVisibility: { mode: 'explicit', relationshipIds: explicitIds }
+        });
+
+        // IMPORTANT: views may already have materialized connections from earlier node additions
+        // (implicit mode). Now that we've set explicit relationship visibility, re-materialize
+        // connections so the diagram does not keep rendering relationships that are not part of
+        // the imported diagram.
+        const latestModel = modelStore.getState().model;
+        const latestView = latestModel?.views[internalId];
+        if (latestModel && latestView) {
+          const nextConnections = materializeViewConnectionsForView(latestModel, latestView);
+          if (nextConnections !== latestView.connections) {
+            modelStore.updateView(internalId, { connections: nextConnections });
+          }
+        }
       } catch (e) {
         pushWarning(report, `Failed to apply relationship routing in view "${v.name}": ${(e as Error).message}`);
       }
     }
 
-// Post-process: normalize node z-order to avoid large containers covering smaller nodes after import.
-try {
-  const latestModel = modelStore.getState().model;
-  const latestView = latestModel?.views[internalId];
-  if (latestModel && latestView?.layout?.nodes?.length) {
-    const fixedNodes = fixViewZOrder(latestModel, latestView);
-    const existingRels = latestView.layout?.relationships ?? [];
-    modelStore.updateView(internalId, { layout: { nodes: fixedNodes, relationships: existingRels } });
-  }
-} catch (e) {
-  pushWarning(report, `Failed to normalize z-order in view "${v.name}": ${(e as Error).message}`);
-}
+    // Post-process: normalize node z-order to avoid large containers covering smaller nodes after import.
+    try {
+      const latestModel = modelStore.getState().model;
+      const latestView = latestModel?.views[internalId];
+      if (latestModel && latestView?.layout?.nodes?.length) {
+        const fixedNodes = fixViewZOrder(latestModel, latestView);
+        const existingRels = latestView.layout?.relationships ?? [];
+        modelStore.updateView(internalId, { layout: { nodes: fixedNodes, relationships: existingRels } });
+      }
+    } catch (e) {
+      pushWarning(report, `Failed to normalize z-order in view "${v.name}": ${(e as Error).message}`);
+    }
 
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useModelStore } from '../../store';
@@ -20,10 +20,6 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
   const navigate = useNavigate();
   const { model, fileName, isDirty } = useModelStore((s) => s);
 
-  const doOpenOverlayWorkspace = useCallback(() => {
-    navigate('/overlay');
-  }, [navigate]);
-
   const ctrl = useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps });
 
   const actions = useMemo(
@@ -36,7 +32,6 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onProperties: ctrl.doProperties,
         onSave: ctrl.doSave,
         onSaveAs: ctrl.doSaveAs,
-        onOpenOverlayWorkspace: doOpenOverlayWorkspace,
         onModel: ctrl.doProperties,
         onAbout: ctrl.doAbout
       }),
@@ -48,7 +43,6 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       ctrl.doProperties,
       ctrl.doSave,
       ctrl.doSaveAs,
-      doOpenOverlayWorkspace,
       ctrl.doAbout
     ]
   );

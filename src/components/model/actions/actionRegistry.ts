@@ -4,7 +4,6 @@ export type ModelActionId =
   | 'properties'
   | 'save'
   | 'saveAs'
-  | 'openOverlayWorkspace'
   | 'model'
   | 'about';
 
@@ -24,7 +23,6 @@ type BuildRegistryArgs = {
   onProperties: () => void;
   onSave: () => void;
   onSaveAs: () => void;
-  onOpenOverlayWorkspace: () => void;
   onModel: () => void;
   onAbout: () => void;
 };
@@ -66,11 +64,6 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       label: 'Download As',
       run: args.onSaveAs,
       disabled: !modelLoaded
-    },
-    {
-      id: 'openOverlayWorkspace',
-      label: 'Open Overlay workspace…',
-      run: args.onOpenOverlayWorkspace
     },
     // NOTE: kept for backward compatibility with existing UI that had both "Properties" and "Model".
     {

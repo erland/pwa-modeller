@@ -4,10 +4,10 @@ import { AppShell } from '../components/shell/AppShell';
 import '../styles/crud.css';
 
 import { OverlayStatusPanel } from '../components/overlay/OverlayStatusPanel';
-import { OverlayLifecyclePanel } from '../components/overlay/OverlayLifecyclePanel';
 import { OverlaySurveyCsvPanel } from '../components/overlay/OverlaySurveyCsvPanel';
 import { OverlayDiagnosticsPanel } from '../components/overlay/OverlayDiagnosticsPanel';
 import { OverlayCoveragePanel } from '../components/overlay/OverlayCoveragePanel';
+import { OverlayActions } from '../components/overlay/OverlayActions';
 import { useModelStore } from '../store';
 
 type OverlayTab = 'overview' | 'survey' | 'diagnostics' | 'coverage';
@@ -17,7 +17,11 @@ export default function OverlayPage() {
   const [activeTab, setActiveTab] = useState<OverlayTab>('overview');
 
   return (
-    <AppShell title="EA Modeller" subtitle="Manage overlay data: lifecycle, imports/exports, diagnostics, and coverage">
+    <AppShell
+      title="EA Modeller"
+      subtitle="Manage overlay data: lifecycle, imports/exports, diagnostics, and coverage"
+      actions={<OverlayActions />}
+    >
       <div className="overlayWorkspace" aria-label="Overlay workspace">
         <div className="workspaceHeader">
           <h1 className="workspaceTitle">Overlay</h1>
@@ -73,8 +77,6 @@ export default function OverlayPage() {
             </div>
           ) : activeTab === 'overview' ? (
             <>
-              <OverlayLifecyclePanel />
-              <div style={{ height: 12 }} />
               <OverlayStatusPanel />
             </>
           ) : activeTab === 'survey' ? (

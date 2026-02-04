@@ -53,6 +53,31 @@ export function computeVisibleRelationshipIdsForView(model: Model, view: View): 
     return out;
   }
 
+  // Backward compatibility:
+  // If relationshipVisibility is unset but the view has imported relationship layout entries,
+  // treat those relationship ids as an explicit allow-list. This avoids the default implicit
+  // behavior (show all model relationships between nodes), which can introduce duplicates
+  // in older imported models.
+  if (!view.relationshipVisibility && Array.isArray(layout.relationships) && layout.relationships.length > 0) {
+    const raw = layout.relationships
+      .map((r: any) => (r && typeof r.relationshipId === 'string' ? r.relationshipId : null))
+      .filter((v: any): v is string => typeof v === 'string' && v.length > 0);
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const id of raw) {
+      if (seen.has(id)) continue;
+      const rel = model.relationships[id];
+      if (!rel) continue;
+      const s = endpointRefForRelationship(rel, 'source');
+      const t = endpointRefForRelationship(rel, 'target');
+      if (!s || !t) continue;
+      if (!nodeSet.has(keyOf(s)) || !nodeSet.has(keyOf(t))) continue;
+      seen.add(id);
+      out.push(id);
+    }
+    return out;
+  }
+
   // Implicit mode (default): include all model relationships whose endpoints exist as nodes in the view.
   const ids: string[] = [];
   for (const rel of Object.values(model.relationships)) {

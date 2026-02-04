@@ -26,6 +26,8 @@ import { getNotation } from '../../notations';
 type Props = {
   selection: Selection;
   onSelect: (sel: Selection) => void;
+  /** Optional: informs parent about which view is currently active in the diagram UI. */
+  onActiveViewIdChange?: (viewId: string | null) => void;
 };
 
 function sortViews(views: Record<string, View>): View[] {
@@ -37,13 +39,18 @@ function sortViews(views: Record<string, View>): View[] {
  *
  * Rendering is delegated to {@link DiagramCanvasView}; all non-trivial logic lives in hooks.
  */
-export function DiagramCanvas({ selection, onSelect }: Props) {
+export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Props) {
   const navigate = useNavigate();
   const model = useModelStore((s) => s.model) as Model | null;
 
   const views = useMemo(() => (model ? sortViews(model.views) : []), [model]);
   const { activeViewId } = useActiveViewId(model, views, selection);
   const activeView = model && activeViewId ? model.views[activeViewId] : null;
+
+  useEffect(() => {
+    if (typeof onActiveViewIdChange !== 'function') return;
+    onActiveViewIdChange(activeViewId ?? null);
+  }, [activeViewId, onActiveViewIdChange]);
 
   const { nodes, bounds, surfacePadding, surfaceWidthModel, surfaceHeightModel } = useDiagramNodes(activeView);
 

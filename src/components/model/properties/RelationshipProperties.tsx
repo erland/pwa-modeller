@@ -10,16 +10,19 @@ type Props = {
   relationshipId: string;
   /** Optional: when the relationship is selected from within a view, this enables view-specific connection props. */
   viewId?: string;
+  /** Optional: when a diagram is open, use this view as context even if selection didn't originate in the diagram. */
+  activeViewId?: string | null;
   actions: ModelActions;
   onSelect?: (selection: Selection) => void;
 };
 
-export function RelationshipProperties({ model, relationshipId, viewId, actions, onSelect }: Props) {
+export function RelationshipProperties({ model, relationshipId, viewId, activeViewId, actions, onSelect }: Props) {
   const rel = model.relationships[relationshipId];
   if (!rel) return <p className="panelHint">Relationship not found.</p>;
 
-  const view = viewId ? model.views[viewId] : undefined;
-  const isInViewContext = Boolean(viewId && view);
+  const effectiveViewId = viewId ?? (activeViewId ?? undefined);
+  const view = effectiveViewId ? model.views[effectiveViewId] : undefined;
+  const isInViewContext = Boolean(effectiveViewId && view);
   const isVisibleInView = isInViewContext ? computeVisibleRelationshipIdsForView(model, view!).includes(relationshipId) : true;
 
   const kind = kindFromTypeId(rel.type);
@@ -37,9 +40,9 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
                 type="button"
                 className="shellButton"
                 onClick={() => {
-                  if (!viewId) return;
-                  if (isVisibleInView) actions.hideRelationshipInView(viewId, relationshipId);
-                  else actions.showRelationshipInView(viewId, relationshipId);
+                  if (!effectiveViewId) return;
+                  if (isVisibleInView) actions.hideRelationshipInView(effectiveViewId, relationshipId);
+                  else actions.showRelationshipInView(effectiveViewId, relationshipId);
                 }}
                 title={isVisibleInView ? 'Hide this relationship in this diagram' : 'Show this relationship in this diagram'}
               >
@@ -56,7 +59,7 @@ export function RelationshipProperties({ model, relationshipId, viewId, actions,
         </div>
       )}
 
-      {notation.renderRelationshipProperties({ model, relationshipId, viewId, actions, onSelect })}
+      {notation.renderRelationshipProperties({ model, relationshipId, viewId: effectiveViewId, actions, onSelect })}
     </>
   );
 }

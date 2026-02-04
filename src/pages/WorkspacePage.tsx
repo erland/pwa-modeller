@@ -33,12 +33,14 @@ function WorkspaceMainPlaceholder({
   selection,
   mainTab,
   onChangeTab,
-  onSelect
+  onSelect,
+  onActiveViewIdChange
 }: {
   selection: Selection;
   mainTab: 'diagram' | 'reports' | 'validation';
   onChangeTab: (tab: 'diagram' | 'reports' | 'validation') => void;
   onSelect: (sel: Selection) => void;
+  onActiveViewIdChange?: (viewId: string | null) => void;
 }) {
   return (
     <div className="workspace">
@@ -77,7 +79,7 @@ function WorkspaceMainPlaceholder({
 
       {mainTab === 'diagram' ? (
         <div className="modelWorkspaceCanvas" aria-label="Diagram area">
-          <DiagramCanvas selection={selection} onSelect={onSelect} />
+          <DiagramCanvas selection={selection} onSelect={onSelect} onActiveViewIdChange={onActiveViewIdChange} />
         </div>
       ) : mainTab === 'reports' ? (
         <ReportsWorkspace />
@@ -92,6 +94,7 @@ export default function WorkspacePage() {
   const [selection, setSelection] = useState<Selection>(noSelection);
   const [modelPropsOpen, setModelPropsOpen] = useState(false);
   const [mainTab, setMainTab] = useState<'diagram' | 'reports' | 'validation'>('diagram');
+  const [activeDiagramViewId, setActiveDiagramViewId] = useState<string | null>(null);
   const model = useModelStore((s) => s.model);
 
   const location = useLocation();
@@ -223,6 +226,7 @@ export default function WorkspacePage() {
             selection={selection}
             onSelect={setSelection}
             onEditModelProps={() => setModelPropsOpen(true)}
+            activeViewId={mainTab === 'diagram' ? activeDiagramViewId : null}
           />
         }
       >
@@ -231,6 +235,7 @@ export default function WorkspacePage() {
           mainTab={mainTab}
           onChangeTab={setMainTab}
           onSelect={setSelection}
+          onActiveViewIdChange={setActiveDiagramViewId}
         />
       </AppShell>
 

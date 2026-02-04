@@ -21,6 +21,8 @@ type Props = {
   selection: Selection;
   onSelect?: (selection: Selection) => void;
   onEditModelProps: () => void;
+  /** Optional: active view context when a diagram is open. */
+  activeViewId?: string | null;
 };
 
 function buildFolderOptions(model: Model): { elementFolders: FolderOption[]; viewFolders: FolderOption[] } {
@@ -31,7 +33,7 @@ function buildFolderOptions(model: Model): { elementFolders: FolderOption[]; vie
   return { elementFolders: all, viewFolders: all };
 }
 
-export function PropertiesPanel({ selection, onSelect, onEditModelProps }: Props) {
+export function PropertiesPanel({ selection, onSelect, onEditModelProps, activeViewId }: Props) {
   const model = useModelStore((s) => s.model);
 
   const actions = useMemo<ModelActions>(
@@ -163,6 +165,7 @@ case 'viewNodes':
           model={model}
           relationshipId={selection.relationshipId}
           viewId={selection.viewId}
+          activeViewId={activeViewId}
           actions={actions}
           onSelect={onSelect}
         />

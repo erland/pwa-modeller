@@ -133,6 +133,19 @@ body {
   opacity: 0.92;
 }
 
+/* Clickable status chips (e.g., Overlay chip) */
+.shellStatusChipButton {
+  cursor: pointer;
+}
+
+.shellStatusChipButton:hover {
+  opacity: 1;
+}
+
+.shellStatusChip.isOverlayActive {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
 .shellStatusChip.isOffline {
   border-color: rgba(255, 255, 255, 0.28);
 }

@@ -9,6 +9,35 @@ export type OverlayPersistedEnvelopeV1 = {
   entries: OverlayStoreEntry[];
 };
 
+export type OverlayPersistedMeta = {
+  signature: string;
+  savedAt: string;
+  entryCount: number;
+};
+
+/** Load only envelope metadata (savedAt, entryCount) for status displays. */
+export function loadPersistedOverlayMeta(signature: string): OverlayPersistedMeta | null {
+  if (!hasLocalStorage()) return null;
+  const key = overlayStorageKey(signature);
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return null;
+
+  const parsed = safeParse(raw);
+  if (!isRecord(parsed)) return null;
+  if (parsed['v'] !== 1) return null;
+  if (parsed['signature'] !== signature) return null;
+
+  const savedAt = typeof parsed['savedAt'] === 'string' ? parsed['savedAt'] : '';
+  const entries = parsed['entries'];
+  const entryCount = Array.isArray(entries) ? entries.length : 0;
+
+  return {
+    signature,
+    savedAt: savedAt || '',
+    entryCount
+  };
+}
+
 function hasLocalStorage(): boolean {
   try {
     return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';

@@ -18,6 +18,8 @@ import {
   type ImportReport
 } from '../../../import';
 
+import { readFileAsText } from '../../shared/fileUtils';
+
 function defaultFileName(metadata: ModelMetadata): string {
   return sanitizeFileName(metadata.name || 'model');
 }
@@ -89,23 +91,6 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
     if (!confirmReplaceIfDirty()) return;
     triggerLoadFilePicker();
   }, [confirmReplaceIfDirty, triggerLoadFilePicker]);
-
-  async function readFileAsText(file: File): Promise<string> {
-    // Prefer the modern File.text() API when available.
-    const anyFile = file as unknown as { text?: () => Promise<string> };
-    if (typeof anyFile.text === 'function') {
-      return await anyFile.text();
-    }
-
-    // Jest/jsdom (and some older browsers) may not implement File.text().
-    // FileReader is widely supported and works in tests.
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
-      reader.onload = () => resolve(String(reader.result ?? ''));
-      reader.readAsText(file);
-    });
-  }
 
   const tryOpenNativeModel = useCallback(
     async (file: File): Promise<boolean> => {

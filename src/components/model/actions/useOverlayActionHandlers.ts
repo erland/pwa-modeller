@@ -5,7 +5,6 @@ import { computeModelSignature } from '../../../domain';
 import { buildOverlayModelExternalIdIndex } from '../../../domain/overlay';
 import {
   downloadTextFile,
-  sanitizeFileName,
   sanitizeFileNameWithExtension,
   overlayStore
 } from '../../../store';
@@ -24,6 +23,9 @@ import {
 } from '../../../store/overlay';
 import { useOverlayStore } from '../../../store/overlay';
 
+import { defaultOverlayFileBase } from '../../overlay/overlayUiUtils';
+import { readFileAsText } from '../../shared/fileUtils';
+
 export type LastOverlayImportInfo = {
   fileName: string;
   warnings: string[];
@@ -36,25 +38,6 @@ export type UseOverlayActionHandlersArgs = {
 };
 
 type ToastState = { message: string; kind: 'info' | 'success' | 'warn' | 'error' };
-
-function defaultOverlayFileBase(model: Model, fileName: string | null): string {
-  const fromFile = fileName ? fileName.replace(/\.[^.]+$/, '') : '';
-  const fromMeta = (model.metadata?.name || '').trim();
-  const base = fromMeta || fromFile || 'model';
-  return sanitizeFileName(base);
-}
-
-async function readFileAsText(file: File): Promise<string> {
-  const anyFile = file as unknown as { text?: () => Promise<string> };
-  if (typeof anyFile.text === 'function') return await anyFile.text();
-
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
-    reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.readAsText(file);
-  });
-}
 
 function summarizeWarnings(warnings: string[]): string {
   if (!warnings.length) return '';

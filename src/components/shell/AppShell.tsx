@@ -1,9 +1,10 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 
 import '../../styles/shell.css';
-import { useModelStore } from '../../store';
+import { computeModelSignature } from '../../domain';
+import { loadOverlayExportMarker, useModelStore, useOverlayStore } from '../../store';
 import { initRelationshipValidationMatrixFromBundledTable } from '../../domain/config/archimatePalette';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
@@ -72,6 +73,7 @@ function useMediaQuery(query: string) {
 }
 
 export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, children }: AppShellProps) {
+  const navigate = useNavigate();
   const hasLeft = Boolean(leftSidebar);
   const hasRight = Boolean(rightSidebar);
 
@@ -116,6 +118,11 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
     isDirty: s.isDirty,
     model: s.model
   }));
+
+  const { overlayCount, overlayVersion } = useOverlayStore((s) => ({ overlayCount: s.size, overlayVersion: s.getVersion() }));
+  const overlaySignature = model ? computeModelSignature(model) : '';
+  const overlayExportMarker = overlaySignature ? loadOverlayExportMarker(overlaySignature) : null;
+  const overlayExportDirty = overlayCount > 0 && (!overlayExportMarker || overlayExportMarker.version !== overlayVersion);
 
   // We always use strict ArchiMate relationship validation now. Best-effort preload.
   useEffect(() => {
@@ -224,11 +231,31 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
         <nav className="shellNav" aria-label="Primary navigation" data-testid="app-nav">
           <TopNavLink to="/" label="Workspace" />
           <TopNavLink to="/analysis" label="Analysis" />
+          <TopNavLink to="/overlay" label="Overlay" />
           <TopNavLink to="/about" label="About" className="shellNavLinkAbout" />
         </nav>
 
         <div className="shellActions" aria-label="Actions">
           <div className="shellStatus" aria-label="Status">
+            {model ? (
+              <button
+                type="button"
+                className={["shellStatusChip", "shellStatusChipButton", overlayCount ? 'isOverlayActive' : null, overlayExportDirty ? 'isDirty' : null]
+                  .filter(Boolean)
+                  .join(' ')}
+                aria-label="Open Overlay workspace"
+                title={
+                  overlayCount
+                    ? overlayExportMarker
+                      ? `Overlay entries: ${overlayCount}. Last exported: ${overlayExportMarker.exportedAt}. Click to open Overlay workspace.`
+                      : `Overlay entries: ${overlayCount}. Not exported as a file yet. Click to open Overlay workspace.`
+                    : 'No overlay entries. Click to open Overlay workspace.'
+                }
+                onClick={() => navigate('/overlay')}
+              >
+                Overlay{overlayCount ? ` ${overlayCount}` : ''}{overlayExportDirty ? ' *' : ''}
+              </button>
+            ) : null}
             {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
             {model && isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}
           </div>

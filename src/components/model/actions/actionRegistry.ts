@@ -4,12 +4,7 @@ export type ModelActionId =
   | 'properties'
   | 'save'
   | 'saveAs'
-  | 'overlayExport'
-  | 'overlayImport'
-  | 'overlaySurveyExport'
-  | 'overlaySurveyImport'
-  | 'overlayReport'
-  | 'overlayManage'
+  | 'openOverlayWorkspace'
   | 'model'
   | 'about';
 
@@ -24,20 +19,12 @@ export type ModelAction = {
 type BuildRegistryArgs = {
   modelLoaded: boolean;
   isDirty: boolean;
-  overlayHasEntries: boolean;
-  overlayReportAvailable: boolean;
-  overlayHasIssues: boolean;
   onNew: () => void;
   onLoad: () => void;
   onProperties: () => void;
   onSave: () => void;
   onSaveAs: () => void;
-  onOverlayExport: () => void;
-  onOverlayImport: () => void;
-  onOverlaySurveyExport: () => void;
-  onOverlaySurveyImport: () => void;
-  onOverlayReport: () => void;
-  onOverlayManage: () => void;
+  onOpenOverlayWorkspace: () => void;
   onModel: () => void;
   onAbout: () => void;
 };
@@ -47,7 +34,7 @@ type BuildRegistryArgs = {
  * Keeps UI components (menus/toolbars/shortcuts) consistent.
  */
 export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[] {
-  const { modelLoaded, isDirty, overlayHasEntries, overlayReportAvailable, overlayHasIssues } = args;
+  const { modelLoaded, isDirty } = args;
 
   return [
     {
@@ -81,52 +68,9 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       disabled: !modelLoaded
     },
     {
-      id: 'overlayExport',
-      label: 'Export overlay…',
-      run: args.onOverlayExport,
-      disabled: !modelLoaded || !overlayHasEntries,
-      title: !modelLoaded ? 'No model loaded' : !overlayHasEntries ? 'No overlay entries to export' : undefined
-    },
-    {
-      id: 'overlaySurveyExport',
-      label: 'Export overlay survey…',
-      run: args.onOverlaySurveyExport,
-      disabled: !modelLoaded,
-      title: !modelLoaded ? 'No model loaded' : undefined
-    },
-    {
-      id: 'overlayImport',
-      label: 'Import overlay…',
-      run: args.onOverlayImport,
-      disabled: !modelLoaded,
-      title: !modelLoaded ? 'No model loaded' : undefined
-    },
-    {
-      id: 'overlaySurveyImport',
-      label: 'Import overlay survey…',
-      run: args.onOverlaySurveyImport,
-      disabled: !modelLoaded,
-      title: !modelLoaded ? 'No model loaded' : undefined
-    },
-    {
-      id: 'overlayReport',
-      label: 'Overlay resolve report…',
-      run: args.onOverlayReport,
-      disabled: !modelLoaded || !overlayReportAvailable,
-      title: !modelLoaded ? 'No model loaded' : !overlayReportAvailable ? 'No overlay import run yet' : undefined
-    },
-    {
-      id: 'overlayManage',
-      label: 'Manage overlay…',
-      run: args.onOverlayManage,
-      disabled: !modelLoaded || !overlayHasEntries,
-      title: !modelLoaded
-        ? 'No model loaded'
-        : !overlayHasEntries
-          ? 'No overlay entries'
-          : overlayHasIssues
-            ? 'Resolve orphans and ambiguous entries'
-            : 'Review overlay entries'
+      id: 'openOverlayWorkspace',
+      label: 'Open Overlay workspace…',
+      run: args.onOpenOverlayWorkspace
     },
     // NOTE: kept for backward compatibility with existing UI that had both "Properties" and "Model".
     {

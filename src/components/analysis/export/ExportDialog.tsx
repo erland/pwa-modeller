@@ -14,6 +14,7 @@ import {
   copyPngFromSvgText,
   buildExportBundle,
   generatePptxBlobV1,
+  generateXlsxBlobV1,
 } from '../../../export';
 import { ExportOptionsPanel } from './ExportOptionsPanel';
 
@@ -85,6 +86,23 @@ export function ExportDialog({
       setBusy(false);
     }
   }
+
+  async function handleDownloadXlsx(): Promise<void> {
+    setStatus(null);
+    setBusy(true);
+    try {
+      const blob = await generateXlsxBlobV1(exportBundle, exportOptions.xlsx);
+      const fileName = sanitizeFileNameWithExtension(exportBundle.title, 'xlsx');
+      downloadBlobFile(fileName, blob);
+      setStatus('Downloaded XLSX.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to generate XLSX.';
+      setStatus(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
 
   const [status, setStatus] = useState<string | null>(null);
   useEffect(() => setStatus(null), [tab, kind, isOpen]);
@@ -214,7 +232,7 @@ export function ExportDialog({
               </div>
               <ExportOptionsPanel value={exportOptions} onChange={setExportOptions} />
               <div className="crudHint" style={{ marginTop: 10 }}>
-                Download actions will be implemented in Steps 8–9.
+                Download actions are implemented for PPTX (Sandbox) and XLSX (Matrix/Portfolio) in v1.
               </div>
             </div>
 
@@ -232,7 +250,13 @@ export function ExportDialog({
                 >
                   Download PPTX
                 </button>
-                <button type="button" className="secondaryButton" disabled aria-disabled title="Step 9">
+                <button
+                  type="button"
+                  className="secondaryButton"
+                  disabled={!exportViewState.canDownloadXlsx || busy}
+                  aria-disabled={!exportViewState.canDownloadXlsx || busy}
+                  onClick={handleDownloadXlsx}
+                >
                   Download XLSX
                 </button>
                 <button type="button" className="secondaryButton" disabled aria-disabled title="Future">

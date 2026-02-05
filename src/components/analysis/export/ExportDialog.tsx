@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { AnalysisRequest } from '../../../domain/analysis';
 import type { AnalysisViewState } from '../contracts/analysisViewState';
 
+import { deriveDefaultExportOptions } from '../../../export/defaultExportOptions';
+import { deriveExportViewState } from '../../../export/deriveExportViewState';
+import type { ExportOptions } from '../../../export/contracts/ExportOptions';
+
 import { Dialog } from '../../dialog/Dialog';
+import { ExportOptionsPanel } from './ExportOptionsPanel';
 
 type ExportTab = 'quick' | 'download';
 
@@ -54,14 +59,27 @@ export function ExportDialog({
 
   const [tab, setTab] = useState<ExportTab>('quick');
 
+  const [exportOptions, setExportOptions] = useState<ExportOptions>(() => deriveDefaultExportOptions(kind, viewState));
+
+  useEffect(() => {
+    // If the mode changes (or view state changes significantly), reset to stable defaults.
+    setExportOptions(deriveDefaultExportOptions(kind, viewState));
+  }, [kind, viewState]);
+
+  const exportViewState = useMemo(() => {
+    return deriveExportViewState(kind, viewState, exportOptions);
+  }, [kind, viewState, exportOptions]);
+
   const debugSummary = useMemo(() => {
     // Keep this compact; it helps validate we pass the right data without overwhelming the UI.
     return {
       kind,
       request,
       viewState,
+      exportOptions,
+      exportViewState,
     };
-  }, [kind, request, viewState]);
+  }, [kind, request, viewState, exportOptions, exportViewState]);
 
   return (
     <Dialog
@@ -130,6 +148,20 @@ export function ExportDialog({
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
+            <div className="crudSection" style={{ marginTop: 0 }}>
+              <div className="crudHeader">
+                <h3 className="crudTitle">Options</h3>
+              </div>
+              <p className="crudHint">
+                Configure what a future export should include. The actual generation is implemented in later steps.
+              </p>
+              <ExportOptionsPanel options={exportOptions} onChange={setExportOptions} />
+              <div className="crudHint" style={{ margin: '8px 0 0 0' }}>
+                Derived: PPTX layout <strong>{exportViewState.pptx.layout}</strong>, theme{' '}
+                <strong>{exportViewState.pptx.theme}</strong>, font scale <strong>{exportViewState.pptx.fontScale}</strong>.
+              </div>
+            </div>
+
             <div className="crudSection" style={{ marginTop: 0 }}>
               <div className="crudHeader">
                 <h3 className="crudTitle">PowerPoint</h3>

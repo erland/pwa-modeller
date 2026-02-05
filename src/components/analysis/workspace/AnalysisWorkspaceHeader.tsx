@@ -5,14 +5,12 @@ export function AnalysisWorkspaceHeader({
   onChangeMode,
   canOpenTraceability,
   onOpenTraceability,
-  canExport,
   onOpenExport,
 }: {
   mode: AnalysisMode;
   onChangeMode: (mode: AnalysisMode) => void;
   canOpenTraceability: boolean;
   onOpenTraceability: () => void;
-  canExport: boolean;
   onOpenExport: () => void;
 }) {
   return (
@@ -73,18 +71,16 @@ export function AnalysisWorkspaceHeader({
         >
           Sandbox
         </button>
-      </div>
-      <div className="rowActions">
         <button
           type="button"
           className="miniLinkButton"
           onClick={onOpenExport}
-          disabled={!canExport}
-          aria-disabled={!canExport}
-          title="Export analysis results (clipboard, PPTX, XLSX)"
+          title="Export results (copy/download)"
         >
           Export…
         </button>
+      </div>
+      <div className="rowActions">
         <button
           type="button"
           className="miniLinkButton"
@@ -94,6 +90,14 @@ export function AnalysisWorkspaceHeader({
           title="Open Traceability Explorer from the currently selected element"
         >
           Open traceability
+        </button>
+        <button
+          type="button"
+          className="miniLinkButton"
+          onClick={onOpenExport}
+          title="Export results (copy/download)"
+        >
+          Export…
         </button>
       </div>
     </div>

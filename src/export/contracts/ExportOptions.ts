@@ -1,23 +1,16 @@
-export type ExportTarget = 'pptx' | 'xlsx' | 'both' | 'clipboard';
-
-export type PptxLayoutPreset = 'chart' | 'chart+bullets' | 'table' | 'dashboard';
-export type PptxTheme = 'light' | 'brand';
+export type ExportTarget = 'clipboard' | 'download';
 
 export type PptxOptions = {
-  layout: PptxLayoutPreset;
-  theme: PptxTheme;
-  includeLegend: boolean;
-  includeFilters: boolean;
-  includeMethodNote: boolean;
+  layout: 'wide' | 'standard';
+  theme: 'light' | 'dark';
+  includeTitleSlide: boolean;
+  includeNotes: boolean;
   footerText?: string;
 };
 
 export type XlsxOptions = {
-  /** Include raw/normalized data tables. */
-  includeData: boolean;
-  /** Keep false in v1; reserved for later chart export. */
-  includeCharts: boolean;
-  /** Optional sheet name override. */
+  includeRawData: boolean;
+  includeSummary: boolean;
   sheetName?: string;
 };
 
@@ -25,4 +18,6 @@ export type ExportOptions = {
   target: ExportTarget;
   pptx: PptxOptions;
   xlsx: XlsxOptions;
+  // v2+: include charts etc.
+  includeCharts?: boolean;
 };

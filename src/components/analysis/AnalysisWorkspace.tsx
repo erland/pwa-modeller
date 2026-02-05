@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ModelKind, ViewNodeLayout } from '../../domain';
 import { createView, materializeViewConnectionsForView } from '../../domain';
@@ -16,12 +16,11 @@ import { TraceabilityModeView } from './modes/TraceabilityModeView';
 import { SandboxModeView } from './modes/SandboxModeView';
 
 import { AnalysisWorkspaceHeader } from './workspace/AnalysisWorkspaceHeader';
-import { useAnalysisWorkspaceController } from './workspace/useAnalysisWorkspaceController';
-
 import { ExportDialog } from './export/ExportDialog';
 import { buildAnalysisRequest } from './contracts/buildAnalysisRequest';
 import { buildAnalysisViewState } from './contracts/buildAnalysisViewState';
 import { loadAnalysisUiState } from './analysisUiStateStorage';
+import { useAnalysisWorkspaceController } from './workspace/useAnalysisWorkspaceController';
 
 export function AnalysisWorkspace({
   modelKind,
@@ -37,6 +36,8 @@ export function AnalysisWorkspace({
   onOpenViewInWorkspace?: (openViewId: string) => void;
 }) {
   const { state, actions, derived } = useAnalysisWorkspaceController({ modelKind, selection });
+  const [isExportOpen, setIsExportOpen] = useState(false);
+
   const {
     model,
     modelId,
@@ -71,71 +72,6 @@ export function AnalysisWorkspace({
     sandbox,
     selectionElementIds,
   } = derived;
-
-  const [exportOpen, setExportOpen] = useState(false);
-
-  const analysisRequest = useMemo(() => {
-    if (!model) return null;
-    return buildAnalysisRequest({
-      mode,
-
-      // The analysis workspace auto-runs and keeps active ids aligned,
-      // but those are not currently surfaced from the controller.
-      // For export wiring (Step 2), use the draft ids.
-      activeStartId: draftStartId,
-      activeSourceId: draftSourceId,
-      activeTargetId: draftTargetId,
-
-      direction,
-      relationshipTypes,
-      layers,
-      elementTypes,
-
-      maxDepth,
-      includeStart,
-
-      maxPaths,
-      maxPathLength,
-      pathsMode,
-
-      matrixBuiltQuery: matrix.state.build.builtQuery,
-    });
-  }, [
-    direction,
-    draftSourceId,
-    draftStartId,
-    draftTargetId,
-    elementTypes,
-    includeStart,
-    layers,
-    matrix.state.build.builtQuery,
-    maxDepth,
-    maxPathLength,
-    maxPaths,
-    model,
-    mode,
-    pathsMode,
-    relationshipTypes,
-  ]);
-
-  const analysisViewState = useMemo(() => {
-    if (!model) return null;
-    const persistedUi = loadAnalysisUiState(modelId);
-    return buildAnalysisViewState({
-      mode,
-      persistedUi,
-      sandbox: {
-        showRelationships: sandbox.state.relationships.show,
-        relationshipMode: sandbox.state.relationships.mode,
-        enabledRelationshipTypes: sandbox.state.relationships.enabledTypes,
-        addRelatedDepth: sandbox.state.addRelated.depth,
-        addRelatedDirection: sandbox.state.addRelated.direction,
-        addRelatedEnabledTypes: sandbox.state.addRelated.enabledTypes,
-        persistEnabled: sandbox.state.ui.persistEnabled,
-        edgeRouting: sandbox.state.ui.edgeRouting,
-      },
-    });
-  }, [model, modelId, mode, sandbox.state.addRelated, sandbox.state.relationships, sandbox.state.ui.edgeRouting, sandbox.state.ui.persistEnabled]);
 
   const lastSeedViewId = useRef<string | null>(null);
   useEffect(() => {
@@ -241,6 +177,30 @@ export function AnalysisWorkspace({
     [model, sandbox.actions, setMode]
   );
 
+  const persistedUi = loadAnalysisUiState(modelId);
+  const analysisRequestForExport = buildAnalysisRequest({
+    mode,
+    activeStartId: draftStartId,
+    activeSourceId: draftSourceId,
+    activeTargetId: draftTargetId,
+    direction,
+    relationshipTypes,
+    layers,
+    elementTypes,
+    maxDepth,
+    includeStart,
+    maxPaths,
+    maxPathLength,
+    pathsMode,
+    matrixBuiltQuery: matrix.state.build.builtQuery ?? null,
+    portfolio: undefined,
+  });
+
+  const analysisViewStateForExport = buildAnalysisViewState({
+    mode,
+    persistedUi,
+  });
+
   return (
     <div className="workspace" aria-label="Analysis workspace">
       <AnalysisWorkspaceHeader
@@ -248,19 +208,18 @@ export function AnalysisWorkspace({
         onChangeMode={setMode}
         canOpenTraceability={canOpenTraceability}
         onOpenTraceability={openTraceabilityFromSelection}
-        canExport={Boolean(model && analysisRequest && analysisViewState)}
-        onOpenExport={() => setExportOpen(true)}
+        onOpenExport={() => setIsExportOpen(true)}
       />
 
-      {analysisRequest && analysisViewState ? (
-        <ExportDialog
-          isOpen={exportOpen}
-          kind={analysisRequest.kind}
-          request={analysisRequest}
-          viewState={analysisViewState}
-          onClose={() => setExportOpen(false)}
-        />
-      ) : null}
+      <ExportDialog
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        kind={analysisViewStateForExport.kind}
+        analysisRequest={analysisRequestForExport}
+        analysisViewState={analysisViewStateForExport}
+        modelName={model?.metadata?.name || 'model'}
+        matrix={{ result: matrix.derived.result, cellValues: matrix.derived.cellValues }}
+      />
 
       {!model ? (
         <div className="crudSection">

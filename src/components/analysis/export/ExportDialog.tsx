@@ -1,85 +1,89 @@
-import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { AnalysisRequest } from '../../../domain/analysis';
-import type { AnalysisViewState } from '../contracts/analysisViewState';
-
-import { deriveDefaultExportOptions } from '../../../export/defaultExportOptions';
-import { deriveExportViewState } from '../../../export/deriveExportViewState';
-import type { ExportOptions } from '../../../export/contracts/ExportOptions';
+import type { AnalysisViewState, AnalysisViewKind } from '../contracts/analysisViewState';
+import type { RelationshipMatrixResult } from '../../../domain/analysis/relationshipMatrix';
 
 import { Dialog } from '../../dialog/Dialog';
+import { deriveDefaultExportOptions, deriveExportViewState, copyTextToClipboard, tabularToTsv } from '../../../export';
+import { buildMatrixTabular } from '../../../export/builders/matrixToTabular';
 import { ExportOptionsPanel } from './ExportOptionsPanel';
 
-type ExportTab = 'quick' | 'download';
+type Props = {
+  isOpen: boolean;
+  onClose: () => void;
 
-function TabButton({
-  isActive,
-  children,
-  onClick,
-  autoFocus,
-}: {
-  isActive: boolean;
-  children: ReactNode;
-  onClick: () => void;
-  autoFocus?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      className="miniButton"
-      onClick={onClick}
-      data-autofocus={autoFocus ? 'true' : undefined}
-      style={{
-        background: isActive ? 'var(--surface-2)' : undefined,
-        borderColor: isActive ? 'var(--border-2)' : undefined,
-        fontWeight: isActive ? 800 : 650,
-      }}
-    >
-      {children}
-    </button>
+  kind: AnalysisViewKind;
+  analysisRequest: AnalysisRequest;
+  analysisViewState: AnalysisViewState;
+
+  // Optional computed data for fast-win exports
+  modelName: string;
+  matrix?: { result: RelationshipMatrixResult | null; cellValues?: number[][] };
+};
+
+type TabId = 'quickCopy' | 'download';
+
+function extractHtmlTableAsTabular(table: HTMLTableElement) {
+  const headers = Array.from(table.querySelectorAll('thead th')).map((th) => (th.textContent ?? '').trim());
+  const rows = Array.from(table.querySelectorAll('tbody tr')).map((tr) =>
+    Array.from(tr.querySelectorAll('td,th')).map((td) => (td.textContent ?? '').trim())
   );
+  return { headers, rows };
 }
 
 export function ExportDialog({
   isOpen,
-  kind,
-  request,
-  viewState,
   onClose,
-}: {
-  isOpen: boolean;
-  kind: AnalysisRequest['kind'];
-  request: AnalysisRequest;
-  viewState: AnalysisViewState;
-  onClose: () => void;
-}) {
-  // Step 3: dialog skeleton with tabs (Quick copy + Download).
-  // No actual copy/download logic yet — those are implemented in later steps.
+  kind,
+  analysisRequest,
+  analysisViewState,
+  modelName,
+  matrix,
+}: Props) {
+  const [tab, setTab] = useState<TabId>('quickCopy');
 
-  const [tab, setTab] = useState<ExportTab>('quick');
-
-  const [exportOptions, setExportOptions] = useState<ExportOptions>(() => deriveDefaultExportOptions(kind, viewState));
-
+  const [exportOptions, setExportOptions] = useState(() => deriveDefaultExportOptions(kind));
   useEffect(() => {
-    // If the mode changes (or view state changes significantly), reset to stable defaults.
-    setExportOptions(deriveDefaultExportOptions(kind, viewState));
-  }, [kind, viewState]);
+    setExportOptions(deriveDefaultExportOptions(kind));
+  }, [kind, isOpen]);
 
-  const exportViewState = useMemo(() => {
-    return deriveExportViewState(kind, viewState, exportOptions);
-  }, [kind, viewState, exportOptions]);
+  const exportViewState = useMemo(
+    () => deriveExportViewState(kind, analysisViewState, exportOptions),
+    [analysisViewState, exportOptions, kind]
+  );
 
-  const debugSummary = useMemo(() => {
-    // Keep this compact; it helps validate we pass the right data without overwhelming the UI.
-    return {
-      kind,
-      request,
-      viewState,
-      exportOptions,
-      exportViewState,
-    };
-  }, [kind, request, viewState, exportOptions, exportViewState]);
+  const [status, setStatus] = useState<string | null>(null);
+  useEffect(() => setStatus(null), [tab, kind, isOpen]);
+
+  const onCopyTable = async () => {
+    setStatus(null);
+    try {
+      if (kind === 'matrix') {
+        const r = matrix?.result;
+        if (!r) throw new Error('Matrix results are not available yet.');
+        const tabular = buildMatrixTabular(r, matrix?.cellValues);
+        const tsv = tabularToTsv(tabular);
+        await copyTextToClipboard(tsv);
+        setStatus('Copied matrix table as TSV.');
+        return;
+      }
+
+      if (kind === 'portfolio') {
+        const table = document.querySelector('table[aria-label="Portfolio population table"]') as HTMLTableElement | null;
+        if (!table) throw new Error('Could not find the Portfolio table in the page.');
+        const tabular = extractHtmlTableAsTabular(table);
+        const tsv = tabularToTsv({ headers: tabular.headers, rows: tabular.rows });
+        await copyTextToClipboard(tsv);
+        setStatus('Copied portfolio table as TSV.');
+        return;
+      }
+
+      throw new Error('Copy table is not supported for this view yet.');
+    } catch (e) {
+      setStatus((e as Error).message || 'Copy failed.');
+    }
+  };
 
   return (
     <Dialog
@@ -87,131 +91,108 @@ export function ExportDialog({
       isOpen={isOpen}
       onClose={onClose}
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button type="button" className="miniButton" onClick={onClose}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div className="crudHint">{status ?? ''}</div>
+          <button type="button" className="primaryButton" onClick={onClose}>
             Close
           </button>
         </div>
       }
     >
       <div style={{ display: 'grid', gap: 12 }}>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <TabButton isActive={tab === 'quick'} onClick={() => setTab('quick')} autoFocus>
-              Quick copy
-            </TabButton>
-            <TabButton isActive={tab === 'download'} onClick={() => setTab('download')}>
-              Download
-            </TabButton>
-
-            <span style={{ fontSize: 12, opacity: 0.78, marginLeft: 8 }}>
-              Mode: <strong>{kind}</strong>
-            </span>
-          </div>
-
-          <div className="crudHint" style={{ margin: 0 }}>
-            Quick copy focuses on clipboard (table/image). Download creates files (PPTX/XLSX/CSV). This is a skeleton in
-            Step 3; actions will be enabled in later steps.
-          </div>
+        <div className="workspaceTabs" role="tablist" aria-label="Export tabs">
+          <button
+            type="button"
+            className={`tabButton ${tab === 'quickCopy' ? 'isActive' : ''}`}
+            role="tab"
+            aria-selected={tab === 'quickCopy'}
+            onClick={() => setTab('quickCopy')}
+          >
+            Quick copy
+          </button>
+          <button
+            type="button"
+            className={`tabButton ${tab === 'download' ? 'isActive' : ''}`}
+            role="tab"
+            aria-selected={tab === 'download'}
+            onClick={() => setTab('download')}
+          >
+            Download
+          </button>
         </div>
 
-        {tab === 'quick' ? (
-          <div style={{ display: 'grid', gap: 12 }}>
-            <div className="crudSection" style={{ marginTop: 0 }}>
-              <div className="crudHeader">
-                <h3 className="crudTitle">Copy as table</h3>
+        {tab === 'quickCopy' ? (
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div className="analysisSection">
+              <div className="analysisSectionHeader">
+                <h3 className="analysisSectionTitle">Copy to clipboard</h3>
               </div>
-              <p className="crudHint">
-                Copy the current view’s data as TSV so it can be pasted into Excel/Sheets/Notion. (Implemented in Step 5.)
-              </p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="miniButton" disabled>
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="secondaryButton"
+                  onClick={onCopyTable}
+                  disabled={!exportViewState.canCopyTable}
+                  aria-disabled={!exportViewState.canCopyTable}
+                  title={!exportViewState.canCopyTable ? 'Not supported for this view yet' : 'Copy as TSV'}
+                >
                   Copy table (TSV)
                 </button>
-              </div>
-            </div>
 
-            <div className="crudSection" style={{ marginTop: 0 }}>
-              <div className="crudHeader">
-                <h3 className="crudTitle">Copy as image</h3>
-              </div>
-              <p className="crudHint">
-                Copy a PNG snapshot of the current diagram/visual so it can be pasted into documents and slides.
-                (Implemented in Step 6.)
-              </p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="miniButton" disabled>
+                <button type="button" className="secondaryButton" disabled aria-disabled title="Step 6">
                   Copy image (PNG)
                 </button>
               </div>
             </div>
+
+            <details>
+              <summary className="miniLinkButton">Debug details</summary>
+              <pre style={{ whiteSpace: 'pre-wrap' }}>
+{JSON.stringify({ kind, modelName, analysisRequest, analysisViewState, exportOptions, exportViewState }, null, 2)}
+              </pre>
+            </details>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: 12 }}>
-            <div className="crudSection" style={{ marginTop: 0 }}>
-              <div className="crudHeader">
-                <h3 className="crudTitle">Options</h3>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div className="analysisSection">
+              <div className="analysisSectionHeader">
+                <h3 className="analysisSectionTitle">Options</h3>
               </div>
-              <p className="crudHint">
-                Configure what a future export should include. The actual generation is implemented in later steps.
-              </p>
-              <ExportOptionsPanel options={exportOptions} onChange={setExportOptions} />
-              <div className="crudHint" style={{ margin: '8px 0 0 0' }}>
-                Derived: PPTX layout <strong>{exportViewState.pptx.layout}</strong>, theme{' '}
-                <strong>{exportViewState.pptx.theme}</strong>, font scale <strong>{exportViewState.pptx.fontScale}</strong>.
+              <ExportOptionsPanel value={exportOptions} onChange={setExportOptions} />
+              <div className="crudHint" style={{ marginTop: 10 }}>
+                Download actions will be implemented in Steps 8–9.
               </div>
             </div>
 
-            <div className="crudSection" style={{ marginTop: 0 }}>
-              <div className="crudHeader">
-                <h3 className="crudTitle">PowerPoint</h3>
+            <div className="analysisSection">
+              <div className="analysisSectionHeader">
+                <h3 className="analysisSectionTitle">Download</h3>
               </div>
-              <p className="crudHint">Generate a PPTX containing slides for the selected views. (Implemented in Step 8.)</p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="miniButton" disabled>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button type="button" className="secondaryButton" disabled aria-disabled title="Step 8">
                   Download PPTX
                 </button>
-              </div>
-            </div>
-
-            <div className="crudSection" style={{ marginTop: 0 }}>
-              <div className="crudHeader">
-                <h3 className="crudTitle">Excel</h3>
-              </div>
-              <p className="crudHint">Generate an XLSX workbook with data-first sheets. (Implemented in Step 9.)</p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="miniButton" disabled>
+                <button type="button" className="secondaryButton" disabled aria-disabled title="Step 9">
                   Download XLSX
                 </button>
-              </div>
-            </div>
-
-            <div className="crudSection" style={{ marginTop: 0 }}>
-              <div className="crudHeader">
-                <h3 className="crudTitle">Other formats</h3>
-              </div>
-              <p className="crudHint">
-                Mode-specific bundles may provide extra downloads (CSV, JSON, images). (Enabled as bundles are added in
-                Step 7+.)
-              </p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="miniButton" disabled>
+                <button type="button" className="secondaryButton" disabled aria-disabled title="Future">
                   Download CSV
                 </button>
-                <button type="button" className="miniButton" disabled>
+                <button type="button" className="secondaryButton" disabled aria-disabled title="Future">
                   Download JSON
                 </button>
               </div>
             </div>
+
+            <details>
+              <summary className="miniLinkButton">Debug details</summary>
+              <pre style={{ whiteSpace: 'pre-wrap' }}>
+{JSON.stringify({ kind, modelName, analysisRequest, analysisViewState, exportOptions, exportViewState }, null, 2)}
+              </pre>
+            </details>
           </div>
         )}
-
-        <details className="crudHint" style={{ marginTop: 2 }}>
-          <summary style={{ cursor: 'pointer' }}>Debug details</summary>
-          <div style={{ marginTop: 6 }}>
-            <code style={{ display: 'block', whiteSpace: 'pre-wrap' }}>{JSON.stringify(debugSummary, null, 2)}</code>
-          </div>
-        </details>
       </div>
     </Dialog>
   );

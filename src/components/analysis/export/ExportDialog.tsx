@@ -5,7 +5,14 @@ import type { AnalysisViewState, AnalysisViewKind } from '../contracts/analysisV
 import type { RelationshipMatrixResult } from '../../../domain/analysis/relationshipMatrix';
 
 import { Dialog } from '../../dialog/Dialog';
-import { deriveDefaultExportOptions, deriveExportViewState, copyTextToClipboard, tabularToTsv } from '../../../export';
+import {
+  deriveDefaultExportOptions,
+  deriveExportViewState,
+  copyTextToClipboard,
+  tabularToTsv,
+  canWriteImageToClipboard,
+  copyPngFromSvgElement,
+} from '../../../export';
 import { buildMatrixTabular } from '../../../export/builders/matrixToTabular';
 import { ExportOptionsPanel } from './ExportOptionsPanel';
 
@@ -85,6 +92,25 @@ export function ExportDialog({
     }
   };
 
+  const onCopyImage = async () => {
+    setStatus(null);
+    try {
+      if (kind !== 'sandbox') throw new Error('Copy image is only supported for Sandbox (so far).');
+      if (!canWriteImageToClipboard()) {
+        throw new Error('Copy image is not supported in this browser.');
+      }
+
+      const svg = document.querySelector('.analysisSandboxSvg') as SVGSVGElement | null;
+      if (!svg) throw new Error('Could not find the Sandbox canvas SVG in the page.');
+
+      // Use a white background so arrows/lines are visible when pasted into Office/Docs.
+      await copyPngFromSvgElement(svg, { scale: 2, background: '#ffffff' });
+      setStatus('Copied sandbox canvas as PNG.');
+    } catch (e) {
+      setStatus((e as Error).message || 'Copy failed.');
+    }
+  };
+
   return (
     <Dialog
       title="Export"
@@ -140,7 +166,14 @@ export function ExportDialog({
                   Copy table (TSV)
                 </button>
 
-                <button type="button" className="secondaryButton" disabled aria-disabled title="Step 6">
+                <button
+                  type="button"
+                  className="secondaryButton"
+                  onClick={onCopyImage}
+                  disabled={!exportViewState.canCopyImage}
+                  aria-disabled={!exportViewState.canCopyImage}
+                  title={!exportViewState.canCopyImage ? 'Not supported for this view yet' : 'Copy as PNG'}
+                >
                   Copy image (PNG)
                 </button>
               </div>

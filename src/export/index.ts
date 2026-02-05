@@ -5,3 +5,5 @@ export * from './deriveExportViewState';
 
 export * from './helpers/clipboard';
 export * from './helpers/tsv';
+
+export * from './clipboard/copyPngFromSvgElement';

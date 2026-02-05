@@ -11,9 +11,9 @@ import {
   copyTextToClipboard,
   tabularToTsv,
   canWriteImageToClipboard,
-  copyPngFromSvgElement,
+  copyPngFromSvgText,
+  buildExportBundle,
 } from '../../../export';
-import { buildMatrixTabular } from '../../../export/builders/matrixToTabular';
 import { ExportOptionsPanel } from './ExportOptionsPanel';
 
 type Props = {
@@ -30,14 +30,6 @@ type Props = {
 };
 
 type TabId = 'quickCopy' | 'download';
-
-function extractHtmlTableAsTabular(table: HTMLTableElement) {
-  const headers = Array.from(table.querySelectorAll('thead th')).map((th) => (th.textContent ?? '').trim());
-  const rows = Array.from(table.querySelectorAll('tbody tr')).map((tr) =>
-    Array.from(tr.querySelectorAll('td,th')).map((td) => (td.textContent ?? '').trim())
-  );
-  return { headers, rows };
-}
 
 export function ExportDialog({
   isOpen,
@@ -60,33 +52,35 @@ export function ExportDialog({
     [analysisViewState, exportOptions, kind]
   );
 
+  const exportBundle = useMemo(
+    () =>
+      buildExportBundle({
+        kind,
+        modelName,
+        analysisRequest,
+        analysisViewState,
+        exportOptions,
+        matrix,
+        document,
+      }),
+    [analysisRequest, analysisViewState, exportOptions, kind, matrix, modelName]
+  );
+
   const [status, setStatus] = useState<string | null>(null);
   useEffect(() => setStatus(null), [tab, kind, isOpen]);
 
   const onCopyTable = async () => {
     setStatus(null);
     try {
-      if (kind === 'matrix') {
-        const r = matrix?.result;
-        if (!r) throw new Error('Matrix results are not available yet.');
-        const tabular = buildMatrixTabular(r, matrix?.cellValues);
-        const tsv = tabularToTsv(tabular);
-        await copyTextToClipboard(tsv);
-        setStatus('Copied matrix table as TSV.');
-        return;
+      const tableArtifact = exportBundle.artifacts.find((a) => a.type === 'table');
+      if (!tableArtifact || tableArtifact.type !== 'table') {
+        const msg = exportBundle.warnings?.[0] ?? 'Copy table is not supported for this view yet.';
+        throw new Error(msg);
       }
 
-      if (kind === 'portfolio') {
-        const table = document.querySelector('table[aria-label="Portfolio population table"]') as HTMLTableElement | null;
-        if (!table) throw new Error('Could not find the Portfolio table in the page.');
-        const tabular = extractHtmlTableAsTabular(table);
-        const tsv = tabularToTsv({ headers: tabular.headers, rows: tabular.rows });
-        await copyTextToClipboard(tsv);
-        setStatus('Copied portfolio table as TSV.');
-        return;
-      }
-
-      throw new Error('Copy table is not supported for this view yet.');
+      const tsv = tabularToTsv(tableArtifact.data);
+      await copyTextToClipboard(tsv);
+      setStatus(`Copied ${tableArtifact.name} table as TSV.`);
     } catch (e) {
       setStatus((e as Error).message || 'Copy failed.');
     }
@@ -95,17 +89,23 @@ export function ExportDialog({
   const onCopyImage = async () => {
     setStatus(null);
     try {
-      if (kind !== 'sandbox') throw new Error('Copy image is only supported for Sandbox (so far).');
       if (!canWriteImageToClipboard()) {
         throw new Error('Copy image is not supported in this browser.');
       }
 
-      const svg = document.querySelector('.analysisSandboxSvg') as SVGSVGElement | null;
-      if (!svg) throw new Error('Could not find the Sandbox canvas SVG in the page.');
+      const imageArtifact = exportBundle.artifacts.find((a) => a.type === 'image');
+      if (!imageArtifact || imageArtifact.type !== 'image') {
+        const msg = exportBundle.warnings?.[0] ?? 'Copy image is not supported for this view yet.';
+        throw new Error(msg);
+      }
+
+      if (imageArtifact.data.kind !== 'svg') {
+        throw new Error('Only SVG sources are supported for PNG copy in v1.');
+      }
 
       // Use a white background so arrows/lines are visible when pasted into Office/Docs.
-      await copyPngFromSvgElement(svg, { scale: 2, background: '#ffffff' });
-      setStatus('Copied sandbox canvas as PNG.');
+      await copyPngFromSvgText(imageArtifact.data.data, { scale: 2, background: '#ffffff' });
+      setStatus(`Copied ${imageArtifact.name} as PNG.`);
     } catch (e) {
       setStatus((e as Error).message || 'Copy failed.');
     }
@@ -182,7 +182,7 @@ export function ExportDialog({
             <details>
               <summary className="miniLinkButton">Debug details</summary>
               <pre style={{ whiteSpace: 'pre-wrap' }}>
-{JSON.stringify({ kind, modelName, analysisRequest, analysisViewState, exportOptions, exportViewState }, null, 2)}
+{JSON.stringify({ kind, modelName, analysisRequest, analysisViewState, exportOptions, exportViewState, exportBundle }, null, 2)}
               </pre>
             </details>
           </div>
@@ -221,7 +221,7 @@ export function ExportDialog({
             <details>
               <summary className="miniLinkButton">Debug details</summary>
               <pre style={{ whiteSpace: 'pre-wrap' }}>
-{JSON.stringify({ kind, modelName, analysisRequest, analysisViewState, exportOptions, exportViewState }, null, 2)}
+{JSON.stringify({ kind, modelName, analysisRequest, analysisViewState, exportOptions, exportViewState, exportBundle }, null, 2)}
               </pre>
             </details>
           </div>

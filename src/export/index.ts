@@ -6,4 +6,6 @@ export * from './deriveExportViewState';
 export * from './helpers/clipboard';
 export * from './helpers/tsv';
 
+export * from './builders/buildExportBundle';
+
 export * from './clipboard/copyPngFromSvgElement';

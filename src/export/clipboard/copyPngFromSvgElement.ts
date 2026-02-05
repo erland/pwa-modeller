@@ -87,3 +87,67 @@ export async function copyPngFromSvgElement(svg: SVGSVGElement, options?: CopyPn
   const item = new ClipboardItem({ 'image/png': blob });
   await navigator.clipboard.write([item]);
 }
+
+function parseSvgSizeFromText(svgText: string): { width: number; height: number } {
+  try {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const svg = doc.querySelector('svg');
+    if (!svg) return { width: 800, height: 600 };
+
+    const vb = svg.getAttribute('viewBox');
+    if (vb) {
+      const parts = vb.split(/[\s,]+/).map((p) => Number(p));
+      if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
+        const w = parts[2];
+        const h = parts[3];
+        if (w > 0 && h > 0) return { width: w, height: h };
+      }
+    }
+
+    const wAttr = svg.getAttribute('width');
+    const hAttr = svg.getAttribute('height');
+    const w = wAttr ? Number(String(wAttr).replace(/[^0-9.]/g, '')) : NaN;
+    const h = hAttr ? Number(String(hAttr).replace(/[^0-9.]/g, '')) : NaN;
+    if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) return { width: w, height: h };
+  } catch {
+    // ignore
+  }
+
+  return { width: 800, height: 600 };
+}
+
+function svgTextToDataUrl(svgText: string): string {
+  const serialized = ensureNamespaces(svgText);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(serialized)}`;
+}
+
+export async function copyPngFromSvgText(svgText: string, options?: CopyPngFromSvgOptions): Promise<void> {
+  if (!canWriteImageToClipboard()) {
+    throw new Error('Clipboard image write is not supported in this browser.');
+  }
+
+  const scale = typeof options?.scale === 'number' && options.scale > 0 ? options.scale : 2;
+  const background = options?.background ?? null;
+
+  const { width, height } = parseSvgSizeFromText(svgText);
+  const dataUrl = svgTextToDataUrl(svgText);
+  const img = await loadImage(dataUrl);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context not available');
+
+  if (background) {
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  const blob = await canvasToPngBlob(canvas);
+  const item = new ClipboardItem({ 'image/png': blob });
+  await navigator.clipboard.write([item]);
+}

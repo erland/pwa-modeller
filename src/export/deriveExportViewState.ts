@@ -10,9 +10,9 @@ export function deriveExportViewState(kind: AnalysisViewKind, _analysisViewState
   const isClipboard = options.target === 'clipboard';
 
   const canCopyTable = isClipboard && (kind === 'matrix' || kind === 'portfolio');
-  const canCopyImage = isClipboard && (kind === 'matrix' || kind === 'portfolio' || kind === 'sandbox' || kind === 'traceability');
+  const canCopyImage = isClipboard && kind === 'sandbox';
 
-  const canDownloadPptx = !isClipboard && (kind === 'matrix' || kind === 'portfolio' || kind === 'sandbox' || kind === 'traceability');
+  const canDownloadPptx = !isClipboard && (kind === 'matrix' || kind === 'portfolio' || kind === 'sandbox');
   const canDownloadXlsx = !isClipboard && (kind === 'matrix' || kind === 'portfolio');
 
   return {

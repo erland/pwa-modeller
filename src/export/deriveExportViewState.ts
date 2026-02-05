@@ -21,6 +21,7 @@ export function deriveExportViewState(kind: AnalysisViewKind, _analysisViewState
     canCopyImage,
     canDownloadPptx,
     canDownloadXlsx,
+    canDownloadPng: kind === 'sandbox',
     supportsCharts: false,
   };
 }

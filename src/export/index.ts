@@ -12,3 +12,6 @@ export * from './pptx/generatePptxV1';
 
 export * from './clipboard/copyPngFromSvgElement';
 export * from './xlsx/generateXlsxV1';
+
+export * from './report/reportStore';
+export * from './image/downloadPngFromSvgText';

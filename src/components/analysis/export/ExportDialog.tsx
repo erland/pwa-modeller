@@ -15,6 +15,11 @@ import {
   buildExportBundle,
   generatePptxBlobV1,
   generateXlsxBlobV1,
+  downloadPngFromSvgText,
+  addToExportReport,
+  loadExportReport,
+  exportReportAsJsonBlob,
+  clearExportReport,
 } from '../../../export';
 import { ExportOptionsPanel } from './ExportOptionsPanel';
 
@@ -46,6 +51,7 @@ export function ExportDialog({
 }: Props) {
   const [tab, setTab] = useState<TabId>('quickCopy');
   const [busy, setBusy] = useState(false);
+  const [reportCount, setReportCount] = useState(() => loadExportReport().length);
 
   const [exportOptions, setExportOptions] = useState(() => deriveDefaultExportOptions(kind));
   useEffect(() => {
@@ -106,9 +112,13 @@ export function ExportDialog({
 
   const [status, setStatus] = useState<string | null>(null);
   useEffect(() => setStatus(null), [tab, kind, isOpen]);
+  useEffect(() => {
+    if (isOpen) setReportCount(loadExportReport().length);
+  }, [isOpen]);
 
   const onCopyTable = async () => {
     setStatus(null);
+    setBusy(true);
     try {
       const tableArtifact = exportBundle.artifacts.find((a) => a.type === 'table');
       if (!tableArtifact || tableArtifact.type !== 'table') {
@@ -121,11 +131,14 @@ export function ExportDialog({
       setStatus(`Copied ${tableArtifact.name} table as TSV.`);
     } catch (e) {
       setStatus((e as Error).message || 'Copy failed.');
+    } finally {
+      setBusy(false);
     }
   };
 
   const onCopyImage = async () => {
     setStatus(null);
+    setBusy(true);
     try {
       if (!canWriteImageToClipboard()) {
         throw new Error('Copy image is not supported in this browser.');
@@ -145,9 +158,71 @@ export function ExportDialog({
       await copyPngFromSvgText(imageArtifact.data.data, { scale: 2, background: '#ffffff' });
       setStatus(`Copied ${imageArtifact.name} as PNG.`);
     } catch (e) {
-      setStatus((e as Error).message || 'Copy failed.');
+      const msg = (e as Error).message || 'Copy failed.';
+      setStatus(`${msg} (You can use Download PNG instead.)`);
+    } finally {
+      setBusy(false);
     }
   };
+
+
+const onDownloadPng = async () => {
+  setStatus(null);
+  setBusy(true);
+  try {
+    const imageArtifact = exportBundle.artifacts.find((a) => a.type === 'image');
+    if (!imageArtifact || imageArtifact.type !== 'image') {
+      const msg = exportBundle.warnings?.[0] ?? 'Download PNG is not supported for this view yet.';
+      throw new Error(msg);
+    }
+    if (imageArtifact.data.kind !== 'svg') {
+      throw new Error('Only SVG sources are supported for PNG download in v1.');
+    }
+    await downloadPngFromSvgText(exportBundle.title, imageArtifact.data.data, { scale: 2, background: '#ffffff' });
+    setStatus('Downloaded PNG.');
+  } catch (e) {
+    setStatus((e as Error).message || 'Download failed.');
+  } finally {
+    setBusy(false);
+  }
+};
+
+const onAddToReport = () => {
+  try {
+    addToExportReport({
+      kind,
+      title: exportBundle.title,
+      modelName,
+      exportOptions,
+      analysisRequest,
+      analysisViewState,
+      bundle: exportBundle,
+    });
+    const nextCount = loadExportReport().length;
+    setReportCount(nextCount);
+    setStatus(`Added to report (${nextCount} items).`);
+  } catch (e) {
+    setStatus((e as Error).message || 'Failed to add to report.');
+  }
+};
+
+const onDownloadReportJson = () => {
+  try {
+    const items = loadExportReport();
+    const blob = exportReportAsJsonBlob(items);
+    const fileName = sanitizeFileNameWithExtension('export-report', 'json');
+    downloadBlobFile(fileName, blob);
+    setStatus('Downloaded report.json.');
+  } catch (e) {
+    setStatus((e as Error).message || 'Failed to download report.');
+  }
+};
+
+const onClearReport = () => {
+  clearExportReport();
+  setReportCount(0);
+  setStatus('Cleared report.');
+};
 
   return (
     <Dialog
@@ -193,31 +268,58 @@ export function ExportDialog({
               </div>
 
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+
                 <button
                   type="button"
                   className="secondaryButton"
                   onClick={onCopyTable}
-                  disabled={!exportViewState.canCopyTable}
-                  aria-disabled={!exportViewState.canCopyTable}
+                  disabled={!exportViewState.canCopyTable || busy}
+                  aria-disabled={!exportViewState.canCopyTable || busy}
                   title={!exportViewState.canCopyTable ? 'Not supported for this view yet' : 'Copy as TSV'}
                 >
                   Copy table (TSV)
                 </button>
 
+<button
+  type="button"
+  className="secondaryButton"
+  onClick={onCopyImage}
+  disabled={!exportViewState.canCopyImage || busy || !canWriteImageToClipboard()}
+  aria-disabled={!exportViewState.canCopyImage || busy || !canWriteImageToClipboard()}
+  title={
+    !exportViewState.canCopyImage
+      ? 'Not supported for this view yet'
+      : !canWriteImageToClipboard()
+        ? 'Browser does not support copying images to clipboard (use Download PNG)'
+        : 'Copy as PNG'
+  }
+>
+  Copy image (PNG)
+</button>
+
                 <button
                   type="button"
                   className="secondaryButton"
-                  onClick={onCopyImage}
-                  disabled={!exportViewState.canCopyImage}
-                  aria-disabled={!exportViewState.canCopyImage}
-                  title={!exportViewState.canCopyImage ? 'Not supported for this view yet' : 'Copy as PNG'}
+                  onClick={onDownloadPng}
+                  disabled={!exportViewState.canDownloadPng || busy}
+                  aria-disabled={!exportViewState.canDownloadPng || busy}
+                  title={!exportViewState.canDownloadPng ? 'Not supported for this view yet' : 'Download a PNG image'}
                 >
-                  Copy image (PNG)
+                  Download PNG
                 </button>
-              </div>
-            </div>
 
-            <details>
+              </div>
+
+</div>
+
+{exportBundle.warnings && exportBundle.warnings.length > 0 ? (
+  <div className="crudHint" style={{ marginTop: 10 }}>
+    <strong>Notes:</strong> {exportBundle.warnings.join(' • ')}
+  </div>
+) : null}
+
+<details>
+
               <summary className="miniLinkButton">Debug details</summary>
               <pre style={{ whiteSpace: 'pre-wrap' }}>
 {JSON.stringify({ kind, modelName, analysisRequest, analysisViewState, exportOptions, exportViewState, exportBundle }, null, 2)}
@@ -247,6 +349,7 @@ export function ExportDialog({
                   disabled={!exportViewState.canDownloadPptx || busy}
                   aria-disabled={!exportViewState.canDownloadPptx || busy}
                   onClick={handleDownloadPptx}
+                  title={!exportViewState.canDownloadPptx ? 'Not supported for this view yet' : 'Download PPTX'}
                 >
                   Download PPTX
                 </button>
@@ -256,6 +359,7 @@ export function ExportDialog({
                   disabled={!exportViewState.canDownloadXlsx || busy}
                   aria-disabled={!exportViewState.canDownloadXlsx || busy}
                   onClick={handleDownloadXlsx}
+                  title={!exportViewState.canDownloadXlsx ? 'Not supported for this view yet' : 'Download XLSX'}
                 >
                   Download XLSX
                 </button>
@@ -266,9 +370,61 @@ export function ExportDialog({
                   Download JSON
                 </button>
               </div>
-            </div>
 
-            <details>
+</div>
+
+{exportBundle.warnings && exportBundle.warnings.length > 0 ? (
+  <div className="crudHint" style={{ marginTop: 10 }}>
+    <strong>Notes:</strong> {exportBundle.warnings.join(' • ')}
+  </div>
+) : null}
+
+
+
+<div className="analysisSection">
+  <div className="analysisSectionHeader">
+    <h3 className="analysisSectionTitle">Report</h3>
+  </div>
+  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+    <button
+      type="button"
+      className="secondaryButton"
+      onClick={onAddToReport}
+      disabled={exportBundle.artifacts.length === 0 || busy}
+      aria-disabled={exportBundle.artifacts.length === 0 || busy}
+      title={exportBundle.artifacts.length === 0 ? 'Nothing to add yet' : 'Add this snapshot to a lightweight report store'}
+    >
+      Add to report
+    </button>
+
+    <button
+      type="button"
+      className="secondaryButton"
+      onClick={onDownloadReportJson}
+      disabled={reportCount === 0 || busy}
+      aria-disabled={reportCount === 0 || busy}
+      title={reportCount === 0 ? 'Report is empty' : 'Download report JSON'}
+    >
+      Download report.json
+    </button>
+
+    <button
+      type="button"
+      className="secondaryButton"
+      onClick={onClearReport}
+      disabled={reportCount === 0 || busy}
+      aria-disabled={reportCount === 0 || busy}
+      title={reportCount === 0 ? 'Report is empty' : 'Clear report'}
+    >
+      Clear report
+    </button>
+
+    <span className="crudHint">Items: {reportCount}</span>
+  </div>
+</div>
+
+<details>
+
               <summary className="miniLinkButton">Debug details</summary>
               <pre style={{ whiteSpace: 'pre-wrap' }}>
 {JSON.stringify({ kind, modelName, analysisRequest, analysisViewState, exportOptions, exportViewState, exportBundle }, null, 2)}

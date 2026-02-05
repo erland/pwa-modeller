@@ -38,6 +38,7 @@ export type ExportViewState = {
   canCopyImage: boolean;
   canDownloadPptx: boolean;
   canDownloadXlsx: boolean;
+  canDownloadPng: boolean;
   // v2 placeholders
   supportsCharts: boolean;
 };

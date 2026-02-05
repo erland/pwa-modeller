@@ -5,11 +5,15 @@ export function AnalysisWorkspaceHeader({
   onChangeMode,
   canOpenTraceability,
   onOpenTraceability,
+  canExport,
+  onOpenExport,
 }: {
   mode: AnalysisMode;
   onChangeMode: (mode: AnalysisMode) => void;
   canOpenTraceability: boolean;
   onOpenTraceability: () => void;
+  canExport: boolean;
+  onOpenExport: () => void;
 }) {
   return (
     <div className="workspaceHeader">
@@ -71,6 +75,16 @@ export function AnalysisWorkspaceHeader({
         </button>
       </div>
       <div className="rowActions">
+        <button
+          type="button"
+          className="miniLinkButton"
+          onClick={onOpenExport}
+          disabled={!canExport}
+          aria-disabled={!canExport}
+          title="Export analysis results (clipboard, PPTX, XLSX)"
+        >
+          Export…
+        </button>
         <button
           type="button"
           className="miniLinkButton"

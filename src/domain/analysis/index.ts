@@ -10,3 +10,4 @@ export * from './queries/relatedElements';
 export * from './queries/pathsBetween';
 export * from './queries/portfolioPopulation';
 export * from './traceability/types';
+export * from './analysisRequest';

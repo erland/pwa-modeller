@@ -12,7 +12,8 @@ export function deriveExportViewState(kind: AnalysisViewKind, _analysisViewState
   const canCopyTable = isClipboard && (kind === 'matrix' || kind === 'portfolio');
   const canCopyImage = isClipboard && kind === 'sandbox';
 
-  const canDownloadPptx = !isClipboard && (kind === 'matrix' || kind === 'portfolio' || kind === 'sandbox');
+  // PPTX v1 is image-based; we only have an image artifact for Sandbox in v1.
+  const canDownloadPptx = !isClipboard && kind === 'sandbox';
   const canDownloadXlsx = !isClipboard && (kind === 'matrix' || kind === 'portfolio');
 
   return {

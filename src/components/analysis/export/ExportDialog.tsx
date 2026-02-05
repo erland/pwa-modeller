@@ -13,8 +13,11 @@ import {
   canWriteImageToClipboard,
   copyPngFromSvgText,
   buildExportBundle,
+  generatePptxBlobV1,
 } from '../../../export';
 import { ExportOptionsPanel } from './ExportOptionsPanel';
+
+import { downloadBlobFile, sanitizeFileNameWithExtension } from '../../../store/download';
 
 type Props = {
   isOpen: boolean;
@@ -41,6 +44,7 @@ export function ExportDialog({
   matrix,
 }: Props) {
   const [tab, setTab] = useState<TabId>('quickCopy');
+  const [busy, setBusy] = useState(false);
 
   const [exportOptions, setExportOptions] = useState(() => deriveDefaultExportOptions(kind));
   useEffect(() => {
@@ -65,6 +69,22 @@ export function ExportDialog({
       }),
     [analysisRequest, analysisViewState, exportOptions, kind, matrix, modelName]
   );
+
+  async function handleDownloadPptx(): Promise<void> {
+    setStatus(null);
+    setBusy(true);
+    try {
+      const blob = await generatePptxBlobV1(exportBundle, exportOptions.pptx);
+      const fileName = sanitizeFileNameWithExtension(exportBundle.title, 'pptx');
+      downloadBlobFile(fileName, blob);
+      setStatus('Downloaded PPTX.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to generate PPTX.';
+      setStatus(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const [status, setStatus] = useState<string | null>(null);
   useEffect(() => setStatus(null), [tab, kind, isOpen]);
@@ -203,7 +223,13 @@ export function ExportDialog({
                 <h3 className="analysisSectionTitle">Download</h3>
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button type="button" className="secondaryButton" disabled aria-disabled title="Step 8">
+                <button
+                  type="button"
+                  className="secondaryButton"
+                  disabled={!exportViewState.canDownloadPptx || busy}
+                  aria-disabled={!exportViewState.canDownloadPptx || busy}
+                  onClick={handleDownloadPptx}
+                >
                   Download PPTX
                 </button>
                 <button type="button" className="secondaryButton" disabled aria-disabled title="Step 9">

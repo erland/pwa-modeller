@@ -8,4 +8,6 @@ export * from './helpers/tsv';
 
 export * from './builders/buildExportBundle';
 
+export * from './pptx/generatePptxV1';
+
 export * from './clipboard/copyPngFromSvgElement';

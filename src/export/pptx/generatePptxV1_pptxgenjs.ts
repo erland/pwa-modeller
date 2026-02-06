@@ -3,6 +3,8 @@ import type { PptxOptions } from '../contracts/ExportOptions';
 
 import { svgTextToPngBytes } from './svgToPngBytes';
 import PptxGenJS from 'pptxgenjs';
+import { postProcessPptxWithJsZip } from './postProcessPptxWithJsZip';
+import { PptxPostProcessMeta } from './pptxPostProcessMeta';
 
 function isImageArtifact(a: ExportArtifact): a is { type: 'image'; name: string; data: ImageRef } {
   return a.type === 'image';
@@ -23,309 +25,430 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+
+type ParsedNode = {
+  id?: string;
+  elType?: string;
+    x: number; y: number; w: number; h: number;
+  fill?: string; stroke?: string; strokeWidth?: number;
+  text: string;
+};
+
+function parseTranslate(transform: string): { x: number; y: number } | null {
+  // Handles: translate(x,y) or translate(x y)
+  const mm = transform.match(/translate\(\s*([-0-9.]+)(?:[,\s]+)([-0-9.]+)\s*\)/);
+  if (!mm) return null;
+  return { x: Number(mm[1]), y: Number(mm[2]) };
+}
+
+function cssColorToHex(color: string | null | undefined): string | undefined {
+  if (!color) return undefined;
+  const c = color.trim();
+  if (!c) return undefined;
+  if (c.startsWith('#')) return c.replace('#', '').slice(0, 6);
+  const rgb = c.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (rgb) {
+    const r = Number(rgb[1]).toString(16).padStart(2, '0');
+    const g = Number(rgb[2]).toString(16).padStart(2, '0');
+    const b = Number(rgb[3]).toString(16).padStart(2, '0');
+    return `${r}${g}${b}`.toUpperCase();
+  }
+  // Named colors etc: let PowerPoint decide? fallback to black.
+  return '000000';
+}
+
+function getInlineStyle(el: Element): Record<string, string> {
+  const styleAttr = el.getAttribute('style') ?? '';
+  const out: Record<string, string> = {};
+  for (const part of styleAttr.split(';')) {
+    const [k, v] = part.split(':');
+    if (!k || v === undefined) continue;
+    const key = k.trim();
+    const val = v.trim();
+    if (!key || !val) continue;
+    out[key] = val;
+  }
+  return out;
+}
+
+function parseSandboxNodesFromSvg(svgText: string): ParsedNode[] {
+  if (typeof DOMParser === 'undefined') return [];
+  const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+  const svg = doc.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== 'svg') return [];
+
+  const nodes: ParsedNode[] = [];
+  const groups = Array.from(svg.querySelectorAll('g.analysisSandboxNode')) as Element[];
+
+  for (const g of groups) {
+    const tr = g.getAttribute('transform') ?? '';
+    const t = parseTranslate(tr);
+    if (!t) continue;
+
+    const id = (g.getAttribute('data-element-id') ?? '').trim() || undefined;
+    const elType = (g.getAttribute('data-element-type') ?? '').trim() || undefined;
+
+    const rect = g.querySelector('rect');
+    if (!rect) continue;
+
+    const w = Number(rect.getAttribute('width') ?? '0');
+    const h = Number(rect.getAttribute('height') ?? '0');
+    if (!w || !h) continue;
+
+    // Text: the node layer emits two <text> items (title + meta).
+    const texts = Array.from(g.querySelectorAll('text')).map((tx) => (tx.textContent ?? '').trim()).filter(Boolean);
+    if (texts.length === 0) continue;
+
+    // Prefer computed-style inlined by export bundle (style attr).
+    const style = getInlineStyle(rect);
+    const fill = cssColorToHex(style.fill ?? rect.getAttribute('fill'));
+    const stroke = cssColorToHex(style.stroke ?? rect.getAttribute('stroke'));
+    const sw = Number((style['stroke-width'] ?? rect.getAttribute('stroke-width') ?? '1').trim());
+    const strokeWidth = Number.isFinite(sw) ? sw : 1;
+
+    nodes.push({
+      id,
+      elType,
+      x: t.x,
+      y: t.y,
+      w,
+      h,
+      fill,
+      stroke,
+      strokeWidth,
+      text: texts.slice(0, 2).join('\n'),
+    });
+  }
+
+  // Fallback to old heuristic if class selector didn't match (older builds)
+  if (!nodes.length) {
+    const legacyGroups = Array.from(svg.querySelectorAll('g[transform]'));
+    for (const g of legacyGroups) {
+      const tr = g.getAttribute('transform') ?? '';
+      const t = parseTranslate(tr);
+      if (!t) continue;
+      const rect = g.querySelector('rect');
+      if (!rect) continue;
+      const w = Number(rect.getAttribute('width') ?? '0');
+      const h = Number(rect.getAttribute('height') ?? '0');
+      if (!w || !h) continue;
+      const texts = Array.from(g.querySelectorAll('text')).map((tx) => (tx.textContent ?? '').trim()).filter(Boolean);
+      if (texts.length === 0) continue;
+      const style = getInlineStyle(rect);
+      const fill = cssColorToHex(style.fill ?? rect.getAttribute('fill'));
+      const stroke = cssColorToHex(style.stroke ?? rect.getAttribute('stroke'));
+      const sw = Number((style['stroke-width'] ?? rect.getAttribute('stroke-width') ?? '1').trim());
+      const strokeWidth = Number.isFinite(sw) ? sw : 1;
+      nodes.push({ x: t.x, y: t.y, w, h, fill, stroke, strokeWidth, text: texts.slice(0, 2).join('\n') });
+    }
+  }
+
+  return nodes;
+}
+
+
+
+type ParsedEdge = {
+  id?: string;
+  sourceId?: string;
+  targetId?: string;
+  relType?: string;
+  x1: number; y1: number; x2: number; y2: number;
+  stroke?: string;
+  strokeWidth?: number;
+  dashed?: boolean;
+  arrowEnd?: boolean;
+};
+
+function parsePathEndpoints(d: string): { x1: number; y1: number; x2: number; y2: number } | null {
+  const nums = d.match(/[-0-9.]+/g);
+  if (!nums || nums.length < 4) return null;
+  const arr = nums.map(Number).filter((n) => Number.isFinite(n));
+  if (arr.length < 4) return null;
+  const x1 = arr[0], y1 = arr[1];
+  const x2 = arr[arr.length - 2], y2 = arr[arr.length - 1];
+  return { x1, y1, x2, y2 };
+}
+
+function parseSandboxEdgesFromSvg(svgText: string): ParsedEdge[] {
+  if (typeof DOMParser === 'undefined') return [];
+  const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+  const svg = doc.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== 'svg') return [];
+
+  const edges: ParsedEdge[] = [];
+
+  // Primary: use sandbox edge path with semantic data-* attributes.
+  const paths = Array.from(svg.querySelectorAll('path.diagramRelLine')) as Element[];
+  for (const el of paths) {
+    const d = (el.getAttribute('d') ?? '').trim();
+    const pts = d ? parsePathEndpoints(d) : null;
+    if (!pts) continue;
+
+    const id = (el.getAttribute('data-relationship-id') ?? el.getAttribute('data-id') ?? el.getAttribute('id') ?? '').trim() || undefined;
+    const sourceId = (el.getAttribute('data-source-element-id') ?? el.getAttribute('data-source') ?? el.getAttribute('data-src') ?? '').trim() || undefined;
+    const targetId = (el.getAttribute('data-target-element-id') ?? el.getAttribute('data-target') ?? el.getAttribute('data-dst') ?? '').trim() || undefined;
+    const relType = (el.getAttribute('data-relationship-type') ?? el.getAttribute('data-type') ?? '').trim() || undefined;
+
+    // Styling: we prefer model-derived relType mapping for dash/arrow, with SVG as fallback.
+    const isFlow = (relType ?? '').toLowerCase().includes('flow');
+
+    const dash = (el.getAttribute('stroke-dasharray') ?? '').trim();
+    const dashedFromSvg = !!dash && dash !== 'none' && dash !== '0' && dash !== '0,0';
+    const dashed = isFlow ? true : dashedFromSvg;
+
+    const markerEnd = (el.getAttribute('marker-end') ?? '').trim();
+    const arrowEndFromSvg = !!markerEnd;
+    const arrowEnd = isFlow ? true : arrowEndFromSvg;
+
+    // Stroke: often set via computed styles; bundle inlines them into style="".
+    const style = getInlineStyle(el);
+    const stroke = cssColorToHex(style.stroke ?? el.getAttribute('stroke'));
+    const sw = Number((style['stroke-width'] ?? el.getAttribute('stroke-width') ?? '1').trim());
+    const strokeWidth = Number.isFinite(sw) ? sw : 1;
+
+    edges.push({ id, sourceId, targetId, relType, x1: pts.x1, y1: pts.y1, x2: pts.x2, y2: pts.y2, stroke, strokeWidth, dashed, arrowEnd });
+  }
+
+  // Fallback: any <path> with a 'd' (legacy)
+  if (!edges.length) {
+    const legacy = Array.from(svg.querySelectorAll('path'));
+    for (const el of legacy) {
+      const d = (el.getAttribute('d') ?? '').trim();
+      const pts = d ? parsePathEndpoints(d) : null;
+      if (!pts) continue;
+      const id = (el.getAttribute('data-id') ?? el.getAttribute('id') ?? '').trim() || undefined;
+      const style = getInlineStyle(el);
+      const stroke = cssColorToHex(style.stroke ?? el.getAttribute('stroke'));
+      const sw = Number((style['stroke-width'] ?? el.getAttribute('stroke-width') ?? '1').trim());
+      const strokeWidth = Number.isFinite(sw) ? sw : 1;
+      const dash = (style['stroke-dasharray'] ?? el.getAttribute('stroke-dasharray') ?? '').trim();
+      const dashed = !!dash && dash !== 'none';
+      const markerEnd = (el.getAttribute('marker-end') ?? '').trim();
+      const arrowEnd = !!markerEnd;
+      edges.push({ id, x1: pts.x1, y1: pts.y1, x2: pts.x2, y2: pts.y2, stroke, strokeWidth, dashed, arrowEnd });
+    }
+  }
+
+  return edges;
+}
+
+
+function parseSvgViewBox(svgText: string): { minX: number; minY: number; w: number; h: number } | null {
+  if (typeof DOMParser === 'undefined') return null;
+  const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+  const svg = doc.documentElement;
+  if (!svg) return null;
+  const vb = (svg.getAttribute('viewBox') ?? '').trim();
+  if (vb) {
+    const parts = vb.split(/[\s,]+/).map(Number);
+    if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
+      return { minX: parts[0], minY: parts[1], w: parts[2], h: parts[3] };
+    }
+  }
+  const wAttr = Number((svg.getAttribute('width') ?? '').replace(/px$/, ''));
+  const hAttr = Number((svg.getAttribute('height') ?? '').replace(/px$/, ''));
+  if (Number.isFinite(wAttr) && Number.isFinite(hAttr) && wAttr > 0 && hAttr > 0) return { minX: 0, minY: 0, w: wAttr, h: hAttr };
+  return null;
+}
+
 function layoutToPptxGen(layout: PptxOptions['layout']): string {
   return layout === 'standard' ? 'LAYOUT_4X3' : 'LAYOUT_WIDE';
 }
 
-function rgbToHex(rgb: string): string | null {
-  // Accept: rgb(r,g,b) or rgba(r,g,b,a)
-  const m = rgb
-    .replace(/\s+/g, '')
-    .match(/^rgba?\((\d+),(\d+),(\d+)(?:,([01](?:\.\d+)?))?\)$/i);
-  if (!m) return null;
-  const r = Math.max(0, Math.min(255, parseInt(m[1], 10)));
-  const g = Math.max(0, Math.min(255, parseInt(m[2], 10)));
-  const b = Math.max(0, Math.min(255, parseInt(m[3], 10)));
-  const to2 = (n: number) => n.toString(16).padStart(2, '0');
-  return `${to2(r)}${to2(g)}${to2(b)}`.toUpperCase();
-}
-
-function normalizePptxColor(color: string | null | undefined, fallback: string): string {
-  if (!color) return fallback;
-  const c = color.trim();
-  if (!c) return fallback;
-  if (/^#?[0-9a-f]{6}$/i.test(c)) return c.replace('#', '').toUpperCase();
-  const h = rgbToHex(c);
-  if (h) return h;
-  // Some computed styles can return like "rgba(0, 0, 0, 0.65)" or named colors; default fallback.
-  return fallback;
-}
-
-function parseTranslate(transform: string | null): { x: number; y: number } {
-  if (!transform) return { x: 0, y: 0 };
-  const m = transform.match(/translate\(\s*([-\d.]+)[ ,]\s*([-\d.]+)\s*\)/);
-  if (!m) return { x: 0, y: 0 };
-  return { x: parseFloat(m[1]) || 0, y: parseFloat(m[2]) || 0 };
-}
-
-function parseViewBox(vb: string | null): { minX: number; minY: number; w: number; h: number } | null {
-  if (!vb) return null;
-  const parts = vb
-    .trim()
-    .split(/[\s,]+/)
-    .map((s) => parseFloat(s));
-  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return null;
-  return { minX: parts[0], minY: parts[1], w: parts[2], h: parts[3] };
-}
-
-type SandboxNodeShape = {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  rx?: number;
-  fill: string;
-  stroke: string;
-  strokeWidth: number;
-  title: string;
-  meta: string;
-  titleColor: string;
-  metaColor: string;
-};
-
-type SandboxEdgeShape = {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  stroke: string;
-  strokeWidth: number;
-  dash?: string;
-};
-
-function extractSandboxFromSvgText(svgText: string): { nodes: SandboxNodeShape[]; edges: SandboxEdgeShape[]; vb: { minX: number; minY: number; w: number; h: number } } | null {
-  const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
-  const svg = doc.querySelector('svg');
-  if (!svg) return null;
-
-  const vb = parseViewBox(svg.getAttribute('viewBox')) ?? { minX: 0, minY: 0, w: 1000, h: 750 };
-
-  const nodeGs = Array.from(doc.querySelectorAll('g.analysisSandboxNode'));
-  if (nodeGs.length === 0) return null;
-
-  const nodes: SandboxNodeShape[] = nodeGs.map((g) => {
-    const { x, y } = parseTranslate(g.getAttribute('transform'));
-    const rect = g.querySelector('rect');
-    const w = rect ? parseFloat(rect.getAttribute('width') || '0') || 0 : 0;
-    const h = rect ? parseFloat(rect.getAttribute('height') || '0') || 0 : 0;
-    const rx = rect ? parseFloat(rect.getAttribute('rx') || '') || undefined : undefined;
-
-    // InlineComputedSvgStyles puts computed styles into style="…"; prefer rect.style.fill.
-    const fill = normalizePptxColor((rect as any)?.style?.fill || rect?.getAttribute('fill') || rect?.getAttribute('style') || null, 'FFFFFF');
-    const stroke = normalizePptxColor((rect as any)?.style?.stroke || rect?.getAttribute('stroke') || null, '333333');
-    const strokeWidthRaw = (rect as any)?.style?.strokeWidth || '';
-    const strokeWidth = strokeWidthRaw ? parseFloat(strokeWidthRaw) || 1 : 1;
-
-    const texts = Array.from(g.querySelectorAll('text'));
-    const title = (texts[0]?.textContent ?? '').trim();
-    const meta = (texts[1]?.textContent ?? '').trim();
-
-    const titleColor = normalizePptxColor((texts[0] as any)?.style?.fill || (texts[0] as any)?.style?.color || null, '111111');
-    const metaColor = normalizePptxColor((texts[1] as any)?.style?.fill || (texts[1] as any)?.style?.color || null, '333333');
-
-    // Use elementId from React key if present; otherwise generate.
-    const id = (g.getAttribute('data-element-id') || g.getAttribute('id') || title || `node_${Math.random().toString(36).slice(2)}`).slice(0, 64);
-
-    return { id, x, y, w, h, rx, fill, stroke, strokeWidth, title, meta, titleColor, metaColor };
-  });
-
-  // Edges: use diagramRelLine paths.
-  const edgePaths = Array.from(doc.querySelectorAll('path.diagramRelLine'));
-  const edges: SandboxEdgeShape[] = edgePaths
-    .map((p) => {
-      const d = p.getAttribute('d') || '';
-      // Extract first M and last coordinate in the path.
-      const coords = Array.from(d.matchAll(/([ML])\s*([-\d.]+)\s+([-\d.]+)/g)).map((m) => ({
-        cmd: m[1],
-        x: parseFloat(m[2]),
-        y: parseFloat(m[3]),
-      }));
-      if (coords.length < 2) return null;
-      const first = coords[0];
-      const last = coords[coords.length - 1];
-
-      // Try computed inline style first.
-      const stroke = normalizePptxColor((p as any)?.style?.stroke || p.getAttribute('stroke') || null, '333333');
-      const swRaw = (p as any)?.style?.strokeWidth || '';
-      const strokeWidth = swRaw ? parseFloat(swRaw) || 1 : 1;
-      const dash = (p as any)?.style?.strokeDasharray || p.getAttribute('stroke-dasharray') || undefined;
-
-      return { x1: first.x, y1: first.y, x2: last.x, y2: last.y, stroke, strokeWidth, dash: dash || undefined };
-    })
-    .filter(Boolean) as SandboxEdgeShape[];
-
-  // If viewBox seems bogus, derive bounds from nodes.
-  if (vb.w <= 0 || vb.h <= 0) {
-    const maxX = Math.max(...nodes.map((n) => n.x + n.w), ...edges.map((e) => Math.max(e.x1, e.x2)), 1000);
-    const maxY = Math.max(...nodes.map((n) => n.y + n.h), ...edges.map((e) => Math.max(e.y1, e.y2)), 750);
-    return { nodes, edges, vb: { minX: 0, minY: 0, w: maxX, h: maxY } };
-  }
-
-  return { nodes, edges, vb };
-}
-
-function dashToPptx(dash: string | undefined): 'solid' | 'dash' | 'dot' | 'dashDot' | undefined {
-  if (!dash) return undefined;
-  const d = dash.trim();
-  if (!d || d === 'none') return undefined;
-  // Very rough mapping: lots of small values -> dot, otherwise dash.
-  const parts = d.split(/[\s,]+/).map((s) => parseFloat(s)).filter((n) => !Number.isNaN(n));
-  if (parts.length >= 2) {
-    const a = parts[0];
-    const b = parts[1];
-    if (a <= 2 && b >= 4) return 'dot';
-    if (a >= 6 && b >= 4) return 'dash';
-  }
-  return 'dash';
-}
-
 /**
- * PPTX generation v2 (editable shapes + straight lines), implemented using PptxGenJS.
+ * PPTX generation v1 (image-based slides) using PptxGenJS.
  *
- * For Sandbox exports we parse the inlined-style SVG markup and convert:
- * - Nodes -> PowerPoint rounded rectangles + text (editable)
- * - Edges -> PowerPoint straight lines (editable)
- *
- * Other image artifacts fall back to the image-based slide.
+ * This replaces the earlier hand-rolled OOXML approach, which some PowerPoint
+ * builds rejected as invalid. PptxGenJS produces PowerPoint-compatible output.
  */
-export async function generatePptxBlobV1(bundle: ExportBundle, options: PptxOptions): Promise<Blob> {
-  const pptx = new (PptxGenJS as any)();
+export async function generatePptxBlobV1(bundle: ExportBundle, options: PptxOptions): Promise<Blob> {  const pptx = new (PptxGenJS as any)();
   pptx.layout = layoutToPptxGen(options.layout);
   pptx.author = 'EA Modeller PWA';
   pptx.company = 'EA Modeller PWA';
   pptx.subject = bundle.title;
   pptx.title = bundle.title;
 
+  const images = pickImageArtifacts(bundle);
+  if (images.length === 0) {
+    // Always produce a valid PPTX.
+    const slide = pptx.addSlide();
+    slide.addText('No image artifacts available for export.', {
+      x: 0.5,
+      y: 0.5,
+      w: 9,
+      h: 1,
+      fontSize: 18,
+      color: '333333',
+    });
+  }
+
   // PptxGenJS uses inches for coordinates.
+  // Standard (4:3) is 10" × 7.5". Wide is 13.33" × 7.5".
   const pageW = options.layout === 'standard' ? 10 : 13.333;
   const pageH = 7.5;
-  const margin = 0.3;
+
+  let meta: PptxPostProcessMeta | undefined;
 
   const footerText = (options.footerText ?? '').trim();
   const includeFooter = footerText.length > 0;
 
-  const images = pickImageArtifacts(bundle);
-  if (images.length === 0) {
-    const slide = pptx.addSlide();
-    slide.addText('No exportable artifacts available.', { x: 0.5, y: 0.5, w: pageW - 1, h: 1, fontSize: 18, color: '333333' });
-    const out = await pptx.write({ outputType: 'blob', compression: false });
-    return out instanceof Blob
-      ? out
-      : new Blob([out as any], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
-  }
-
   for (const art of images) {
-    // Prefer editable Sandbox export when the artifact contains the Sandbox SVG.
-    const sandbox =
-      art.data.kind === 'svg' && art.data.data.includes('analysisSandboxNode') ? extractSandboxFromSvgText(art.data.data) : null;
-
     const slide = pptx.addSlide();
 
-    if (sandbox) {
-      const availW = pageW - margin * 2;
-      const availH = pageH - margin * 2 - (includeFooter ? 0.35 : 0);
-      const scale = Math.min(availW / sandbox.vb.w, availH / sandbox.vb.h);
-      const dx = margin + (availW - sandbox.vb.w * scale) / 2 - sandbox.vb.minX * scale;
-      const dy = margin + (availH - sandbox.vb.h * scale) / 2 - sandbox.vb.minY * scale;
-
-      const toX = (x: number) => dx + x * scale;
-      const toY = (y: number) => dy + y * scale;
-      const toW = (w: number) => w * scale;
-      const toH = (h: number) => h * scale;
-
-      // Edges first (behind nodes)
-      for (const e of sandbox.edges) {
-        const x1 = toX(e.x1);
-        const y1 = toY(e.y1);
-        const x2 = toX(e.x2);
-        const y2 = toY(e.y2);
-
-        const x = Math.min(x1, x2);
-        const y = Math.min(y1, y2);
-        const w = Math.abs(x2 - x1);
-        const h = Math.abs(y2 - y1);
-
-        slide.addShape((pptx as any).ShapeType.line, {
-          x,
-          y,
-          w: Math.max(0.001, w),
-          h: Math.max(0.001, h),
-          line: {
-            color: normalizePptxColor(e.stroke, '333333'),
-            width: Math.max(0.25, e.strokeWidth * 0.75), // SVG px-ish to PPT pt-ish (rough)
-            dash: dashToPptx(e.dash),
-          },
-        });
-      }
-
-      // Nodes
-      for (const n of sandbox.nodes) {
-        const x = toX(n.x);
-        const y = toY(n.y);
-        const w = toW(n.w);
-        const h = toH(n.h);
-
-        slide.addShape((pptx as any).ShapeType.roundRect, {
-          x,
-          y,
-          w,
-          h,
-          fill: { color: normalizePptxColor(n.fill, 'FFFFFF') },
-          line: { color: normalizePptxColor(n.stroke, '333333'), width: Math.max(0.5, n.strokeWidth * 0.75) },
-        });
-
-        // Title
-        slide.addText(n.title || '(unnamed)', {
-          x: x + 0.08,
-          y: y + 0.08,
-          w: Math.max(0.1, w - 0.16),
-          h: 0.25,
-          fontFace: 'Calibri',
-          fontSize: 14,
-          bold: true,
-          color: normalizePptxColor(n.titleColor, '111111'),
-        });
-
-        // Meta/type
-        slide.addText(n.meta || '', {
-          x: x + 0.08,
-          y: y + 0.36,
-          w: Math.max(0.1, w - 0.16),
-          h: 0.22,
-          fontFace: 'Calibri',
-          fontSize: 10,
-          color: normalizePptxColor(n.metaColor, '333333'),
-        });
-      }
-
-      if (includeFooter) {
-        slide.addText(footerText, { x: 0.3, y: pageH - 0.35, w: pageW - 0.6, h: 0.3, fontSize: 10, color: '555555' });
-      }
-      continue;
-    }
-
-    // Fallback: image-based for non-sandbox images.
+    // Ensure we always embed PNG data (even if the artifact is SVG markup).
     let pngDataUrl: string | undefined;
     if (art.data.kind === 'png') {
+      // Already a data URL.
       pngDataUrl = art.data.data.startsWith('data:') ? art.data.data : `data:image/png;base64,${art.data.data}`;
     } else if (art.data.kind === 'svg') {
       const pngBytes = await svgTextToPngBytes(art.data.data, { scale: 2, background: '#ffffff' });
       pngDataUrl = `data:image/png;base64,${bytesToBase64(pngBytes)}`;
     }
 
+// PPTX v2 (Step 1): Render Sandbox nodes as a single shape-with-text so moving the element in PowerPoint moves its text.
+// This is a best-effort path for SVG artifacts that represent the Sandbox graph.
+if (art.data.kind === 'svg') {
+  try {
+    const vb = parseSvgViewBox(art.data.data) ?? { minX: 0, minY: 0, w: 1000, h: 750 };
+const nodes = parseSandboxNodesFromSvg(art.data.data);
+const edges = parseSandboxEdgesFromSvg(art.data.data);
+
+if (nodes.length > 0) {
+  // Fit uniformly to slide (inches) and center, respecting viewBox minX/minY.
+  const scale = Math.min(pageW / vb.w, pageH / vb.h);
+  const offX = (pageW - vb.w * scale) / 2;
+  const offY = (pageH - vb.h * scale) / 2;
+
+// Collect geometry meta for post-process connector attachment.
+meta = { nodes: [], edges: [] };
+
+
+
+
+const ShapeType = (PptxGenJS as any).ShapeType;
+const lineShape = ShapeType?.line ?? 'line';
+const roundRect = ShapeType?.roundRect ?? 'roundRect';
+
+// Temporary connectors as plain lines (visual correctness). These are editable but not attached.
+// Draw edges first so they appear behind nodes.
+if (edges.length > 0) {
+  let edgeIdx = 0;
+  for (const e of edges) {
+    const x1 = offX + (e.x1 - vb.minX) * scale;
+    const y1 = offY + (e.y1 - vb.minY) * scale;
+    const x2 = offX + (e.x2 - vb.minX) * scale;
+    const y2 = offY + (e.y2 - vb.minY) * scale;
+
+    const x = Math.min(x1, x2);
+    const y = Math.min(y1, y2);
+    const w = Math.max(0.01, Math.abs(x2 - x1));
+    const h = Math.max(0.01, Math.abs(y2 - y1));
+
+
+    meta!.edges.push({
+      edgeId: String(e.id ?? `${edgeIdx}`),
+      relType: e.relType,
+      dashed: e.dashed,
+      x1In: x1,
+      y1In: y1,
+      x2In: x2,
+      y2In: y2,
+      rectIn: { x, y, w, h },
+    });
+
+    slide.addShape(lineShape as any, {
+      x,
+      y,
+      w,
+      h,
+      altText: `EA_EDGE:${e.sourceId ?? ''}->${e.targetId ?? ''}|${e.relType ?? ''}`,
+      line: {
+        color: e.stroke ?? '333333',
+        width: Math.max(0.5, (e.strokeWidth ?? 1) * scale),
+        dash: e.dashed ? 'dash' : 'solid',
+        endArrowType: e.arrowEnd ? 'arrow' : undefined,
+      },
+    } as any);
+
+    edgeIdx += 1;
+  }
+}
+
+      for (const n of nodes) {
+                    const x = offX + (n.x - vb.minX) * scale;
+            const y = offY + (n.y - vb.minY) * scale;
+            const w = n.w * scale;
+            const h = n.h * scale;
+
+            meta!.nodes.push({ elementId: String(n.id ?? `${nodes.indexOf(n)}`), rectIn: { x, y, w, h } });
+
+                    const [nameLine, typeLine] = n.text.split('\n');
+            const runs: any[] = [];
+            if (nameLine) runs.push({ text: nameLine + (typeLine ? '\n' : ''), options: { bold: true, fontSize: 14 } });
+            if (typeLine) runs.push({ text: typeLine, options: { italic: true, fontSize: 10 } });
+            slide.addText(runs.length ? runs : n.text, {
+              altText: n.id ? `EA_NODE:${n.id}` : undefined,
+shape: roundRect as any,
+          x,
+          y,
+          w,
+          h,
+          fill: n.fill ? { color: n.fill } : undefined,
+          line: n.stroke ? { color: n.stroke, width: Math.max(0.5, (n.strokeWidth ?? 1) * scale) } : undefined,
+          fontFace: 'Calibri',
+          fontSize: 10,
+          color: '111111',
+          valign: 'mid',
+          align: 'center',
+          margin: 4,
+                    } as any);
+
+      }
+
+      // Optional: still set pngDataUrl so older behavior remains available if needed.
+      // We skip addImage by setting pngDataUrl to a sentinel.
+      pngDataUrl = '__SKIP_IMAGE__';
+    }
+  } catch {
+    // Fall back to PNG image export.
+  }
+}
+
+
     if (!pngDataUrl) {
       slide.addText('Missing image content.', { x: 0.5, y: 0.5, w: pageW - 1, h: 1, fontSize: 18 });
       continue;
     }
 
-    slide.addImage({ data: pngDataUrl, x: 0, y: 0, w: pageW, h: pageH });
+    if (pngDataUrl !== '__SKIP_IMAGE__') {
+    // Full-bleed placement.
+    slide.addImage({
+      data: pngDataUrl,
+      x: 0,
+      y: 0,
+      w: pageW,
+      h: pageH,
+    });
+    }
+
     if (includeFooter) {
-      slide.addText(footerText, { x: 0.3, y: pageH - 0.35, w: pageW - 0.6, h: 0.3, fontSize: 10, color: '555555' });
+      // Small footer strip at bottom.
+      slide.addText(footerText, {
+        x: 0.3,
+        y: pageH - 0.35,
+        w: pageW - 0.6,
+        h: 0.3,
+        fontSize: 10,
+        color: '555555',
+      });
     }
   }
 
-  const out = await pptx.write({ outputType: 'blob', compression: false });
-  if (out instanceof Blob) return out;
-  return new Blob([out as any], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+  const raw = await pptx.write({ outputType: 'uint8array', compression: false });
+  const processed = await postProcessPptxWithJsZip(raw as any, meta);
+  const safeProcessed = new Uint8Array(processed as any);
+  return new Blob([safeProcessed], {
+    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  });
 }

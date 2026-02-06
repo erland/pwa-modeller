@@ -81,6 +81,10 @@ export function SandboxEdgesLayer({
             <path
               className={'diagramRelLine' + (isSelected ? ' isSelected' : '')}
               d={d}
+              data-relationship-id={r.id}
+              data-relationship-type={String(r.type)}
+              data-source-element-id={String(r.sourceElementId)}
+              data-target-element-id={String(r.targetElementId)}
               markerStart={markerStart}
               markerEnd={markerEnd}
               strokeDasharray={dasharray ?? undefined}

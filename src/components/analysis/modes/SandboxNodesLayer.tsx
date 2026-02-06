@@ -51,6 +51,8 @@ export function SandboxNodesLayer({
               isPairPrimary || isPairSecondary ? 'isPairSelected' : ''
             } ${isPairPrimary ? 'isPairPrimary' : ''} ${isPairSecondary ? 'isPairSecondary' : ''}`}
             transform={`translate(${n.x}, ${n.y})`}
+            data-element-id={n.elementId}
+            data-element-type={String(el.type)}
             onPointerDown={(e) => onPointerDownNode(e, n.elementId)}
             onDoubleClick={() => onDoubleClickNode(n.elementId)}
             onClick={(e) => onClickNode(e, n.elementId)}

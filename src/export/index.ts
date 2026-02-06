@@ -5,6 +5,7 @@ export * from './deriveExportViewState';
 
 export * from './helpers/clipboard';
 export * from './helpers/tsv';
+export * from './helpers/csv';
 
 export * from './builders/buildExportBundle';
 

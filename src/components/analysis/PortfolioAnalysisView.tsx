@@ -5,9 +5,8 @@ import { discoverNumericPropertyKeys } from '../../domain';
 import type { Selection } from '../model/selection';
 import { getAnalysisAdapter } from '../../analysis/adapters/registry';
 import { buildPortfolioPopulation } from '../../domain/analysis';
-import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
 import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../store/overlay';
-import { rowsToCsv } from '../../domain';
+import type { TabularData } from '../../export';
 
 import { collectFacetValues, sortElementTypesForDisplay } from './queryPanel/utils';
 
@@ -23,9 +22,10 @@ export type Props = {
   modelKind: ModelKind;
   selection: Selection;
   onSelectElement: (elementId: string) => void;
+  onExportTableChange?: (table: TabularData | null) => void;
 };
 
-export function PortfolioAnalysisView({ model, modelKind, selection, onSelectElement }: Props) {
+export function PortfolioAnalysisView({ model, modelKind, selection, onSelectElement, onExportTableChange }: Props) {
   const overlayVersion = useOverlayStore((s) => s.getVersion());
   const adapter = useMemo(() => getAnalysisAdapter(modelKind), [modelKind]);
   const facetDefs = useMemo(() => adapter.getFacetDefinitions(model), [adapter, model]);
@@ -96,43 +96,33 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
 
   const selectedElementId = selection.kind === 'element' ? selection.elementId : null;
 
-  const modelName = model.metadata?.name || 'model';
+  const exportTable: TabularData | null = useMemo(() => {
+    if (computed.tableRows.length === 0) return null;
 
-  const exportCsv = (): void => {
-    if (computed.tableRows.length === 0) return;
-    const base = ui.metricKey ? `${modelName}-portfolio-${ui.metricKey}` : `${modelName}-portfolio`;
+    const headers: string[] = ['elementId', 'name', 'type'];
+    if (hasLayerFacet) headers.push('layer');
+    headers.push(ui.metricKey ? ui.metricKey : 'metric');
+    if (ui.showDegree) headers.push('degree');
+    if (ui.showReach3) headers.push('reach3');
 
-    const columns: Array<{ key: string; header: string }> = [
-      { key: 'elementId', header: 'elementId' },
-      { key: 'name', header: 'name' },
-      { key: 'type', header: 'type' }
-    ];
-    if (hasLayerFacet) columns.push({ key: 'layer', header: 'layer' });
-    columns.push({ key: 'metric', header: ui.metricKey ? ui.metricKey : 'metric' });
-    if (ui.showDegree) columns.push({ key: 'degree', header: 'degree' });
-    if (ui.showReach3) columns.push({ key: 'reach3', header: 'reach3' });
-
-    const exportRows: Record<string, unknown>[] = computed.tableRows.map((r) => {
+    const rows: string[][] = computed.tableRows.map((r) => {
       const v = ui.metricKey ? computed.valueByElementId[r.elementId] : undefined;
       const degree = ui.showDegree ? (computed.degreeByElementId[r.elementId] ?? '') : '';
       const reach3 = ui.showReach3 ? (computed.reach3ByElementId[r.elementId] ?? '') : '';
-      return {
-        elementId: r.elementId,
-        name: r.label,
-        type: r.typeLabel,
-        layer: r.layerLabel ?? '',
-        metric: v ?? '',
-        degree,
-        reach3
-      };
+      const out: string[] = [r.elementId, r.label, r.typeLabel];
+      if (hasLayerFacet) out.push(r.layerLabel ?? '');
+      out.push(v === undefined ? '' : String(v));
+      if (ui.showDegree) out.push(degree === undefined ? '' : String(degree));
+      if (ui.showReach3) out.push(reach3 === undefined ? '' : String(reach3));
+      return out;
     });
 
-    const csv = rowsToCsv(
-      exportRows as unknown as Record<string, unknown>[],
-      columns.map((c) => ({ key: c.key as never, header: c.header })) as never
-    );
-    downloadTextFile(sanitizeFileNameWithExtension(base, 'csv'), csv, 'text/csv');
-  };
+    return { headers, rows };
+  }, [computed.degreeByElementId, computed.reach3ByElementId, computed.tableRows, computed.valueByElementId, hasLayerFacet, ui.metricKey, ui.showDegree, ui.showReach3]);
+
+  useEffect(() => {
+    onExportTableChange?.(exportTable);
+  }, [exportTable, onExportTableChange]);
 
   return (
     <div className="workspace" aria-label="Portfolio analysis workspace">
@@ -193,7 +183,6 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
         groupBy={ui.groupBy}
         toggleSort={ui.toggleSort}
         sortIndicator={ui.sortIndicator}
-        exportCsv={exportCsv}
       />
     </div>
   );

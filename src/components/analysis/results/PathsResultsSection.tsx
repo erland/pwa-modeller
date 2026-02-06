@@ -12,11 +12,9 @@ import { OverlaySettingsDialog } from '../OverlaySettingsDialog';
 import { AnalysisSection } from '../layout/AnalysisSection';
 
 import type { AnalysisResultFormatters } from './analysisResultFormatters';
-import { exportPathsCsv } from './analysisResultExport';
 
 export type PathsResultsSectionProps = {
   model: Model;
-  modelName: string;
   modelKind: ModelKind;
   mode: AnalysisMode;
   direction: AnalysisDirection;
@@ -55,7 +53,6 @@ export type PathsResultsSectionProps = {
 export function PathsResultsSection(props: PathsResultsSectionProps) {
   const {
     model,
-    modelName,
     modelKind,
     mode,
     direction,
@@ -139,12 +136,10 @@ export function PathsResultsSection(props: PathsResultsSectionProps) {
           <button
             type="button"
             className="miniLinkButton"
-            onClick={() => exportPathsCsv({ modelName, pathsResult, formatters })}
-            disabled={paths.length === 0}
-            aria-disabled={paths.length === 0}
-            title="Export all paths (flattened steps) as CSV"
+            onClick={() => setIsOverlayOpen(true)}
+            aria-label="Overlay settings"
           >
-            Export CSV
+            Overlay
           </button>
 
           {paths.length > 1 ? (
@@ -161,9 +156,7 @@ export function PathsResultsSection(props: PathsResultsSectionProps) {
             </label>
           ) : null}
 
-          <button type="button" className="miniLinkButton" onClick={() => setIsOverlayOpen(true)} aria-label="Overlay settings">
-            Overlay
-          </button>
+          
 
           {sourceId ? (
             <button type="button" className="miniLinkButton" onClick={() => onOpenTraceability(sourceId)}>

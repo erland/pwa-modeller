@@ -9,13 +9,11 @@ import type { AnalysisMode } from '../AnalysisQueryPanel';
 import type { MiniGraphOptions } from '../MiniGraphOptions';
 import { OverlaySettingsDialog } from '../OverlaySettingsDialog';
 import type { AnalysisResultFormatters } from './analysisResultFormatters';
-import { exportRelatedCsv } from './analysisResultExport';
 
 import { AnalysisSection } from '../layout/AnalysisSection';
 
 export type RelatedResultsSectionProps = {
   model: Model;
-  modelName: string;
   modelKind: ModelKind;
   mode: AnalysisMode;
   direction: AnalysisDirection;
@@ -50,7 +48,6 @@ export function RelatedResultsSection(props: RelatedResultsSectionProps) {
   const [isOverlayOpen, setIsOverlayOpen] = useState(false);
   const {
     model,
-    modelName,
     modelKind,
     mode,
     direction,
@@ -93,18 +90,6 @@ export function RelatedResultsSection(props: RelatedResultsSectionProps) {
           <button type="button" className="miniLinkButton" onClick={() => setIsOverlayOpen(true)} aria-label="Overlay settings">
             Overlay
           </button>
-
-          <button
-            type="button"
-            className="miniLinkButton"
-            onClick={() => exportRelatedCsv({ modelName, relatedResult, formatters })}
-            disabled={hits.length === 0}
-            aria-disabled={hits.length === 0}
-            title="Export the related-elements table as CSV"
-          >
-            Export CSV
-          </button>
-
           {onOpenSandbox ? (
             <button
               type="button"

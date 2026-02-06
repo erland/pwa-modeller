@@ -1,5 +1,6 @@
 import type { Model, ModelKind } from '../../../domain';
 import type { Selection } from '../../model/selection';
+import type { TabularData } from '../../../export';
 
 import { PortfolioAnalysisView } from '../PortfolioAnalysisView';
 
@@ -8,6 +9,7 @@ export type PortfolioModeViewProps = {
   modelKind: ModelKind;
   selection: Selection;
   onSelectElement: (elementId: string) => void;
+  onExportTableChange?: (table: TabularData | null) => void;
 };
 
 export function PortfolioModeView({
@@ -15,6 +17,7 @@ export function PortfolioModeView({
   modelKind,
   selection,
   onSelectElement,
+  onExportTableChange,
 }: PortfolioModeViewProps) {
   return (
     <PortfolioAnalysisView
@@ -22,6 +25,7 @@ export function PortfolioModeView({
       modelKind={modelKind}
       selection={selection}
       onSelectElement={onSelectElement}
+      onExportTableChange={onExportTableChange}
     />
   );
 }

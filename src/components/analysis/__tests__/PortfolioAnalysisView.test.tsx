@@ -5,7 +5,6 @@ import { PortfolioAnalysisView } from '../PortfolioAnalysisView';
 import { createElement, createEmptyModel, createRelationship } from '../../../domain/factories';
 import type { Model } from '../../../domain/types';
 import { noSelection } from '../../model/selection';
-import * as download from '../../../store/download';
 
 const PRESET_KEY = (modelId: string): string => `ea-modeller:analysis:portfolio:presets:${modelId}`;
 
@@ -275,12 +274,12 @@ describe('PortfolioAnalysisView presets', () => {
   });
 });
 
-describe('PortfolioAnalysisView sorting and CSV export', () => {
-  test('sorts by columns and exports the current table order as CSV', async () => {
+describe('PortfolioAnalysisView sorting and export table', () => {
+  test('sorts by columns and provides an export table reflecting the current table order', async () => {
     const user = userEvent.setup();
     const model = buildModelForSorting();
     const onSelectElement = jest.fn();
-    const spy = jest.spyOn(download, 'downloadTextFile').mockImplementation(() => {});
+    const onExportTableChange = jest.fn();
 
     render(
       <PortfolioAnalysisView
@@ -288,6 +287,7 @@ describe('PortfolioAnalysisView sorting and CSV export', () => {
         modelKind="archimate"
         selection={noSelection}
         onSelectElement={onSelectElement}
+        onExportTableChange={onExportTableChange}
       />
     );
 
@@ -310,18 +310,14 @@ describe('PortfolioAnalysisView sorting and CSV export', () => {
     await user.click(within(table).getByRole('button', { name: /^Metric/ })); // metric desc
     expect(tableRowNames(table)).toEqual(['Bravo', 'Alpha', 'Charlie']);
 
-    // Export CSV reflects the current sorted rows.
-    await user.click(screen.getByRole('button', { name: /export csv/i }));
-    expect(spy).toHaveBeenCalled();
-    const csv = spy.mock.calls[0][1] as string;
-    const lines = csv.split('\n');
-    expect(lines[0]).toBe('elementId,name,type,layer,cost');
-    expect(lines[1]).toBe('A,Bravo,BusinessProcess,Business,30');
-    expect(lines[2]).toBe('B,Alpha,ApplicationComponent,Application,10');
+    // Export table reflects the current sorted rows.
+    expect(onExportTableChange).toHaveBeenCalled();
+    const last = onExportTableChange.mock.calls[onExportTableChange.mock.calls.length - 1][0] as any;
+    expect(last.headers).toEqual(['elementId', 'name', 'type', 'layer', 'cost']);
+    expect(last.rows[0]).toEqual(['A', 'Bravo', 'BusinessProcess', 'Business', '30']);
+    expect(last.rows[1]).toEqual(['B', 'Alpha', 'ApplicationComponent', 'Application', '10']);
     // Missing metric exports as an empty cell.
-    expect(lines[3]).toBe('C,Charlie,ApplicationComponent,Technology,');
-
-    spy.mockRestore();
+    expect(last.rows[2]).toEqual(['C', 'Charlie', 'ApplicationComponent', 'Technology', '']);
   });
 });
 
@@ -330,7 +326,7 @@ describe('PortfolioAnalysisView structural metrics columns', () => {
     const user = userEvent.setup();
     const model = buildModelForStructuralMetrics();
     const onSelectElement = jest.fn();
-    const spy = jest.spyOn(download, 'downloadTextFile').mockImplementation(() => {});
+    const onExportTableChange = jest.fn();
 
     render(
       <PortfolioAnalysisView
@@ -338,6 +334,7 @@ describe('PortfolioAnalysisView structural metrics columns', () => {
         modelKind="archimate"
         selection={noSelection}
         onSelectElement={onSelectElement}
+        onExportTableChange={onExportTableChange}
       />
     );
 
@@ -376,13 +373,10 @@ describe('PortfolioAnalysisView structural metrics columns', () => {
     expect((epsilonCells[degreeIdx].textContent ?? '').trim()).toBe('0');
     expect((epsilonCells[reachIdx].textContent ?? '').trim()).toBe('0');
 
-    // Export includes extra columns when enabled.
-    await user.click(screen.getByRole('button', { name: /export csv/i }));
-    const csv = spy.mock.calls[0][1] as string;
-    const header = csv.split('\n')[0];
-    expect(header).toBe('elementId,name,type,layer,metric,degree,reach3');
-
-    spy.mockRestore();
+    // Export table includes extra columns when enabled.
+    expect(onExportTableChange).toHaveBeenCalled();
+    const last = onExportTableChange.mock.calls[onExportTableChange.mock.calls.length - 1][0] as any;
+    expect(last.headers).toEqual(['elementId', 'name', 'type', 'layer', 'metric', 'degree', 'reach3']);
   });
 });
 

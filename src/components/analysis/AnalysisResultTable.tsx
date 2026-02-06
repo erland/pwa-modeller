@@ -59,7 +59,6 @@ export function AnalysisResultTable({
 }: Props) {
   const adapter = getAnalysisAdapter(modelKind);
   const modelId = model.id ?? '';
-  const modelName = model.metadata?.name || 'model';
 
   const overlayVersion = useOverlayStore((s) => s.getVersion());
 
@@ -105,7 +104,6 @@ export function AnalysisResultTable({
       <>
         <RelatedResultsSection
           model={model}
-          modelName={modelName}
           modelKind={modelKind}
           mode={mode}
           direction={direction}
@@ -141,7 +139,6 @@ export function AnalysisResultTable({
     <>
       <PathsResultsSection
         model={model}
-        modelName={modelName}
         modelKind={modelKind}
         mode={mode}
         direction={direction}

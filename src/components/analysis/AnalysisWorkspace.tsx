@@ -37,6 +37,7 @@ export function AnalysisWorkspace({
 }) {
   const { state, actions, derived } = useAnalysisWorkspaceController({ modelKind, selection });
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [portfolioExportTable, setPortfolioExportTable] = useState<import('../../export').TabularData | null>(null);
 
   const {
     model,
@@ -217,6 +218,11 @@ export function AnalysisWorkspace({
         kind={analysisViewStateForExport.kind}
         analysisRequest={analysisRequestForExport}
         analysisViewState={analysisViewStateForExport}
+        model={model}
+        modelKind={modelKind}
+        relatedResult={relatedResult}
+        pathsResult={pathsResult}
+        portfolioTable={portfolioExportTable}
         modelName={model?.metadata?.name || 'model'}
         matrix={{ result: matrix.derived.result, cellValues: matrix.derived.cellValues }}
       />
@@ -288,6 +294,7 @@ export function AnalysisWorkspace({
               modelKind={modelKind}
               selection={selection}
               onSelectElement={(elementId) => onSelect({ kind: 'element', elementId })}
+              onExportTableChange={setPortfolioExportTable}
             />
           ) : mode === 'traceability' ? (
             <TraceabilityModeView

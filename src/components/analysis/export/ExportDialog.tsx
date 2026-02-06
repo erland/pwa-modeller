@@ -3,12 +3,17 @@ import { useEffect, useMemo, useState } from 'react';
 import type { AnalysisRequest } from '../../../domain/analysis';
 import type { AnalysisViewState, AnalysisViewKind } from '../contracts/analysisViewState';
 import type { RelationshipMatrixResult } from '../../../domain/analysis/relationshipMatrix';
+import type { Model, ModelKind, PathsBetweenResult, RelatedElementsResult } from '../../../domain';
+
+import { getAnalysisAdapter } from '../../../analysis/adapters/registry';
+import { createAnalysisResultFormatters } from '../results/analysisResultFormatters';
 
 import { Dialog } from '../../dialog/Dialog';
 import {
   deriveDefaultExportOptions,
   copyTextToClipboard,
   tabularToTsv,
+  tabularToCsv,
   canWriteImageToClipboard,
   copyPngFromSvgText,
   buildExportBundle,
@@ -34,9 +39,16 @@ type Props = {
   // Optional computed data for fast-win exports
   modelName: string;
   matrix?: { result: RelationshipMatrixResult | null; cellValues?: number[][] };
+
+  // Optional context for building tables for related/paths/portfolio
+  model?: Model | null;
+  modelKind?: ModelKind | null;
+  relatedResult?: RelatedElementsResult | null;
+  pathsResult?: PathsBetweenResult | null;
+  portfolioTable?: import('../../../export').TabularData | null;
 };
 
-type ExportFormat = 'svg' | 'png' | 'pptx' | 'xlsx' | 'tsv';
+type ExportFormat = 'svg' | 'png' | 'pptx' | 'xlsx' | 'tsv' | 'csv';
 
 export function ExportDialog({
   isOpen,
@@ -46,8 +58,20 @@ export function ExportDialog({
   analysisViewState,
   modelName,
   matrix,
+  model,
+  modelKind,
+  relatedResult,
+  pathsResult,
+  portfolioTable,
 }: Props) {
   const exportOptions = useMemo(() => deriveDefaultExportOptions(kind), [kind]);
+
+  const fmt = useMemo(() => {
+    if (!model || !modelKind) return null;
+    const adapter = getAnalysisAdapter(modelKind);
+    const f = createAnalysisResultFormatters(adapter, model);
+    return { nodeLabel: f.nodeLabel, nodeType: f.nodeType, nodeLayer: f.nodeLayer };
+  }, [model, modelKind]);
 
   const exportBundle = useMemo(() => {
     return buildExportBundle({
@@ -57,9 +81,13 @@ export function ExportDialog({
       analysisViewState,
       exportOptions,
       matrix,
+      portfolioTable,
+      relatedResult,
+      pathsResult,
+      formatters: fmt ?? undefined,
       document: typeof document !== 'undefined' ? document : undefined,
     });
-  }, [analysisRequest, analysisViewState, exportOptions, kind, matrix, modelName]);
+  }, [analysisRequest, analysisViewState, exportOptions, fmt, kind, matrix, modelName, pathsResult, portfolioTable, relatedResult]);
 
   const sandboxSvgText = useMemo(() => {
     const imageArtifact = exportBundle.artifacts.find((a) => a.type === 'image');
@@ -74,8 +102,10 @@ export function ExportDialog({
 
   const availableFormats: ExportFormat[] = useMemo(() => {
     if (kind === 'sandbox') return ['svg', 'png', 'pptx', 'xlsx'];
-    if (kind === 'matrix' || kind === 'portfolio') return ['xlsx', 'tsv'];
-    if (kind === 'related' || kind === 'paths' || kind === 'traceability') return ['svg', 'png'];
+    if (kind === 'matrix') return ['xlsx', 'tsv'];
+    if (kind === 'portfolio') return ['csv', 'xlsx'];
+    if (kind === 'related' || kind === 'paths') return ['svg', 'png', 'csv', 'xlsx'];
+    if (kind === 'traceability') return ['svg', 'png'];
     return ['svg'];
   }, [kind]);
 
@@ -102,6 +132,27 @@ export function ExportDialog({
       setStatus(`Copied ${tableArtifact.name} table as TSV.`);
     } catch (e) {
       setStatus((e as Error).message || 'Copy failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDownloadCsv = async () => {
+    setStatus(null);
+    setBusy(true);
+    try {
+      const tableArtifact = exportBundle.artifacts.find((a) => a.type === 'table');
+      if (!tableArtifact || tableArtifact.type !== 'table') {
+        const msg = exportBundle.warnings?.[0] ?? 'CSV export is not supported for this view yet.';
+        throw new Error(msg);
+      }
+      const csv = tabularToCsv(tableArtifact.data);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const fileName = sanitizeFileNameWithExtension(exportBundle.title || 'export', 'csv');
+      downloadBlobFile(fileName, blob);
+      setStatus('Downloaded CSV.');
+    } catch (e) {
+      setStatus((e as Error).message || 'Download failed.');
     } finally {
       setBusy(false);
     }
@@ -253,8 +304,10 @@ export function ExportDialog({
   const canSvg = !!sandboxSvgText;
   const canPng = !!sandboxSvgText;
   const canPptx = kind === 'sandbox';
-  const canXlsx = kind === 'matrix' || kind === 'portfolio' || kind === 'sandbox';
-  const canTsv = kind === 'matrix' || kind === 'portfolio';
+  const hasTable = exportBundle.artifacts.some((a) => a.type === 'table');
+  const canXlsx = kind === 'sandbox' || hasTable;
+  const canTsv = (kind === 'matrix' || kind === 'portfolio') && hasTable;
+  const canCsv = hasTable;
 
   const formatLabel = (f: ExportFormat) => {
     switch (f) {
@@ -268,6 +321,8 @@ export function ExportDialog({
         return 'XLSX';
       case 'tsv':
         return 'TSV (table)';
+      case 'csv':
+        return 'CSV';
     }
   };
 
@@ -403,6 +458,19 @@ export function ExportDialog({
                 title={!canTsv ? 'Not supported for this view yet' : 'Copy as TSV'}
               >
                 Copy
+              </button>
+            ) : null}
+
+            {format === 'csv' ? (
+              <button
+                type="button"
+                className="secondaryButton"
+                onClick={onDownloadCsv}
+                disabled={!canCsv || busy}
+                aria-disabled={!canCsv || busy}
+                title={!canCsv ? 'Not supported for this view yet' : 'Download CSV'}
+              >
+                Download
               </button>
             ) : null}
           </div>

@@ -44,8 +44,6 @@ type Props = {
 
   toggleSort: (k: SortKey) => void;
   sortIndicator: (k: SortKey) => string;
-
-  exportCsv: () => void;
 };
 
 export function PortfolioResultsSection({
@@ -67,21 +65,9 @@ export function PortfolioResultsSection({
   sortDir,
   groupBy,
   toggleSort,
-  sortIndicator,
-  exportCsv
+  sortIndicator
 }: Props) {
-  const resultsActions = (
-    <button
-      type="button"
-      className="shellButton"
-      onClick={exportCsv}
-      disabled={tableRows.length === 0}
-      aria-disabled={tableRows.length === 0}
-      title="Export the portfolio table as CSV"
-    >
-      Export CSV
-    </button>
-  );
+  const resultsActions = null;
 
   const resultsHint =
     `Showing ${tableRows.length} element${tableRows.length === 1 ? '' : 's'}.` +
@@ -89,7 +75,7 @@ export function PortfolioResultsSection({
     ` Sorted by ${sortKey} (${sortDir}).`;
 
   return (
-    <AnalysisSection title="Results" hint={resultsHint} actions={resultsActions}>
+    <AnalysisSection title="Results" hint={resultsHint} actions={resultsActions ?? undefined}>
       {metricKey && metricRange ? (
         <div style={{ marginTop: 10 }}>
           <div className="analysisHeatLegend" title="Heat scale">

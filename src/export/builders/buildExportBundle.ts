@@ -1,5 +1,6 @@
 import type { AnalysisRequest } from '../../domain/analysis';
 import type { RelationshipMatrixResult } from '../../domain/analysis/relationshipMatrix';
+import type { PathsBetweenResult, RelatedElementsResult } from '../../domain';
 import type { AnalysisViewKind, AnalysisViewState } from '../../components/analysis/contracts/analysisViewState';
 
 import type { ExportBundle, ExportArtifact, ImageRef, TabularData } from '../contracts/ExportBundle';
@@ -23,19 +24,25 @@ export type BuildExportBundleContext = {
   /** Optional computed data already available in the UI. */
   matrix?: MatrixContext;
 
-  /** DOM access is optional; used for "fast win" extraction in early steps. */
+  /** Optional prebuilt tabular export for Portfolio (includes elementId etc.). */
+  portfolioTable?: TabularData | null;
+
+  /** Optional analysis results for Related/Paths exports (matching existing CSV exports). */
+  relatedResult?: RelatedElementsResult | null;
+  pathsResult?: PathsBetweenResult | null;
+
+  /** Optional formatter helpers for turning ids into user-friendly labels. */
+  formatters?: {
+    nodeLabel: (id: string) => string;
+    nodeType: (id: string) => string;
+    nodeLayer: (id: string) => string;
+  };
+
+  /** DOM access is optional; used for extracting SVGs for image exports. */
   document?: Document;
 };
 
-function extractHtmlTableAsTabular(table: HTMLTableElement): TabularData {
-  const headers = Array.from(table.querySelectorAll('thead th')).map((th) => (th.textContent ?? '').trim());
-  const rows = Array.from(table.querySelectorAll('tbody tr')).map((tr) =>
-    Array.from(tr.querySelectorAll('td,th')).map((td) => (td.textContent ?? '').trim())
-  );
-  return { headers, rows };
-}
-
-function svgToImageRef(svg: SVGSVGElement): ImageRef {
+function sandboxSvgToImageRef(svg: SVGSVGElement): ImageRef {
   // The sandbox SVG is styled via CSS classes. If we serialize only outerHTML we lose
   // computed styles, and downstream rasterization (PNG/PPTX) can render shapes black.
   // To preserve appearance we clone and inline a small set of computed style properties.
@@ -115,16 +122,71 @@ export function buildExportBundle(ctx: BuildExportBundleContext): ExportBundle {
   }
 
   if (kind === 'portfolio') {
-    const doc = ctx.document;
-    if (!doc) {
-      warnings.push('Portfolio export requires DOM access in v1.');
+    if (ctx.portfolioTable) {
+      artifacts.push({ type: 'table', name: 'Portfolio', data: ctx.portfolioTable });
     } else {
-      const table = doc.querySelector('table[aria-label="Portfolio population table"]') as HTMLTableElement | null;
-      if (!table) {
-        warnings.push('Could not find the Portfolio table in the page.');
-      } else {
-        artifacts.push({ type: 'table', name: 'Portfolio', data: extractHtmlTableAsTabular(table) });
+      warnings.push('Portfolio export table is not available yet.');
+    }
+  }
+
+  if (kind === 'related') {
+    const hits = ctx.relatedResult?.hits ?? [];
+    const fmt = ctx.formatters;
+    if (!fmt) {
+      warnings.push('Related-elements export requires formatters in v1.');
+    } else if (hits.length === 0) {
+      warnings.push('No related-elements results are available yet.');
+    } else {
+      const table: TabularData = {
+        headers: ['distance', 'elementId', 'name', 'type', 'layer'],
+        rows: hits.map((h) => [String(h.distance ?? ''), h.elementId, fmt.nodeLabel(h.elementId), fmt.nodeType(h.elementId), fmt.nodeLayer(h.elementId)]),
+      };
+      artifacts.push({ type: 'table', name: 'Related elements', data: table });
+    }
+
+    const doc = ctx.document;
+    if (doc) {
+      const svg = doc.querySelector('svg[aria-label="Mini graph (related elements)"]') as SVGSVGElement | null;
+      if (svg) artifacts.push({ type: 'image', name: 'Related mini graph', data: sandboxSvgToImageRef(svg) });
+    }
+  }
+
+  if (kind === 'paths') {
+    const paths = ctx.pathsResult?.paths ?? [];
+    const fmt = ctx.formatters;
+    if (!fmt) {
+      warnings.push('Paths export requires formatters in v1.');
+    } else if (paths.length === 0) {
+      warnings.push('No connection paths results are available yet.');
+    } else {
+      const rows: string[][] = [];
+      for (let pi = 0; pi < paths.length; pi++) {
+        const p = paths[pi];
+        for (let hi = 0; hi < p.steps.length; hi++) {
+          const s = p.steps[hi];
+          rows.push([
+            String(pi + 1),
+            String(hi + 1),
+            s.fromId,
+            fmt.nodeLabel(s.fromId),
+            s.relationshipId,
+            s.relationshipType,
+            s.toId,
+            fmt.nodeLabel(s.toId),
+          ]);
+        }
       }
+      const table: TabularData = {
+        headers: ['pathIndex', 'hopIndex', 'fromId', 'fromName', 'relationshipId', 'relationshipType', 'toId', 'toName'],
+        rows,
+      };
+      artifacts.push({ type: 'table', name: 'Connection paths (flattened)', data: table });
+    }
+
+    const doc = ctx.document;
+    if (doc) {
+      const svg = doc.querySelector('svg[aria-label="Mini graph (connection paths)"]') as SVGSVGElement | null;
+      if (svg) artifacts.push({ type: 'image', name: 'Paths mini graph', data: sandboxSvgToImageRef(svg) });
     }
   }
 
@@ -137,37 +199,19 @@ export function buildExportBundle(ctx: BuildExportBundleContext): ExportBundle {
       if (!svg) {
         warnings.push('Could not find the Sandbox canvas SVG in the page.');
       } else {
-        artifacts.push({ type: 'image', name: 'Sandbox canvas', data: svgToImageRef(svg) });
-      }
-    }
-  }
-
-  if (kind === 'related' || kind === 'paths') {
-    const doc = ctx.document;
-    if (!doc) {
-      warnings.push('Graph image export requires DOM access in v1.');
-    } else {
-      const aria = kind === 'related' ? 'Mini graph (related elements)' : 'Mini graph (connection paths)';
-      const svg = doc.querySelector(`svg[aria-label="${aria}"]`) as SVGSVGElement | null;
-      if (!svg) {
-        warnings.push(`Could not find the ${kind} mini graph SVG in the page.`);
-      } else {
-        artifacts.push({ type: 'image', name: kind === 'related' ? 'Related mini graph' : 'Paths mini graph', data: svgToImageRef(svg) });
+        artifacts.push({ type: 'image', name: 'Sandbox canvas', data: sandboxSvgToImageRef(svg) });
       }
     }
   }
 
   if (kind === 'traceability') {
     const doc = ctx.document;
-    if (!doc) {
-      warnings.push('Traceability image export requires DOM access in v1.');
-    } else {
+    if (doc) {
       const svg = doc.querySelector('svg[aria-label="Traceability mini graph"]') as SVGSVGElement | null;
-      if (!svg) {
-        warnings.push('Could not find the Traceability mini graph SVG in the page.');
-      } else {
-        artifacts.push({ type: 'image', name: 'Traceability mini graph', data: svgToImageRef(svg) });
-      }
+      if (svg) artifacts.push({ type: 'image', name: 'Traceability mini graph', data: sandboxSvgToImageRef(svg) });
+      else warnings.push('Could not find the Traceability mini graph SVG.');
+    } else {
+      warnings.push('Traceability image export requires DOM access in v1.');
     }
   }
 

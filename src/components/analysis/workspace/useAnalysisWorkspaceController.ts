@@ -163,7 +163,34 @@ useEffect(() => {
   if (!model) return;
   if (!canRun) return;
 
-  if (mode === 'matrix') return;
+  // Auto-build matrix when axes are fully specified and the draft differs from the last built query.
+  // We debounce slightly to avoid firing while the user is still clicking through dropdowns.
+  if (mode === 'matrix') {
+    // Only auto-build when both axes are "fully specified".
+    // - If an axis uses facet source, it requires an element type selection.
+    // - If an axis uses current selection, it requires at least one captured selection id.
+    const rowAxisSpecified =
+      matrixState.axes.rowSource === 'selection'
+        ? matrixState.axes.rowSelectionIds.length > 0
+        : Boolean(matrixState.axes.rowElementType);
+
+    const colAxisSpecified =
+      matrixState.axes.colSource === 'selection'
+        ? matrixState.axes.colSelectionIds.length > 0
+        : Boolean(matrixState.axes.colElementType);
+
+    if (!rowAxisSpecified || !colAxisSpecified) return;
+
+    const hasBuilt = Boolean(matrixState.build.builtQuery);
+    const shouldBuild = !hasBuilt || matrixDerived.isDraftDirty;
+    if (!shouldBuild) return;
+
+    const t = window.setTimeout(() => {
+      buildMatrix();
+    }, 150);
+
+    return () => window.clearTimeout(t);
+  }
 
   if (mode === 'paths') {
     const changed = activeSourceId !== draftSourceId || activeTargetId !== draftTargetId;
@@ -173,7 +200,21 @@ useEffect(() => {
 
   // related / traceability
   if (activeStartId !== draftStartId) run();
-}, [activeSourceId, activeStartId, activeTargetId, canRun, draftSourceId, draftStartId, draftTargetId, model, mode, run]);
+}, [
+  activeSourceId,
+  activeStartId,
+  activeTargetId,
+  buildMatrix,
+  canRun,
+  draftSourceId,
+  draftStartId,
+  draftTargetId,
+  matrixDerived.isDraftDirty,
+  matrixState.build.builtQuery,
+  model,
+  mode,
+  run,
+]);
 
 
 

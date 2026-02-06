@@ -75,6 +75,7 @@ export function ExportDialog({
   const availableFormats: ExportFormat[] = useMemo(() => {
     if (kind === 'sandbox') return ['svg', 'png', 'pptx', 'xlsx'];
     if (kind === 'matrix' || kind === 'portfolio') return ['xlsx', 'tsv'];
+    if (kind === 'related' || kind === 'paths' || kind === 'traceability') return ['svg', 'png'];
     return ['svg'];
   }, [kind]);
 
@@ -252,7 +253,7 @@ export function ExportDialog({
   const canSvg = !!sandboxSvgText;
   const canPng = !!sandboxSvgText;
   const canPptx = kind === 'sandbox';
-  const canXlsx = kind === 'matrix' || kind === 'portfolio';
+  const canXlsx = kind === 'matrix' || kind === 'portfolio' || kind === 'sandbox';
   const canTsv = kind === 'matrix' || kind === 'portfolio';
 
   const formatLabel = (f: ExportFormat) => {

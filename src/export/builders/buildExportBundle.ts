@@ -35,7 +35,7 @@ function extractHtmlTableAsTabular(table: HTMLTableElement): TabularData {
   return { headers, rows };
 }
 
-function sandboxSvgToImageRef(svg: SVGSVGElement): ImageRef {
+function svgToImageRef(svg: SVGSVGElement): ImageRef {
   // The sandbox SVG is styled via CSS classes. If we serialize only outerHTML we lose
   // computed styles, and downstream rasterization (PNG/PPTX) can render shapes black.
   // To preserve appearance we clone and inline a small set of computed style properties.
@@ -137,13 +137,42 @@ export function buildExportBundle(ctx: BuildExportBundleContext): ExportBundle {
       if (!svg) {
         warnings.push('Could not find the Sandbox canvas SVG in the page.');
       } else {
-        artifacts.push({ type: 'image', name: 'Sandbox canvas', data: sandboxSvgToImageRef(svg) });
+        artifacts.push({ type: 'image', name: 'Sandbox canvas', data: svgToImageRef(svg) });
+      }
+    }
+  }
+
+  if (kind === 'related' || kind === 'paths') {
+    const doc = ctx.document;
+    if (!doc) {
+      warnings.push('Graph image export requires DOM access in v1.');
+    } else {
+      const aria = kind === 'related' ? 'Mini graph (related elements)' : 'Mini graph (connection paths)';
+      const svg = doc.querySelector(`svg[aria-label="${aria}"]`) as SVGSVGElement | null;
+      if (!svg) {
+        warnings.push(`Could not find the ${kind} mini graph SVG in the page.`);
+      } else {
+        artifacts.push({ type: 'image', name: kind === 'related' ? 'Related mini graph' : 'Paths mini graph', data: svgToImageRef(svg) });
+      }
+    }
+  }
+
+  if (kind === 'traceability') {
+    const doc = ctx.document;
+    if (!doc) {
+      warnings.push('Traceability image export requires DOM access in v1.');
+    } else {
+      const svg = doc.querySelector('svg[aria-label="Traceability mini graph"]') as SVGSVGElement | null;
+      if (!svg) {
+        warnings.push('Could not find the Traceability mini graph SVG in the page.');
+      } else {
+        artifacts.push({ type: 'image', name: 'Traceability mini graph', data: svgToImageRef(svg) });
       }
     }
   }
 
   // Other views will be added as we grow export coverage.
-  if (kind !== 'matrix' && kind !== 'portfolio' && kind !== 'sandbox') {
+  if (kind !== 'matrix' && kind !== 'portfolio' && kind !== 'sandbox' && kind !== 'related' && kind !== 'paths' && kind !== 'traceability') {
     warnings.push('Export bundle is not yet implemented for this view.');
   }
 

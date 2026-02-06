@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { buildNodeMapFromSlideXml } from './parseSlideNodeMap';
 import type { PptxPostProcessMeta } from './pptxPostProcessMeta';
-import { replaceAllLineShapesWithConnectors } from './attachConnectors';
+import { rebuildSlideFromMeta } from './attachConnectors';
 
 export type PptxBytes = Uint8Array | ArrayBuffer;
 
@@ -45,7 +45,7 @@ if (slide) {
   // - If connector transform fails, keep the original XML (plain lines remain).
   // - If connector transform succeeds but results in empty/invalid XML, fall back.
   try {
-    const replaced = replaceAllLineShapesWithConnectors(xml, meta);
+    const replaced = rebuildSlideFromMeta(xml, meta);
     if (replaced && typeof replaced.xml === 'string' && replaced.xml.length > 200) {
       zip.file(slidePath, replaced.xml);
     } else {

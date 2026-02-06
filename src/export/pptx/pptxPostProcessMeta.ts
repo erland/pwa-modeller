@@ -3,13 +3,27 @@ export type PptxInchRect = { x: number; y: number; w: number; h: number };
 
 export type PptxNodeMeta = {
   elementId: string;
+  name: string;
+  typeLabel?: string;
   rectIn: PptxInchRect;
+  fillHex?: string;
+  strokeHex?: string;
+  textHex?: string;
 };
 
 export type PptxEdgeMeta = {
+  fromNodeId?: string;
+  toNodeId?: string;
   edgeId: string;
   relType?: string;
   dashed?: boolean;
+  linePattern?: 'solid' | 'dashed' | 'dotted';
+  markerStart?: string;
+  markerEnd?: string;
+  pptxHeadEnd?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+  pptxTailEnd?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+  strokeHex?: string;
+  strokeWidthPt?: number;
   // Preferred endpoints in inches (slide coordinates) if available.
   x1In: number;
   y1In: number;

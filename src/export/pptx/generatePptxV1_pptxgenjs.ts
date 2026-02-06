@@ -5,6 +5,9 @@ import { svgTextToPngBytes } from './svgToPngBytes';
 import PptxGenJS from 'pptxgenjs';
 import { postProcessPptxWithJsZip } from './postProcessPptxWithJsZip';
 import { PptxPostProcessMeta } from './pptxPostProcessMeta';
+import { kindFromTypeId } from '../../domain';
+import { getNotation } from '../../notations';
+import type { RelationshipStyle, MarkerKind, LinePattern } from '../../diagram/relationships/style';
 
 function isImageArtifact(a: ExportArtifact): a is { type: 'image'; name: string; data: ImageRef } {
   return a.type === 'image';
@@ -158,6 +161,11 @@ type ParsedEdge = {
   strokeWidth?: number;
   dashed?: boolean;
   arrowEnd?: boolean;
+  linePattern?: 'solid' | 'dashed' | 'dotted';
+  markerStart?: MarkerKind;
+  markerEnd?: MarkerKind;
+  pptxHeadEnd?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+  pptxTailEnd?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
 };
 
 function parsePathEndpoints(d: string): { x1: number; y1: number; x2: number; y2: number } | null {
@@ -168,6 +176,49 @@ function parsePathEndpoints(d: string): { x1: number; y1: number; x2: number; y2
   const x1 = arr[0], y1 = arr[1];
   const x2 = arr[arr.length - 2], y2 = arr[arr.length - 1];
   return { x1, y1, x2, y2 };
+}
+
+function getSandboxRelationshipStyle(type: string, attrs?: unknown): RelationshipStyle | null {
+  try {
+    const kind = kindFromTypeId(type);
+    const notation = getNotation(kind);
+    return notation.getRelationshipStyle({ type: String(type), attrs });
+  } catch {
+    return null;
+  }
+}
+
+function markerKindToPptxEnd(kind: MarkerKind | undefined): 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval' {
+  switch (kind) {
+    case 'arrowOpen':
+      return 'arrow';
+    case 'arrowFilled':
+      return 'triangle';
+    case 'triangleOpen':
+    case 'triangleFilled':
+      return 'triangle';
+    case 'diamondOpen':
+    case 'diamondFilled':
+      return 'diamond';
+    case 'circleOpen':
+    case 'circleFilled':
+      return 'oval';
+    case 'none':
+    default:
+      return 'none';
+  }
+}
+
+function dashPatternFromStyle(style: RelationshipStyle | null): LinePattern | 'solid' {
+  const p = style?.line?.pattern;
+  if (p === 'dashed' || p === 'dotted') return p;
+  if (style?.line?.dasharray) {
+    // Heuristic: treat any dasharray as dashed unless it looks like dotted ("2 4").
+    const da = String(style.line.dasharray).trim();
+    if (/^2\s+4$/.test(da) || /^2,4$/.test(da)) return 'dotted';
+    return 'dashed';
+  }
+  return 'solid';
 }
 
 function parseSandboxEdgesFromSvg(svgText: string): ParsedEdge[] {
@@ -190,16 +241,21 @@ function parseSandboxEdgesFromSvg(svgText: string): ParsedEdge[] {
     const targetId = (el.getAttribute('data-target-element-id') ?? el.getAttribute('data-target') ?? el.getAttribute('data-dst') ?? '').trim() || undefined;
     const relType = (el.getAttribute('data-relationship-type') ?? el.getAttribute('data-type') ?? '').trim() || undefined;
 
-    // Styling: we prefer model-derived relType mapping for dash/arrow, with SVG as fallback.
-    const isFlow = (relType ?? '').toLowerCase().includes('flow');
+    // Styling: use the same notation-driven relationship style as the Sandbox renderer.
+const relStyle = getSandboxRelationshipStyle(String(relType ?? ''), undefined);
+const linePattern = dashPatternFromStyle(relStyle);
+const markerStart = relStyle?.markerStart ?? 'none';
+const markerEnd = relStyle?.markerEnd ?? 'none';
+const pptxHeadEnd = markerKindToPptxEnd(markerStart);
+    let pptxTailEnd = markerKindToPptxEnd(markerEnd);
+    // UML aggregation/composition: PowerPoint's built-in diamond renders reliably as tailEnd.
+    // Sandbox uses markerStart for uml.aggregation/uml.composition; map that to tailEnd.
+    if (markerStart === 'diamondOpen' || markerStart === 'diamondFilled') {
+      pptxTailEnd = 'diamond';
+    }
 
-    const dash = (el.getAttribute('stroke-dasharray') ?? '').trim();
-    const dashedFromSvg = !!dash && dash !== 'none' && dash !== '0' && dash !== '0,0';
-    const dashed = isFlow ? true : dashedFromSvg;
-
-    const markerEnd = (el.getAttribute('marker-end') ?? '').trim();
-    const arrowEndFromSvg = !!markerEnd;
-    const arrowEnd = isFlow ? true : arrowEndFromSvg;
+const dashed = linePattern === 'dashed' || linePattern === 'dotted';
+const arrowEnd = pptxTailEnd !== 'none';
 
     // Stroke: often set via computed styles; bundle inlines them into style="".
     const style = getInlineStyle(el);
@@ -207,7 +263,7 @@ function parseSandboxEdgesFromSvg(svgText: string): ParsedEdge[] {
     const sw = Number((style['stroke-width'] ?? el.getAttribute('stroke-width') ?? '1').trim());
     const strokeWidth = Number.isFinite(sw) ? sw : 1;
 
-    edges.push({ id, sourceId, targetId, relType, x1: pts.x1, y1: pts.y1, x2: pts.x2, y2: pts.y2, stroke, strokeWidth, dashed, arrowEnd });
+    edges.push({ id, sourceId, targetId, relType, x1: pts.x1, y1: pts.y1, x2: pts.x2, y2: pts.y2, stroke, strokeWidth, dashed, arrowEnd, linePattern, markerStart, markerEnd, pptxHeadEnd, pptxTailEnd });
   }
 
   // Fallback: any <path> with a 'd' (legacy)
@@ -346,9 +402,22 @@ if (edges.length > 0) {
     const h = Math.max(0.01, Math.abs(y2 - y1));
 
 
-    meta!.edges.push({
+    const relLower = String(e.relType ?? '').toLowerCase();
+            const forcedHeadEnd = (relLower.includes('composition') || relLower.includes('aggregation')) ? 'diamond' : (e.pptxHeadEnd ?? undefined);
+            const forcedTailEnd = (relLower.includes('composition') || relLower.includes('aggregation')) ? 'none' : (e.pptxTailEnd ?? undefined);
+
+            meta.edges.push({
       edgeId: String(e.id ?? `${edgeIdx}`),
+      fromNodeId: e.sourceId ?? undefined,
+      toNodeId: e.targetId ?? undefined,
       relType: e.relType,
+      linePattern: e.linePattern ?? (e.dashed ? 'dashed' : 'solid'),
+      markerStart: e.markerStart ?? undefined,
+      markerEnd: e.markerEnd ?? undefined,
+      pptxHeadEnd: forcedHeadEnd,
+      pptxTailEnd: forcedTailEnd,
+      strokeHex: typeof e.stroke === 'string' ? e.stroke : undefined,
+      strokeWidthPt: typeof e.strokeWidth === 'number' ? Math.max(0.25, e.strokeWidth * 0.75) : undefined,
       dashed: e.dashed,
       x1In: x1,
       y1In: y1,
@@ -357,12 +426,13 @@ if (edges.length > 0) {
       rectIn: { x, y, w, h },
     });
 
+
     slide.addShape(lineShape as any, {
       x,
       y,
       w,
       h,
-      altText: `EA_EDGE:${e.sourceId ?? ''}->${e.targetId ?? ''}|${e.relType ?? ''}`,
+      altText: `EA_EDGEID:${String(e.id ?? edgeIdx)}|${e.sourceId ?? ''}->${e.targetId ?? ''}|${e.relType ?? ''}|h=${(e.pptxHeadEnd ?? 'none')}|t=${(e.pptxTailEnd ?? 'none')}|p=${(e.linePattern ?? (e.dashed ? 'dashed' : 'solid'))}`,
       line: {
         color: e.stroke ?? '333333',
         width: Math.max(0.5, (e.strokeWidth ?? 1) * scale),
@@ -381,7 +451,16 @@ if (edges.length > 0) {
             const w = n.w * scale;
             const h = n.h * scale;
 
-            meta!.nodes.push({ elementId: String(n.id ?? `${nodes.indexOf(n)}`), rectIn: { x, y, w, h } });
+            const [nameLine0, typeLine0] = n.text.split('\n');
+            meta.nodes.push({
+              elementId: String(n.id ?? `${nodes.indexOf(n)}`),
+              name: (nameLine0 ?? '').trim() || String(n.id ?? `${nodes.indexOf(n)}`),
+              typeLabel: (typeLine0 ?? '').trim() || undefined,
+              rectIn: { x, y, w, h },
+              fillHex: n.fill ?? undefined,
+              strokeHex: n.stroke ?? undefined,
+              textHex: '111111',
+            });
 
                     const [nameLine, typeLine] = n.text.split('\n');
             const runs: any[] = [];

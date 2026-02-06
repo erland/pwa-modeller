@@ -139,6 +139,52 @@ function createEl(doc: Document, ns: string, qname: string): Element {
   return doc.createElementNS(ns, qname);
 }
 
+function readShapeRectEmu(el: Element, nsA: string): PptxEmuRect | null {
+  // Works for p:sp shapes with a:xfrm/a:off + a:ext
+  const xfrm = el.getElementsByTagNameNS(nsA, 'xfrm')[0];
+  if (!xfrm) return null;
+  const off = xfrm.getElementsByTagNameNS(nsA, 'off')[0];
+  const ext = xfrm.getElementsByTagNameNS(nsA, 'ext')[0];
+  if (!off || !ext) return null;
+
+  const x = Number(off.getAttribute('x') ?? '');
+  const y = Number(off.getAttribute('y') ?? '');
+  const cx = Number(ext.getAttribute('cx') ?? '');
+  const cy = Number(ext.getAttribute('cy') ?? '');
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+  return { x, y, cx, cy };
+}
+
+function cssColorToHex(color: string | undefined | null): string {
+  if (!color) return '000000';
+  const c = String(color).trim();
+
+  // #RGB or #RRGGBB
+  const mHex = c.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+  if (mHex) {
+    const h = mHex[1];
+    if (h.length === 3) return (h[0]+h[0]+h[1]+h[1]+h[2]+h[2]).toUpperCase();
+    return h.toUpperCase();
+  }
+
+  // rgb(…) or rgba(…)
+  const mRgb = c.match(/^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9.]+))?\s*\)$/i);
+  if (mRgb) {
+    const r = Math.max(0, Math.min(255, Number(mRgb[1])));
+    const g = Math.max(0, Math.min(255, Number(mRgb[2])));
+    const b = Math.max(0, Math.min(255, Number(mRgb[3])));
+    return [r,g,b].map((n)=>n.toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+
+  // Already bare hex?
+  const mBare = c.match(/^([0-9a-fA-F]{6})$/);
+  if (mBare) return mBare[1].toUpperCase();
+
+  return '000000';
+}
+
+
+
 function ensureAvLst(doc: Document, nsA: string): Element {
   return createEl(doc, nsA, 'a:avLst');
 }
@@ -176,6 +222,51 @@ function parseEdgeMarker(marker: string): { from: string; to: string; relType?: 
   return { from: mm[1], to: mm[2], relType };
 }
 
+function parseEdgeIdStyleMarker(marker: string): {
+  edgeId: string;
+  from?: string;
+  to?: string;
+  relType?: string;
+  head?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+  tail?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+  pattern?: 'solid' | 'dashed' | 'dotted';
+} | null {
+  if (!marker.startsWith('EA_EDGEID:')) return null;
+  const rest = marker.slice('EA_EDGEID:'.length).trim();
+  const parts = rest.split('|').map((p) => p.trim()).filter((p) => p.length > 0);
+  const edgeId = parts[0] ?? '';
+  if (!edgeId) return null;
+
+  const fromToPart = parts.find((p) => p.includes('->'));
+  let from: string | undefined;
+  let to: string | undefined;
+  if (fromToPart) {
+    const mm = fromToPart.match(/^([^\s]+)->([^\s]+)$/);
+    if (mm) {
+      from = mm[1];
+      to = mm[2];
+    }
+  }
+
+  const relType =
+    parts.find((p) => p !== edgeId && !p.includes('->') && !p.startsWith('h=') && !p.startsWith('t=') && !p.startsWith('p=')) ||
+    undefined;
+
+  const head = (parts.find((p) => p.startsWith('h='))?.slice(2) as any) ?? undefined;
+  const tail = (parts.find((p) => p.startsWith('t='))?.slice(2) as any) ?? undefined;
+  const pattern = (parts.find((p) => p.startsWith('p='))?.slice(2) as any) ?? undefined;
+
+  return { edgeId, from, to, relType, head, tail, pattern };
+}
+
+function findEdgeMetaById(metaEdges: PptxEdgeMeta[] | undefined, edgeId: string | undefined): PptxEdgeMeta | null {
+  if (!metaEdges || !edgeId) return null;
+  for (const e of metaEdges) {
+    if (String(e.edgeId) === String(edgeId)) return e;
+  }
+  return null;
+}
+
 function ensureDash(doc: Document, nsA: string, ln: Element, val: 'dash' | 'dot' | 'solid'): void {
   // Remove existing prstDash
   const kids = Array.from(ln.children);
@@ -197,6 +288,33 @@ function ensureDash(doc: Document, nsA: string, ln: Element, val: 'dash' | 'dot'
   } else {
     ln.appendChild(prstDash);
   }
+}
+
+function ensureEnd(
+  doc: Document,
+  nsA: string,
+  ln: Element,
+  which: 'headEnd' | 'tailEnd',
+  type: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval'
+): void {
+  const kids = Array.from(ln.children);
+  for (const k of kids) {
+    if (k.localName === which) ln.removeChild(k);
+  }
+  if (type === 'none') return;
+
+  const el = createEl(doc, nsA, which === 'headEnd' ? 'a:headEnd' : 'a:tailEnd');
+  el.setAttribute('type', type);
+
+  if (type === 'diamond') {
+    el.setAttribute('w', 'med');
+    el.setAttribute('len', 'med');
+  } else if (type === 'triangle' || type === 'arrow') {
+    el.setAttribute('w', 'sm');
+    el.setAttribute('len', 'sm');
+  }
+
+  ln.appendChild(el);
 }
 
 function edgeMetaScore(edge: PptxEdgeMeta, lineRectEmu: PptxEmuRect): number {
@@ -291,19 +409,32 @@ export function replaceAllLineShapesWithConnectors(
 
   for (const ls of lineShapes) {
     const b = ls.rect;
-    const mk = parseEdgeMarker(getShapeMarker(ls.sp));
+    const markerText = getShapeMarker(ls.sp);
+    const mkId = parseEdgeIdStyleMarker(markerText);
+    const mk = parseEdgeMarker(markerText.startsWith('EA_EDGEID:') ? `EA_EDGE:${markerText.split('|').slice(1).join('|')}` : markerText);
 
     let from: { id: number; rect: PptxEmuRect } | null = null;
     let to: { id: number; rect: PptxEmuRect } | null = null;
 
-    if (mk) {
-      const f = nodeIdToShape.get(mk.from);
-      const t = nodeIdToShape.get(mk.to);
-      if (f && t && f.id !== t.id) {
-        from = { id: f.id, rect: f.rect };
-        to = { id: t.id, rect: t.rect };
-      }
+    if (mkId?.from && mkId?.to) {
+  const f = nodeIdToShape.get(mkId.from);
+  const t = nodeIdToShape.get(mkId.to);
+  if (f && t && f.id !== t.id) {
+    from = { id: f.id, rect: f.rect };
+    to = { id: t.id, rect: t.rect };
+  }
+}
+
+if (!from || !to) {
+  if (mk?.from && mk?.to) {
+    const f = nodeIdToShape.get(mk.from);
+    const t = nodeIdToShape.get(mk.to);
+    if (f && t && f.id !== t.id) {
+      from = { id: f.id, rect: f.rect };
+      to = { id: t.id, rect: t.rect };
     }
+  }
+}
 
     if (!from || !to) {
       const p1 = { x: b.x, y: b.y };
@@ -385,14 +516,23 @@ export function replaceAllLineShapesWithConnectors(
     if (ls.ln) {
       const ln = ls.ln.cloneNode(true) as Element;
 
-      const edgeMeta = findBestEdgeMeta(meta?.edges, b);
-      const isDashed =
-        !!edgeMeta?.dashed ||
-        ((edgeMeta?.relType ?? mk?.relType ?? '').toLowerCase().includes('flow'));
+      const edgeMeta =
+  findEdgeMetaById(meta?.edges, mkId?.edgeId) ?? findBestEdgeMeta(meta?.edges, b);
 
-      if (isDashed) ensureDash(doc, ns.a, ln, 'dash');
+const patVal = (edgeMeta?.linePattern ??
+  mkId?.pattern ??
+  (edgeMeta?.dashed ? 'dashed' : 'solid')) as 'solid' | 'dashed' | 'dotted';
 
-      spPr.appendChild(ln);
+if (patVal === 'dashed') ensureDash(doc, ns.a, ln, 'dash');
+else if (patVal === 'dotted') ensureDash(doc, ns.a, ln, 'dot');
+
+const head = (edgeMeta?.pptxHeadEnd ?? mkId?.head ?? 'none') as 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+const tail = (edgeMeta?.pptxTailEnd ?? mkId?.tail ?? 'none') as 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+
+ensureEnd(doc, ns.a, ln, 'headEnd', head);
+ensureEnd(doc, ns.a, ln, 'tailEnd', tail);
+
+spPr.appendChild(ln);
     }
 
     cxnSp.appendChild(nv);
@@ -408,4 +548,546 @@ export function replaceAllLineShapesWithConnectors(
   notes.push(`Found ${nodeShapes.length} nodes and ${lineShapes.length} lines.`);
   notes.push(`Replaced ${replaced} lines; skipped ${skipped}.`);
   return { xml: new XMLSerializer().serializeToString(doc), replacedCount: replaced, skippedCount: skipped, notes };
+}
+
+export function rebuildConnectorsFromMeta(slideXml: string, meta?: PptxPostProcessMeta): ConnectorReplaceResult {
+  try {
+    const notes: string[] = [];
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(slideXml, 'application/xml');
+
+    const ns = {
+      p: 'http://schemas.openxmlformats.org/presentationml/2006/main',
+      a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
+      r: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+    };
+
+    // Locate spTree
+    const spTree = doc.getElementsByTagNameNS(ns.p, 'spTree')[0];
+    if (!spTree) {
+      return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: ['No p:spTree found.'] };
+    }
+
+    const children = Array.from(spTree.childNodes).filter((n) => n.nodeType === 1) as Element[];
+
+    // Build node map from markers
+    const nodeIdToShape = new Map<string, { id: number; rect: PptxEmuRect }>();
+    for (const el of children) {
+      // node shapes are p:sp elements with EA_NODEID marker in name/descr
+      if (el.localName !== 'sp') continue;
+      const mk = getShapeMarker(el);
+      const nodeId = parseNodeMarker(mk);
+      if (!nodeId) continue;
+
+      const cNvPr = el.getElementsByTagNameNS(ns.p, 'cNvPr')[0];
+      const idAttr = cNvPr?.getAttribute('id');
+      const shapeId = idAttr ? Number(idAttr) : NaN;
+      const rect = readShapeRectEmu(el, ns.a);
+      if (!Number.isFinite(shapeId) || !rect) continue;
+      nodeIdToShape.set(nodeId, { id: shapeId, rect });
+    }
+
+
+// Fallback: if node markers are not present in slide XML (common with pptxgenjs),
+// build node map by matching meta.node rects to slide shapes by geometry.
+if (nodeIdToShape.size === 0 && meta?.nodes?.length) {
+  const candidates: { id: number; rect: PptxEmuRect }[] = [];
+  for (const el of children) {
+    if (el.localName !== 'sp') continue;
+    const cNvPr = el.getElementsByTagNameNS(ns.p, 'cNvPr')[0];
+    const idAttr = cNvPr?.getAttribute('id');
+    const shapeId = idAttr ? Number(idAttr) : NaN;
+    const rect = readShapeRectEmu(el, ns.a);
+    if (!Number.isFinite(shapeId) || !rect) continue;
+
+    const prst = el.getElementsByTagNameNS(ns.a, 'prstGeom')[0]?.getAttribute('prst') ?? '';
+    // Exclude footer/background-ish shapes; focus on the node roundRect/rect shapes.
+    if (prst === 'line') continue;
+    candidates.push({ id: shapeId, rect });
+  }
+
+  const used = new Set<number>();
+  const score = (a: PptxEmuRect, b: PptxEmuRect): number =>
+    Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.cx - b.cx) + Math.abs(a.cy - b.cy);
+
+  for (const n of meta.nodes) {
+    const target: PptxEmuRect = {
+      x: inchToEmu(n.rectIn.x),
+      y: inchToEmu(n.rectIn.y),
+      cx: inchToEmu(n.rectIn.w),
+      cy: inchToEmu(n.rectIn.h),
+    };
+
+    let best: { id: number; rect: PptxEmuRect } | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (const c of candidates) {
+      if (used.has(c.id)) continue;
+      const s = score(c.rect, target);
+      if (s < bestScore) {
+        bestScore = s;
+        best = c;
+      }
+    }
+
+    if (best) {
+      used.add(best.id);
+      nodeIdToShape.set(n.elementId, { id: best.id, rect: best.rect });
+    }
+  }
+
+  notes.push(`Fallback node map via geometry: matched ${nodeIdToShape.size}/${meta.nodes.length} nodes.`);
+}
+    // Remove existing connectors and any placeholder line shapes (p:sp with prstGeom line) to avoid duplicates
+    let removed = 0;
+    for (const el of children) {
+      if (el.localName === 'cxnSp') {
+        spTree.removeChild(el);
+        removed++;
+      } else if (el.localName === 'sp') {
+        const prst = el.getElementsByTagNameNS(ns.a, 'prstGeom')[0]?.getAttribute('prst');
+        if (prst === 'line') {
+          spTree.removeChild(el);
+          removed++;
+        }
+      }
+    }
+
+    const edges = meta?.edges ?? [];
+    let replaced = 0;
+    let skipped = 0;
+
+    // Helper: emu -> string
+    const emu = (v: number) => String(Math.round(v));
+
+    for (let i = 0; i < edges.length; i++) {
+      const e = edges[i];
+      const fromId = e.fromNodeId;
+      const toId = e.toNodeId;
+      if (!fromId || !toId) {
+        skipped++;
+        continue;
+      }
+      const from = nodeIdToShape.get(fromId);
+      const to = nodeIdToShape.get(toId);
+      if (!from || !to || from.id === to.id) {
+        skipped++;
+        continue;
+      }
+
+      // Compute connector bbox from node centers
+      const aC = center(from.rect);
+      const bC = center(to.rect);
+      const x = Math.min(aC.x, bC.x);
+      const y = Math.min(aC.y, bC.y);
+      const minExt = 10000; // ~0.011" in EMU, prevents invisible connectors when nearly horizontal/vertical
+      const cx = Math.max(minExt, Math.abs(aC.x - bC.x));
+      const cy = Math.max(minExt, Math.abs(aC.y - bC.y));
+
+      // Determine connection indices (0..3) on each shape
+      const stIdx = chooseConnIdx(aC, bC);
+      const enIdx = chooseConnIdx(bC, aC);
+
+      // Style
+      const pat = (e.linePattern ?? (e.dashed ? 'dashed' : 'solid')) as any;
+      let head = (e.pptxHeadEnd ?? 'none') as any;
+      let tail = (e.pptxTailEnd ?? 'none') as any;
+      const rt = String(e.relType ?? '').toLowerCase();
+      if (rt.includes('composition') || rt.includes('aggregation')) {
+        head = 'diamond';
+        tail = 'none';
+      }
+
+      const strokeHex = cssColorToHex(e.strokeHex);
+      const widthPt = typeof e.strokeWidthPt === 'number' ? e.strokeWidthPt : 1;
+      const widthEmu = Math.max(12700, Math.round(widthPt * 12700)); // 1pt ~= 12700 EMU in DrawingML
+
+      const cxnSp = createEl(doc, ns.p, 'p:cxnSp');
+
+      // nvCxnSpPr
+      const nv = createEl(doc, ns.p, 'p:nvCxnSpPr');
+      const cNvPr = createEl(doc, ns.p, 'p:cNvPr');
+      cNvPr.setAttribute('id', String(8000 + i));
+      cNvPr.setAttribute('name', `EA_CXN:${e.edgeId ?? i}`);
+      const cNvCxnSpPr = createEl(doc, ns.p, 'p:cNvCxnSpPr');
+      const nvPr = createEl(doc, ns.p, 'p:nvPr');
+      nv.appendChild(cNvPr);
+      nv.appendChild(cNvCxnSpPr);
+      nv.appendChild(nvPr);
+
+      // spPr with xfrm and a:prstGeom
+      const spPr = createEl(doc, ns.p, 'p:spPr');
+      const xfrm = createEl(doc, ns.a, 'a:xfrm');
+      const off = createEl(doc, ns.a, 'a:off'); off.setAttribute('x', emu(x)); off.setAttribute('y', emu(y));
+      const ext = createEl(doc, ns.a, 'a:ext'); ext.setAttribute('cx', emu(cx)); ext.setAttribute('cy', emu(cy));
+      xfrm.appendChild(off); xfrm.appendChild(ext);
+      spPr.appendChild(xfrm);
+
+      const prstGeom = createEl(doc, ns.a, 'a:prstGeom'); prstGeom.setAttribute('prst','straightConnector1');
+      const avLst = createEl(doc, ns.a, 'a:avLst');
+      prstGeom.appendChild(avLst);
+      spPr.appendChild(prstGeom);
+
+      // a:ln
+      const ln = createEl(doc, ns.a, 'a:ln');
+      ln.setAttribute('w', String(widthEmu));
+
+      const solidFill = createEl(doc, ns.a, 'a:solidFill');
+      const srgb = createEl(doc, ns.a, 'a:srgbClr'); srgb.setAttribute('val', strokeHex);
+      solidFill.appendChild(srgb);
+      ln.appendChild(solidFill);
+
+      if (pat === 'dashed') {
+        const prstDash = createEl(doc, ns.a, 'a:prstDash'); prstDash.setAttribute('val','dash');
+        ln.appendChild(prstDash);
+      } else if (pat === 'dotted') {
+        const prstDash = createEl(doc, ns.a, 'a:prstDash'); prstDash.setAttribute('val','dot');
+        ln.appendChild(prstDash);
+      }
+
+      if (head && head !== 'none') {
+        const he = createEl(doc, ns.a, 'a:headEnd'); he.setAttribute('type', head);
+        if (head === 'diamond') { he.setAttribute('w','med'); he.setAttribute('len','med'); }
+        ln.appendChild(he);
+      }
+      if (tail && tail !== 'none') {
+        const te = createEl(doc, ns.a, 'a:tailEnd'); te.setAttribute('type', tail);
+        if (tail === 'diamond') { te.setAttribute('w','med'); te.setAttribute('len','med'); }
+        ln.appendChild(te);
+      }
+
+      spPr.appendChild(ln);
+
+      // stCxn / endCxn
+
+      cxnSp.appendChild(nv);
+      cxnSp.appendChild(spPr);
+      
+      spTree.appendChild(cxnSp);
+      replaced++;
+    }
+
+    notes.push(`Node map: ${nodeIdToShape.size} nodes.`);
+    notes.push(`Removed ${removed} existing connector/line shapes.`);
+    notes.push(`Built ${replaced} connectors; skipped ${skipped}.`);
+
+    return { xml: new XMLSerializer().serializeToString(doc), replacedCount: replaced, skippedCount: skipped, notes };
+  } catch (e: any) {
+    return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: [`rebuildConnectorsFromMeta failed: ${String(e?.message ?? e)}`] };
+  }
+}
+
+function normalizeHex6(v: string | undefined | null, fallback: string): string {
+  if (!v) return fallback;
+  const s = String(v).trim();
+  const m = s.match(/^#?([0-9a-fA-F]{6})$/);
+  if (m) return m[1].toUpperCase();
+  const m3 = s.match(/^#?([0-9a-fA-F]{3})$/);
+  if (m3) {
+    const h = m3[1];
+    return (h[0]+h[0]+h[1]+h[1]+h[2]+h[2]).toUpperCase();
+  }
+  return fallback;
+}
+
+function createNodeShapeFromMeta(
+  doc: Document,
+  ns: { p: string; a: string },
+  shapeId: number,
+  rectEmu: PptxEmuRect,
+  nameLine: string,
+  typeLine?: string,
+  fillHex?: string,
+  strokeHex?: string,
+  textHex?: string
+): Element {
+  const sp = createEl(doc, ns.p, 'p:sp');
+
+  const nvSpPr = createEl(doc, ns.p, 'p:nvSpPr');
+  const cNvPr = createEl(doc, ns.p, 'p:cNvPr');
+  cNvPr.setAttribute('id', String(shapeId));
+  cNvPr.setAttribute('name', `EA_NODE:${shapeId}`);
+  const cNvSpPr = createEl(doc, ns.p, 'p:cNvSpPr');
+  const nvPr = createEl(doc, ns.p, 'p:nvPr');
+  nvSpPr.appendChild(cNvPr);
+  nvSpPr.appendChild(cNvSpPr);
+  nvSpPr.appendChild(nvPr);
+
+  const spPr = createEl(doc, ns.p, 'p:spPr');
+  const xfrm = createEl(doc, ns.a, 'a:xfrm');
+  const off = createEl(doc, ns.a, 'a:off'); off.setAttribute('x', String(Math.round(rectEmu.x))); off.setAttribute('y', String(Math.round(rectEmu.y)));
+  const ext = createEl(doc, ns.a, 'a:ext'); ext.setAttribute('cx', String(Math.round(rectEmu.cx))); ext.setAttribute('cy', String(Math.round(rectEmu.cy)));
+  xfrm.appendChild(off); xfrm.appendChild(ext);
+  spPr.appendChild(xfrm);
+
+  const prstGeom = createEl(doc, ns.a, 'a:prstGeom'); prstGeom.setAttribute('prst', 'roundRect');
+  prstGeom.appendChild(createEl(doc, ns.a, 'a:avLst'));
+  spPr.appendChild(prstGeom);
+
+  const fill = createEl(doc, ns.a, 'a:solidFill');
+  const fillClr = createEl(doc, ns.a, 'a:srgbClr');
+  fillClr.setAttribute('val', normalizeHex6(fillHex, '9FCFFF'));
+  fill.appendChild(fillClr);
+  spPr.appendChild(fill);
+
+  const ln = createEl(doc, ns.a, 'a:ln');
+  ln.setAttribute('w', '6350'); // matches pptxgen default from working file
+  const lnFill = createEl(doc, ns.a, 'a:solidFill');
+  const lnClr = createEl(doc, ns.a, 'a:srgbClr');
+  lnClr.setAttribute('val', normalizeHex6(strokeHex, '111111'));
+  lnFill.appendChild(lnClr);
+  ln.appendChild(lnFill);
+  spPr.appendChild(ln);
+
+  const txBody = createEl(doc, ns.p, 'p:txBody');
+  const bodyPr = createEl(doc, ns.a, 'a:bodyPr');
+  bodyPr.setAttribute('wrap', 'square');
+  bodyPr.setAttribute('lIns', '50800');
+  bodyPr.setAttribute('tIns', '50800');
+  bodyPr.setAttribute('rIns', '50800');
+  bodyPr.setAttribute('bIns', '50800');
+  bodyPr.setAttribute('rtlCol', '0');
+  bodyPr.setAttribute('anchor', 'ctr');
+  txBody.appendChild(bodyPr);
+  txBody.appendChild(createEl(doc, ns.a, 'a:lstStyle'));
+
+  const p = createEl(doc, ns.a, 'a:p');
+
+  // line 1 (bold, 14pt)
+  const pPr1 = createEl(doc, ns.a, 'a:pPr');
+  pPr1.setAttribute('algn', 'ctr');
+  pPr1.setAttribute('indent', '0');
+  pPr1.setAttribute('marL', '0');
+  pPr1.appendChild(createEl(doc, ns.a, 'a:buNone'));
+  p.appendChild(pPr1);
+
+  const r1 = createEl(doc, ns.a, 'a:r');
+  const rPr1 = createEl(doc, ns.a, 'a:rPr');
+  rPr1.setAttribute('lang', 'en-US');
+  rPr1.setAttribute('sz', '1400');
+  rPr1.setAttribute('b', '1');
+  rPr1.setAttribute('dirty', '0');
+  const rFill1 = createEl(doc, ns.a, 'a:solidFill');
+  const rClr1 = createEl(doc, ns.a, 'a:srgbClr');
+  rClr1.setAttribute('val', normalizeHex6(textHex, '111111'));
+  rFill1.appendChild(rClr1);
+  rPr1.appendChild(rFill1);
+  const latin1 = createEl(doc, ns.a, 'a:latin'); latin1.setAttribute('typeface', 'Calibri'); latin1.setAttribute('pitchFamily', '34'); latin1.setAttribute('charset', '0');
+  rPr1.appendChild(latin1);
+  r1.appendChild(rPr1);
+  const t1 = createEl(doc, ns.a, 'a:t');
+  t1.textContent = (nameLine ?? '').trim() + (typeLine ? '\n' : '');
+  r1.appendChild(t1);
+  p.appendChild(r1);
+
+  // line 2 (italic, 10pt)
+  if (typeLine) {
+    const pPr2 = createEl(doc, ns.a, 'a:pPr');
+    pPr2.setAttribute('algn', 'ctr');
+    pPr2.setAttribute('indent', '0');
+    pPr2.setAttribute('marL', '0');
+    pPr2.appendChild(createEl(doc, ns.a, 'a:buNone'));
+    p.appendChild(pPr2);
+
+    const r2 = createEl(doc, ns.a, 'a:r');
+    const rPr2 = createEl(doc, ns.a, 'a:rPr');
+    rPr2.setAttribute('lang', 'en-US');
+    rPr2.setAttribute('sz', '1000');
+    rPr2.setAttribute('i', '1');
+    rPr2.setAttribute('dirty', '0');
+    const rFill2 = createEl(doc, ns.a, 'a:solidFill');
+    const rClr2 = createEl(doc, ns.a, 'a:srgbClr');
+    rClr2.setAttribute('val', normalizeHex6(textHex, '111111'));
+    rFill2.appendChild(rClr2);
+    rPr2.appendChild(rFill2);
+    const latin2 = createEl(doc, ns.a, 'a:latin'); latin2.setAttribute('typeface', 'Calibri'); latin2.setAttribute('pitchFamily', '34'); latin2.setAttribute('charset', '0');
+    rPr2.appendChild(latin2);
+    r2.appendChild(rPr2);
+    const t2 = createEl(doc, ns.a, 'a:t');
+    t2.textContent = typeLine;
+    r2.appendChild(t2);
+    p.appendChild(r2);
+  }
+
+  const endPara = createEl(doc, ns.a, 'a:endParaRPr');
+  endPara.setAttribute('lang', 'en-US');
+  endPara.setAttribute('sz', '1000');
+  endPara.setAttribute('dirty', '0');
+  p.appendChild(endPara);
+
+  txBody.appendChild(p);
+
+  sp.appendChild(nvSpPr);
+  sp.appendChild(spPr);
+  sp.appendChild(txBody);
+  return sp;
+}
+
+export function rebuildSlideFromMeta(slideXml: string, meta?: PptxPostProcessMeta): ConnectorReplaceResult {
+  try {
+    const notes: string[] = [];
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(slideXml, 'application/xml');
+
+    const ns = {
+      p: 'http://schemas.openxmlformats.org/presentationml/2006/main',
+      a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
+    };
+
+    const spTree = doc.getElementsByTagNameNS(ns.p, 'spTree')[0];
+    if (!spTree) return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: ['No p:spTree found.'] };
+
+    const all = Array.from(spTree.childNodes).filter((n) => n.nodeType === 1) as Element[];
+
+    // Keep only the mandatory group props
+    for (const el of all) {
+      const ln = el.localName;
+      if (ln === 'nvGrpSpPr' || ln === 'grpSpPr') continue;
+      spTree.removeChild(el);
+    }
+
+    const nodes = meta?.nodes ?? [];
+    const edges = meta?.edges ?? [];
+    notes.push(`Meta: ${nodes.length} nodes, ${edges.length} edges.`);
+
+    // Allocate deterministic shape ids
+    let nextId = 4;
+    const nodeShapeIdByElementId = new Map<string, number>();
+    const nodeRectEmuByElementId = new Map<string, PptxEmuRect>();
+
+    for (const n of nodes) {
+      const id = nextId++;
+      nodeShapeIdByElementId.set(String(n.elementId), id);
+
+      const r = n.rectIn;
+      const rectEmu: PptxEmuRect = { x: inchToEmu(r.x), y: inchToEmu(r.y), cx: inchToEmu(r.w), cy: inchToEmu(r.h) };
+      nodeRectEmuByElementId.set(String(n.elementId), rectEmu);
+
+      const sp = createNodeShapeFromMeta(
+        doc,
+        { p: ns.p, a: ns.a },
+        id,
+        rectEmu,
+        n.name,
+        n.typeLabel,
+        n.fillHex,
+        n.strokeHex,
+        n.textHex
+      );
+
+      // Tag element id in marker so future steps can recover
+      const cNvPr = sp.getElementsByTagNameNS(ns.p, 'cNvPr')[0];
+      if (cNvPr) cNvPr.setAttribute('descr', `EA_NODEID:${String(n.elementId)}`);
+
+      spTree.appendChild(sp);
+    }
+
+    // Build connectors after nodes, but insert before first node so they appear behind.
+    const firstNodeEl = Array.from(spTree.childNodes).find((n) => (n as any).localName === 'sp') as any;
+    let replaced = 0;
+    let skipped = 0;
+
+    const chooseIdx = (from: PptxEmuRect, to: PptxEmuRect) => chooseConnIdx(center(from), center(to));
+
+    for (let i = 0; i < edges.length; i++) {
+      const e = edges[i];
+      const fromEl = e.fromNodeId;
+      const toEl = e.toNodeId;
+      if (!fromEl || !toEl) { skipped++; continue; }
+
+      const fromId = nodeShapeIdByElementId.get(String(fromEl));
+      const toId = nodeShapeIdByElementId.get(String(toEl));
+      const fromRect = nodeRectEmuByElementId.get(String(fromEl));
+      const toRect = nodeRectEmuByElementId.get(String(toEl));
+      if (!fromId || !toId || !fromRect || !toRect || fromId === toId) { skipped++; continue; }
+
+      const aC = center(fromRect);
+      const bC = center(toRect);
+      const x = Math.min(aC.x, bC.x);
+      const y = Math.min(aC.y, bC.y);
+      const minExt = 10000;
+      const cx = Math.max(minExt, Math.abs(aC.x - bC.x));
+      const cy = Math.max(minExt, Math.abs(aC.y - bC.y));
+
+      const stIdx = chooseIdx(fromRect, toRect);
+      const enIdx = chooseIdx(toRect, fromRect);
+
+      const pat = (e.linePattern ?? (e.dashed ? 'dashed' : 'solid')) as any;
+      const head = (e.pptxHeadEnd ?? 'none') as any;
+      const tail = (e.pptxTailEnd ?? 'none') as any;
+
+      const strokeHex = normalizeHex6(e.strokeHex, '111111');
+      const widthPt = typeof e.strokeWidthPt === 'number' ? e.strokeWidthPt : 1;
+      const widthEmu = Math.max(12700, Math.round(widthPt * 12700));
+
+      const cxnSp = createEl(doc, ns.p, 'p:cxnSp');
+
+      const nv = createEl(doc, ns.p, 'p:nvCxnSpPr');
+      const cNvPr = createEl(doc, ns.p, 'p:cNvPr');
+      cNvPr.setAttribute('id', String(8000 + i));
+      cNvPr.setAttribute('name', `EA_CXN:${String(e.edgeId ?? i)}`);
+      const cNvCxnSpPr = createEl(doc, ns.p, 'p:cNvCxnSpPr');
+      // Lock aspect/position per PowerPoint expectations
+      const locks = createEl(doc, ns.a, 'a:cxnSpLocks');
+      locks.setAttribute('noGrp', '1');
+      cNvCxnSpPr.appendChild(locks);
+
+      const stCxn = createEl(doc, ns.a, 'a:stCxn');
+      stCxn.setAttribute('id', String(fromId));
+      stCxn.setAttribute('idx', String(stIdx));
+      const endCxn = createEl(doc, ns.a, 'a:endCxn');
+      endCxn.setAttribute('id', String(toId));
+      endCxn.setAttribute('idx', String(enIdx));
+      cNvCxnSpPr.appendChild(stCxn);
+      cNvCxnSpPr.appendChild(endCxn);
+
+      const nvPr = createEl(doc, ns.p, 'p:nvPr');
+      nv.appendChild(cNvPr); nv.appendChild(cNvCxnSpPr); nv.appendChild(nvPr);
+
+      const spPr = createEl(doc, ns.p, 'p:spPr');
+      const xfrm = createEl(doc, ns.a, 'a:xfrm');
+      const off = createEl(doc, ns.a, 'a:off'); off.setAttribute('x', String(Math.round(x))); off.setAttribute('y', String(Math.round(y)));
+      const ext = createEl(doc, ns.a, 'a:ext'); ext.setAttribute('cx', String(Math.round(cx))); ext.setAttribute('cy', String(Math.round(cy)));
+      xfrm.appendChild(off); xfrm.appendChild(ext);
+      spPr.appendChild(xfrm);
+
+      const prstGeom = createEl(doc, ns.a, 'a:prstGeom'); prstGeom.setAttribute('prst','straightConnector1');
+      prstGeom.appendChild(createEl(doc, ns.a, 'a:avLst'));
+      spPr.appendChild(prstGeom);
+
+      const ln = createEl(doc, ns.a, 'a:ln');
+      ln.setAttribute('w', String(widthEmu));
+      const solidFill = createEl(doc, ns.a, 'a:solidFill');
+      const clr = createEl(doc, ns.a, 'a:srgbClr'); clr.setAttribute('val', strokeHex);
+      solidFill.appendChild(clr);
+      ln.appendChild(solidFill);
+      if (pat === 'dashed') { const d = createEl(doc, ns.a, 'a:prstDash'); d.setAttribute('val','dash'); ln.appendChild(d); }
+      else if (pat === 'dotted') { const d = createEl(doc, ns.a, 'a:prstDash'); d.setAttribute('val','dot'); ln.appendChild(d); }
+
+      if (head && head !== 'none') { const he = createEl(doc, ns.a, 'a:headEnd'); he.setAttribute('type', head); if (head==='diamond'){he.setAttribute('w','med'); he.setAttribute('len','med');} ln.appendChild(he); }
+      if (tail && tail !== 'none') { const te = createEl(doc, ns.a, 'a:tailEnd'); te.setAttribute('type', tail); if (tail==='diamond'){te.setAttribute('w','med'); te.setAttribute('len','med');} ln.appendChild(te); }
+
+      spPr.appendChild(ln);
+
+      const st = createEl(doc, ns.p, 'p:stCxn');
+      st.setAttribute('id', String(fromId));
+      st.setAttribute('idx', String(stIdx));
+      const en = createEl(doc, ns.p, 'p:endCxn');
+      en.setAttribute('id', String(toId));
+      en.setAttribute('idx', String(enIdx));
+
+      cxnSp.appendChild(nv);
+      cxnSp.appendChild(spPr);
+      
+      if (firstNodeEl) spTree.insertBefore(cxnSp, firstNodeEl);
+      else spTree.appendChild(cxnSp);
+      replaced++;
+    }
+
+    notes.push(`Built ${replaced} connectors; skipped ${skipped}.`);
+
+    return { xml: new XMLSerializer().serializeToString(doc), replacedCount: replaced, skippedCount: skipped, notes };
+  } catch (e: any) {
+    return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: [`rebuildSlideFromMeta failed: ${String(e?.message ?? e)}`] };
+  }
 }

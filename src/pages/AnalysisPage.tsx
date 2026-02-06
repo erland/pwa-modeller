@@ -59,11 +59,9 @@ export default function AnalysisPage() {
   const navigate = useNavigate();
   const sandboxSeedViewId =
     (location.state as { openSandboxFromViewId?: string } | null)?.openSandboxFromViewId ?? null;
-
-  // Latch the seed id so clearing navigation state doesn't race with sandbox seeding.
   const [latchedSandboxSeedViewId, setLatchedSandboxSeedViewId] = useState<string | null>(null);
 
-  // Clear navigation state after latching it (avoids re-seeding when navigating back).
+  // Clear navigation state after consuming it to avoid re-seeding when navigating back.
   useEffect(() => {
     if (!sandboxSeedViewId) return;
     setLatchedSandboxSeedViewId(sandboxSeedViewId);

@@ -683,9 +683,9 @@ if (nodeIdToShape.size === 0 && meta?.nodes?.length) {
       const minExt = 10000; // ~0.011" in EMU, prevents invisible connectors when nearly horizontal/vertical
       const cx = Math.max(minExt, Math.abs(aC.x - bC.x));
       const cy = Math.max(minExt, Math.abs(aC.y - bC.y));
-      // Connection indices (0..3) could be used to snap to shape connection points.
-      // Currently we draw connectors by absolute coordinates, so indices are not needed.
 
+      // Determine connection indices (0..3) on each shape
+      // Connector index selection was used in early prototypes; current PPTX connector routing uses absolute geometry.
       // Style
       const pat = (e.linePattern ?? (e.dashed ? 'dashed' : 'solid')) as any;
       let head = (e.pptxHeadEnd ?? 'none') as any;

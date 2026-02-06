@@ -70,13 +70,13 @@ export function PortfolioAnalysisView({ model, modelKind, selection, onSelectEle
     if (next.length !== ui.types.length) ui.setTypes(next);
   }, [availableElementTypes, hasElementTypeFacet, ui]);
 
-  const availablePropertyKeys = useMemo(
-    () =>
-      discoverNumericPropertyKeys(model, {
-        getTaggedValues: (el) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues
-      }),
-    [model, overlayVersion]
-  );
+  const availablePropertyKeys = useMemo(() => {
+    // overlayStore reference is stable; overlayVersion is the change signal.
+    void overlayVersion;
+    return discoverNumericPropertyKeys(model, {
+      getTaggedValues: (el) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues,
+    });
+  }, [model, overlayVersion]);
 
   const computed = usePortfolioComputedData({
     model,

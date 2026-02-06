@@ -59,6 +59,9 @@ export function usePortfolioComputedData({
   type Row = (typeof rows)[number];
 
   const valueByElementId = useMemo(() => {
+    // overlayStore reference is stable; overlayVersion is the change signal.
+    void overlayVersion;
+
     if (!metricKey) return {} as Record<string, number | undefined>;
     const out: Record<string, number | undefined> = {};
     const getTaggedValues = (el: Element) => getEffectiveTagsForElement(model, el, overlayStore).effectiveTaggedValues;

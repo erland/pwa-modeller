@@ -6,7 +6,6 @@ import { rebuildSlideFromMeta } from './attachConnectors';
 export type PptxBytes = Uint8Array | ArrayBuffer;
 
 function warn(msg: string, err?: unknown): void {
-  // eslint-disable-next-line no-console
   console.warn(`[PPTX post-process] ${msg}`, err);
 }
 

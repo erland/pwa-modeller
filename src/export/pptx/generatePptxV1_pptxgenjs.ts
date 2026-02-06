@@ -318,7 +318,8 @@ function layoutToPptxGen(layout: PptxOptions['layout']): string {
  * This replaces the earlier hand-rolled OOXML approach, which some PowerPoint
  * builds rejected as invalid. PptxGenJS produces PowerPoint-compatible output.
  */
-export async function generatePptxBlobV1(bundle: ExportBundle, options: PptxOptions): Promise<Blob> {  const pptx = new (PptxGenJS as any)();
+export async function generatePptxBlobV1(bundle: ExportBundle, options: PptxOptions): Promise<Blob> {
+  const pptx = new PptxGenJS();
   pptx.layout = layoutToPptxGen(options.layout);
   pptx.author = 'EA Modeller PWA';
   pptx.company = 'EA Modeller PWA';
@@ -382,7 +383,12 @@ meta = { nodes: [], edges: [] };
 
 
 
-const ShapeType = (PptxGenJS as any).ShapeType;
+// Use plain string shape names to avoid relying on non-typed static enums.
+const ShapeType: Record<string, string> = {
+  line: 'line',
+  rect: 'rect',
+  roundRect: 'roundRect',
+};
 const lineShape = ShapeType?.line ?? 'line';
 const roundRect = ShapeType?.roundRect ?? 'roundRect';
 
@@ -427,7 +433,7 @@ if (edges.length > 0) {
     });
 
 
-    slide.addShape(lineShape as any, {
+    slide.addShape(lineShape, {
       x,
       y,
       w,
@@ -439,7 +445,7 @@ if (edges.length > 0) {
         dash: e.dashed ? 'dash' : 'solid',
         endArrowType: e.arrowEnd ? 'arrow' : undefined,
       },
-    } as any);
+    });
 
     edgeIdx += 1;
   }
@@ -463,12 +469,12 @@ if (edges.length > 0) {
             });
 
                     const [nameLine, typeLine] = n.text.split('\n');
-            const runs: any[] = [];
+            const runs: import('pptxgenjs').TextRun[] = [];
             if (nameLine) runs.push({ text: nameLine + (typeLine ? '\n' : ''), options: { bold: true, fontSize: 14 } });
             if (typeLine) runs.push({ text: typeLine, options: { italic: true, fontSize: 10 } });
             slide.addText(runs.length ? runs : n.text, {
               altText: n.id ? `EA_NODE:${n.id}` : undefined,
-shape: roundRect as any,
+shape: roundRect,
           x,
           y,
           w,
@@ -481,7 +487,7 @@ shape: roundRect as any,
           valign: 'mid',
           align: 'center',
           margin: 4,
-                    } as any);
+                    });
 
       }
 
@@ -524,9 +530,10 @@ shape: roundRect as any,
     }
   }
 
-  const raw = await pptx.write({ outputType: 'uint8array', compression: false });
-  const processed = await postProcessPptxWithJsZip(raw as any, meta);
-  const safeProcessed = new Uint8Array(processed as any);
+  // Request a Uint8Array payload (browser-friendly) and post-process the zip.
+  const raw = await pptx.write('nodebuffer');
+  const processed = await postProcessPptxWithJsZip(raw, meta);
+  const safeProcessed = new Uint8Array(processed);
   return new Blob([safeProcessed], {
     type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   });

@@ -1,13 +1,14 @@
 import type { Model, TaggedValue } from '../../../domain';
 import { dedupeExternalIds, externalKey } from '../../../domain/externalIds';
-import type { Element, Relationship } from '../../../domain/types';
+import type { Element, Relationship, ExternalIdRef } from '../../../domain/types';
 import { normalizeKey } from '../../../domain/taggedValues';
 import {
   buildOverlayModelExternalIdIndex,
   computeModelSignature,
   resolveTargetsByExternalKey,
   toOverlayExternalRef,
-  type OverlayExternalRef
+  type OverlayExternalRef,
+  type OverlayTagValue
 } from '../../../domain/overlay';
 
 import type { OverlayStore } from '../OverlayStore';
@@ -206,8 +207,20 @@ function stringifyTaggedValue(tv: TaggedValue | undefined): string {
   return raw;
 }
 
-function pickPrimaryExternalRef(externalIds: any): { scheme: string; scope: string; value: string; ref?: OverlayExternalRef } {
-  const list = dedupeExternalIds(externalIds ?? []);
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v !== null && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+}
+
+function isExternalIdRef(v: unknown): v is ExternalIdRef {
+  const r = asRecord(v);
+  return typeof r?.system === 'string' && typeof r?.id === 'string' && (r.scope === undefined || typeof r.scope === 'string');
+}
+
+function pickPrimaryExternalRef(
+  externalIds: unknown
+): { scheme: string; scope: string; value: string; ref?: OverlayExternalRef } {
+  const raw = Array.isArray(externalIds) ? (externalIds as unknown[]) : [];
+  const list = dedupeExternalIds(raw.filter(isExternalIdRef));
   const first = list[0];
   if (!first) return { scheme: '', scope: '', value: '' };
   const scheme = (first.system ?? '').toString().trim();
@@ -220,7 +233,7 @@ function modelTargets(
   model: Model,
   options: Pick<SurveyExportOptions, 'targetSet' | 'elementTypes' | 'relationshipTypes'>
 ): Array<{ kind: 'element' | 'relationship'; obj: Element | Relationship }> {
-  const out: Array<{ kind: 'element' | 'relationship'; obj: any }> = [];
+  const out: Array<{ kind: 'element' | 'relationship'; obj: Element | Relationship }> = [];
   const targetSet = options.targetSet;
 
   const elTypes = (options.elementTypes ?? []).filter((t) => !!t);
@@ -228,14 +241,14 @@ function modelTargets(
 
   if (targetSet === 'elements' || targetSet === 'both') {
     for (const el of Object.values(model.elements ?? {})) {
-      const t = (el as any).type ?? '';
+      const t = (asRecord(el)?.type as unknown) ?? '';
       if (elTypes.length > 0 && !elTypes.includes(String(t))) continue;
       out.push({ kind: 'element', obj: el });
     }
   }
   if (targetSet === 'relationships' || targetSet === 'both') {
     for (const rel of Object.values(model.relationships ?? {})) {
-      const t = (rel as any).type ?? '';
+      const t = (asRecord(rel)?.type as unknown) ?? '';
       if (relTypes.length > 0 && !relTypes.includes(String(t))) continue;
       out.push({ kind: 'relationship', obj: rel });
     }
@@ -263,10 +276,11 @@ export function serializeOverlaySurveyCsv(args: {
   const targets = modelTargets(model, options);
   for (const t of targets) {
     const kind = t.kind;
-    const id = (t.obj as any).id ?? '';
-    const name = (t.obj as any).name ?? '';
-    const type = (t.obj as any).type ?? '';
-    const ext = pickPrimaryExternalRef((t.obj as any).externalIds);
+    const rec = asRecord(t.obj) ?? {};
+    const id = rec.id ?? '';
+    const name = rec.name ?? '';
+    const type = rec.type ?? '';
+    const ext = pickPrimaryExternalRef(rec.externalIds);
 
     let tagged: TaggedValue[] | undefined;
     if (prefill) {
@@ -300,8 +314,9 @@ function findExistingOverlayEntriesForTarget(overlayStore: OverlayStore, kind: '
   return [...ids].filter((id) => overlayStore.getEntry(id)?.target.kind === kind).sort();
 }
 
-function buildOverlayRefsForModelObject(obj: any): OverlayExternalRef[] {
-  const list = dedupeExternalIds(obj?.externalIds ?? []);
+function buildOverlayRefsForModelObject(obj: unknown): OverlayExternalRef[] {
+  const raw = Array.isArray(asRecord(obj)?.externalIds) ? (asRecord(obj)?.externalIds as unknown[]) : [];
+  const list = dedupeExternalIds(raw.filter(isExternalIdRef));
   return list.map((r) => toOverlayExternalRef(r));
 }
 
@@ -384,22 +399,22 @@ export function importOverlaySurveyCsvToStore(args: {
     const kind = kindRaw;
 
     const targetId = (map.target_id ?? '').toString().trim();
-    const byId = kind === 'element' ? (model.elements as any)[targetId] : (model.relationships as any)[targetId];
+    const byId = kind === 'element' ? model.elements?.[targetId] : model.relationships?.[targetId];
 
-    let targetObj: any | null = byId ?? null;
+    let targetObj: Element | Relationship | null = byId ?? null;
     if (!targetObj) {
       const k = inferExternalKeyFromRow(map);
       if (k) {
         const candidates = resolveTargetsByExternalKey(idx, k).filter((c) => c.kind === kind);
         if (candidates.length === 1) {
-          targetObj = kind === 'element' ? (model.elements as any)[candidates[0].id] : (model.relationships as any)[candidates[0].id];
+          targetObj = kind === 'element' ? model.elements?.[candidates[0].id] ?? null : model.relationships?.[candidates[0].id] ?? null;
         } else if (candidates.length > 1) {
           warnings.push(`row ${r + 1}: ambiguous match for external key ${k} (${candidates.length} candidates)`);
         }
       }
     }
 
-    const nextTags: Record<string, any> = {};
+    const nextTags: Record<string, string> = {};
     let hasAnyTagValue = false;
     for (const k of tagKeys) {
       const raw = (map[k] ?? '').toString();
@@ -426,7 +441,8 @@ export function importOverlaySurveyCsvToStore(args: {
     }
 
     // Resolve to an existing overlay entry (if any) by external keys.
-    const extIds = dedupeExternalIds(targetObj.externalIds ?? []);
+    const rawExt = Array.isArray(asRecord(targetObj)?.externalIds) ? (asRecord(targetObj)?.externalIds as unknown[]) : [];
+    const extIds = dedupeExternalIds(rawExt.filter(isExternalIdRef));
     const keys = extIds.map((x) => externalKey(x)).filter((k) => !!k);
     const matches = findExistingOverlayEntriesForTarget(overlayStore, kind, keys);
 
@@ -447,7 +463,7 @@ export function importOverlaySurveyCsvToStore(args: {
     }
 
     // Apply updates.
-    const merged: Record<string, any> = { ...entry.tags };
+    const merged: Record<string, OverlayTagValue> = { ...entry.tags };
     let changed = false;
 
     for (const k of tagKeys) {

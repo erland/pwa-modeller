@@ -105,6 +105,9 @@ export function TraceabilityExplorer({
   // Recompute when overlay changes so keys discovered from *effective* tags stay up to date.
   const overlayVersion = useOverlayStore((s) => s.getVersion());
   const availablePropertyKeys = useMemo(() => {
+    // overlayStore reference is stable; overlayVersion is the change signal.
+    void overlayVersion;
+
     // Avoid scanning the entire model unless the user is actually interacting
     // with the overlay-property UI (autocomplete) or the overlay is active.
     if (!isOverlayOpen && graphOptions.nodeOverlayMetricId !== 'nodePropertyNumber') return [];

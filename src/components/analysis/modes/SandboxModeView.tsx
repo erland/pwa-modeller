@@ -218,7 +218,7 @@ export function SandboxModeView({
       set.add(r.type);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [model.relationships]);
+  }, [model]);
 
   const {
     isDropTarget,
@@ -290,15 +290,15 @@ export function SandboxModeView({
       if (rr) rels[r.id] = rr;
     }
     return { ...sandboxSubModel, relationships: rels };
-  }, [model.relationships, renderedRelationships, sandboxSubModel]);
+  }, [model, renderedRelationships, sandboxSubModel]);
 
-  const availablePropertyKeys = useMemo(
-    () =>
-      discoverNumericPropertyKeys(sandboxRelationshipsModel, {
-        getTaggedValues: (el) => getEffectiveTagsForElement(sandboxRelationshipsModel, el, overlayStore).effectiveTaggedValues,
-      }),
-    [sandboxRelationshipsModel, overlayVersion]
-  );
+  const availablePropertyKeys = useMemo(() => {
+    // overlayStore reference is stable; overlayVersion is the change signal.
+    void overlayVersion;
+    return discoverNumericPropertyKeys(sandboxRelationshipsModel, {
+      getTaggedValues: (el) => getEffectiveTagsForElement(sandboxRelationshipsModel, el, overlayStore).effectiveTaggedValues,
+    });
+  }, [sandboxRelationshipsModel, overlayVersion]);
 
   const overlayRelationshipTypes = useMemo(() => {
     const set = new Set<string>();
@@ -307,6 +307,9 @@ export function SandboxModeView({
   }, [renderedRelationships]);
 
   const nodeOverlayScores = useMemo(() => {
+    // overlayStore reference is stable; overlayVersion is the change signal.
+    void overlayVersion;
+
     if (graphOptions.nodeOverlayMetricId === 'off') return null;
     if (!nodes.length) return null;
 

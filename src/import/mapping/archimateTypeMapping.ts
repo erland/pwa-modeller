@@ -98,7 +98,6 @@ export function mapRelationshipType(rawType: string, source: string): TypeMappin
 
   // (Re-)compute the key after the compatibility check above.
   // NOTE: keep as a separate const to avoid re-normalizing later.
-  // eslint-disable-next-line @typescript-eslint/no-shadow
   const key2 = key;
 
   // Accept variants like "AssociationRelationship".

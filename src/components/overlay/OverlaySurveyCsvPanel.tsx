@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { Model } from '../../domain';
+import type { Element, Model, Relationship } from '../../domain';
 import { computeModelSignature } from '../../domain';
 import { downloadTextFile, sanitizeFileNameWithExtension } from '../../store';
 import { overlayStore } from '../../store/overlay/overlayStoreInstance';
@@ -35,15 +35,13 @@ export function OverlaySurveyCsvPanel(props: { model: Model | null; fileName: st
   const [importError, setImportError] = useState<string | null>(null);
   const [importOptions, setImportOptions] = useState<SurveyImportOptions>({ blankMode: 'ignore' });
 
+  const modelSignature = useMemo(() => (model ? computeModelSignature(model) : ''), [model]);
+
   useEffect(() => {
     // Reset type filters when model changes.
-    if (!model) return;
-    const sig = computeModelSignature(model);
-    // Use signature in dep array, not direct effect.
-    void sig;
     setSelectedElementTypes(undefined);
     setSelectedRelationshipTypes(undefined);
-  }, [model ? computeModelSignature(model) : '']);
+  }, [modelSignature]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -56,7 +54,7 @@ export function OverlaySurveyCsvPanel(props: { model: Model | null; fileName: st
     if (!model) return [] as string[];
     const set = new Set<string>();
     for (const el of Object.values(model.elements ?? {})) {
-      const t = String((el as any).type ?? '').trim();
+      const t = String((el as Element).type ?? '').trim();
       if (t) set.add(t);
     }
     return [...set.values()].sort();
@@ -66,7 +64,7 @@ export function OverlaySurveyCsvPanel(props: { model: Model | null; fileName: st
     if (!model) return [] as string[];
     const set = new Set<string>();
     for (const rel of Object.values(model.relationships ?? {})) {
-      const t = String((rel as any).type ?? '').trim();
+      const t = String((rel as Relationship).type ?? '').trim();
       if (t) set.add(t);
     }
     return [...set.values()].sort();
@@ -89,13 +87,15 @@ export function OverlaySurveyCsvPanel(props: { model: Model | null; fileName: st
     }
     // Core keys
     for (const el of Object.values(model.elements ?? {})) {
-      for (const tv of (el as any).taggedValues ?? []) {
+      const e = el as Element;
+      for (const tv of e.taggedValues ?? []) {
         const k = (tv?.key ?? '').toString().trim();
         if (k) set.add(k);
       }
     }
     for (const rel of Object.values(model.relationships ?? {})) {
-      for (const tv of (rel as any).taggedValues ?? []) {
+      const r = rel as Relationship;
+      for (const tv of r.taggedValues ?? []) {
         const k = (tv?.key ?? '').toString().trim();
         if (k) set.add(k);
       }

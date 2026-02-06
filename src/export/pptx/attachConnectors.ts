@@ -252,9 +252,37 @@ function parseEdgeIdStyleMarker(marker: string): {
     parts.find((p) => p !== edgeId && !p.includes('->') && !p.startsWith('h=') && !p.startsWith('t=') && !p.startsWith('p=')) ||
     undefined;
 
-  const head = (parts.find((p) => p.startsWith('h='))?.slice(2) as any) ?? undefined;
-  const tail = (parts.find((p) => p.startsWith('t='))?.slice(2) as any) ?? undefined;
-  const pattern = (parts.find((p) => p.startsWith('p='))?.slice(2) as any) ?? undefined;
+  const asMarkerEnd = (
+    v: string | undefined,
+  ): 'none' | 'triangle' | 'arrow' | 'diamond' | 'oval' | undefined => {
+    if (!v) return undefined;
+    switch (v) {
+      case 'none':
+      case 'triangle':
+      case 'arrow':
+      case 'diamond':
+      case 'oval':
+        return v;
+      default:
+        return undefined;
+    }
+  };
+
+  const asLinePattern = (v: string | undefined): 'solid' | 'dashed' | 'dotted' | undefined => {
+    if (!v) return undefined;
+    switch (v) {
+      case 'solid':
+      case 'dashed':
+      case 'dotted':
+        return v;
+      default:
+        return undefined;
+    }
+  };
+
+  const head = asMarkerEnd(parts.find((p) => p.startsWith('h='))?.slice(2) ?? undefined);
+  const tail = asMarkerEnd(parts.find((p) => p.startsWith('t='))?.slice(2) ?? undefined);
+  const pattern = asLinePattern(parts.find((p) => p.startsWith('p='))?.slice(2) ?? undefined);
 
   return { edgeId, from, to, relType, head, tail, pattern };
 }
@@ -687,9 +715,9 @@ if (nodeIdToShape.size === 0 && meta?.nodes?.length) {
       // Determine connection indices (0..3) on each shape
       // Connector index selection was used in early prototypes; current PPTX connector routing uses absolute geometry.
       // Style
-      const pat = (e.linePattern ?? (e.dashed ? 'dashed' : 'solid')) as any;
-      let head = (e.pptxHeadEnd ?? 'none') as any;
-      let tail = (e.pptxTailEnd ?? 'none') as any;
+      const pat = String(e.linePattern ?? (e.dashed ? 'dashed' : 'solid'));
+      let head = String(e.pptxHeadEnd ?? 'none');
+      let tail = String(e.pptxTailEnd ?? 'none');
       const rt = String(e.relType ?? '').toLowerCase();
       if (rt.includes('composition') || rt.includes('aggregation')) {
         head = 'diamond';
@@ -770,8 +798,9 @@ if (nodeIdToShape.size === 0 && meta?.nodes?.length) {
     notes.push(`Built ${replaced} connectors; skipped ${skipped}.`);
 
     return { xml: new XMLSerializer().serializeToString(doc), replacedCount: replaced, skippedCount: skipped, notes };
-  } catch (e: any) {
-    return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: [`rebuildConnectorsFromMeta failed: ${String(e?.message ?? e)}`] };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: [`rebuildConnectorsFromMeta failed: ${msg}`] };
   }
 }
 
@@ -981,7 +1010,9 @@ export function rebuildSlideFromMeta(slideXml: string, meta?: PptxPostProcessMet
     }
 
     // Build connectors after nodes, but insert before first node so they appear behind.
-    const firstNodeEl = Array.from(spTree.childNodes).find((n) => (n as any).localName === 'sp') as any;
+    const firstNodeEl = Array.from(spTree.childNodes).find(
+      (n): n is Element => n.nodeType === 1 && (n as Element).localName === 'sp'
+    );
     let replaced = 0;
     let skipped = 0;
 
@@ -1010,9 +1041,9 @@ export function rebuildSlideFromMeta(slideXml: string, meta?: PptxPostProcessMet
       const stIdx = chooseIdx(fromRect, toRect);
       const enIdx = chooseIdx(toRect, fromRect);
 
-      const pat = (e.linePattern ?? (e.dashed ? 'dashed' : 'solid')) as any;
-      const head = (e.pptxHeadEnd ?? 'none') as any;
-      const tail = (e.pptxTailEnd ?? 'none') as any;
+      const pat = String(e.linePattern ?? (e.dashed ? 'dashed' : 'solid'));
+      const head = String(e.pptxHeadEnd ?? 'none');
+      const tail = String(e.pptxTailEnd ?? 'none');
 
       const strokeHex = normalizeHex6(e.strokeHex, '111111');
       const widthPt = typeof e.strokeWidthPt === 'number' ? e.strokeWidthPt : 1;
@@ -1085,7 +1116,8 @@ export function rebuildSlideFromMeta(slideXml: string, meta?: PptxPostProcessMet
     notes.push(`Built ${replaced} connectors; skipped ${skipped}.`);
 
     return { xml: new XMLSerializer().serializeToString(doc), replacedCount: replaced, skippedCount: skipped, notes };
-  } catch (e: any) {
-    return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: [`rebuildSlideFromMeta failed: ${String(e?.message ?? e)}`] };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: [`rebuildSlideFromMeta failed: ${msg}`] };
   }
 }

@@ -72,9 +72,12 @@ function buildSearchIndex(model: Model): Array<{ kind: 'element' | 'relationship
 export function OverlayManageDialog({ isOpen, onClose, model, onToast }: OverlayManageDialogProps) {
   // Trigger rerender when the overlay store changes.
   const overlayVersion = useOverlayStore((s) => s.getVersion());
-  void overlayVersion;
 
-  const entries = useMemo(() => overlayStore.listEntries(), [overlayVersion]);
+  const entries = useMemo(() => {
+    // overlayStore reference is stable; overlayVersion is the change signal.
+    void overlayVersion;
+    return overlayStore.listEntries();
+  }, [overlayVersion]);
   const modelIndex = useMemo(() => buildOverlayModelExternalIdIndex(model), [model]);
   const report = useMemo(() => resolveOverlayAgainstModel(entries, modelIndex), [entries, modelIndex]);
 

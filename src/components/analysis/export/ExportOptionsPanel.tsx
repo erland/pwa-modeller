@@ -37,7 +37,10 @@ export function ExportOptionsPanel({
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <label className="crudLabel" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             Layout
-            <select value={value.pptx.layout} onChange={(e) => setPptx({ layout: e.target.value as any })}>
+            <select
+              value={value.pptx.layout}
+              onChange={(e) => setPptx({ layout: e.target.value as ExportOptions['pptx']['layout'] })}
+            >
               <option value="wide">Wide (16:9)</option>
               <option value="standard">Standard (4:3)</option>
             </select>
@@ -45,7 +48,10 @@ export function ExportOptionsPanel({
 
           <label className="crudLabel" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             Theme
-            <select value={value.pptx.theme} onChange={(e) => setPptx({ theme: e.target.value as any })}>
+            <select
+              value={value.pptx.theme}
+              onChange={(e) => setPptx({ theme: e.target.value as ExportOptions['pptx']['theme'] })}
+            >
               <option value="light">Light</option>
               <option value="dark">Dark</option>
             </select>

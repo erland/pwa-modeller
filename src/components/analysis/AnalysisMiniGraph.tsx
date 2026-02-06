@@ -112,6 +112,10 @@ export function AnalysisMiniGraph({
   }, [model, nodeOverlayMetricId]);
 
   const nodeOverlayScores = useMemo(() => {
+    // Intentionally depend on overlayVersion so overlay changes recompute numeric-property overlays.
+    // (overlayStore reference is stable; overlayVersion is the change signal.)
+    void overlayVersion;
+
     if (nodeOverlayMetricId === 'off') return null;
     if (!analysisGraph) return null;
 
@@ -147,7 +151,7 @@ export function AnalysisMiniGraph({
       relationshipTypes,
       nodeIds
     });
-  }, [analysisGraph, nodeOverlayMetricId, nodeOverlayReachDepth, nodeOverlayPropertyKey, overlayDirection, overlayRelationshipTypes, safeData.nodes, model, model.elements, overlayVersion]);
+  }, [analysisGraph, nodeOverlayMetricId, nodeOverlayReachDepth, nodeOverlayPropertyKey, overlayDirection, overlayRelationshipTypes, safeData.nodes, model, overlayVersion]);
 
   const selectedRelationshipId = selectionToRelationshipId(selection);
   const selectedElementId = selectionToElementId(selection);

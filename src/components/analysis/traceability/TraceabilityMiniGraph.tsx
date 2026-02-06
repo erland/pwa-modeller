@@ -178,6 +178,9 @@ export function TraceabilityMiniGraph({
   }, [model, nodeOverlayMetricId]);
 
   const nodeOverlayScores = useMemo(() => {
+    // overlayStore reference is stable; overlayVersion is the change signal.
+    void overlayVersion;
+
     if (nodeOverlayMetricId === 'off') return null;
     if (!analysisGraph) return null;
 

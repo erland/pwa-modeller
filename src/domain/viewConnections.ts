@@ -59,9 +59,10 @@ export function computeVisibleRelationshipIdsForView(model: Model, view: View): 
   // behavior (show all model relationships between nodes), which can introduce duplicates
   // in older imported models.
   if (!view.relationshipVisibility && Array.isArray(layout.relationships) && layout.relationships.length > 0) {
+    const isRecord = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
     const raw = layout.relationships
-      .map((r: any) => (r && typeof r.relationshipId === 'string' ? r.relationshipId : null))
-      .filter((v: any): v is string => typeof v === 'string' && v.length > 0);
+      .map((r: unknown) => (isRecord(r) && typeof r.relationshipId === 'string' ? r.relationshipId : null))
+      .filter((v): v is string => typeof v === 'string' && v.length > 0);
     const out: string[] = [];
     const seen = new Set<string>();
     for (const id of raw) {

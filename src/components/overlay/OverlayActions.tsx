@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { computeModelSignature } from '../../domain';
 import {
@@ -79,14 +79,15 @@ export function OverlayActions() {
     return exportMarker.version !== overlayVersion;
   }, [canUseOverlay, overlayCount, exportMarker, overlayVersion]);
 
-  const triggerLoadPicker = () => {
+  const triggerLoadPicker = useCallback(() => {
     const el = loadInputRef.current;
     if (!el) return;
     el.value = '';
     el.click();
-  };
+  }, []);
 
-  const doExport = (mode: 'save' | 'saveAs') => {
+  const doExport = useCallback(
+    (mode: 'save' | 'saveAs') => {
     if (!model) {
       setToast({ kind: 'warn', message: 'Load a model first before exporting an overlay.' });
       return;
@@ -108,9 +109,12 @@ export function OverlayActions() {
     downloadTextFile(fileOut, json, 'application/json');
     if (signature) setOverlayExportMarker(signature, overlayStore.getVersion());
     setToast({ kind: 'success', message: `Overlay exported to ${fileOut}.` });
-  };
+    },
+    // overlayStore is a stable singleton; do not include in deps.
+    [fileName, model, overlayCount, signature]
+  );
 
-  const doClear = () => {
+  const doClear = useCallback(() => {
     if (!model) return;
     if (overlayCount === 0) {
       setToast({ kind: 'info', message: 'Overlay is already empty.' });
@@ -131,7 +135,8 @@ export function OverlayActions() {
       clearOverlayExportMarker(signature);
     }
     setToast({ kind: 'success', message: 'Overlay cleared.' });
-  };
+  // overlayStore is a stable singleton; do not include in deps.
+  }, [isDirty, model, overlayCount, signature]);
 
   const onFileChosen = async (f: File | null) => {
     if (!model) {
@@ -160,9 +165,10 @@ export function OverlayActions() {
     }
   };
 
-  const actions = useMemo(
-    () =>
-      [
+  type ActionItem = { id: string; label: string; run: () => void; disabled?: boolean; title?: string };
+
+  const actions: ActionItem[] = useMemo(
+    () => [
         {
           id: 'load',
           label: 'Load overlay…',
@@ -189,8 +195,8 @@ export function OverlayActions() {
           run: doClear,
           disabled: !canClear
         }
-      ] as const,
-    [canUseOverlay, canExport, canClear, overlayCount, signature, model, fileName]
+      ],
+    [canUseOverlay, canExport, canClear, overlayCount, triggerLoadPicker, doExport, doClear]
   );
 
   return (
@@ -216,7 +222,7 @@ export function OverlayActions() {
         }}
       />
 
-      <OverlayActionsMenuDialog isOpen={menuOpen} onClose={() => setMenuOpen(false)} actions={actions as any} />
+      <OverlayActionsMenuDialog isOpen={menuOpen} onClose={() => setMenuOpen(false)} actions={actions} />
 
       {toast ? (
         <span className="shellStatusChip" style={{ marginLeft: 8 }} title={toast.kind}>

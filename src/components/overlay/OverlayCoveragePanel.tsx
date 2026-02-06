@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import type { Element, Relationship } from '../../domain';
+
 import type { Model, TaggedValue } from '../../domain/types';
 import { computeModelSignature } from '../../domain/overlay';
 import {
@@ -69,7 +71,7 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
     if (!model) return [] as string[];
     const set = new Set<string>();
     for (const el of Object.values(model.elements ?? {})) {
-      const t = String((el as any).type ?? '').trim();
+      const t = String((el as Element).type ?? '').trim();
       if (t) set.add(t);
     }
     return [...set.values()].sort();
@@ -79,7 +81,7 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
     if (!model) return [] as string[];
     const set = new Set<string>();
     for (const rel of Object.values(model.relationships ?? {})) {
-      const t = String((rel as any).type ?? '').trim();
+      const t = String((rel as Relationship).type ?? '').trim();
       if (t) set.add(t);
     }
     return [...set.values()].sort();
@@ -88,6 +90,9 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
   const requiredKeys = useMemo(() => parseRequiredTags(requiredText), [requiredText]);
 
   const stats: CoverageStats = useMemo(() => {
+    // overlayStore reference is stable; overlayVersion is the change signal.
+    void overlayVersion;
+
     if (!model) {
       return {
         totalElements: 0,
@@ -103,7 +108,7 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
         const el = model.elements?.[id];
         if (!el) return false;
         if (selectedElementTypes === undefined) return true;
-        const t = String((el as any).type ?? '').trim();
+        const t = String((el as Element).type ?? '').trim();
         return selectedElementTypes.includes(t);
       })
       .sort();
@@ -113,7 +118,7 @@ export function OverlayCoveragePanel({ model }: { model: Model | null }) {
         const rel = model.relationships?.[id];
         if (!rel) return false;
         if (selectedRelationshipTypes === undefined) return true;
-        const t = String((rel as any).type ?? '').trim();
+        const t = String((rel as Relationship).type ?? '').trim();
         return selectedRelationshipTypes.includes(t);
       })
       .sort();

@@ -19,7 +19,10 @@ export function isOverlayTarget(x: unknown): x is OverlayTarget {
 
 export function isOverlayEntry(x: unknown): x is OverlayEntry {
   if (!isRecord(x)) return false;
-  if ('entryId' in x && typeof (x as any).entryId !== 'string') return false;
+  if ('entryId' in x) {
+    const v = (x as Record<string, unknown>).entryId;
+    if (v !== undefined && typeof v !== 'string') return false;
+  }
   if (!isOverlayTarget(x.target)) return false;
   if (!isRecord(x.tags)) return false;
   // Tags are JSON-ish; we do a light structural check only.

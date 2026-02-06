@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Model } from '../../../domain';
+import type { Element, Model, Relationship } from '../../../domain';
 import { computeModelSignature } from '../../../domain';
 import { buildOverlayModelExternalIdIndex } from '../../../domain/overlay';
 import {
@@ -99,7 +99,7 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     if (!model) return [] as string[];
     const set = new Set<string>();
     for (const el of Object.values(model.elements ?? {})) {
-      const t = String((el as any).type ?? '').trim();
+      const t = String(el.type ?? '').trim();
       if (t) set.add(t);
     }
     return [...set.values()].sort();
@@ -109,7 +109,7 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     if (!model) return [] as string[];
     const set = new Set<string>();
     for (const rel of Object.values(model.relationships ?? {})) {
-      const t = String((rel as any).type ?? '').trim();
+      const t = String(rel.type ?? '').trim();
       if (t) set.add(t);
     }
     return [...set.values()].sort();
@@ -128,7 +128,7 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     }
     const idx = buildOverlayModelExternalIdIndex(model);
     return resolveOverlayAgainstModel(overlayStore.listEntries(), idx);
-  }, [model, overlayHasEntries, overlayEntryCount]);
+  }, [model, overlayHasEntries]);
 
   const overlayHasIssues = !!liveReport && (liveReport.counts.orphan > 0 || liveReport.counts.ambiguous > 0);
   const overlayReportAvailable = !!lastOverlayImport;
@@ -156,11 +156,13 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
     setOverlayImportDialogOpen(true);
   }, [model]);
 
+  const modelSignature = useMemo(() => (model ? computeModelSignature(model) : ''), [model]);
+
   useEffect(() => {
     // When a new model is loaded/imported, reset survey type filters to "all".
     setSurveyElementTypes([]);
     setSurveyRelationshipTypes([]);
-  }, [model ? computeModelSignature(model) : '']);
+  }, [modelSignature]);
 
   const doOverlaySurveyExport = useCallback(() => {
     if (!model) {
@@ -229,13 +231,15 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
 
     // Core tagged values keys
     for (const el of Object.values(model.elements ?? {})) {
-      for (const tv of (el as any).taggedValues ?? []) {
+      const e = el as Element;
+      for (const tv of e.taggedValues ?? []) {
         const k = (tv?.key ?? '').toString().trim();
         if (k) set.add(k);
       }
     }
     for (const rel of Object.values(model.relationships ?? {})) {
-      for (const tv of (rel as any).taggedValues ?? []) {
+      const r = rel as Relationship;
+      for (const tv of r.taggedValues ?? []) {
         const k = (tv?.key ?? '').toString().trim();
         if (k) set.add(k);
       }

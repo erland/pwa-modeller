@@ -26,7 +26,8 @@ function colName(colIndex0: number): string {
 
 function sanitizeSheetName(name: string): string {
   // Excel constraints: max 31 chars; cannot contain: : \ / ? * [ ]
-  const cleaned = name.replace(/[:\\/?*\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+  // Put `[` first in the character class to avoid escaping it.
+  const cleaned = name.replace(/[[:\\/?*\]]/g, ' ').replace(/\s+/g, ' ').trim();
   const truncated = cleaned.slice(0, 31);
   return truncated.length ? truncated : 'Sheet1';
 }
@@ -83,8 +84,8 @@ function buildSummaryTabular(bundle: ExportBundle): TabularData {
 
 function getTableArtifacts(bundle: ExportBundle): Array<{ name: string; data: TabularData }> {
   return bundle.artifacts
-    .filter((a: ExportArtifact) => a.type === 'table')
-    .map((a) => ({ name: a.name, data: (a as any).data as TabularData }));
+    .filter((a): a is Extract<ExportArtifact, { type: 'table' }> => a.type === 'table')
+    .map((a) => ({ name: a.name, data: a.data }));
 }
 
 export async function generateXlsxBlobV1(bundle: ExportBundle, options: XlsxOptions): Promise<Blob> {
@@ -113,7 +114,7 @@ export async function generateXlsxBlobV1(bundle: ExportBundle, options: XlsxOpti
   // Sanitize and de-duplicate sheet names
   const used = new Set<string>();
   const normSheets = sheets.map((s, idx) => {
-    let base = sanitizeSheetName(s.name);
+    const base = sanitizeSheetName(s.name);
     let name = base;
     let n = 2;
     while (used.has(name)) {

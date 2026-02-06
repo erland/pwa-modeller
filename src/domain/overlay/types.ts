@@ -49,8 +49,13 @@ export type OverlayTarget = {
 export type OverlayTagPrimitive = string | number | boolean | null;
 
 // Recursive JSON-ish value type.
-// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
-export type OverlayTagObject = { [key: string]: OverlayTagValue };
+//
+// NOTE: Some TS versions report TS2456 (circularly references itself) for recursive type
+// aliases when the object branch is expressed via `Record<…>`. Using an interface for
+// the object branch keeps the recursion legal.
+export interface OverlayTagObject {
+  [key: string]: OverlayTagValue;
+}
 export type OverlayTagValue = OverlayTagPrimitive | OverlayTagValue[] | OverlayTagObject;
 
 export type OverlayEntryMeta = {

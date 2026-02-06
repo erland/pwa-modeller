@@ -25,6 +25,8 @@ export function SandboxCanvas({
   edgeRouting,
   orthogonalPointsByRelationshipId,
   selectedEdgeId,
+  overlayBadgeByElementId,
+  overlayScaleByElementId,
   onPointerDownCanvas,
   onPointerMove,
   onPointerUpOrCancel,
@@ -50,6 +52,8 @@ export function SandboxCanvas({
   edgeRouting: 'straight' | 'orthogonal';
   orthogonalPointsByRelationshipId: Map<string, Point[]>;
   selectedEdgeId: string | null;
+  overlayBadgeByElementId: Record<string, string> | null;
+  overlayScaleByElementId: Record<string, number> | null;
   onPointerDownCanvas: (e: PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (e: PointerEvent<SVGSVGElement>) => void;
   onPointerUpOrCancel: (e: PointerEvent<SVGSVGElement>) => void;
@@ -107,6 +111,8 @@ export function SandboxCanvas({
           nodes={nodes}
           selectedElementId={selectedElementId}
           pairAnchors={pairAnchors}
+          overlayBadgeByElementId={overlayBadgeByElementId}
+          overlayScaleByElementId={overlayScaleByElementId}
           onPointerDownNode={onPointerDownNode}
           onClickNode={onClickNode}
           onDoubleClickNode={onDoubleClickNode}

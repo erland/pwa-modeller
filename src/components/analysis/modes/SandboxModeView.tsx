@@ -24,12 +24,22 @@ import { SandboxInsertDialog } from './SandboxInsertDialog';
 import { SandboxCanvas } from './SandboxCanvas';
 import { SandboxRelationshipsPanel } from './SandboxRelationshipsPanel';
 import { SandboxToolbar } from './SandboxToolbar';
+import { OverlaySettingsDialog } from '../OverlaySettingsDialog';
+import { useMiniGraphOptionsForModel } from '../results/useMiniGraphOptionsForModel';
 import { useSandboxViewport } from './useSandboxViewport';
 import { useSandboxRelationships } from './useSandboxRelationships';
 import { useSandboxSelectionController } from './useSandboxSelectionController';
 import { useSandboxDialogController } from './useSandboxDialogController';
 import { useSandboxDragController } from './useSandboxDragController';
 import { SANDBOX_GRID_SIZE, SANDBOX_NODE_H, SANDBOX_NODE_W } from './sandboxConstants';
+
+import {
+  buildAnalysisGraph,
+  computeNodeMetric,
+  discoverNumericPropertyKeys,
+  readNumericPropertyFromElement,
+} from '../../../domain';
+import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../../store/overlay';
 
 export function SandboxModeView({
   model,
@@ -112,6 +122,12 @@ export function SandboxModeView({
 
   const [edgeCapDismissed, setEdgeCapDismissed] = useState(false);
 
+  // Overlay settings (same overlay UI as Related elements/Paths mini graph).
+  const modelId = model.id ?? '';
+  const overlayVersion = useOverlayStore((s) => s.getVersion());
+  const { graphOptions, setGraphOptions } = useMiniGraphOptionsForModel(modelId);
+  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
+
   const [insertMode, setInsertMode] = useState<SandboxInsertIntermediatesMode>('shortest');
   const [insertK, setInsertK] = useState(3);
   const [insertMaxHops, setInsertMaxHops] = useState(8);
@@ -122,6 +138,20 @@ export function SandboxModeView({
     for (const n of nodes) m.set(n.elementId, n);
     return m;
   }, [nodes]);
+
+  // Sub-model containing only the sandbox content (used for overlay metrics + property key discovery).
+  const sandboxSubModel = useMemo(() => {
+    const elementIds = nodes.map((n) => n.elementId);
+    const elements: typeof model.elements = {};
+    for (const id of elementIds) {
+      const el = model.elements[id];
+      if (el) elements[id] = el;
+    }
+
+    const relationshipsById: typeof model.relationships = {};
+    // NOTE: We seed relationships later in the render cycle based on the computed visible relationships.
+    return { ...model, elements, relationships: relationshipsById };
+  }, [model, nodes]);
 
   const {
     selectedElementId,
@@ -253,6 +283,107 @@ export function SandboxModeView({
     });
   }, [nodes, renderedRelationships, relationships.show, ui.edgeRouting]);
 
+  const sandboxRelationshipsModel = useMemo(() => {
+    const rels: typeof model.relationships = {};
+    for (const r of renderedRelationships) {
+      const rr = model.relationships[r.id];
+      if (rr) rels[r.id] = rr;
+    }
+    return { ...sandboxSubModel, relationships: rels };
+  }, [model.relationships, renderedRelationships, sandboxSubModel]);
+
+  const availablePropertyKeys = useMemo(
+    () =>
+      discoverNumericPropertyKeys(sandboxRelationshipsModel, {
+        getTaggedValues: (el) => getEffectiveTagsForElement(sandboxRelationshipsModel, el, overlayStore).effectiveTaggedValues,
+      }),
+    [sandboxRelationshipsModel, overlayVersion]
+  );
+
+  const overlayRelationshipTypes = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of renderedRelationships) set.add(String(r.type));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [renderedRelationships]);
+
+  const nodeOverlayScores = useMemo(() => {
+    if (graphOptions.nodeOverlayMetricId === 'off') return null;
+    if (!nodes.length) return null;
+
+    const nodeIds = nodes.map((n) => n.elementId);
+    const relationshipTypes = overlayRelationshipTypes as unknown as import('../../../domain').RelationshipType[];
+
+    const analysisGraph = buildAnalysisGraph(sandboxRelationshipsModel);
+
+    if (graphOptions.nodeOverlayMetricId === 'nodeReach') {
+      return computeNodeMetric(analysisGraph, 'nodeReach', {
+        direction: 'both',
+        relationshipTypes,
+        maxDepth: graphOptions.nodeOverlayReachDepth,
+        nodeIds,
+        maxVisited: 5000,
+      });
+    }
+
+    if (graphOptions.nodeOverlayMetricId === 'nodePropertyNumber') {
+      const key = (graphOptions.nodeOverlayPropertyKey ?? '').trim();
+      if (!key) return {};
+      return computeNodeMetric(analysisGraph, 'nodePropertyNumber', {
+        key,
+        nodeIds,
+        getValueByNodeId: (nodeId, k) =>
+          readNumericPropertyFromElement(sandboxRelationshipsModel.elements[nodeId], k, {
+            getTaggedValues: (el) =>
+              getEffectiveTagsForElement(sandboxRelationshipsModel, el, overlayStore).effectiveTaggedValues,
+          }),
+      });
+    }
+
+    return computeNodeMetric(analysisGraph, graphOptions.nodeOverlayMetricId, {
+      direction: 'both',
+      relationshipTypes,
+      nodeIds,
+    });
+  }, [sandboxRelationshipsModel, nodes, graphOptions.nodeOverlayMetricId, graphOptions.nodeOverlayReachDepth, graphOptions.nodeOverlayPropertyKey, overlayRelationshipTypes, overlayVersion]);
+
+  const overlayBadgeByElementId = useMemo(() => {
+    if (!nodeOverlayScores || graphOptions.nodeOverlayMetricId === 'off') return null;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(nodeOverlayScores)) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+      // Keep it compact: avoid long decimals.
+      out[k] = Number.isInteger(v) ? String(v) : v.toFixed(2);
+    }
+    return out;
+  }, [nodeOverlayScores, graphOptions.nodeOverlayMetricId]);
+
+  const overlayScaleByElementId = useMemo(() => {
+    if (!nodeOverlayScores || !graphOptions.scaleNodesByOverlayScore || graphOptions.nodeOverlayMetricId === 'off') return null;
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    for (const v of Object.values(nodeOverlayScores)) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+      min = Math.min(min, v);
+      max = Math.max(max, v);
+    }
+    if (!(max > min)) {
+      const out: Record<string, number> = {};
+      for (const id of Object.keys(nodeOverlayScores)) out[id] = 1;
+      return out;
+    }
+
+    const out: Record<string, number> = {};
+    for (const [id, v] of Object.entries(nodeOverlayScores)) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) {
+        out[id] = 1;
+        continue;
+      }
+      const t = (v - min) / (max - min);
+      out[id] = 0.85 + Math.max(0, Math.min(1, t)) * (1.25 - 0.85);
+    }
+    return out;
+  }, [nodeOverlayScores, graphOptions.scaleNodesByOverlayScore, graphOptions.nodeOverlayMetricId]);
+
 
 
   return (
@@ -273,6 +404,19 @@ export function SandboxModeView({
         onFitToContent={fitToContent}
         onResetView={resetView}
         onSetPersistEnabled={onSetPersistEnabled}
+        overlayButton={
+          <button
+            type="button"
+            className="miniLinkButton"
+            onClick={() => setIsOverlayOpen(true)}
+            disabled={!nodes.length}
+            aria-disabled={!nodes.length}
+            aria-label="Overlay settings"
+            title="Overlay settings"
+          >
+            Overlay
+          </button>
+        }
         canAddSelected={canAddSelected}
         canRemoveSelected={canRemoveSelected}
         canAddRelated={canAddRelated}
@@ -374,6 +518,8 @@ export function SandboxModeView({
         edgeRouting={ui.edgeRouting}
         orthogonalPointsByRelationshipId={orthogonalPointsByRelationshipId}
         selectedEdgeId={selectedEdgeId}
+        overlayBadgeByElementId={overlayBadgeByElementId}
+        overlayScaleByElementId={overlayScaleByElementId}
         onPointerDownCanvas={onPointerDownCanvas}
         onPointerMove={onPointerMove}
         onPointerUpOrCancel={onPointerUpOrCancel}
@@ -479,6 +625,14 @@ export function SandboxModeView({
           const ids = renderedRelationships.map((r) => r.id);
           onSaveAsDiagram(name, ids);
         }}
+      />
+
+      <OverlaySettingsDialog
+        isOpen={isOverlayOpen}
+        onClose={() => setIsOverlayOpen(false)}
+        graphOptions={graphOptions}
+        onChangeGraphOptions={(next) => setGraphOptions(next)}
+        availablePropertyKeys={availablePropertyKeys}
       />
     </div>
   );

@@ -15,6 +15,7 @@ export function SandboxToolbar({
   onFitToContent,
   onResetView,
   onSetPersistEnabled,
+  overlayButton,
   canAddSelected,
   canRemoveSelected,
   canAddRelated,
@@ -36,6 +37,7 @@ export function SandboxToolbar({
   onFitToContent: () => void;
   onResetView: () => void;
   onSetPersistEnabled: (enabled: boolean) => void;
+  overlayButton?: ReactNode;
   canAddSelected: boolean;
   canRemoveSelected: boolean;
   canAddRelated: boolean;
@@ -199,6 +201,7 @@ export function SandboxToolbar({
           </span>
           {addSelectedButton}
           {removeSelectedButton}
+          {overlayButton ?? null}
           {addRelatedButton}
           {insertIntermediatesButton}
         </div>

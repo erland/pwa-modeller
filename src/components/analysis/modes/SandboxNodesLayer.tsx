@@ -12,6 +12,8 @@ export function SandboxNodesLayer({
   nodes,
   selectedElementId,
   pairAnchors,
+  overlayBadgeByElementId,
+  overlayScaleByElementId,
   onPointerDownNode,
   onClickNode,
   onDoubleClickNode,
@@ -20,6 +22,8 @@ export function SandboxNodesLayer({
   nodes: Array<{ elementId: string; x: number; y: number }>;
   selectedElementId: string | null;
   pairAnchors: string[];
+  overlayBadgeByElementId: Record<string, string> | null;
+  overlayScaleByElementId: Record<string, number> | null;
   onPointerDownNode: (e: PointerEvent<SVGGElement>, elementId: string) => void;
   onClickNode: (e: MouseEvent<SVGGElement>, elementId: string) => void;
   onDoubleClickNode: (elementId: string) => void;
@@ -44,6 +48,11 @@ export function SandboxNodesLayer({
         const notation = kind === 'uml' ? umlNotation : kind === 'bpmn' ? bpmnNotation : archimateNotation;
         const bgVar = notation.getElementBgVar(String(el.type));
 
+        const badge = overlayBadgeByElementId ? overlayBadgeByElementId[n.elementId] : undefined;
+        const scale = overlayScaleByElementId ? overlayScaleByElementId[n.elementId] : 1;
+        const cx = SANDBOX_NODE_W / 2;
+        const cy = SANDBOX_NODE_H / 2;
+
         return (
           <g
             key={n.elementId}
@@ -60,13 +69,32 @@ export function SandboxNodesLayer({
             tabIndex={0}
             aria-label={label}
           >
-            <rect width={SANDBOX_NODE_W} height={SANDBOX_NODE_H} rx={8} ry={8} style={{ fill: bgVar }} />
-            <text x={10} y={22} className="analysisSandboxNodeTitle">
-              {label}
-            </text>
-            <text x={10} y={42} className="analysisSandboxNodeMeta">
-              {secondary}
-            </text>
+            <g transform={scale !== 1 ? `translate(${cx}, ${cy}) scale(${scale}) translate(${-cx}, ${-cy})` : undefined}>
+              <rect width={SANDBOX_NODE_W} height={SANDBOX_NODE_H} rx={8} ry={8} style={{ fill: bgVar }} />
+              <text x={10} y={22} className="analysisSandboxNodeTitle">
+                {label}
+              </text>
+              <text x={10} y={42} className="analysisSandboxNodeMeta">
+                {secondary}
+              </text>
+
+              {badge ? (
+                <g className="analysisSandboxNodeBadge" aria-label="Overlay badge" pointerEvents="none">
+                  <circle cx={SANDBOX_NODE_W - 14} cy={14} r={10} fill="rgba(0,0,0,0.55)" />
+                  <text
+                    x={SANDBOX_NODE_W - 14}
+                    y={18}
+                    textAnchor="middle"
+                    fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+                    fontSize={10}
+                    fontWeight={800}
+                    fill="white"
+                  >
+                    {badge}
+                  </text>
+                </g>
+              ) : null}
+            </g>
           </g>
         );
       })}

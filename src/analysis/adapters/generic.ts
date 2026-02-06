@@ -26,9 +26,17 @@ export function createGenericAnalysisAdapter(kind: ModelKind): AnalysisAdapter {
       return !edge.undirected;
     },
     getFacetDefinitions(model) {
-      // No facets by default.
+      // Provide a minimal, stable facet set so the Analysis workspace can offer
+      // element-type based filters (Matrix row/column type selectors, etc.) even
+      // for notations that currently use the generic adapter (e.g., BPMN/UML).
+      //
+      // NOTE: The UI relies on the facet IDs `elementType` and `archimateLayer`
+      // (the latter is ArchiMate-specific and intentionally omitted here).
       void model;
-      return [];
+      return [
+        { id: 'type', label: 'Type', kind: 'single' },
+        { id: 'elementType', label: 'Element type', kind: 'multi' }
+      ];
     },
     getNodeFacetValues(node, model) {
       const el = model.elements[node.id] ?? node;

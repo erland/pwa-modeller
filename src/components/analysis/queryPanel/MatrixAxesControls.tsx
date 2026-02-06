@@ -1,4 +1,5 @@
 import type { ElementType } from '../../../domain';
+import { getElementTypeLabel } from '../../../domain';
 
 import type { MatrixAxisSource } from './useMatrixAxesLayerGuards';
 
@@ -98,7 +99,7 @@ export function MatrixAxesControls({
                 <option value="">Select type…</option>
                 {availableRowElementTypes.map((t) => (
                   <option key={t} value={t}>
-                    {String(t)}
+                    {getElementTypeLabel(t)}
                   </option>
                 ))}
               </select>
@@ -171,7 +172,7 @@ export function MatrixAxesControls({
                 <option value="">Select type…</option>
                 {availableColElementTypes.map((t) => (
                   <option key={t} value={t}>
-                    {String(t)}
+                    {getElementTypeLabel(t)}
                   </option>
                 ))}
               </select>

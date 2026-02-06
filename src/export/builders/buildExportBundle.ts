@@ -36,12 +36,65 @@ function extractHtmlTableAsTabular(table: HTMLTableElement): TabularData {
 }
 
 function sandboxSvgToImageRef(svg: SVGSVGElement): ImageRef {
-  // Outer HTML is good enough as a v1 normalized representation.
-  const data = svg.outerHTML;
+  // The sandbox SVG is styled via CSS classes. If we serialize only outerHTML we lose
+  // computed styles, and downstream rasterization (PNG/PPTX) can render shapes black.
+  // To preserve appearance we clone and inline a small set of computed style properties.
+  const data = inlineComputedSvgStyles(svg);
   // width/height can be missing; callers can interpret viewBox later.
   const width = svg.width?.baseVal?.value || undefined;
   const height = svg.height?.baseVal?.value || undefined;
   return { kind: 'svg', data, width, height };
+}
+
+function inlineComputedSvgStyles(svg: SVGSVGElement): string {
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+
+  // Ensure namespaces exist for better compatibility.
+  if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  if (!clone.getAttribute('xmlns:xlink')) clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+  const srcEls = Array.from(svg.querySelectorAll('*'));
+  const dstEls = Array.from(clone.querySelectorAll('*'));
+  const n = Math.min(srcEls.length, dstEls.length);
+
+  for (let i = 0; i < n; i += 1) {
+    const src = srcEls[i] as Element;
+    const dst = dstEls[i] as Element;
+    const cs = window.getComputedStyle(src);
+
+    // The subset below covers the vast majority of our diagram styling.
+    const style: string[] = [];
+
+    // Fills/strokes
+    if (cs.fill && cs.fill !== 'none') style.push(`fill:${cs.fill}`);
+    if (cs.stroke && cs.stroke !== 'none') style.push(`stroke:${cs.stroke}`);
+    if (cs.strokeWidth && cs.strokeWidth !== '0px') style.push(`stroke-width:${cs.strokeWidth}`);
+    if (cs.strokeDasharray && cs.strokeDasharray !== 'none') style.push(`stroke-dasharray:${cs.strokeDasharray}`);
+    if (cs.strokeLinecap && cs.strokeLinecap !== 'butt') style.push(`stroke-linecap:${cs.strokeLinecap}`);
+    if (cs.strokeLinejoin && cs.strokeLinejoin !== 'miter') style.push(`stroke-linejoin:${cs.strokeLinejoin}`);
+
+    // Text
+    if (cs.color) style.push(`color:${cs.color}`);
+    if (cs.fontFamily) style.push(`font-family:${cs.fontFamily}`);
+    if (cs.fontSize) style.push(`font-size:${cs.fontSize}`);
+    if (cs.fontWeight) style.push(`font-weight:${cs.fontWeight}`);
+    if (cs.fontStyle && cs.fontStyle !== 'normal') style.push(`font-style:${cs.fontStyle}`);
+    if (cs.textDecorationLine && cs.textDecorationLine !== 'none') style.push(`text-decoration:${cs.textDecorationLine}`);
+
+    // Opacity
+    if (cs.opacity && cs.opacity !== '1') style.push(`opacity:${cs.opacity}`);
+
+    if (style.length) {
+      // Preserve any explicit inline styles and append computed style overrides.
+      const existing = dst.getAttribute('style');
+      const merged = existing ? `${existing};${style.join(';')}` : style.join(';');
+      dst.setAttribute('style', merged);
+    }
+  }
+
+  // XMLSerializer handles SVG reasonably well for our use case.
+  const s = new XMLSerializer().serializeToString(clone);
+  return s;
 }
 
 export function buildExportBundle(ctx: BuildExportBundleContext): ExportBundle {

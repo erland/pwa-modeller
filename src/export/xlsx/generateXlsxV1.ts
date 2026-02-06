@@ -2,7 +2,7 @@
 import type { ExportBundle, ExportArtifact, TabularData } from '../contracts/ExportBundle';
 import type { XlsxOptions } from '../contracts/ExportOptions';
 
-import { ZipWriter } from '../pptx/zipWriter';
+import { ZipWriter } from '../zip/zipWriter';
 
 function xmlEscape(s: string): string {
   return s

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Node 1"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="914400"/>
+            <a:ext cx="1828800" cy="914400"/>
+          </a:xfrm>
+          <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+      </p:sp>
+
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="Node 2"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="3657600" y="914400"/>
+            <a:ext cx="1828800" cy="914400"/>
+          </a:xfrm>
+          <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+      </p:sp>
+
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="4" name="Line 1"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="1828800" y="1371600"/>
+            <a:ext cx="1828800" cy="0"/>
+          </a:xfrm>
+          <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+          <a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
+        </p:spPr>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>

@@ -1,331 +1,92 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 
-import type { Element, Model, Relationship } from '../../../domain';
+import type { Model } from '../../../domain';
 import { computeModelSignature } from '../../../domain';
-import { buildOverlayModelExternalIdIndex } from '../../../domain/overlay';
-import {
-  downloadTextFile,
-  sanitizeFileNameWithExtension,
-  overlayStore
-} from '../../../store';
-import type { ResolveReport } from '../../../store/overlay/resolve';
-import { resolveOverlayAgainstModel } from '../../../store/overlay/resolve';
-import {
-  type OverlayImportWarning,
-  parseOverlayJson,
-  serializeOverlayStoreToJson,
-  importOverlayFileToStore,
-  type SurveyExportOptions,
-  type SurveyImportOptions,
-  type SurveyTargetSet,
-  importOverlaySurveyCsvToStore,
-  serializeOverlaySurveyCsv
-} from '../../../store/overlay';
-import { useOverlayStore } from '../../../store/overlay';
+import { downloadTextFile, sanitizeFileNameWithExtension } from '../../../store';
 
-import { defaultOverlayFileBase } from '../../overlay/overlayUiUtils';
-import { readFileAsText } from '../../shared/fileUtils';
+import { useOverlaySurveyState } from './overlay/useOverlaySurveyState';
+import { useOverlayToast } from './overlay/useOverlayToast';
+import { useOverlayImportFlows } from './overlay/useOverlayImportFlows';
 
-export type LastOverlayImportInfo = {
-  fileName: string;
-  warnings: string[];
-  report: ResolveReport;
-};
+export type { LastOverlayImportInfo } from './overlay/useOverlayImportFlows';
 
 export type UseOverlayActionHandlersArgs = {
   model: Model | null;
   fileName: string | null;
 };
 
-type ToastState = { message: string; kind: 'info' | 'success' | 'warn' | 'error' };
-
-function summarizeWarnings(warnings: string[]): string {
-  if (!warnings.length) return '';
-  if (warnings.length === 1) return ` (1 warning)`;
-  return ` (${warnings.length} warnings)`;
-}
-
-function resolveSummary(report: ResolveReport): string {
-  const { attached, orphan, ambiguous } = report.counts;
-  return `attached=${attached}, orphan=${orphan}, ambiguous=${ambiguous}`;
-}
-
-function warningToText(w: OverlayImportWarning): string {
-  if (w.type === 'signature-mismatch') {
-    const a = w.fileSignature ? `file=${w.fileSignature}` : 'file=?';
-    const b = w.currentSignature ? `current=${w.currentSignature}` : 'current=?';
-    return `signature mismatch (${a}, ${b})`;
-  }
-  if (w.type === 'merge-conflict-multiple-existing') {
-    const ref = w.importedEntryId ? `entry=${w.importedEntryId}` : `entry#${w.importedEntryIndex}`;
-    return `merge conflict: ${ref} matched multiple existing entries (${w.matchedEntryIds.join(', ')})`;
-  }
-  return `dropped invalid entry #${w.importedEntryIndex}: ${w.reason}`;
-}
 
 /**
  * Encapsulates all orchestration logic for Overlay import/export actions.
  */
 export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHandlersArgs) {
-  const overlayLoadInputRef = useRef<HTMLInputElement | null>(null);
-  const overlaySurveyLoadInputRef = useRef<HTMLInputElement | null>(null);
+  const { toast, setToast } = useOverlayToast();
 
-  const [overlayImportDialogOpen, setOverlayImportDialogOpen] = useState(false);
-  const [overlayImporting, setOverlayImporting] = useState(false);
-  const [overlayImportError, setOverlayImportError] = useState<string | null>(null);
+  const {
+    surveyTargetSet,
+    setSurveyTargetSet,
+    availableSurveyElementTypes,
+    availableSurveyRelationshipTypes,
+    surveyElementTypes,
+    setSurveyElementTypes,
+    surveyRelationshipTypes,
+    setSurveyRelationshipTypes,
+    surveyTagKeysText,
+    setSurveyTagKeysText,
+    surveyImportOptions,
+    setSurveyImportOptions,
+    suggestSurveyKeys: suggestSurveyKeysRaw
+  } = useOverlaySurveyState(model);
 
-  const [surveyExportDialogOpen, setSurveyExportDialogOpen] = useState(false);
-  const [surveyImportDialogOpen, setSurveyImportDialogOpen] = useState(false);
-  const [surveyImporting, setSurveyImporting] = useState(false);
-  const [surveyImportError, setSurveyImportError] = useState<string | null>(null);
+  const {
+    overlayLoadInputRef,
+    overlaySurveyLoadInputRef,
+    onOverlayFileChosen,
+    onOverlaySurveyFileChosen,
+    triggerOverlayLoadFilePicker,
+    triggerOverlaySurveyLoadFilePicker,
 
-  const [surveyTargetSet, setSurveyTargetSet] = useState<SurveyTargetSet>('elements');
-  const [surveyElementTypes, setSurveyElementTypes] = useState<string[]>([]);
-  const [surveyRelationshipTypes, setSurveyRelationshipTypes] = useState<string[]>([]);
-  const [surveyTagKeysText, setSurveyTagKeysText] = useState<string>('');
-  const [surveyImportOptions, setSurveyImportOptions] = useState<SurveyImportOptions>({ blankMode: 'ignore' });
+    overlayImportDialogOpen,
+    setOverlayImportDialogOpen,
+    overlayImporting,
+    overlayImportError,
 
-  const [overlayReportOpen, setOverlayReportOpen] = useState(false);
-  const [lastOverlayImport, setLastOverlayImport] = useState<LastOverlayImportInfo | null>(null);
+    surveyExportDialogOpen,
+    setSurveyExportDialogOpen,
 
-  const [overlayManageOpen, setOverlayManageOpen] = useState(false);
+    surveyImportDialogOpen,
+    setSurveyImportDialogOpen,
+    surveyImporting,
+    surveyImportError,
 
-  const [toast, setToast] = useState<ToastState | null>(null);
-
-  const overlayEntryCount = useOverlayStore((s) => s.size);
-  const overlayHasEntries = overlayEntryCount > 0;
-
-  const availableSurveyElementTypes = useMemo(() => {
-    if (!model) return [] as string[];
-    const set = new Set<string>();
-    for (const el of Object.values(model.elements ?? {})) {
-      const t = String(el.type ?? '').trim();
-      if (t) set.add(t);
-    }
-    return [...set.values()].sort();
-  }, [model]);
-
-  const availableSurveyRelationshipTypes = useMemo(() => {
-    if (!model) return [] as string[];
-    const set = new Set<string>();
-    for (const rel of Object.values(model.relationships ?? {})) {
-      const t = String(rel.type ?? '').trim();
-      if (t) set.add(t);
-    }
-    return [...set.values()].sort();
-  }, [model]);
-
-  const liveReport = useMemo(() => {
-    if (!model) return null;
-    if (!overlayHasEntries) {
-      return {
-        total: 0,
-        attached: [],
-        orphan: [],
-        ambiguous: [],
-        counts: { attached: 0, orphan: 0, ambiguous: 0 }
-      } as ResolveReport;
-    }
-    const idx = buildOverlayModelExternalIdIndex(model);
-    return resolveOverlayAgainstModel(overlayStore.listEntries(), idx);
-  }, [model, overlayHasEntries]);
-
-  const overlayHasIssues = !!liveReport && (liveReport.counts.orphan > 0 || liveReport.counts.ambiguous > 0);
-  const overlayReportAvailable = !!lastOverlayImport;
-
-  const triggerOverlayLoadFilePicker = useCallback(() => {
-    const el = overlayLoadInputRef.current;
-    if (!el) return;
-    el.value = '';
-    el.click();
-  }, []);
-
-  const triggerOverlaySurveyLoadFilePicker = useCallback(() => {
-    const el = overlaySurveyLoadInputRef.current;
-    if (!el) return;
-    el.value = '';
-    el.click();
-  }, []);
-
-  const doOverlayImport = useCallback(() => {
-    if (!model) {
-      setToast({ kind: 'warn', message: 'Load a model first before importing an overlay.' });
-      return;
-    }
-    setOverlayImportError(null);
-    setOverlayImportDialogOpen(true);
-  }, [model]);
-
-  const modelSignature = useMemo(() => (model ? computeModelSignature(model) : ''), [model]);
-
-  useEffect(() => {
-    // When a new model is loaded/imported, reset survey type filters to "all".
-    setSurveyElementTypes([]);
-    setSurveyRelationshipTypes([]);
-  }, [modelSignature]);
-
-  const doOverlaySurveyExport = useCallback(() => {
-    if (!model) {
-      setToast({ kind: 'warn', message: 'Load a model first before exporting a survey.' });
-      return;
-    }
-    setSurveyExportDialogOpen(true);
-  }, [model]);
-
-  const doOverlaySurveyImport = useCallback(() => {
-    if (!model) {
-      setToast({ kind: 'warn', message: 'Load a model first before importing a survey.' });
-      return;
-    }
-    setSurveyImportError(null);
-    setSurveyImportDialogOpen(true);
-  }, [model]);
-
-  const doOverlayExport = useCallback(() => {
-    if (!model) {
-      setToast({ kind: 'warn', message: 'Load a model first before exporting an overlay.' });
-      return;
-    }
-
-    const base = defaultOverlayFileBase(model, fileName);
-    const json = serializeOverlayStoreToJson({ overlayStore, model });
-    downloadTextFile(sanitizeFileNameWithExtension(`${base}-overlay`, 'json'), json, 'application/json');
-    setToast({ kind: 'success', message: 'Overlay exported.' });
-  }, [fileName, model]);
-
-  const doOverlaySurveyExportNow = useCallback(() => {
-    if (!model) return;
-    const base = defaultOverlayFileBase(model, fileName);
-
-    const tagKeys = surveyTagKeysText
-      .split(/[\n,]/g)
-      .map((s) => s.trim())
-      .filter((s) => !!s);
-
-    const options: SurveyExportOptions = {
-      targetSet: surveyTargetSet,
-      elementTypes: surveyElementTypes,
-      relationshipTypes: surveyRelationshipTypes,
-      tagKeys,
-      prefillFromEffectiveTags: true
-    };
-
-    const csv = serializeOverlaySurveyCsv({ model, overlayStore, options });
-    downloadTextFile(sanitizeFileNameWithExtension(`${base}-overlay-survey`, 'csv'), csv, 'text/csv');
-    setToast({ kind: 'success', message: 'Overlay survey exported.' });
-    setSurveyExportDialogOpen(false);
-  }, [fileName, model, surveyTagKeysText, surveyTargetSet, surveyElementTypes, surveyRelationshipTypes]);
+    lastOverlayImport,
+    doOverlayImport,
+    doOverlayExport,
+    doOverlaySurveyExport,
+    doOverlaySurveyImport,
+    doOverlaySurveyExportNow,
+    overlayHasEntries,
+    overlayHasIssues,
+    overlayReportAvailable,
+    liveReport
+  } = useOverlayImportFlows({
+    model,
+    fileName,
+    setToast,
+    surveyTargetSet,
+    surveyElementTypes,
+    surveyRelationshipTypes,
+    surveyTagKeysText,
+    surveyImportOptions
+  });
 
   const suggestSurveyKeys = useCallback(() => {
-    if (!model) return;
-
-    const set = new Set<string>();
-
-    // Overlay keys
-    for (const e of overlayStore.listEntries()) {
-      for (const k0 of Object.keys(e.tags ?? {})) {
-        const k = (k0 ?? '').toString().trim();
-        if (k) set.add(k);
-      }
-    }
-
-    // Core tagged values keys
-    for (const el of Object.values(model.elements ?? {})) {
-      const e = el as Element;
-      for (const tv of e.taggedValues ?? []) {
-        const k = (tv?.key ?? '').toString().trim();
-        if (k) set.add(k);
-      }
-    }
-    for (const rel of Object.values(model.relationships ?? {})) {
-      const r = rel as Relationship;
-      for (const tv of r.taggedValues ?? []) {
-        const k = (tv?.key ?? '').toString().trim();
-        if (k) set.add(k);
-      }
-    }
-
-    const keys = [...set.values()]
-      .map((s) => s.trim())
-      .filter((s) => !!s)
-      .sort()
-      .slice(0, 40);
-
-    setSurveyTagKeysText(keys.join('\n'));
+    const { keys } = suggestSurveyKeysRaw();
     setToast({ kind: 'info', message: keys.length ? `Suggested ${keys.length} keys.` : 'No tag keys found to suggest.' });
-  }, [model]);
+  }, [suggestSurveyKeysRaw, setToast]);
 
-  const onOverlayFileChosen = useCallback(
-    async (file: File | null) => {
-      if (!file) return;
-      if (!model) return;
-
-      setOverlayImporting(true);
-      setOverlayImportError(null);
-      try {
-        const text = await readFileAsText(file);
-        const overlayFile = parseOverlayJson(text);
-
-        const result = importOverlayFileToStore({ overlayStore, overlayFile, model });
-
-        const report = result.resolveReport;
-        const warnings = result.warnings.map(warningToText);
-
-        setLastOverlayImport({ fileName: file.name || 'overlay.json', warnings, report });
-        setOverlayImportDialogOpen(false);
-
-        const warnSuffix = summarizeWarnings(warnings);
-        const msg = `Overlay imported: ${resolveSummary(report)}${warnSuffix}.`;
-        setToast({ kind: warnings.length || report.counts.orphan || report.counts.ambiguous ? 'warn' : 'success', message: msg });
-
-        // Auto-open report dialog when there are actionable issues.
-        if (warnings.length > 0 || report.counts.orphan > 0 || report.counts.ambiguous > 0) {
-          setOverlayReportOpen(true);
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setOverlayImportError(msg);
-      } finally {
-        setOverlayImporting(false);
-      }
-    },
-    [model]
-  );
-
-  const onOverlaySurveyFileChosen = useCallback(
-    async (file: File | null) => {
-      if (!file) return;
-      if (!model) return;
-
-      setSurveyImporting(true);
-      setSurveyImportError(null);
-      try {
-        const text = await readFileAsText(file);
-
-        const result = importOverlaySurveyCsvToStore({ model, overlayStore, csvText: text, options: surveyImportOptions });
-
-        const report = result.resolveReport;
-        const warnings = result.warnings;
-
-        setLastOverlayImport({ fileName: file.name || 'overlay-survey.csv', warnings, report });
-        setSurveyImportDialogOpen(false);
-
-        const warnSuffix = summarizeWarnings(warnings);
-        const msg = `Survey imported: ${resolveSummary(report)}${warnSuffix}.`;
-        setToast({ kind: warnings.length || report.counts.orphan || report.counts.ambiguous ? 'warn' : 'success', message: msg });
-
-        if (warnings.length > 0 || report.counts.orphan > 0 || report.counts.ambiguous > 0) {
-          setOverlayReportOpen(true);
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setSurveyImportError(msg);
-      } finally {
-        setSurveyImporting(false);
-      }
-    },
-    [model, surveyImportOptions]
-  );
+  const [overlayReportOpen, setOverlayReportOpen] = useState(false);
+  const [overlayManageOpen, setOverlayManageOpen] = useState(false);
 
   const doOverlayReport = useCallback(() => {
     if (!lastOverlayImport) return;
@@ -342,7 +103,7 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
       return;
     }
     setOverlayManageOpen(true);
-  }, [model, overlayHasEntries]);
+  }, [model, overlayHasEntries, setToast]);
 
   const downloadOverlayResolveReport = useCallback(() => {
     if (!model) return;
@@ -391,13 +152,6 @@ export function useOverlayActionHandlers({ model, fileName }: UseOverlayActionHa
       'text/markdown'
     );
   }, [lastOverlayImport, model]);
-
-  // Auto-dismiss toast.
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 4200);
-    return () => window.clearTimeout(t);
-  }, [toast]);
 
   return {
     overlayLoadInputRef,

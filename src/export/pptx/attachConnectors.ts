@@ -15,6 +15,8 @@ import {
 
 import { buildNodeMap } from './nodeMap';
 import { resolveEdgeStyle } from './edgeStyle';
+import { buildCxnSp } from './builders/connectorBuilder';
+import { buildNodeSp } from './builders/nodeBuilder';
 
 export type ConnectorReplaceResult = {
   xml: string;
@@ -154,18 +156,6 @@ function cssColorToHex(color: string | undefined | null): string {
 
   return '000000';
 }
-
-
-
-function ensureAvLst(doc: Document, nsA: string): Element {
-  return createEl(doc, nsA, 'a:avLst');
-}
-
-function addCxnSpLocks(doc: Document, nsA: string, cNvCxnSpPr: Element): void {
-  const locks = createEl(doc, nsA, 'a:cxnSpLocks');
-  cNvCxnSpPr.appendChild(locks);
-}
-
 function findFirstNodeInsertionIndex(spTree: Element): number {
   const children = Array.from(spTree.children);
   for (let i = 0; i < children.length; i++) {
@@ -382,76 +372,34 @@ if (!from || !to) {
 
     maxId += 1;
 
-    const cxnSp = createEl(doc, ns.p, 'p:cxnSp');
-
-    const nv = createEl(doc, ns.p, 'p:nvCxnSpPr');
-    const cNvPr = createEl(doc, ns.p, 'p:cNvPr');
-    cNvPr.setAttribute('id', String(maxId));
-    cNvPr.setAttribute('name', `Connector ${maxId}`);
-
-    const cNvCxnSpPr = createEl(doc, ns.p, 'p:cNvCxnSpPr');
-    addCxnSpLocks(doc, ns.a, cNvCxnSpPr);
-
-    const st = createEl(doc, ns.a, 'a:stCxn');
-    st.setAttribute('id', String(from.id));
-    st.setAttribute('idx', String(chooseConnIdx(center(from.rect), center(to.rect))));
-
-    const en = createEl(doc, ns.a, 'a:endCxn');
-    en.setAttribute('id', String(to.id));
-    en.setAttribute('idx', String(chooseConnIdx(center(to.rect), center(from.rect))));
-
-    cNvCxnSpPr.appendChild(st);
-    cNvCxnSpPr.appendChild(en);
-
-    const nvPr = createEl(doc, ns.p, 'p:nvPr');
-
-    nv.appendChild(cNvPr);
-    nv.appendChild(cNvCxnSpPr);
-    nv.appendChild(nvPr);
-
-    const spPr = createEl(doc, ns.p, 'p:spPr');
-
     const x = Math.min(b.x, b.x + b.cx);
     const y = Math.min(b.y, b.y + b.cy);
     const cx = Math.abs(b.cx);
     const cy = Math.abs(b.cy);
 
-    const xfrm = createEl(doc, ns.a, 'a:xfrm');
-    const off = createEl(doc, ns.a, 'a:off');
-    off.setAttribute('x', String(x));
-    off.setAttribute('y', String(y));
-    const ext = createEl(doc, ns.a, 'a:ext');
-    ext.setAttribute('cx', String(cx));
-    ext.setAttribute('cy', String(cy));
-    xfrm.appendChild(off);
-    xfrm.appendChild(ext);
-
-    const geom = createEl(doc, ns.a, 'a:prstGeom');
-    geom.setAttribute('prst', 'line');
-    geom.appendChild(ensureAvLst(doc, ns.a));
-
-    spPr.appendChild(xfrm);
-    spPr.appendChild(geom);
-
+    let ln: Element | null = null;
     if (ls.ln) {
-      const ln = ls.ln.cloneNode(true) as Element;
+      ln = ls.ln.cloneNode(true) as Element;
 
       const edgeMeta =
-  findEdgeMetaById(meta?.edges, mkId?.edgeId) ?? findBestEdgeMeta(meta?.edges, b);
+        findEdgeMetaById(meta?.edges, mkId?.edgeId) ?? findBestEdgeMeta(meta?.edges, b);
+      const style = resolveEdgeStyle(edgeMeta ?? null, mkId ?? null);
 
-const style = resolveEdgeStyle(edgeMeta ?? null, mkId ?? null);
+      if (style.dash === 'dash') ensureDash(doc, ns.a, ln, 'dash');
+      else if (style.dash === 'dot') ensureDash(doc, ns.a, ln, 'dot');
 
-if (style.dash === 'dash') ensureDash(doc, ns.a, ln, 'dash');
-else if (style.dash === 'dot') ensureDash(doc, ns.a, ln, 'dot');
-
-ensureEnd(doc, ns.a, ln, 'headEnd', style.head);
-ensureEnd(doc, ns.a, ln, 'tailEnd', style.tail);
-
-spPr.appendChild(ln);
+      ensureEnd(doc, ns.a, ln, 'headEnd', style.head);
+      ensureEnd(doc, ns.a, ln, 'tailEnd', style.tail);
     }
 
-    cxnSp.appendChild(nv);
-    cxnSp.appendChild(spPr);
+    const cxnSp = buildCxnSp(doc, { p: ns.p, a: ns.a }, {
+      shapeId: maxId,
+      name: `Connector ${maxId}`,
+      from: { id: from.id, idx: chooseConnIdx(center(from.rect), center(to.rect)) },
+      to: { id: to.id, idx: chooseConnIdx(center(to.rect), center(from.rect)) },
+      bbox: { x, y, cx, cy },
+      ln,
+    });
 
     if (insertBefore) spTree.insertBefore(cxnSp, insertBefore);
     else spTree.appendChild(cxnSp);
@@ -515,8 +463,6 @@ export function rebuildConnectorsFromMeta(slideXml: string, meta?: PptxPostProce
     let replaced = 0;
     let skipped = 0;
 
-    // Helper: emu -> string
-    const emu = (v: number) => String(Math.round(v));
 
     for (let i = 0; i < edges.length; i++) {
       const e = edges[i];
@@ -559,32 +505,6 @@ export function rebuildConnectorsFromMeta(slideXml: string, meta?: PptxPostProce
       const widthPt = typeof e.strokeWidthPt === 'number' ? e.strokeWidthPt : 1;
       const widthEmu = Math.max(12700, Math.round(widthPt * 12700)); // 1pt ~= 12700 EMU in DrawingML
 
-      const cxnSp = createEl(doc, ns.p, 'p:cxnSp');
-
-      // nvCxnSpPr
-      const nv = createEl(doc, ns.p, 'p:nvCxnSpPr');
-      const cNvPr = createEl(doc, ns.p, 'p:cNvPr');
-      cNvPr.setAttribute('id', String(8000 + i));
-      cNvPr.setAttribute('name', `EA_CXN:${e.edgeId ?? i}`);
-      const cNvCxnSpPr = createEl(doc, ns.p, 'p:cNvCxnSpPr');
-      const nvPr = createEl(doc, ns.p, 'p:nvPr');
-      nv.appendChild(cNvPr);
-      nv.appendChild(cNvCxnSpPr);
-      nv.appendChild(nvPr);
-
-      // spPr with xfrm and a:prstGeom
-      const spPr = createEl(doc, ns.p, 'p:spPr');
-      const xfrm = createEl(doc, ns.a, 'a:xfrm');
-      const off = createEl(doc, ns.a, 'a:off'); off.setAttribute('x', emu(x)); off.setAttribute('y', emu(y));
-      const ext = createEl(doc, ns.a, 'a:ext'); ext.setAttribute('cx', emu(cx)); ext.setAttribute('cy', emu(cy));
-      xfrm.appendChild(off); xfrm.appendChild(ext);
-      spPr.appendChild(xfrm);
-
-      const prstGeom = createEl(doc, ns.a, 'a:prstGeom'); prstGeom.setAttribute('prst','straightConnector1');
-      const avLst = createEl(doc, ns.a, 'a:avLst');
-      prstGeom.appendChild(avLst);
-      spPr.appendChild(prstGeom);
-
       // a:ln
       const ln = createEl(doc, ns.a, 'a:ln');
       ln.setAttribute('w', String(widthEmu));
@@ -613,13 +533,17 @@ export function rebuildConnectorsFromMeta(slideXml: string, meta?: PptxPostProce
         ln.appendChild(te);
       }
 
-      spPr.appendChild(ln);
+      const cxnSp = buildCxnSp(doc, { p: ns.p, a: ns.a }, {
+        shapeId: 8000 + i,
+        name: `EA_CXN:${e.edgeId ?? i}`,
+        from: { id: from.id, idx: 0 },
+        to: { id: to.id, idx: 0 },
+        bbox: { x, y, cx, cy },
+        prst: 'straightConnector1',
+        includeConnections: false,
+        ln,
+      });
 
-      // stCxn / endCxn
-
-      cxnSp.appendChild(nv);
-      cxnSp.appendChild(spPr);
-      
       spTree.appendChild(cxnSp);
       replaced++;
     }
@@ -646,139 +570,6 @@ function normalizeHex6(v: string | undefined | null, fallback: string): string {
     return (h[0]+h[0]+h[1]+h[1]+h[2]+h[2]).toUpperCase();
   }
   return fallback;
-}
-
-function createNodeShapeFromMeta(
-  doc: Document,
-  ns: { p: string; a: string },
-  shapeId: number,
-  rectEmu: PptxEmuRect,
-  nameLine: string,
-  typeLine?: string,
-  fillHex?: string,
-  strokeHex?: string,
-  textHex?: string
-): Element {
-  const sp = createEl(doc, ns.p, 'p:sp');
-
-  const nvSpPr = createEl(doc, ns.p, 'p:nvSpPr');
-  const cNvPr = createEl(doc, ns.p, 'p:cNvPr');
-  cNvPr.setAttribute('id', String(shapeId));
-  cNvPr.setAttribute('name', `EA_NODE:${shapeId}`);
-  const cNvSpPr = createEl(doc, ns.p, 'p:cNvSpPr');
-  const nvPr = createEl(doc, ns.p, 'p:nvPr');
-  nvSpPr.appendChild(cNvPr);
-  nvSpPr.appendChild(cNvSpPr);
-  nvSpPr.appendChild(nvPr);
-
-  const spPr = createEl(doc, ns.p, 'p:spPr');
-  const xfrm = createEl(doc, ns.a, 'a:xfrm');
-  const off = createEl(doc, ns.a, 'a:off'); off.setAttribute('x', String(Math.round(rectEmu.x))); off.setAttribute('y', String(Math.round(rectEmu.y)));
-  const ext = createEl(doc, ns.a, 'a:ext'); ext.setAttribute('cx', String(Math.round(rectEmu.cx))); ext.setAttribute('cy', String(Math.round(rectEmu.cy)));
-  xfrm.appendChild(off); xfrm.appendChild(ext);
-  spPr.appendChild(xfrm);
-
-  const prstGeom = createEl(doc, ns.a, 'a:prstGeom'); prstGeom.setAttribute('prst', 'roundRect');
-  prstGeom.appendChild(createEl(doc, ns.a, 'a:avLst'));
-  spPr.appendChild(prstGeom);
-
-  const fill = createEl(doc, ns.a, 'a:solidFill');
-  const fillClr = createEl(doc, ns.a, 'a:srgbClr');
-  fillClr.setAttribute('val', normalizeHex6(fillHex, '9FCFFF'));
-  fill.appendChild(fillClr);
-  spPr.appendChild(fill);
-
-  const ln = createEl(doc, ns.a, 'a:ln');
-  ln.setAttribute('w', '6350'); // matches pptxgen default from working file
-  const lnFill = createEl(doc, ns.a, 'a:solidFill');
-  const lnClr = createEl(doc, ns.a, 'a:srgbClr');
-  lnClr.setAttribute('val', normalizeHex6(strokeHex, '111111'));
-  lnFill.appendChild(lnClr);
-  ln.appendChild(lnFill);
-  spPr.appendChild(ln);
-
-  const txBody = createEl(doc, ns.p, 'p:txBody');
-  const bodyPr = createEl(doc, ns.a, 'a:bodyPr');
-  bodyPr.setAttribute('wrap', 'square');
-  bodyPr.setAttribute('lIns', '50800');
-  bodyPr.setAttribute('tIns', '50800');
-  bodyPr.setAttribute('rIns', '50800');
-  bodyPr.setAttribute('bIns', '50800');
-  bodyPr.setAttribute('rtlCol', '0');
-  bodyPr.setAttribute('anchor', 'ctr');
-  txBody.appendChild(bodyPr);
-  txBody.appendChild(createEl(doc, ns.a, 'a:lstStyle'));
-
-  const p = createEl(doc, ns.a, 'a:p');
-
-  // line 1 (bold, 14pt)
-  const pPr1 = createEl(doc, ns.a, 'a:pPr');
-  pPr1.setAttribute('algn', 'ctr');
-  pPr1.setAttribute('indent', '0');
-  pPr1.setAttribute('marL', '0');
-  pPr1.appendChild(createEl(doc, ns.a, 'a:buNone'));
-  p.appendChild(pPr1);
-
-  const r1 = createEl(doc, ns.a, 'a:r');
-  const rPr1 = createEl(doc, ns.a, 'a:rPr');
-  rPr1.setAttribute('lang', 'en-US');
-  rPr1.setAttribute('sz', '1400');
-  rPr1.setAttribute('b', '1');
-  rPr1.setAttribute('dirty', '0');
-  const rFill1 = createEl(doc, ns.a, 'a:solidFill');
-  const rClr1 = createEl(doc, ns.a, 'a:srgbClr');
-  rClr1.setAttribute('val', normalizeHex6(textHex, '111111'));
-  rFill1.appendChild(rClr1);
-  rPr1.appendChild(rFill1);
-  const latin1 = createEl(doc, ns.a, 'a:latin'); latin1.setAttribute('typeface', 'Calibri'); latin1.setAttribute('pitchFamily', '34'); latin1.setAttribute('charset', '0');
-  rPr1.appendChild(latin1);
-  r1.appendChild(rPr1);
-  const t1 = createEl(doc, ns.a, 'a:t');
-  t1.textContent = (nameLine ?? '').trim() + (typeLine ? '\n' : '');
-  r1.appendChild(t1);
-  p.appendChild(r1);
-
-  // line 2 (italic, 10pt)
-  if (typeLine) {
-    const pPr2 = createEl(doc, ns.a, 'a:pPr');
-    pPr2.setAttribute('algn', 'ctr');
-    pPr2.setAttribute('indent', '0');
-    pPr2.setAttribute('marL', '0');
-    pPr2.appendChild(createEl(doc, ns.a, 'a:buNone'));
-    p.appendChild(pPr2);
-
-    const r2 = createEl(doc, ns.a, 'a:r');
-    const rPr2 = createEl(doc, ns.a, 'a:rPr');
-    rPr2.setAttribute('lang', 'en-US');
-    rPr2.setAttribute('sz', '1000');
-    rPr2.setAttribute('i', '1');
-    rPr2.setAttribute('dirty', '0');
-    const rFill2 = createEl(doc, ns.a, 'a:solidFill');
-    const rClr2 = createEl(doc, ns.a, 'a:srgbClr');
-    rClr2.setAttribute('val', normalizeHex6(textHex, '111111'));
-    rFill2.appendChild(rClr2);
-    rPr2.appendChild(rFill2);
-    const latin2 = createEl(doc, ns.a, 'a:latin'); latin2.setAttribute('typeface', 'Calibri'); latin2.setAttribute('pitchFamily', '34'); latin2.setAttribute('charset', '0');
-    rPr2.appendChild(latin2);
-    r2.appendChild(rPr2);
-    const t2 = createEl(doc, ns.a, 'a:t');
-    t2.textContent = typeLine;
-    r2.appendChild(t2);
-    p.appendChild(r2);
-  }
-
-  const endPara = createEl(doc, ns.a, 'a:endParaRPr');
-  endPara.setAttribute('lang', 'en-US');
-  endPara.setAttribute('sz', '1000');
-  endPara.setAttribute('dirty', '0');
-  p.appendChild(endPara);
-
-  txBody.appendChild(p);
-
-  sp.appendChild(nvSpPr);
-  sp.appendChild(spPr);
-  sp.appendChild(txBody);
-  return sp;
 }
 
 export function rebuildSlideFromMeta(slideXml: string, meta?: PptxPostProcessMeta): ConnectorReplaceResult {
@@ -821,7 +612,7 @@ export function rebuildSlideFromMeta(slideXml: string, meta?: PptxPostProcessMet
       const rectEmu: PptxEmuRect = { x: inchToEmu(r.x), y: inchToEmu(r.y), cx: inchToEmu(r.w), cy: inchToEmu(r.h) };
       nodeRectEmuByElementId.set(String(n.elementId), rectEmu);
 
-      const sp = createNodeShapeFromMeta(
+      const sp = buildNodeSp(
         doc,
         { p: ns.p, a: ns.a },
         id,
@@ -880,40 +671,7 @@ const strokeHex = normalizeHex6(e.strokeHex, '111111');
       const widthPt = typeof e.strokeWidthPt === 'number' ? e.strokeWidthPt : 1;
       const widthEmu = Math.max(12700, Math.round(widthPt * 12700));
 
-      const cxnSp = createEl(doc, ns.p, 'p:cxnSp');
-
-      const nv = createEl(doc, ns.p, 'p:nvCxnSpPr');
-      const cNvPr = createEl(doc, ns.p, 'p:cNvPr');
-      cNvPr.setAttribute('id', String(8000 + i));
-      cNvPr.setAttribute('name', `EA_CXN:${String(e.edgeId ?? i)}`);
-      const cNvCxnSpPr = createEl(doc, ns.p, 'p:cNvCxnSpPr');
-      // Lock aspect/position per PowerPoint expectations
-      const locks = createEl(doc, ns.a, 'a:cxnSpLocks');
-      locks.setAttribute('noGrp', '1');
-      cNvCxnSpPr.appendChild(locks);
-
-      const stCxn = createEl(doc, ns.a, 'a:stCxn');
-      stCxn.setAttribute('id', String(fromId));
-      stCxn.setAttribute('idx', String(stIdx));
-      const endCxn = createEl(doc, ns.a, 'a:endCxn');
-      endCxn.setAttribute('id', String(toId));
-      endCxn.setAttribute('idx', String(enIdx));
-      cNvCxnSpPr.appendChild(stCxn);
-      cNvCxnSpPr.appendChild(endCxn);
-
-      const nvPr = createEl(doc, ns.p, 'p:nvPr');
-      nv.appendChild(cNvPr); nv.appendChild(cNvCxnSpPr); nv.appendChild(nvPr);
-
-      const spPr = createEl(doc, ns.p, 'p:spPr');
-      const xfrm = createEl(doc, ns.a, 'a:xfrm');
-      const off = createEl(doc, ns.a, 'a:off'); off.setAttribute('x', String(Math.round(x))); off.setAttribute('y', String(Math.round(y)));
-      const ext = createEl(doc, ns.a, 'a:ext'); ext.setAttribute('cx', String(Math.round(cx))); ext.setAttribute('cy', String(Math.round(cy)));
-      xfrm.appendChild(off); xfrm.appendChild(ext);
-      spPr.appendChild(xfrm);
-
-      const prstGeom = createEl(doc, ns.a, 'a:prstGeom'); prstGeom.setAttribute('prst','straightConnector1');
-      prstGeom.appendChild(createEl(doc, ns.a, 'a:avLst'));
-      spPr.appendChild(prstGeom);
+      // Build connector with strict child ordering
 
       const ln = createEl(doc, ns.a, 'a:ln');
       ln.setAttribute('w', String(widthEmu));
@@ -927,17 +685,16 @@ const strokeHex = normalizeHex6(e.strokeHex, '111111');
       if (head && head !== 'none') { const he = createEl(doc, ns.a, 'a:headEnd'); he.setAttribute('type', head); if (head==='diamond'){he.setAttribute('w','med'); he.setAttribute('len','med');} ln.appendChild(he); }
       if (tail && tail !== 'none') { const te = createEl(doc, ns.a, 'a:tailEnd'); te.setAttribute('type', tail); if (tail==='diamond'){te.setAttribute('w','med'); te.setAttribute('len','med');} ln.appendChild(te); }
 
-      spPr.appendChild(ln);
-
-      const st = createEl(doc, ns.p, 'p:stCxn');
-      st.setAttribute('id', String(fromId));
-      st.setAttribute('idx', String(stIdx));
-      const en = createEl(doc, ns.p, 'p:endCxn');
-      en.setAttribute('id', String(toId));
-      en.setAttribute('idx', String(enIdx));
-
-      cxnSp.appendChild(nv);
-      cxnSp.appendChild(spPr);
+      const cxnSp = buildCxnSp(doc, { p: ns.p, a: ns.a }, {
+        shapeId: 8000 + i,
+        name: `EA_CXN:${String(e.edgeId ?? i)}`,
+        from: { id: fromId, idx: stIdx },
+        to: { id: toId, idx: enIdx },
+        bbox: { x, y, cx, cy },
+        prst: 'straightConnector1',
+        locksAttrs: { noGrp: '1' },
+        ln,
+      });
       
       if (firstNodeEl) spTree.insertBefore(cxnSp, firstNodeEl);
       else spTree.appendChild(cxnSp);

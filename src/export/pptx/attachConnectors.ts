@@ -14,6 +14,7 @@ import {
 } from './pptxMarkers';
 
 import { buildNodeMap } from './nodeMap';
+import { resolveEdgeStyle } from './edgeStyle';
 
 export type ConnectorReplaceResult = {
   xml: string;
@@ -438,18 +439,13 @@ if (!from || !to) {
       const edgeMeta =
   findEdgeMetaById(meta?.edges, mkId?.edgeId) ?? findBestEdgeMeta(meta?.edges, b);
 
-const patVal = (edgeMeta?.linePattern ??
-  mkId?.pattern ??
-  (edgeMeta?.dashed ? 'dashed' : 'solid')) as 'solid' | 'dashed' | 'dotted';
+const style = resolveEdgeStyle(edgeMeta ?? null, mkId ?? null);
 
-if (patVal === 'dashed') ensureDash(doc, ns.a, ln, 'dash');
-else if (patVal === 'dotted') ensureDash(doc, ns.a, ln, 'dot');
+if (style.dash === 'dash') ensureDash(doc, ns.a, ln, 'dash');
+else if (style.dash === 'dot') ensureDash(doc, ns.a, ln, 'dot');
 
-const head = (edgeMeta?.pptxHeadEnd ?? mkId?.head ?? 'none') as 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
-const tail = (edgeMeta?.pptxTailEnd ?? mkId?.tail ?? 'none') as 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
-
-ensureEnd(doc, ns.a, ln, 'headEnd', head);
-ensureEnd(doc, ns.a, ln, 'tailEnd', tail);
+ensureEnd(doc, ns.a, ln, 'headEnd', style.head);
+ensureEnd(doc, ns.a, ln, 'tailEnd', style.tail);
 
 spPr.appendChild(ln);
     }
@@ -549,9 +545,10 @@ export function rebuildConnectorsFromMeta(slideXml: string, meta?: PptxPostProce
       // Determine connection indices (0..3) on each shape
       // Connector index selection was used in early prototypes; current PPTX connector routing uses absolute geometry.
       // Style
-      const pat = String(e.linePattern ?? (e.dashed ? 'dashed' : 'solid'));
-      let head = String(e.pptxHeadEnd ?? 'none');
-      let tail = String(e.pptxTailEnd ?? 'none');
+      const style = resolveEdgeStyle(e, null);
+      const pat = style.dash === 'dash' ? 'dashed' : style.dash === 'dot' ? 'dotted' : 'solid';
+      let head = style.head;
+      let tail = style.tail;
       const rt = String(e.relType ?? '').toLowerCase();
       if (rt.includes('composition') || rt.includes('aggregation')) {
         head = 'diamond';
@@ -875,11 +872,11 @@ export function rebuildSlideFromMeta(slideXml: string, meta?: PptxPostProcessMet
       const stIdx = chooseIdx(fromRect, toRect);
       const enIdx = chooseIdx(toRect, fromRect);
 
-      const pat = String(e.linePattern ?? (e.dashed ? 'dashed' : 'solid'));
-      const head = String(e.pptxHeadEnd ?? 'none');
-      const tail = String(e.pptxTailEnd ?? 'none');
-
-      const strokeHex = normalizeHex6(e.strokeHex, '111111');
+      const style = resolveEdgeStyle(e, null);
+      const pat = style.dash === 'dash' ? 'dashed' : style.dash === 'dot' ? 'dotted' : 'solid';
+      let head = style.head;
+      let tail = style.tail;
+const strokeHex = normalizeHex6(e.strokeHex, '111111');
       const widthPt = typeof e.strokeWidthPt === 'number' ? e.strokeWidthPt : 1;
       const widthEmu = Math.max(12700, Math.round(widthPt * 12700));
 

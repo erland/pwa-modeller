@@ -7,6 +7,12 @@ import {
   readNumAttr,
 } from './xmlDom';
 
+import {
+  parseEdgeIdStyleMarker,
+  parseEdgeMarker,
+  parseNodeMarker,
+} from './pptxMarkers';
+
 export type ConnectorReplaceResult = {
   xml: string;
   replacedCount: number;
@@ -168,87 +174,7 @@ function findFirstNodeInsertionIndex(spTree: Element): number {
   return children.length;
 }
 
-function parseNodeMarker(marker: string): string | null {
-  if (!marker.startsWith('EA_NODE:')) return null;
-  const v = marker.slice('EA_NODE:'.length).trim();
-  return v ? v : null;
-}
-
-function parseEdgeMarker(marker: string): { from: string; to: string; relType?: string } | null {
-  if (!marker.startsWith('EA_EDGE:')) return null;
-  const v = marker.slice('EA_EDGE:'.length).trim();
-  const parts = v.split('|');
-  const core = (parts[0] ?? '').trim();
-  const relType = (parts[1] ?? '').trim() || undefined;
-  const mm = core.match(/^([^\s]+)->([^\s]+)$/);
-  if (!mm) return null;
-  return { from: mm[1], to: mm[2], relType };
-}
-
-function parseEdgeIdStyleMarker(marker: string): {
-  edgeId: string;
-  from?: string;
-  to?: string;
-  relType?: string;
-  head?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
-  tail?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
-  pattern?: 'solid' | 'dashed' | 'dotted';
-} | null {
-  if (!marker.startsWith('EA_EDGEID:')) return null;
-  const rest = marker.slice('EA_EDGEID:'.length).trim();
-  const parts = rest.split('|').map((p) => p.trim()).filter((p) => p.length > 0);
-  const edgeId = parts[0] ?? '';
-  if (!edgeId) return null;
-
-  const fromToPart = parts.find((p) => p.includes('->'));
-  let from: string | undefined;
-  let to: string | undefined;
-  if (fromToPart) {
-    const mm = fromToPart.match(/^([^\s]+)->([^\s]+)$/);
-    if (mm) {
-      from = mm[1];
-      to = mm[2];
-    }
-  }
-
-  const relType =
-    parts.find((p) => p !== edgeId && !p.includes('->') && !p.startsWith('h=') && !p.startsWith('t=') && !p.startsWith('p=')) ||
-    undefined;
-
-  const asMarkerEnd = (
-    v: string | undefined,
-  ): 'none' | 'triangle' | 'arrow' | 'diamond' | 'oval' | undefined => {
-    if (!v) return undefined;
-    switch (v) {
-      case 'none':
-      case 'triangle':
-      case 'arrow':
-      case 'diamond':
-      case 'oval':
-        return v;
-      default:
-        return undefined;
-    }
-  };
-
-  const asLinePattern = (v: string | undefined): 'solid' | 'dashed' | 'dotted' | undefined => {
-    if (!v) return undefined;
-    switch (v) {
-      case 'solid':
-      case 'dashed':
-      case 'dotted':
-        return v;
-      default:
-        return undefined;
-    }
-  };
-
-  const head = asMarkerEnd(parts.find((p) => p.startsWith('h='))?.slice(2) ?? undefined);
-  const tail = asMarkerEnd(parts.find((p) => p.startsWith('t='))?.slice(2) ?? undefined);
-  const pattern = asLinePattern(parts.find((p) => p.startsWith('p='))?.slice(2) ?? undefined);
-
-  return { edgeId, from, to, relType, head, tail, pattern };
-}
+// Marker parsing helpers moved to ./pptxMarkers (pure + unit tested)
 
 function findEdgeMetaById(metaEdges: PptxEdgeMeta[] | undefined, edgeId: string | undefined): PptxEdgeMeta | null {
   if (!metaEdges || !edgeId) return null;

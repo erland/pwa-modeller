@@ -1,4 +1,11 @@
 import { inchToEmu, PptxEmuRect, PptxEdgeMeta, PptxPostProcessMeta } from './pptxPostProcessMeta';
+import {
+  createEl,
+  findAllByLocalName,
+  findFirstByLocalName,
+  getPptxNs,
+  readNumAttr,
+} from './xmlDom';
 
 export type ConnectorReplaceResult = {
   xml: string;
@@ -7,46 +14,6 @@ export type ConnectorReplaceResult = {
   notes: string[];
 };
 
-type Ns = { p: string; a: string };
-
-function getNs(doc: Document): Ns {
-  const root = doc.documentElement;
-  const p =
-    root.lookupNamespaceURI('p') ??
-    root.namespaceURI ??
-    'http://schemas.openxmlformats.org/presentationml/2006/main';
-  const a = root.lookupNamespaceURI('a') ?? 'http://schemas.openxmlformats.org/drawingml/2006/main';
-  return { p, a };
-}
-
-function findFirstByLocalName(root: Element, localName: string): Element | null {
-  const stack: Element[] = [root];
-  while (stack.length) {
-    const el = stack.pop()!;
-    if (el.localName === localName) return el;
-    for (let i = 0; i < el.children.length; i++) stack.push(el.children[i]);
-  }
-  return null;
-}
-
-function findAllByLocalName(root: Element, localName: string): Element[] {
-  const out: Element[] = [];
-  const stack: Element[] = [root];
-  while (stack.length) {
-    const el = stack.pop()!;
-    if (el.localName === localName) out.push(el);
-    for (let i = 0; i < el.children.length; i++) stack.push(el.children[i]);
-  }
-  return out;
-}
-
-function readNumAttr(el: Element | null, name: string): number | null {
-  if (!el) return null;
-  const v = el.getAttribute(name);
-  if (!v) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
 
 function getSpTree(doc: Document): Element | null {
   const root = doc.documentElement;
@@ -133,10 +100,6 @@ function chooseConnIdx(from: { x: number; y: number }, to: { x: number; y: numbe
   const dy = to.y - from.y;
   if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 1 : 3;
   return dy >= 0 ? 2 : 0;
-}
-
-function createEl(doc: Document, ns: string, qname: string): Element {
-  return doc.createElementNS(ns, qname);
 }
 
 function readShapeRectEmu(el: Element, nsA: string): PptxEmuRect | null {
@@ -383,7 +346,7 @@ export function replaceAllLineShapesWithConnectors(
   }
 
   const doc = new DOMParser().parseFromString(slideXml, 'application/xml');
-  const ns = getNs(doc);
+  const ns = getPptxNs(doc);
   const spTree = getSpTree(doc);
   if (!spTree) return { xml: slideXml, replacedCount: 0, skippedCount: 0, notes: ['spTree not found.'] };
 

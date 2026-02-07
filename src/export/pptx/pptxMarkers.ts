@@ -72,13 +72,13 @@ function asLinePattern(v: string | undefined): LinePattern | undefined {
 export function parseEdgeIdStyleMarker(marker: string): EdgeIdStyleMarkerInfo | null {
   if (!marker.startsWith('EA_EDGEID:')) return null;
   const rest = marker.slice('EA_EDGEID:'.length).trim();
-  // Important: the first segment (before the first '|') is the edgeId.
-  // If that segment is empty (e.g. 'EA_EDGEID:|A->B'), treat as invalid.
   const rawParts = rest.split('|').map((p) => p.trim());
+
+  // EdgeId must be the first segment (before the first '|'). Do not skip empty segments.
   const edgeId = rawParts[0] ?? '';
   if (!edgeId) return null;
 
-  // Remaining segments are optional metadata; ignore empty ones.
+  // Optional segments may be missing; for those we can safely ignore empty parts.
   const parts = rawParts.filter((p) => p.length > 0);
 
   const fromToPart = parts.find((p) => p.includes('->'));

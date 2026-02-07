@@ -13,6 +13,8 @@ import {
   parseNodeMarker,
 } from './pptxMarkers';
 
+import { buildNodeMap } from './nodeMap';
+
 export type ConnectorReplaceResult = {
   xml: string;
   replacedCount: number;
@@ -487,75 +489,18 @@ export function rebuildConnectorsFromMeta(slideXml: string, meta?: PptxPostProce
 
     const children = Array.from(spTree.childNodes).filter((n) => n.nodeType === 1) as Element[];
 
-    // Build node map from markers
-    const nodeIdToShape = new Map<string, { id: number; rect: PptxEmuRect }>();
-    for (const el of children) {
-      // node shapes are p:sp elements with EA_NODEID marker in name/descr
-      if (el.localName !== 'sp') continue;
-      const mk = getShapeMarker(el);
-      const nodeId = parseNodeMarker(mk);
-      if (!nodeId) continue;
+    // Build node map (markers first, then geometry fallback)
+    const { map: nodeIdToShape, notes: nodeMapNotes } = buildNodeMap({
+      children,
+      nsP: ns.p,
+      nsA: ns.a,
+      meta,
+      getShapeMarker,
+      readShapeRectEmu,
+    });
+    notes.push(...nodeMapNotes);
 
-      const cNvPr = el.getElementsByTagNameNS(ns.p, 'cNvPr')[0];
-      const idAttr = cNvPr?.getAttribute('id');
-      const shapeId = idAttr ? Number(idAttr) : NaN;
-      const rect = readShapeRectEmu(el, ns.a);
-      if (!Number.isFinite(shapeId) || !rect) continue;
-      nodeIdToShape.set(nodeId, { id: shapeId, rect });
-    }
-
-
-// Fallback: if node markers are not present in slide XML (common with pptxgenjs),
-// build node map by matching meta.node rects to slide shapes by geometry.
-if (nodeIdToShape.size === 0 && meta?.nodes?.length) {
-  const candidates: { id: number; rect: PptxEmuRect }[] = [];
-  for (const el of children) {
-    if (el.localName !== 'sp') continue;
-    const cNvPr = el.getElementsByTagNameNS(ns.p, 'cNvPr')[0];
-    const idAttr = cNvPr?.getAttribute('id');
-    const shapeId = idAttr ? Number(idAttr) : NaN;
-    const rect = readShapeRectEmu(el, ns.a);
-    if (!Number.isFinite(shapeId) || !rect) continue;
-
-    const prst = el.getElementsByTagNameNS(ns.a, 'prstGeom')[0]?.getAttribute('prst') ?? '';
-    // Exclude footer/background-ish shapes; focus on the node roundRect/rect shapes.
-    if (prst === 'line') continue;
-    candidates.push({ id: shapeId, rect });
-  }
-
-  const used = new Set<number>();
-  const score = (a: PptxEmuRect, b: PptxEmuRect): number =>
-    Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.cx - b.cx) + Math.abs(a.cy - b.cy);
-
-  for (const n of meta.nodes) {
-    const target: PptxEmuRect = {
-      x: inchToEmu(n.rectIn.x),
-      y: inchToEmu(n.rectIn.y),
-      cx: inchToEmu(n.rectIn.w),
-      cy: inchToEmu(n.rectIn.h),
-    };
-
-    let best: { id: number; rect: PptxEmuRect } | null = null;
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    for (const c of candidates) {
-      if (used.has(c.id)) continue;
-      const s = score(c.rect, target);
-      if (s < bestScore) {
-        bestScore = s;
-        best = c;
-      }
-    }
-
-    if (best) {
-      used.add(best.id);
-      nodeIdToShape.set(n.elementId, { id: best.id, rect: best.rect });
-    }
-  }
-
-  notes.push(`Fallback node map via geometry: matched ${nodeIdToShape.size}/${meta.nodes.length} nodes.`);
-}
-    // Remove existing connectors and any placeholder line shapes (p:sp with prstGeom line) to avoid duplicates
+// Remove existing connectors and any placeholder line shapes (p:sp with prstGeom line) to avoid duplicates
     let removed = 0;
     for (const el of children) {
       if (el.localName === 'cxnSp') {

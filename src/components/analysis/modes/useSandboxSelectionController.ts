@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback } from 'react';
 import type { MouseEvent } from 'react';
 
 import type { Relationship } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import type { SandboxNode } from '../workspace/controller/sandboxTypes';
+
+import {
+  type SandboxSelectedEdge,
+  toggleEdgeSelection,
+  useSandboxSelectionState,
+} from './sandboxSelection';
+
+export type { SandboxSelectedEdge } from './sandboxSelection';
 
 function blurDocumentActiveElement(): void {
   const active = document.activeElement;
@@ -17,26 +25,6 @@ function blurDocumentActiveElement(): void {
   const maybe = active as unknown as { blur?: () => void };
   if (typeof maybe.blur === 'function') maybe.blur();
 }
-
-function getSelectedElementId(selection: Selection): string | null {
-  switch (selection.kind) {
-    case 'element':
-      return selection.elementId;
-    case 'viewNode':
-      return selection.elementId;
-    case 'viewNodes':
-      return selection.elementIds[0] ?? null;
-    default:
-      return null;
-  }
-}
-
-export type SandboxSelectedEdge = {
-  id: string;
-  type: string;
-  sourceElementId: string;
-  targetElementId: string;
-};
 
 export function useSandboxSelectionController({
   selection,
@@ -68,73 +56,41 @@ export function useSandboxSelectionController({
   onCanvasClick: (e: MouseEvent<SVGSVGElement>) => void;
   onClickNode: (e: MouseEvent<SVGGElement>, elementId: string) => void;
 } {
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-
-  // Sandbox-local pair selection for "Insert between".
-  // Keeps sandbox operations independent from the global single-selection UX.
-  const [pairSelection, setPairSelection] = useState<string[]>([]);
-
-  // Keep local edge highlight in sync with global selection so the PropertiesPanel can drive selection.
-  useEffect(() => {
-    if (selection.kind === 'relationship') {
-      setSelectedEdgeId(selection.relationshipId);
-      setPairSelection([]);
-      return;
-    }
-    setSelectedEdgeId(null);
-  }, [selection]);
-
-  const selectedElementId = useMemo(() => getSelectedElementId(selection), [selection]);
-
-  const insertAnchors = useMemo(() => {
-    const uniq = Array.from(new Set(selectionElementIds.filter((id) => nodeById.has(id))));
-    return uniq;
-  }, [nodeById, selectionElementIds]);
-
-  const pairAnchors = useMemo(() => {
-    const uniq = Array.from(new Set(pairSelection.filter((id) => nodeById.has(id))));
-    return uniq.slice(0, 2);
-  }, [nodeById, pairSelection]);
-
-  const addRelatedAnchors = useMemo(() => {
-    const raw = pairSelection.length ? pairSelection : selectionElementIds;
-    const uniq = Array.from(new Set(raw.filter((id) => nodeById.has(id))));
-    return uniq;
-  }, [nodeById, pairSelection, selectionElementIds]);
-
-  const selectedEdge = useMemo((): SandboxSelectedEdge | null => {
-    if (!selectedEdgeId) return null;
-    const r = (modelRelationships as Record<string, Relationship | undefined>)[selectedEdgeId];
-    if (!r) return null;
-    if (!r.sourceElementId || !r.targetElementId) return null;
-    if (!nodeById.has(r.sourceElementId)) return null;
-    if (!nodeById.has(r.targetElementId)) return null;
-    return {
-      id: r.id,
-      type: String(r.type),
-      sourceElementId: r.sourceElementId,
-      targetElementId: r.targetElementId,
-    };
-  }, [modelRelationships, nodeById, selectedEdgeId]);
+  const {
+    selectedElementId,
+    selectedEdgeId,
+    selectedEdge,
+    pairSelection,
+    pairAnchors,
+    addRelatedAnchors,
+    insertAnchors,
+    clearLocalSelection,
+    selectRelationship,
+    clickNode,
+  } = useSandboxSelectionState({
+    selection,
+    selectionElementIds,
+    nodeById,
+    modelRelationships,
+  });
 
   const onEdgeHitClick = useCallback(
     (e: MouseEvent<SVGPathElement>, relationshipId: string) => {
       e.stopPropagation();
 
       // Toggle relationship selection: clicking the selected edge again clears selection.
-      if (selectedEdgeId === relationshipId) {
+      const next = toggleEdgeSelection(selectedEdgeId, relationshipId);
+      if (!next) {
         blurDocumentActiveElement();
-        setSelectedEdgeId(null);
-        setPairSelection([]);
+        clearLocalSelection();
         onClearSelection();
         return;
       }
 
-      setSelectedEdgeId(relationshipId);
-      setPairSelection([]);
-      onSelectRelationship(relationshipId);
+      selectRelationship(next);
+      onSelectRelationship(next);
     },
-    [onClearSelection, onSelectRelationship, selectedEdgeId]
+    [clearLocalSelection, onClearSelection, onSelectRelationship, selectRelationship, selectedEdgeId]
   );
 
   const onCanvasClick = useCallback(
@@ -143,40 +99,20 @@ export function useSandboxSelectionController({
       if (e.target !== e.currentTarget) return;
       if (consumeSuppressNextBackgroundClick()) return;
       blurDocumentActiveElement();
-      setSelectedEdgeId(null);
-      setPairSelection([]);
+      clearLocalSelection();
       onClearSelection();
     },
-    [consumeSuppressNextBackgroundClick, onClearSelection]
+    [clearLocalSelection, consumeSuppressNextBackgroundClick, onClearSelection]
   );
 
   const onClickNode = useCallback(
     (e: MouseEvent<SVGGElement>, elementId: string) => {
       e.stopPropagation();
-      setSelectedEdgeId(null);
-
-      if (e.shiftKey) {
-        setPairSelection((prev) => {
-          const cur = prev.filter(Boolean);
-          if (cur.length === 0) return [elementId];
-          if (cur.length === 1) {
-            return cur[0] === elementId ? [] : [cur[0], elementId];
-          }
-
-          const [a, b] = cur;
-          if (elementId === a) return [b];
-          if (elementId === b) return [a];
-          // Replace the secondary selection but keep the primary stable.
-          return [a, elementId];
-        });
-      } else {
-        // Normal click sets a single local selection (primary).
-        setPairSelection([elementId]);
-      }
+      clickNode(elementId, e.shiftKey);
 
       onSelectElement(elementId);
     },
-    [onSelectElement]
+    [clickNode, onSelectElement]
   );
 
   return {

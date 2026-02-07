@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-
 import type { Model } from '../../../domain';
 import type { Selection } from '../../model/selection';
 import type {
   SandboxNode,
   SandboxAddRelatedDirection,
-  SandboxInsertIntermediatesMode,
   SandboxInsertIntermediatesOptions,
   SandboxRelationshipVisibilityMode,
   SandboxRelationshipsState,
@@ -13,33 +10,13 @@ import type {
   SandboxState,
 } from '../workspace/controller/sandboxTypes';
 
-import type { Point } from '../../diagram/geometry';
-
-import { computeSandboxOrthogonalPointsByRelationshipId } from './sandboxRouting';
+import { useSandboxModeController } from './useSandboxModeController';
 
 import '../../../styles/analysisSandbox.css';
 
-import { SaveSandboxAsDiagramDialog } from './SaveSandboxAsDiagramDialog';
-import { SandboxInsertDialog } from './SandboxInsertDialog';
-import { SandboxCanvas } from './SandboxCanvas';
-import { SandboxRelationshipsPanel } from './SandboxRelationshipsPanel';
-import { SandboxToolbar } from './SandboxToolbar';
-import { OverlaySettingsDialog } from '../OverlaySettingsDialog';
-import { useMiniGraphOptionsForModel } from '../results/useMiniGraphOptionsForModel';
-import { useSandboxViewport } from './useSandboxViewport';
-import { useSandboxRelationships } from './useSandboxRelationships';
-import { useSandboxSelectionController } from './useSandboxSelectionController';
-import { useSandboxDialogController } from './useSandboxDialogController';
-import { useSandboxDragController } from './useSandboxDragController';
-import { SANDBOX_GRID_SIZE, SANDBOX_NODE_H, SANDBOX_NODE_W } from './sandboxConstants';
-
-import {
-  buildAnalysisGraph,
-  computeNodeMetric,
-  discoverNumericPropertyKeys,
-  readNumericPropertyFromElement,
-} from '../../../domain';
-import { getEffectiveTagsForElement, overlayStore, useOverlayStore } from '../../../store/overlay';
+import { SandboxModeDialogs } from './SandboxModeDialogs';
+import { SandboxModePanels } from './SandboxModePanels';
+import { useSandboxShortcuts } from './useSandboxShortcuts';
 
 export function SandboxModeView({
   model,
@@ -108,50 +85,47 @@ export function SandboxModeView({
   onClearWarning: () => void;
   onUndoLastInsert: () => void;
 }) {
+  const ctrl = useSandboxModeController({
+    model,
+    nodes,
+    relationships,
+    ui,
+    selection,
+    selectionElementIds,
+    onSelectElement,
+    onSelectRelationship,
+    onClearSelection,
+    onMoveNode,
+    onAddNodeAt,
+    onSetEnabledRelationshipTypes,
+  });
+
+  const {
+    viewport,
+    nodeById,
+    allRelationshipTypes,
+    edgeCapDismissed,
+    setEdgeCapDismissed,
+    canAddSelected,
+    canRemoveSelected,
+    canInsertIntermediates,
+    canAddRelated,
+    selectionController,
+    dialogController,
+    dragController,
+    relationshipsController,
+    orthogonalPointsByRelationshipId,
+    overlay,
+    insertUi,
+  } = ctrl;
+
   const {
     svgRef,
     viewBox,
     fitToContent,
     resetView,
-    clientToWorld,
-    consumeSuppressNextBackgroundClick,
     onPointerDownCanvas,
-    onPointerMoveCanvas,
-    onPointerUpOrCancelCanvas,
-  } = useSandboxViewport({ nodes, nodeW: SANDBOX_NODE_W, nodeH: SANDBOX_NODE_H });
-
-  const [edgeCapDismissed, setEdgeCapDismissed] = useState(false);
-
-  // Overlay settings (same overlay UI as Related elements/Paths mini graph).
-  const modelId = model.id ?? '';
-  const overlayVersion = useOverlayStore((s) => s.getVersion());
-  const { graphOptions, setGraphOptions } = useMiniGraphOptionsForModel(modelId);
-  const [isOverlayOpen, setIsOverlayOpen] = useState(false);
-
-  const [insertMode, setInsertMode] = useState<SandboxInsertIntermediatesMode>('shortest');
-  const [insertK, setInsertK] = useState(3);
-  const [insertMaxHops, setInsertMaxHops] = useState(8);
-  const [insertDirection, setInsertDirection] = useState<SandboxAddRelatedDirection>('both');
-
-  const nodeById = useMemo(() => {
-    const m = new Map<string, SandboxNode>();
-    for (const n of nodes) m.set(n.elementId, n);
-    return m;
-  }, [nodes]);
-
-  // Sub-model containing only the sandbox content (used for overlay metrics + property key discovery).
-  const sandboxSubModel = useMemo(() => {
-    const elementIds = nodes.map((n) => n.elementId);
-    const elements: typeof model.elements = {};
-    for (const id of elementIds) {
-      const el = model.elements[id];
-      if (el) elements[id] = el;
-    }
-
-    const relationshipsById: typeof model.relationships = {};
-    // NOTE: We seed relationships later in the render cycle based on the computed visible relationships.
-    return { ...model, elements, relationships: relationshipsById };
-  }, [model, nodes]);
+  } = viewport;
 
   const {
     selectedElementId,
@@ -163,16 +137,7 @@ export function SandboxModeView({
     onEdgeHitClick,
     onCanvasClick,
     onClickNode,
-  } = useSandboxSelectionController({
-    selection,
-    selectionElementIds,
-    nodeById,
-    modelRelationships: model.relationships,
-    consumeSuppressNextBackgroundClick,
-    onSelectElement,
-    onSelectRelationship,
-    onClearSelection,
-  });
+  } = selectionController;
 
   const {
     saveDialogOpen,
@@ -189,36 +154,15 @@ export function SandboxModeView({
     addRelatedDialogAnchors,
     openAddRelatedDialog,
     closeAddRelatedDialog,
-  } = useSandboxDialogController({
-    pairAnchors,
-    insertAnchors,
-    addRelatedAnchors,
-    selectedEdge,
-  });
+  } = dialogController;
 
-  const canAddSelected = useMemo(() => {
-    for (const id of selectionElementIds) {
-      if (!model.elements[id]) continue;
-      if (!nodeById.has(id)) return true;
-    }
-    return false;
-  }, [model.elements, nodeById, selectionElementIds]);
-
-  const canRemoveSelected = useMemo(() => {
-    for (const id of selectionElementIds) {
-      if (nodeById.has(id)) return true;
-    }
-    return false;
-  }, [nodeById, selectionElementIds]);
-
-  const allRelationshipTypes = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of Object.values(model.relationships)) {
-      if (!r.type) continue;
-      set.add(r.type);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [model]);
+  const {
+    baseVisibleRelationships,
+    availableRelationshipTypes,
+    selectedTypeCount,
+    edgeOverflow,
+    renderedRelationships,
+  } = relationshipsController;
 
   const {
     isDropTarget,
@@ -228,170 +172,73 @@ export function SandboxModeView({
     onDragOver,
     onDragLeave,
     onDrop,
-  } = useSandboxDragController({
-    nodeById,
-    model,
-    clientToWorld,
-    onMoveNode,
-    onPointerMoveCanvas,
-    onPointerUpOrCancelCanvas,
-    nodeW: SANDBOX_NODE_W,
-    nodeH: SANDBOX_NODE_H,
-    onAddNodeAt,
-    onSelectElement,
-  });
-
-  const canInsertIntermediates = useMemo(() => {
-    // Prefer the local pair selection; fall back to global selection if it happens to include 2 sandbox nodes.
-    const anchors = pairAnchors.length ? pairAnchors : insertAnchors;
-    // Relationship type filtering is configured in the dialog; don't block opening it.
-    return anchors.length === 2;
-  }, [insertAnchors, pairAnchors]);
-
-  const canAddRelated = useMemo(() => {
-    return addRelatedAnchors.length > 0;
-  }, [addRelatedAnchors.length]);
+  } = dragController;
 
   const {
-    baseVisibleRelationships,
-    availableRelationshipTypes,
-    selectedTypeCount,
-    edgeOverflow,
-    renderedRelationships,
-  } = useSandboxRelationships({
-    modelRelationships: model.relationships,
-    nodes,
-    relationships,
-    maxEdges: ui.maxEdges,
-    onSetEnabledRelationshipTypes,
+    graphOptions,
+    setGraphOptions,
+    isOverlayOpen,
+    setIsOverlayOpen,
+    availablePropertyKeys,
+    overlayBadgeByElementId,
+    overlayScaleByElementId,
+  } = overlay;
+
+  const {
+    insertMode,
+    setInsertMode,
+    insertK,
+    setInsertK,
+    insertMaxHops,
+    setInsertMaxHops,
+    insertDirection,
+    setInsertDirection,
+  } = insertUi;
+
+  const isAnyDialogOpen =
+    isOverlayOpen ||
+    saveDialogOpen ||
+    insertBetweenDialogOpen ||
+    insertFromEdgeDialogOpen ||
+    addRelatedDialogOpen;
+
+  const closeAllDialogs = () => {
+    setIsOverlayOpen(false);
+    setSaveDialogOpen(false);
+    closeInsertBetweenDialog();
+    closeInsertFromEdgeDialog();
+    closeAddRelatedDialog();
+  };
+
+  useSandboxShortcuts({
+    enabled: true,
+    isAnyDialogOpen,
+    closeAllDialogs,
+    clearSelection: onClearSelection,
+    canRemoveSelected,
+    removeSelected: onRemoveSelected,
   });
 
-  useEffect(() => {
-    if (edgeOverflow > 0) setEdgeCapDismissed(false);
-  }, [edgeOverflow]);
-
-  const orthogonalPointsByRelationshipId = useMemo(() => {
-    if (ui.edgeRouting !== 'orthogonal') return new Map<string, Point[]>();
-    if (!relationships.show) return new Map<string, Point[]>();
-    if (renderedRelationships.length === 0) return new Map<string, Point[]>();
-    return computeSandboxOrthogonalPointsByRelationshipId({
-      nodes,
-      renderedRelationships,
-      nodeW: SANDBOX_NODE_W,
-      nodeH: SANDBOX_NODE_H,
-      gridSize: SANDBOX_GRID_SIZE,
-    });
-  }, [nodes, renderedRelationships, relationships.show, ui.edgeRouting]);
-
-  const sandboxRelationshipsModel = useMemo(() => {
-    const rels: typeof model.relationships = {};
-    for (const r of renderedRelationships) {
-      const rr = model.relationships[r.id];
-      if (rr) rels[r.id] = rr;
-    }
-    return { ...sandboxSubModel, relationships: rels };
-  }, [model, renderedRelationships, sandboxSubModel]);
-
-  const availablePropertyKeys = useMemo(() => {
-    // overlayStore reference is stable; overlayVersion is the change signal.
-    void overlayVersion;
-    return discoverNumericPropertyKeys(sandboxRelationshipsModel, {
-      getTaggedValues: (el) => getEffectiveTagsForElement(sandboxRelationshipsModel, el, overlayStore).effectiveTaggedValues,
-    });
-  }, [sandboxRelationshipsModel, overlayVersion]);
-
-  const overlayRelationshipTypes = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of renderedRelationships) set.add(String(r.type));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [renderedRelationships]);
-
-  const nodeOverlayScores = useMemo(() => {
-    // overlayStore reference is stable; overlayVersion is the change signal.
-    void overlayVersion;
-
-    if (graphOptions.nodeOverlayMetricId === 'off') return null;
-    if (!nodes.length) return null;
-
-    const nodeIds = nodes.map((n) => n.elementId);
-    const relationshipTypes = overlayRelationshipTypes as unknown as import('../../../domain').RelationshipType[];
-
-    const analysisGraph = buildAnalysisGraph(sandboxRelationshipsModel);
-
-    if (graphOptions.nodeOverlayMetricId === 'nodeReach') {
-      return computeNodeMetric(analysisGraph, 'nodeReach', {
-        direction: 'both',
-        relationshipTypes,
-        maxDepth: graphOptions.nodeOverlayReachDepth,
-        nodeIds,
-        maxVisited: 5000,
-      });
-    }
-
-    if (graphOptions.nodeOverlayMetricId === 'nodePropertyNumber') {
-      const key = (graphOptions.nodeOverlayPropertyKey ?? '').trim();
-      if (!key) return {};
-      return computeNodeMetric(analysisGraph, 'nodePropertyNumber', {
-        key,
-        nodeIds,
-        getValueByNodeId: (nodeId, k) =>
-          readNumericPropertyFromElement(sandboxRelationshipsModel.elements[nodeId], k, {
-            getTaggedValues: (el) =>
-              getEffectiveTagsForElement(sandboxRelationshipsModel, el, overlayStore).effectiveTaggedValues,
-          }),
-      });
-    }
-
-    return computeNodeMetric(analysisGraph, graphOptions.nodeOverlayMetricId, {
-      direction: 'both',
-      relationshipTypes,
-      nodeIds,
-    });
-  }, [sandboxRelationshipsModel, nodes, graphOptions.nodeOverlayMetricId, graphOptions.nodeOverlayReachDepth, graphOptions.nodeOverlayPropertyKey, overlayRelationshipTypes, overlayVersion]);
-
-  const overlayBadgeByElementId = useMemo(() => {
-    if (!nodeOverlayScores || graphOptions.nodeOverlayMetricId === 'off') return null;
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(nodeOverlayScores)) {
-      if (typeof v !== 'number' || !Number.isFinite(v)) continue;
-      // Keep it compact: avoid long decimals.
-      out[k] = Number.isInteger(v) ? String(v) : v.toFixed(2);
-    }
-    return out;
-  }, [nodeOverlayScores, graphOptions.nodeOverlayMetricId]);
-
-  const overlayScaleByElementId = useMemo(() => {
-    if (!nodeOverlayScores || !graphOptions.scaleNodesByOverlayScore || graphOptions.nodeOverlayMetricId === 'off') return null;
-    let min = Number.POSITIVE_INFINITY;
-    let max = Number.NEGATIVE_INFINITY;
-    for (const v of Object.values(nodeOverlayScores)) {
-      if (typeof v !== 'number' || !Number.isFinite(v)) continue;
-      min = Math.min(min, v);
-      max = Math.max(max, v);
-    }
-    if (!(max > min)) {
-      const out: Record<string, number> = {};
-      for (const id of Object.keys(nodeOverlayScores)) out[id] = 1;
-      return out;
-    }
-
-    const out: Record<string, number> = {};
-    for (const [id, v] of Object.entries(nodeOverlayScores)) {
-      if (typeof v !== 'number' || !Number.isFinite(v)) {
-        out[id] = 1;
-        continue;
-      }
-      const t = (v - min) / (max - min);
-      out[id] = 0.85 + Math.max(0, Math.min(1, t)) * (1.25 - 0.85);
-    }
-    return out;
-  }, [nodeOverlayScores, graphOptions.scaleNodesByOverlayScore, graphOptions.nodeOverlayMetricId]);
 
 
+  const overlayButton = (
+    <button
+      type="button"
+      className="miniLinkButton"
+      onClick={() => setIsOverlayOpen(true)}
+      disabled={!nodes.length}
+      aria-disabled={!nodes.length}
+      aria-label="Overlay settings"
+      title="Overlay settings"
+    >
+      Overlay
+    </button>
+  );
 
   return (
     <div className="crudSection">
-      <SandboxToolbar
+      <SandboxModePanels
+        // Toolbar
         nodesCount={nodes.length}
         ui={ui}
         edgeOverflow={edgeOverflow}
@@ -407,19 +254,7 @@ export function SandboxModeView({
         onFitToContent={fitToContent}
         onResetView={resetView}
         onSetPersistEnabled={onSetPersistEnabled}
-        overlayButton={
-          <button
-            type="button"
-            className="miniLinkButton"
-            onClick={() => setIsOverlayOpen(true)}
-            disabled={!nodes.length}
-            aria-disabled={!nodes.length}
-            aria-label="Overlay settings"
-            title="Overlay settings"
-          >
-            Overlay
-          </button>
-        }
+        overlayButton={overlayButton}
         canAddSelected={canAddSelected}
         canRemoveSelected={canRemoveSelected}
         canAddRelated={canAddRelated}
@@ -488,41 +323,31 @@ export function SandboxModeView({
             Insert intermediate…
           </button>
         }
-      />
-
-      <SandboxRelationshipsPanel
-        nodesCount={nodes.length}
-        maxNodes={ui.maxNodes}
+        // Relationships panel
         relationships={relationships}
-        edgeRouting={ui.edgeRouting}
         baseVisibleRelationshipsCount={baseVisibleRelationships.length}
         availableRelationshipTypes={availableRelationshipTypes}
         selectedTypeCount={selectedTypeCount}
-        enabledTypes={relationships.enabledTypes}
-        explicitIdsCount={relationships.explicitIds.length}
         onSetShowRelationships={onSetShowRelationships}
         onSetRelationshipMode={onSetRelationshipMode}
         onSetEdgeRouting={onSetEdgeRouting}
         onToggleEnabledRelationshipType={onToggleEnabledRelationshipType}
         onSetEnabledRelationshipTypes={onSetEnabledRelationshipTypes}
-      />
-
-      <SandboxCanvas
-        svgRef={svgRef}
-        viewBox={viewBox ?? null}
-        isDropTarget={isDropTarget}
-        nodes={nodes}
+        // Canvas
         model={model}
-        selectedElementId={selectedElementId}
-        pairAnchors={pairAnchors}
+        nodes={nodes}
         selection={selection}
         nodeById={nodeById}
         renderedRelationships={renderedRelationships}
-        edgeRouting={ui.edgeRouting}
         orthogonalPointsByRelationshipId={orthogonalPointsByRelationshipId}
+        selectedElementId={selectedElementId}
         selectedEdgeId={selectedEdgeId}
+        pairAnchors={pairAnchors}
         overlayBadgeByElementId={overlayBadgeByElementId}
         overlayScaleByElementId={overlayScaleByElementId}
+        svgRef={svgRef}
+        viewBox={viewBox ?? null}
+        isDropTarget={isDropTarget}
         onPointerDownCanvas={onPointerDownCanvas}
         onPointerMove={onPointerMove}
         onPointerUpOrCancel={onPointerUpOrCancel}
@@ -536,106 +361,44 @@ export function SandboxModeView({
         onDoubleClickNode={onSelectElement}
       />
 
-      <SandboxInsertDialog
-        kind="intermediates"
-        isOpen={insertBetweenDialogOpen}
+      <SandboxModeDialogs
         model={model}
-        maxNodes={ui.maxNodes}
-        sourceElementId={insertBetweenEndpoints?.[0] ?? ''}
-        targetElementId={insertBetweenEndpoints?.[1] ?? ''}
-        contextLabel="Between"
-        existingElementIds={nodes.map((n) => n.elementId)}
+        ui={ui}
+        nodesElementIds={nodes.map((n) => n.elementId)}
         allRelationshipTypes={allRelationshipTypes}
-        initialEnabledRelationshipTypes={addRelated.enabledTypes}
-        initialOptions={{ mode: insertMode, k: insertK, maxHops: insertMaxHops, direction: insertDirection }}
-        onCancel={closeInsertBetweenDialog}
-        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
-          closeInsertBetweenDialog();
-          setInsertMode(options.mode);
-          setInsertK(options.k);
-          setInsertMaxHops(options.maxHops);
-          setInsertDirection(options.direction);
-
-          // Keep traversal settings consistent with the insert preview.
-          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
-
-          const src = insertBetweenEndpoints?.[0];
-          const dst = insertBetweenEndpoints?.[1];
-          if (!src || !dst) return;
-          onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
-        }}
-      />
-
-      <SandboxInsertDialog
-        kind="intermediates"
-        isOpen={insertFromEdgeDialogOpen}
-        model={model}
-        maxNodes={ui.maxNodes}
-        sourceElementId={insertFromEdgeEndpoints?.[0] ?? ''}
-        targetElementId={insertFromEdgeEndpoints?.[1] ?? ''}
-        contextLabel="From relationship"
-        contextRelationshipType={selectedEdge?.type}
-        existingElementIds={nodes.map((n) => n.elementId)}
-        allRelationshipTypes={allRelationshipTypes}
-        initialEnabledRelationshipTypes={addRelated.enabledTypes}
-        initialOptions={{ mode: insertMode, k: insertK, maxHops: insertMaxHops, direction: insertDirection }}
-        onCancel={closeInsertFromEdgeDialog}
-        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
-          closeInsertFromEdgeDialog();
-          setInsertMode(options.mode);
-          setInsertK(options.k);
-          setInsertMaxHops(options.maxHops);
-          setInsertDirection(options.direction);
-
-          // Keep traversal settings consistent with the insert preview.
-          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
-
-          const src = insertFromEdgeEndpoints?.[0];
-          const dst = insertFromEdgeEndpoints?.[1];
-          if (!src || !dst) return;
-          onInsertIntermediatesBetween(src, dst, { ...options, allowedElementIds: selectedElementIds });
-        }}
-      />
-
-      <SandboxInsertDialog
-        kind="related"
-        isOpen={addRelatedDialogOpen}
-        model={model}
-        maxNodes={ui.maxNodes}
-        anchorElementIds={addRelatedDialogAnchors}
-        existingElementIds={nodes.map((n) => n.elementId)}
-        allRelationshipTypes={allRelationshipTypes}
-        initialEnabledRelationshipTypes={addRelated.enabledTypes}
-        initialOptions={{ depth: addRelated.depth, direction: addRelated.direction }}
-        onCancel={closeAddRelatedDialog}
-        onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
-          closeAddRelatedDialog();
-          // Persist settings for the next time.
-          onSetAddRelatedDepth(options.depth);
-          onSetAddRelatedDirection(options.direction);
-          onSetAddRelatedEnabledTypes(enabledRelationshipTypes);
-          if (addRelatedDialogAnchors.length === 0) return;
-          onAddRelatedFromSelection(addRelatedDialogAnchors, selectedElementIds);
-        }}
-      />
-
-      <SaveSandboxAsDiagramDialog
-        isOpen={saveDialogOpen}
-        initialName="Sandbox diagram"
-        onCancel={() => setSaveDialogOpen(false)}
-        onConfirm={(name) => {
-          setSaveDialogOpen(false);
-          const ids = renderedRelationships.map((r) => r.id);
-          onSaveAsDiagram(name, ids);
-        }}
-      />
-
-      <OverlaySettingsDialog
-        isOpen={isOverlayOpen}
-        onClose={() => setIsOverlayOpen(false)}
+        addRelated={addRelated}
+        insertBetweenDialogOpen={insertBetweenDialogOpen}
+        insertBetweenEndpoints={insertBetweenEndpoints}
+        closeInsertBetweenDialog={closeInsertBetweenDialog}
+        insertFromEdgeDialogOpen={insertFromEdgeDialogOpen}
+        insertFromEdgeEndpoints={insertFromEdgeEndpoints}
+        closeInsertFromEdgeDialog={closeInsertFromEdgeDialog}
+        selectedEdgeType={selectedEdge?.type}
+        addRelatedDialogOpen={addRelatedDialogOpen}
+        addRelatedDialogAnchors={addRelatedDialogAnchors}
+        closeAddRelatedDialog={closeAddRelatedDialog}
+        insertMode={insertMode}
+        setInsertMode={setInsertMode}
+        insertK={insertK}
+        setInsertK={setInsertK}
+        insertMaxHops={insertMaxHops}
+        setInsertMaxHops={setInsertMaxHops}
+        insertDirection={insertDirection}
+        setInsertDirection={setInsertDirection}
+        saveDialogOpen={saveDialogOpen}
+        setSaveDialogOpen={setSaveDialogOpen}
+        onSaveAsDiagram={onSaveAsDiagram}
+        getVisibleRelationshipIds={() => renderedRelationships.map((r) => r.id)}
+        isOverlayOpen={isOverlayOpen}
+        setIsOverlayOpen={setIsOverlayOpen}
         graphOptions={graphOptions}
-        onChangeGraphOptions={(next) => setGraphOptions(next)}
+        setGraphOptions={setGraphOptions}
         availablePropertyKeys={availablePropertyKeys}
+        onSetAddRelatedEnabledTypes={onSetAddRelatedEnabledTypes}
+        onSetAddRelatedDepth={onSetAddRelatedDepth}
+        onSetAddRelatedDirection={onSetAddRelatedDirection}
+        onAddRelatedFromSelection={onAddRelatedFromSelection}
+        onInsertIntermediatesBetween={onInsertIntermediatesBetween}
       />
     </div>
   );

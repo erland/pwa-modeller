@@ -1,5 +1,14 @@
 import '@testing-library/jest-dom';
 
+// Node/JSDOM in Jest may not expose TextEncoder/TextDecoder globally.
+// Our ZIP writer and a few helpers rely on them.
+if (typeof (globalThis as any).TextEncoder === 'undefined' || typeof (globalThis as any).TextDecoder === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const util = require('util') as typeof import('util');
+  (globalThis as any).TextEncoder = util.TextEncoder;
+  (globalThis as any).TextDecoder = util.TextDecoder;
+}
+
 // JSDOM doesn't implement the Canvas 2D API by default.
 // Some layout helpers use canvas text measurement, so we provide a minimal mock
 // to keep tests deterministic and avoid noisy console errors.

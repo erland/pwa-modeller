@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { usePortalStore } from '../store/usePortalStore';
 
 export default function PortalHomePage() {
-  const { datasetMeta, latest, status, error } = usePortalStore();
+  const { datasetMeta, latest, status, error, updateInfo } = usePortalStore();
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -12,15 +12,20 @@ export default function PortalHomePage() {
       {!datasetMeta ? (
         <div style={{ padding: 12, border: '1px solid var(--borderColor, rgba(0,0,0,0.12))', borderRadius: 12 }}>
           <strong>{status === 'loading' ? 'Loading dataset…' : status === 'error' ? 'Failed to load dataset.' : 'No dataset loaded.'}</strong>
-          <div style={{ marginTop: 8, opacity: 0.85 }}>
-            This portal is read-only.
-          </div>
-          {status === 'error' && error ? (
-            <div style={{ marginTop: 8, color: 'var(--danger, #b42318)', whiteSpace: 'pre-wrap' }}>{error}</div>
-          ) : null}
+          <div style={{ marginTop: 8, opacity: 0.85 }}>This portal is read-only.</div>
+          {status === 'error' && error ? <div style={{ marginTop: 8, color: 'var(--danger, #b42318)', whiteSpace: 'pre-wrap' }}>{error}</div> : null}
+
           <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
-            Configured latest.json URL:{' '}
-            <code>{latest.latestUrl ?? '—'}</code>
+            Channel: <code>{latest.channel ?? '—'}</code>
+            {latest.channelSource ? (
+              <span style={{ marginLeft: 8 }}>
+                (source: <strong>{latest.channelSource}</strong>)
+              </span>
+            ) : null}
+          </div>
+
+          <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+            Configured latest.json URL: <code>{latest.latestUrl ?? '—'}</code>
             {latest.latestUrlSource ? (
               <span style={{ marginLeft: 8 }}>
                 (source: <strong>{latest.latestUrlSource}</strong>)
@@ -40,17 +45,19 @@ export default function PortalHomePage() {
                 createdAt: <code>{datasetMeta.createdAt}</code>
               </span>
             ) : null}
-            {datasetMeta.loadedFromCache ? (
-              <span style={{ marginLeft: 10 }}>(loaded from cache)</span>
-            ) : null}
-            {datasetMeta.indexesDerived ? (
-              <span style={{ marginLeft: 10 }}>(indexes derived in portal)</span>
-            ) : null}
+            {datasetMeta.loadedFromCache ? <span style={{ marginLeft: 10 }}>(loaded from cache)</span> : null}
+            {datasetMeta.indexesDerived ? <span style={{ marginLeft: 10 }}>(indexes derived in portal)</span> : null}
           </div>
+
+          {updateInfo.state === 'available' ? (
+            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
+              Update available: <code>{updateInfo.currentBundleId}</code> → <code>{updateInfo.latestBundleId}</code>
+            </div>
+          ) : null}
         </div>
       )}
 
-      <div style={{ marginTop: 16, opacity: 0.85 }}>Example routes (for now these will still show “No dataset loaded”):</div>
+      <div style={{ marginTop: 16, opacity: 0.85 }}>Example routes:</div>
       <ul>
         <li>
           <Link to="/portal/e/123">/portal/e/:id</Link>

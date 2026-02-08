@@ -1,12 +1,12 @@
-import { ChangeEvent, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
 
 import { PortalStoreProvider, usePortalStore } from './store/usePortalStore';
 import { fetchLatest, PortalFetchError } from './data/portalDataset';
 import { search as searchIndex } from './indexes/portalIndexes';
 
-const PORTAL_LATEST_URL_LOCALSTORAGE_KEY = 'portal.latestUrl';
+const CHANNELS = ['prod', 'test', 'demo', 'custom'];
 
 function formatTestError(e: any): string {
   if (e instanceof PortalFetchError) {
@@ -23,13 +23,29 @@ function normalizeUrl(value: unknown): string | null {
 
 function PortalTopBar() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { datasetMeta, status, error, latest, indexes, setLatestUrl, load, clearCache } = usePortalStore();
+  const { datasetMeta, status, error, latest, indexes, updateInfo, setChannel, setLatestUrl, load, checkForUpdate, applyUpdate, clearCache } = usePortalStore();
+
   const [query, setQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const [channelDraft, setChannelDraft] = useState<string>(latest.channel ?? 'prod');
   const [latestUrlDraft, setLatestUrlDraft] = useState<string>(latest.latestUrl ?? '');
+
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
+
+  // Poll for updates (Step 10)
+  useEffect(() => {
+    if (status !== 'ready') return;
+    // check on start
+    void checkForUpdate();
+
+    const id = window.setInterval(() => {
+      void checkForUpdate();
+    }, 5 * 60 * 1000);
+
+    return () => window.clearInterval(id);
+  }, [checkForUpdate, status]);
 
   const datasetLabel = useMemo(() => {
     if (!datasetMeta) return 'No dataset loaded';
@@ -49,6 +65,7 @@ function PortalTopBar() {
   const onChangeQuery = (e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value);
 
   const openDialog = () => {
+    setChannelDraft(latest.channel ?? 'prod');
     setLatestUrlDraft(latest.latestUrl ?? '');
     setTestStatus('idle');
     setTestMessage('');
@@ -84,13 +101,11 @@ function PortalTopBar() {
       setTestMessage('Please enter a URL to latest.json');
       return;
     }
-    try {
-      window.localStorage.setItem(PORTAL_LATEST_URL_LOCALSTORAGE_KEY, url);
-    } catch {
-      // ignore
-    }
+
+    setChannel(channelDraft, 'localStorage');
     setLatestUrl(url, 'localStorage');
     void load(url);
+
     setIsDialogOpen(false);
   };
 
@@ -101,7 +116,6 @@ function PortalTopBar() {
     const results = searchIndex(indexes, query, { limit: 10 });
     if (!results.length) return;
 
-    // Navigate to best match (internal id route for now; Step 5 will prefer externalId permalinks).
     navigate(`/portal/e/${encodeURIComponent(results[0].id)}`);
     setQuery('');
   };
@@ -115,329 +129,251 @@ function PortalTopBar() {
     return searchIndex(indexes, q, { limit: 8 });
   }, [canSearch, indexes, query]);
 
+  const updateBanner = useMemo(() => {
+    if (updateInfo.state !== 'available') return null;
+    return (
+      <div style={styles.updateBanner}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div>
+            <strong>Update available</strong>: {updateInfo.currentBundleId} → {updateInfo.latestBundleId}
+            {updateInfo.latestTitle ? <span style={{ opacity: 0.85 }}> ({updateInfo.latestTitle})</span> : null}
+          </div>
+          <button style={styles.bannerButton} onClick={() => void applyUpdate()}>
+            Reload
+          </button>
+          <button style={styles.bannerButtonSecondary} onClick={() => void checkForUpdate()}>
+            Check again
+          </button>
+        </div>
+      </div>
+    );
+  }, [applyUpdate, checkForUpdate, updateInfo]);
 
   return (
     <>
       <div style={styles.topBar}>
-      <div style={styles.topLeft}>
-        <Link to="/portal" style={styles.brand}>
-          EA Portal
-        </Link>
-        <div style={styles.dataset} title={datasetLabel}>
-          {datasetLabel}
+        <div style={styles.topLeft}>
+          <Link to="/" style={styles.brand}>
+            EA Modeller
+          </Link>
+          <span style={styles.sep}>/</span>
+          <Link to="/portal" style={styles.portalLink}>
+            Portal
+          </Link>
+
+          <span style={styles.datasetLabel}>{datasetLabel}</span>
+          {statusLabel ? <span style={styles.statusPill}>{statusLabel}</span> : null}
+          {latest.channel ? <span style={styles.channelPill}>{latest.channel}</span> : null}
         </div>
-        {statusLabel ? (
-          <div style={styles.statusPill} title={error ?? undefined}>
-            {statusLabel}
-          </div>
-        ) : null}
-      </div>
 
-      <div style={styles.topCenter}>
-        <input
-          value={query}
-          onChange={onChangeQuery}
-          placeholder={canSearch ? 'Search elements…' : 'Load a dataset to search'}
-          disabled={!canSearch}
-          style={styles.searchInput}
-        />
-        <button onClick={onSearch} disabled={!canSearch} style={styles.button}>
-          Search
-        </button>
-        <button onClick={openDialog} style={styles.button}>
-          Change dataset
-        </button>
-
-        {canSearch && query.trim() && searchResults.length > 0 && (
-          <div style={styles.searchResults}>
-            {searchResults.map((r) => (
-              <div
-                key={r.id}
-                style={styles.searchResultRow}
-                onMouseDown={(e) => {
-                  // prevent input blur
-                  e.preventDefault();
-                }}
-                onClick={() => {
-                  navigate(`/portal/e/${encodeURIComponent(r.id)}`);
-                  setQuery('');
-                }}
-                title={r.type}
-              >
-                <div style={styles.searchResultName}>{r.name || '(unnamed)'}</div>
-                <div style={styles.searchResultMeta}>{r.type}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-      </div>
-
-      <div style={styles.topRight}>
-        <button onClick={() => navigate('/')} style={styles.button} title="Back to the modelling workspace">
-          Back to Modeller
-        </button>
-
-        <div style={styles.routeHint} title={location.pathname}>
-          {location.pathname}
-        </div>
-      </div>
-      </div>
-
-      {isDialogOpen && (
-        <div style={styles.modalBackdrop} role="dialog" aria-modal="true">
-          <div style={styles.modalCard}>
-            <div style={styles.modalTitle}>Change dataset</div>
-            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
-              Configure the URL to <code>latest.json</code>. You can also pass it on startup via{' '}
-              <code>?bundleUrl=...</code> (or <code>?latestUrl=...</code>).
-            </div>
-
-            <label style={styles.modalLabel}>latest.json URL</label>
+        <div style={styles.topRight}>
+          <div style={styles.searchWrap}>
             <input
-              value={latestUrlDraft}
-              onChange={(e) => setLatestUrlDraft(e.target.value)}
-              placeholder="https://.../latest.json"
-              style={styles.modalInput}
-              autoFocus
+              placeholder={canSearch ? 'Search elements…' : 'Load a dataset to search'}
+              value={query}
+              onChange={onChangeQuery}
+              onKeyDown={(e) => (e.key === 'Enter' ? onSearch() : null)}
+              disabled={!canSearch}
+              style={styles.searchInput}
             />
+            <button onClick={onSearch} disabled={!canSearch} style={styles.searchButton}>
+              Search
+            </button>
+            {searchResults.length ? (
+              <div style={styles.searchResults}>
+                {searchResults.map((r) => (
+                  <button
+                    key={r.id}
+                    style={styles.searchResultRow}
+                    onClick={() => {
+                      navigate(`/portal/e/${encodeURIComponent(r.id)}`);
+                      setQuery('');
+                    }}
+                  >
+                    <div style={styles.searchResultTitle}>{r.label}</div>
+                    <div style={styles.searchResultMeta}>{r.meta}</div>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
-            <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-              Current source: <strong>{latest.latestUrlSource ?? '—'}</strong>
+          <button style={styles.topButton} onClick={openDialog}>
+            Change dataset
+          </button>
+
+          <Link to="/" style={styles.topButtonLink}>
+            Back to Modeller
+          </Link>
+        </div>
+      </div>
+
+      {updateBanner}
+
+      {status === 'error' && error ? (
+        <div style={styles.errorBar}>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{error}</div>
+        </div>
+      ) : null}
+
+      {isDialogOpen ? (
+        <div style={styles.dialogBackdrop} onMouseDown={() => setIsDialogOpen(false)}>
+          <div style={styles.dialog} onMouseDown={(e) => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>Change dataset</h3>
+
+            <div style={styles.formRow}>
+              <label style={styles.label}>Channel</label>
+              <select
+                value={channelDraft}
+                onChange={(e) => {
+                  const c = e.target.value;
+                  setChannelDraft(c);
+                  // Best-effort: switch channel in store to load saved URL (if present)
+                  setChannel(c, 'localStorage');
+                  setLatestUrlDraft((prev) => normalizeUrl(latest.latestUrl) ?? prev);
+                }}
+                style={styles.select}
+              >
+                {CHANNELS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {testStatus !== 'idle' && (
-              <div
-                style={{
-                  ...styles.testBox,
-                  opacity: testStatus === 'testing' ? 0.8 : 1
-                }}
-              >
-                <strong style={{ marginRight: 8 }}>
-                  {testStatus === 'testing'
-                    ? 'Testing'
-                    : testStatus === 'ok'
-                      ? 'OK'
-                      : 'Error'}
-                </strong>
-                <span>{testMessage}</span>
-              </div>
-            )}
+            <div style={styles.formRow}>
+              <label style={styles.label}>latest.json URL</label>
+              <input value={latestUrlDraft} onChange={(e) => setLatestUrlDraft(e.target.value)} style={styles.input} />
+            </div>
 
-            <div style={styles.modalActions}>
-              <button onClick={() => setIsDialogOpen(false)} style={styles.button}>
-                Cancel
+            <div style={styles.smallText}>
+              Startup precedence: <code>?bundleUrl=</code> / <code>?latestUrl=</code>, then per-channel localStorage, then <code>/config.json</code>, then <code>/latest.json</code>.
+            </div>
+
+            <div style={styles.dialogActions}>
+              <button onClick={testConnection} style={styles.button}>
+                {testStatus === 'testing' ? 'Testing…' : 'Test connection'}
               </button>
+
+              <button onClick={useThisDataset} style={styles.buttonPrimary}>
+                Use this dataset
+              </button>
+
               <button
-                onClick={() => void clearCache()}
+                onClick={() => {
+                  void clearCache();
+                  setTestStatus('idle');
+                  setTestMessage('Cache cleared for this latest.json URL.');
+                }}
                 style={styles.button}
-                title="Clears cached bundles for the current latest.json URL"
               >
                 Clear cache
               </button>
-              <button onClick={testConnection} style={styles.button} disabled={testStatus === 'testing'}>
-                Test connection
+
+              <button onClick={() => setIsDialogOpen(false)} style={styles.button}>
+                Close
               </button>
-              <button onClick={useThisDataset} style={styles.primaryButton}>
-                Use this dataset
-              </button>
+            </div>
+
+            {testMessage ? (
+              <pre style={styles.testBox}>
+                {testMessage}
+              </pre>
+            ) : null}
+
+            <div style={styles.smallText}>
+              Tip: you can pass <code>?channel=prod</code> (or test/demo) and/or <code>?bundleUrl=…</code> when sharing links.
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </>
   );
 }
 
-function PortalShellInner() {
-  return (
-    <div style={styles.shell}>
-      <PortalTopBar />
-      <div style={styles.content}>
-        <Outlet />
-      </div>
-    </div>
-  );
-}
-
-export default function PortalShell() {
+export function PortalShell() {
   return (
     <PortalStoreProvider>
-      <PortalShellInner />
+      <PortalTopBar />
+      <div style={styles.body}>
+        <Outlet />
+      </div>
     </PortalStoreProvider>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
-  shell: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    width: '100%'
-  },
   topBar: {
     display: 'flex',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    padding: '10px 12px',
-    borderBottom: '1px solid var(--borderColor, rgba(0,0,0,0.12))'
-  },
-  topLeft: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 10,
-    minWidth: 260
-  },
-  brand: {
-    fontWeight: 700,
-    textDecoration: 'none',
-    color: 'inherit'
-  },
-  dataset: {
-    fontSize: 12,
-    opacity: 0.8,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    maxWidth: 420
-  },
-  statusPill: {
-    fontSize: 11,
-    fontWeight: 600,
-    padding: '2px 8px',
-    borderRadius: 999,
-    border: '1px solid var(--borderColor, rgba(0,0,0,0.18))',
-    background: 'rgba(0,0,0,0.03)',
-    opacity: 0.9
-  },
-  topCenter: {
-    position: 'relative',
-    display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    justifyContent: 'center'
-  },
-  topRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    justifyContent: 'flex-end',
-    minWidth: 280
-  },
-  searchInput: {
-    width: 'min(520px, 45vw)',
-    padding: '7px 10px',
-    borderRadius: 8,
-    border: '1px solid var(--borderColor, rgba(0,0,0,0.2))'
-  },
-  searchResults: {
-    position: 'absolute',
-    top: 46,
-    left: 0,
-    width: 'min(520px, 45vw)',
-    maxHeight: 320,
-    overflow: 'auto',
-    background: 'var(--panelBg, white)',
-    border: '1px solid var(--borderColor, rgba(0,0,0,0.12))',
-    borderRadius: 10,
-    boxShadow: '0 6px 16px rgba(0,0,0,0.08)',
+    padding: '10px 14px',
+    borderBottom: '1px solid rgba(0,0,0,0.12)',
+    position: 'sticky',
+    top: 0,
+    background: 'var(--surface, #fff)',
     zIndex: 10
   },
-  searchResultRow: {
-    padding: '8px 10px',
-    cursor: 'pointer',
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: 10
-  },
-  searchResultName: {
-    fontSize: 13,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap'
-  },
-  searchResultMeta: {
-    fontSize: 12,
-    opacity: 0.7,
-    whiteSpace: 'nowrap'
-  },
-  button: {
-    padding: '7px 10px',
-    borderRadius: 8,
-    border: '1px solid var(--borderColor, rgba(0,0,0,0.2))',
-    background: 'var(--buttonBg, transparent)',
-    cursor: 'pointer'
-  },
-  primaryButton: {
-    padding: '7px 10px',
-    borderRadius: 8,
-    border: '1px solid var(--borderColor, rgba(0,0,0,0.2))',
-    background: 'rgba(0,0,0,0.06)',
-    cursor: 'pointer',
-    fontWeight: 600
-  },
-  modalBackdrop: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.35)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    zIndex: 1000
-  },
-  modalCard: {
-    width: 'min(720px, 92vw)',
-    borderRadius: 12,
-    background: 'var(--panelBg, #fff)',
-    border: '1px solid var(--borderColor, rgba(0,0,0,0.12))',
-    boxShadow: '0 8px 30px rgba(0,0,0,0.25)',
-    padding: 16
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: 700,
-    marginBottom: 8
-  },
-  modalLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    opacity: 0.85
-  },
-  modalInput: {
-    width: '100%',
-    padding: '8px 10px',
+  topLeft: { display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 },
+  topRight: { display: 'flex', alignItems: 'center', gap: 10 },
+  brand: { textDecoration: 'none', fontWeight: 700, color: 'inherit' },
+  portalLink: { textDecoration: 'none', fontWeight: 600, color: 'inherit', opacity: 0.9 },
+  sep: { opacity: 0.4 },
+  datasetLabel: { fontWeight: 600, opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 520 },
+  statusPill: { fontSize: 12, padding: '2px 8px', borderRadius: 999, border: '1px solid rgba(0,0,0,0.2)', opacity: 0.85 },
+  channelPill: { fontSize: 12, padding: '2px 8px', borderRadius: 999, border: '1px dashed rgba(0,0,0,0.25)', opacity: 0.8 },
+
+  searchWrap: { position: 'relative' },
+  searchInput: { width: 280, padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)' },
+  searchButton: { marginLeft: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)', background: 'transparent' },
+  searchResults: {
+    position: 'absolute',
+    top: 40,
+    left: 0,
+    right: 0,
+    background: 'var(--surface, #fff)',
+    border: '1px solid rgba(0,0,0,0.18)',
     borderRadius: 10,
-    border: '1px solid var(--borderColor, rgba(0,0,0,0.2))',
-    marginTop: 6
+    boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
+    padding: 6,
+    zIndex: 20
   },
-  modalActions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 14
+  searchResultRow: { width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer' },
+  searchResultTitle: { fontWeight: 700, fontSize: 13 },
+  searchResultMeta: { fontSize: 12, opacity: 0.7 },
+
+  topButton: { padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)', background: 'transparent' },
+  topButtonLink: { padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)', textDecoration: 'none', color: 'inherit', background: 'transparent' },
+
+  updateBanner: {
+    padding: '10px 14px',
+    borderBottom: '1px solid rgba(0,0,0,0.12)',
+    background: 'rgba(255, 240, 200, 0.6)'
   },
-  testBox: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 10,
-    border: '1px solid var(--borderColor, rgba(0,0,0,0.12))',
-    background: 'rgba(0,0,0,0.02)',
-    fontSize: 12
+  bannerButton: { padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)', background: 'rgba(0,0,0,0.04)' },
+  bannerButtonSecondary: { padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.18)', background: 'transparent', opacity: 0.85 },
+
+  errorBar: {
+    padding: '10px 14px',
+    background: 'rgba(255, 220, 220, 0.65)',
+    borderBottom: '1px solid rgba(0,0,0,0.12)'
   },
-  routeHint: {
-    fontSize: 11,
-    opacity: 0.55,
-    maxWidth: 240,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap'
-  },
-  content: {
-    flex: 1,
-    overflow: 'auto',
-    padding: 16
-  }
+
+  body: { padding: 14 },
+
+  dialogBackdrop: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 80, zIndex: 50 },
+  dialog: { width: 720, maxWidth: '90vw', background: 'var(--surface, #fff)', borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.12)' },
+  formRow: { display: 'grid', gridTemplateColumns: '140px 1fr', gap: 10, alignItems: 'center', marginBottom: 10 },
+  label: { fontWeight: 700, fontSize: 13, opacity: 0.9 },
+  input: { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)' },
+  select: { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)' },
+
+  smallText: { fontSize: 12, opacity: 0.75, marginTop: 8 },
+
+  dialogActions: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 },
+  button: { padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)', background: 'transparent' },
+  buttonPrimary: { padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.22)', background: 'rgba(0,0,0,0.06)', fontWeight: 700 },
+
+  testBox: { marginTop: 12, background: 'rgba(0,0,0,0.04)', padding: 10, borderRadius: 10, whiteSpace: 'pre-wrap' }
 };

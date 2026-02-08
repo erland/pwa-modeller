@@ -14,13 +14,17 @@ export type PortalDatasetMeta = {
   latestUrl: string;
   manifestUrl: string;
   loadedFromCache?: boolean;
+  indexesDerived?: boolean;
 };
 
 export type PortalLatestUrlSource = 'query' | 'localStorage' | 'publicConfig' | 'fallback';
-
-const PORTAL_LATEST_URL_LOCALSTORAGE_KEY = 'portal.latestUrl';
+export type PortalChannelSource = 'query' | 'localStorage' | 'publicConfig' | 'fallback';
 
 export type PortalLatestUrlState = {
+  /** The active channel (prod/test/demo/custom/other). */
+  channel: string;
+  channelSource: PortalChannelSource | null;
+
   /** The configured URL to `latest.json` (may be null until resolved). */
   latestUrl: string | null;
   /** How the URL was resolved (query param, localStorage, or public config). */
@@ -28,6 +32,16 @@ export type PortalLatestUrlState = {
 };
 
 export type PortalLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export type PortalUpdateInfo =
+  | { state: 'none' }
+  | { state: 'checking' }
+  | { state: 'available'; currentBundleId: string; latestBundleId: string; latestTitle?: string }
+  | { state: 'error'; message: string };
+
+const PORTAL_CHANNEL_LOCALSTORAGE_KEY = 'portal.channel';
+const PORTAL_LATEST_URL_LEGACY_KEY = 'portal.latestUrl';
+const portalLatestUrlKeyForChannel = (channel: string) => `portal.latestUrl.${channel}`;
 
 export type PortalStoreState = {
   latest: PortalLatestUrlState;
@@ -39,10 +53,14 @@ export type PortalStoreState = {
   model: Model | null;
   indexes: PortalIndexes | null;
 
+  updateInfo: PortalUpdateInfo;
+
+  setChannel: (channel: string, source?: PortalChannelSource) => void;
   setLatestUrl: (latestUrl: string | null, source?: PortalLatestUrlSource) => void;
 
   load: (latestUrl?: string) => Promise<void>;
   checkForUpdate: () => Promise<{ updateAvailable: boolean; latest?: LatestPointer }>;
+  applyUpdate: () => Promise<void>;
   clearCache: () => Promise<void>;
 };
 
@@ -95,9 +113,48 @@ function formatPortalError(e: any): string {
   return e?.message ? String(e.message) : String(e);
 }
 
+function normalizeString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const s = value.trim();
+  return s.length > 0 ? s : null;
+}
+
+async function tryReadPublicPortalConfig(): Promise<any | null> {
+  try {
+    const resp = await fetch('/config.json', { cache: 'no-cache' });
+    if (!resp.ok) return null;
+    return (await resp.json()) as any;
+  } catch {
+    return null;
+  }
+}
+
+function readQueryParams(): { bundleUrl?: string; channel?: string } {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const bundleUrl = normalizeString(params.get('bundleUrl') || params.get('latestUrl')) ?? undefined;
+    const channel = normalizeString(params.get('channel')) ?? undefined;
+    return { bundleUrl, channel };
+  } catch {
+    return {};
+  }
+}
+
+function resolveLatestUrlFromConfig(cfg: any, channel: string): string | null {
+  // Backwards compatible:
+  // - cfg.portal.latestUrl
+  // - cfg.portal.channels[<channel>].latestUrl
+  const direct = normalizeString(cfg?.portal?.latestUrl);
+  const channelUrl = normalizeString(cfg?.portal?.channels?.[channel]?.latestUrl);
+  return channelUrl ?? direct ?? null;
+}
+
 const PortalStoreContext = createContext<PortalStoreState | null>(null);
 
 export function PortalStoreProvider({ children }: { children: ReactNode }) {
+  const [channel, setChannelState] = useState<string>('prod');
+  const [channelSource, setChannelSource] = useState<PortalChannelSource | null>(null);
+
   const [latestUrl, setLatestUrlState] = useState<string | null>(null);
   const [latestUrlSource, setLatestUrlSource] = useState<PortalLatestUrlSource | null>(null);
 
@@ -106,63 +163,90 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
 
   const [datasetMeta, setDatasetMeta] = useState<PortalDatasetMeta | null>(null);
   const [model, setModel] = useState<Model | null>(null);
-  const [indexes, setIndexes] = useState<any | null>(null);
+  const [indexes, setIndexes] = useState<PortalIndexes | null>(null);
 
-  // Step 2: resolve latestUrl on startup
+  const [updateInfo, setUpdateInfo] = useState<PortalUpdateInfo>({ state: 'none' });
+
+  // Step 2/10: resolve channel + latestUrl on startup
   useEffect(() => {
     let isMounted = true;
+
     (async () => {
-      const normalize = (v: unknown): string | null => {
-        if (typeof v !== 'string') return null;
-        const s = v.trim();
-        return s ? s : null;
-      };
+      const { bundleUrl, channel: channelFromQuery } = readQueryParams();
+      const cfg = await tryReadPublicPortalConfig();
 
-      // 1) Query param `bundleUrl` (or `latestUrl`)
-      let resolvedUrl = (() => {
-        try {
-          const params = new URLSearchParams(window.location.search);
-          return normalize(params.get('bundleUrl') || params.get('latestUrl'));
-        } catch {
-          return null;
-        }
-      })();
-      let source: PortalLatestUrlSource | null = null;
+      // 1) Channel: query param
+      let resolvedChannel = normalizeString(channelFromQuery);
+      let resolvedChannelSource: PortalChannelSource | null = null;
 
-      if (resolvedUrl) {
-        source = 'query';
+      if (resolvedChannel) {
+        resolvedChannelSource = 'query';
         try {
-          window.localStorage.setItem(PORTAL_LATEST_URL_LOCALSTORAGE_KEY, resolvedUrl);
+          window.localStorage.setItem(PORTAL_CHANNEL_LOCALSTORAGE_KEY, resolvedChannel);
         } catch {
           // ignore
         }
       }
 
-      // 2) localStorage
-      if (!resolvedUrl) {
+      // 2) Channel: localStorage
+      if (!resolvedChannel) {
         try {
-          resolvedUrl = normalize(window.localStorage.getItem(PORTAL_LATEST_URL_LOCALSTORAGE_KEY));
-          if (resolvedUrl) source = 'localStorage';
+          resolvedChannel = normalizeString(window.localStorage.getItem(PORTAL_CHANNEL_LOCALSTORAGE_KEY));
+          if (resolvedChannel) resolvedChannelSource = 'localStorage';
         } catch {
           // ignore
         }
       }
 
-      // 3) public/config.json default
-      if (!resolvedUrl) {
+      // 3) Channel: public config
+      if (!resolvedChannel) {
+        const cfgDefaultChannel = normalizeString(cfg?.portal?.defaultChannel);
+        if (cfgDefaultChannel) {
+          resolvedChannel = cfgDefaultChannel;
+          resolvedChannelSource = 'publicConfig';
+        }
+      }
+
+      // Fallback channel
+      if (!resolvedChannel) {
+        resolvedChannel = 'prod';
+        resolvedChannelSource = 'fallback';
+      }
+
+      // Latest URL resolution precedence:
+      // 1) Query param bundleUrl/latestUrl (always wins)
+      // 2) localStorage portal.latestUrl.<channel> (or legacy portal.latestUrl)
+      // 3) public/config.json default (optionally per channel)
+      // 4) fallback /latest.json
+      let resolvedLatestUrl: string | null = null;
+      let resolvedLatestUrlSource: PortalLatestUrlSource | null = null;
+
+      if (bundleUrl) {
+        resolvedLatestUrl = bundleUrl;
+        resolvedLatestUrlSource = 'query';
+
+        // If query specifies a bundleUrl, treat it as "custom" unless user explicitly chose a channel.
+        // But we still persist the URL into the active channel so reloading works.
         try {
-          const resp = await fetch('/config.json', { cache: 'no-cache' });
-          if (resp.ok) {
-            const json = (await resp.json()) as any;
-            const cfgUrl = normalize(json?.portal?.latestUrl);
-            if (cfgUrl) {
-              resolvedUrl = cfgUrl;
-              source = 'publicConfig';
-              try {
-                window.localStorage.setItem(PORTAL_LATEST_URL_LOCALSTORAGE_KEY, resolvedUrl);
-              } catch {
-                // ignore
-              }
+          window.localStorage.setItem(PORTAL_LATEST_URL_LEGACY_KEY, resolvedLatestUrl);
+          window.localStorage.setItem(portalLatestUrlKeyForChannel(resolvedChannel), resolvedLatestUrl);
+        } catch {
+          // ignore
+        }
+      }
+
+      // localStorage per channel
+      if (!resolvedLatestUrl) {
+        try {
+          const perChannel = normalizeString(window.localStorage.getItem(portalLatestUrlKeyForChannel(resolvedChannel)));
+          if (perChannel) {
+            resolvedLatestUrl = perChannel;
+            resolvedLatestUrlSource = 'localStorage';
+          } else {
+            const legacy = normalizeString(window.localStorage.getItem(PORTAL_LATEST_URL_LEGACY_KEY));
+            if (legacy) {
+              resolvedLatestUrl = legacy;
+              resolvedLatestUrlSource = 'localStorage';
             }
           }
         } catch {
@@ -170,20 +254,60 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Fallback
-      if (!resolvedUrl) {
-        resolvedUrl = '/latest.json';
-        source = 'fallback';
+      // public config (per channel or direct)
+      if (!resolvedLatestUrl && cfg) {
+        const cfgUrl = resolveLatestUrlFromConfig(cfg, resolvedChannel);
+        if (cfgUrl) {
+          resolvedLatestUrl = cfgUrl;
+          resolvedLatestUrlSource = 'publicConfig';
+          try {
+            window.localStorage.setItem(PORTAL_LATEST_URL_LEGACY_KEY, resolvedLatestUrl);
+            window.localStorage.setItem(portalLatestUrlKeyForChannel(resolvedChannel), resolvedLatestUrl);
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      // fallback
+      if (!resolvedLatestUrl) {
+        resolvedLatestUrl = '/latest.json';
+        resolvedLatestUrlSource = 'fallback';
       }
 
       if (!isMounted) return;
-      setLatestUrlState(resolvedUrl);
-      setLatestUrlSource(source);
+      setChannelState(resolvedChannel);
+      setChannelSource(resolvedChannelSource);
+      setLatestUrlState(resolvedLatestUrl);
+      setLatestUrlSource(resolvedLatestUrlSource);
     })();
+
     return () => {
       isMounted = false;
     };
   }, []);
+
+  const setChannel = (c: string, source?: PortalChannelSource) => {
+    const normalized = normalizeString(c) ?? 'prod';
+    setChannelState(normalized);
+    if (source) setChannelSource(source);
+    try {
+      window.localStorage.setItem(PORTAL_CHANNEL_LOCALSTORAGE_KEY, normalized);
+    } catch {
+      // ignore
+    }
+
+    // When switching channel, attempt to load that channel's saved URL immediately.
+    try {
+      const saved = normalizeString(window.localStorage.getItem(portalLatestUrlKeyForChannel(normalized)));
+      if (saved) {
+        setLatestUrlState(saved);
+        setLatestUrlSource('localStorage');
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const setLatestUrl = (url: string | null, source?: PortalLatestUrlSource) => {
     setLatestUrlState(url);
@@ -198,7 +322,8 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
       manifest,
       model,
       indexes,
-      loadedFromCache
+      loadedFromCache,
+      indexesDerived
     }: {
       latestUrl: string;
       latest: LatestPointer;
@@ -232,6 +357,15 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
 
       setStatus('loading');
       setError(null);
+      setUpdateInfo({ state: 'none' });
+
+      // Persist for active channel
+      try {
+        window.localStorage.setItem(PORTAL_LATEST_URL_LEGACY_KEY, url);
+        window.localStorage.setItem(portalLatestUrlKeyForChannel(channel), url);
+      } catch {
+        // ignore
+      }
 
       // 1) Fetch latest pointer
       let latest: LatestPointer | null = null;
@@ -280,6 +414,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         const typedModel = modelJson as Model;
         let typedIndexes: PortalIndexes;
         let indexesDerived = false;
+
         if (isPortalIndexes(indexesJson)) {
           typedIndexes = indexesJson as PortalIndexes;
         } else {
@@ -288,10 +423,14 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
             typedIndexes = buildPortalIndexes(typedModel);
             indexesDerived = true;
           } catch (err: any) {
-            throw new PortalFetchError({ kind: 'schema', url: indexesUrl, message: 'indexes.json is invalid and could not be derived from model.json.', details: err?.message ? String(err.message) : String(err) });
+            throw new PortalFetchError({
+              kind: 'schema',
+              url: indexesUrl,
+              message: 'indexes.json is invalid and could not be derived from model.json.',
+              details: err?.message ? String(err.message) : String(err)
+            });
           }
         }
-
 
         await putCachedBundle({
           latestUrl: url,
@@ -310,7 +449,8 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
           manifest,
           model: typedModel,
           indexes: typedIndexes,
-          loadedFromCache: false
+          loadedFromCache: false,
+          indexesDerived
         });
 
         setStatus('ready');
@@ -336,21 +476,41 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         setError(formatPortalError(e) || 'Failed to load published bundle');
       }
     },
-    [applyBundleToState, latestUrl]
+    [applyBundleToState, latestUrl, channel]
   );
 
   const checkForUpdate = useCallback(async () => {
     const url = latestUrl?.trim();
     if (!url) return { updateAvailable: false };
 
+    setUpdateInfo((prev) => (prev.state === 'available' ? prev : { state: 'checking' }));
+
     try {
       const latest = await fetchLatest(url);
       const updateAvailable = datasetMeta?.bundleId ? latest.bundleId !== datasetMeta.bundleId : true;
+
+      if (datasetMeta?.bundleId && updateAvailable) {
+        setUpdateInfo({
+          state: 'available',
+          currentBundleId: datasetMeta.bundleId,
+          latestBundleId: latest.bundleId,
+          latestTitle: latest.title
+        });
+      } else {
+        setUpdateInfo({ state: 'none' });
+      }
+
       return { updateAvailable, latest };
-    } catch {
+    } catch (e: any) {
+      setUpdateInfo({ state: 'error', message: formatPortalError(e) || 'Failed to check for updates' });
       return { updateAvailable: false };
     }
   }, [datasetMeta?.bundleId, latestUrl]);
+
+  const applyUpdate = useCallback(async () => {
+    if (!latestUrl) return;
+    await load(latestUrl);
+  }, [latestUrl, load]);
 
   const clearCache = useCallback(async () => {
     const url = latestUrl?.trim();
@@ -366,24 +526,27 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<PortalStoreState>(
     () => ({
-      latest: { latestUrl, latestUrlSource },
+      latest: { channel, channelSource, latestUrl, latestUrlSource },
       status,
       error,
       datasetMeta,
       model,
       indexes,
+      updateInfo,
+      setChannel,
       setLatestUrl,
       load,
       checkForUpdate,
+      applyUpdate,
       clearCache
     }),
-    [datasetMeta, error, indexes, latestUrl, latestUrlSource, load, model, status, checkForUpdate, clearCache]
+    [channel, channelSource, datasetMeta, error, indexes, latestUrl, latestUrlSource, model, status, updateInfo, load, checkForUpdate, applyUpdate, clearCache]
   );
 
   return <PortalStoreContext.Provider value={value}>{children}</PortalStoreContext.Provider>;
 }
 
-export function usePortalStore() {
+export function usePortalStore(): PortalStoreState {
   const ctx = useContext(PortalStoreContext);
   if (!ctx) throw new Error('usePortalStore must be used within PortalStoreProvider');
   return ctx;

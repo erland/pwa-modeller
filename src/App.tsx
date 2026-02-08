@@ -8,6 +8,8 @@ import AnalysisPage from './pages/AnalysisPage';
 import OverlayPage from './pages/OverlayPage';
 import WorkspacePage from './pages/WorkspacePage';
 
+import PublisherPage from './publisher/pages/PublisherPage';
+
 import PortalShell from './portal/PortalShell';
 import PortalElementPage from './portal/pages/PortalElementPage';
 import PortalHomePage from './portal/pages/PortalHomePage';
@@ -20,6 +22,7 @@ export function AppRoutes() {
       <Route path="/analysis" element={<AnalysisPage />} />
       <Route path="/overlay" element={<OverlayPage />} />
       <Route path="/about" element={<AboutPage />} />
+      <Route path="/publisher" element={<PublisherPage />} />
 
       {/* Read-only portal (publisher/published dataset routes added in later steps) */}
       <Route path="/portal" element={<PortalShell />}>

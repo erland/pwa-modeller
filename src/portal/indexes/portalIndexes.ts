@@ -147,7 +147,6 @@ export type PortalElementFactSheetData = {
     outgoing: { relType: string; relIds: string[]; items: PortalFactSheetRelationItem[] }[];
     incoming: { relType: string; relIds: string[]; items: PortalFactSheetRelationItem[] }[];
   };
-  relatedElements: { id: string; name: string; type: string; kind?: string; layer?: string }[];
 };
 
 export type PortalFactSheetRelationItem = {
@@ -190,8 +189,6 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
 
   const groups = indexes.relationshipGroupsIndex[elementId] ?? { outgoing: {}, incoming: {} };
 
-  const relatedIds = new Set<string>();
-
   function expandRel(relId: string, direction: 'outgoing' | 'incoming'): PortalFactSheetRelationItem {
     const rel: Relationship | undefined = model.relationships?.[relId];
     const type = String(rel?.type ?? 'Unknown');
@@ -203,7 +200,6 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
     const targetId = rel?.targetElementId;
     const otherId = direction === 'outgoing' ? targetId : sourceId;
     const otherEl = otherId ? model.elements?.[otherId] : undefined;
-    if (otherId) relatedIds.add(otherId);
 
     return {
       id: relId,
@@ -240,23 +236,9 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
     element: el,
     externalIdKeys,
     usedInViews,
-    relations: { outgoing, incoming },
-    relatedElements: Array.from(relatedIds)
-      .flatMap((id) => {
-        const e = model.elements?.[id];
-        if (!e) return [];
-        return [
-          {
-            id,
-            name: e.name,
-            type: String(e.type ?? ''),
-            kind: e.kind ? String(e.kind) : undefined,
-            layer: (e as { layer?: unknown }).layer ? String((e as { layer?: unknown }).layer) : undefined,
-          },
-        ];
-      })
-      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    relations: { outgoing, incoming }
   };
+
 }
 
 export function search(

@@ -313,7 +313,6 @@ export function PortalShell() {
 
 const styles: Record<string, CSSProperties> = {
   shell: {
-    height: '100vh',
     height: '100dvh',
     minHeight: 0,
     display: 'flex',

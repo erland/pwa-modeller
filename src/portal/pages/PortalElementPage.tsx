@@ -5,6 +5,9 @@ import { Link, useParams } from 'react-router-dom';
 import { usePortalStore } from '../store/usePortalStore';
 import { getElementFactSheetData, resolveElementIdFromExternalId } from '../indexes/portalIndexes';
 
+import { formatElementTypeLabel, formatRelationshipTypeLabel } from '../../components/ui/typeLabels';
+import { readUmlClassifierMembers, type UmlAttribute, type UmlOperation } from '../../domain/uml/members';
+
 type PortalElementPageProps = { mode: 'internalId' } | { mode: 'externalId' };
 
 function Card(props: { title?: string; children: React.ReactNode; right?: React.ReactNode }) {
@@ -86,16 +89,76 @@ async function copyText(text: string): Promise<boolean> {
 
 type TaggedValueLike = { ns?: unknown; key?: unknown; type?: unknown; value?: unknown };
 
-function formatTaggedValue(tv: unknown): string {
-  if (!tv || typeof tv !== 'object') return '';
+function readTaggedValue(tv: unknown): { label: string; type?: string; value: string } | null {
+  if (!tv || typeof tv !== 'object') return null;
   const t = tv as TaggedValueLike;
-  if (!tv) return '';
   const ns = typeof t.ns === 'string' ? t.ns.trim() : '';
   const key = typeof t.key === 'string' ? t.key.trim() : '';
   const type = typeof t.type === 'string' ? t.type.trim() : '';
   const value = String(t.value ?? '');
   const label = ns ? `${ns}:${key}` : key;
-  return type ? `${label} (${type}) = ${value}` : `${label} = ${value}`;
+  if (!label) return null;
+  return { label, type: type || undefined, value };
+}
+
+function isUmlClassifierType(t: string): boolean {
+  return t === 'uml.class' || t === 'uml.associationClass' || t === 'uml.interface' || t === 'uml.datatype';
+}
+
+function formatUmlVisibility(v?: string): string {
+  switch (v) {
+    case 'public':
+      return '+';
+    case 'private':
+      return '-';
+    case 'protected':
+      return '#';
+    case 'package':
+      return '~';
+  }
+  return '';
+}
+
+function formatMultiplicity(m?: { lower?: string; upper?: string }): string {
+  const lo = (m?.lower ?? '').trim();
+  const hi = (m?.upper ?? '').trim();
+  if (!lo && !hi) return '';
+  if (!hi) return `[${lo}]`;
+  return `[${lo || '0'}..${hi}]`;
+}
+
+function formatUmlAttribute(a: UmlAttribute): string {
+  const vis = formatUmlVisibility(a.visibility);
+  const name = a.name?.trim() ?? '';
+  const type = (a.dataTypeName ?? '').trim();
+  const mult = formatMultiplicity(a.multiplicity);
+  const def = (a.defaultValue ?? '').trim();
+  const parts: string[] = [];
+  if (vis) parts.push(vis);
+  parts.push(name || '(unnamed)');
+  if (type) parts.push(`: ${type}`);
+  if (mult) parts.push(` ${mult}`);
+  if (a.isStatic) parts.push(' {static}');
+  if (def) parts.push(` = ${def}`);
+  return parts.join('');
+}
+
+function formatUmlOperation(o: UmlOperation): string {
+  const vis = formatUmlVisibility(o.visibility);
+  const name = o.name?.trim() ?? '';
+  const params = (o.params ?? []).map((p) => {
+    const pn = (p.name ?? '').trim();
+    const pt = (p.type ?? '').trim();
+    return pt ? `${pn}: ${pt}` : pn;
+  });
+  const returnType = (o.returnType ?? '').trim();
+  const parts: string[] = [];
+  if (vis) parts.push(vis);
+  parts.push(`${name || '(unnamed)'}(${params.filter(Boolean).join(', ')})`);
+  if (returnType) parts.push(`: ${returnType}`);
+  if (o.isAbstract) parts.push(' {abstract}');
+  if (o.isStatic) parts.push(' {static}');
+  return parts.join('');
 }
 
 function safeJsonStringify(value: unknown, maxLen = 40000): string {
@@ -112,11 +175,6 @@ export default function PortalElementPage(props: PortalElementPageProps) {
   const params = useParams();
   const { datasetMeta, model, indexes } = usePortalStore();
   const [copied, setCopied] = useState<string | null>(null);
-
-  const label = useMemo(() => {
-    if (props.mode === 'externalId') return params.externalId ?? '';
-    return params.id ?? '';
-  }, [params, props.mode]);
 
   const resolvedElementId = useMemo(() => {
     if (!datasetMeta || !model || !indexes) return null;
@@ -153,8 +211,16 @@ export default function PortalElementPage(props: PortalElementPageProps) {
 
   const elementDisplayName = data?.element?.name || '(unnamed)';
   const elementType = data ? String(data.element?.type ?? '') : '';
+  const elementTypeLabel = data ? formatElementTypeLabel({ type: elementType }) : '';
   const elementKind = data?.element?.kind;
   const elementLayer = data?.element?.layer;
+
+  const umlMembers = useMemo(() => {
+    if (!data) return null;
+    if (!isUmlClassifierType(String(data.element?.type ?? ''))) return null;
+    const m = readUmlClassifierMembers(data.element, { includeEmptyNames: false });
+    return m;
+  }, [data]);
 
   return (
     <div style={{ maxWidth: 1100 }}>
@@ -170,7 +236,7 @@ export default function PortalElementPage(props: PortalElementPageProps) {
             {data ? (
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <Pill>
-                  <code>{elementType || 'Unknown'}</code>
+                  {elementTypeLabel || 'Unknown'}
                 </Pill>
                 {elementKind ? <Pill>{elementKind}</Pill> : null}
                 {elementLayer ? <Pill>{elementLayer}</Pill> : null}
@@ -236,6 +302,30 @@ export default function PortalElementPage(props: PortalElementPageProps) {
               )}
             </Card>
 
+            {umlMembers && umlMembers.attributes.length ? (
+              <Card title="Attributes">
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {umlMembers.attributes.map((a, idx) => (
+                    <li key={`${a.name}-${idx}`} style={{ marginBottom: 4, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
+                      {formatUmlAttribute(a)}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
+
+            {umlMembers && umlMembers.operations.length ? (
+              <Card title="Operations">
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {umlMembers.operations.map((o, idx) => (
+                    <li key={`${o.name}-${idx}`} style={{ marginBottom: 4, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
+                      {formatUmlOperation(o)}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
+
             <Card title="Relationships">
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
@@ -245,7 +335,7 @@ export default function PortalElementPage(props: PortalElementPageProps) {
                       {data.relations.outgoing.map((g) => (
                         <div key={`out-${g.relType}`}>
                           <div style={{ opacity: 0.85, marginBottom: 4 }}>
-                            <code>{g.relType}</code> <span style={{ opacity: 0.7 }}>· {g.items.length}</span>
+                            {formatRelationshipTypeLabel({ type: g.relType })} <span style={{ opacity: 0.7 }}>· {g.items.length}</span>
                           </div>
                           <ul style={{ margin: 0, paddingLeft: 18 }}>
                             {g.items.map((it) => (
@@ -257,7 +347,7 @@ export default function PortalElementPage(props: PortalElementPageProps) {
                                 )}
                                 <span style={{ opacity: 0.75 }}> — </span>
                                 <span style={{ opacity: 0.85 }}>
-                                  <code>{it.type}</code>
+                                  {formatRelationshipTypeLabel({ type: it.type })}
                                   {it.name ? <span style={{ opacity: 0.85 }}> · {it.name}</span> : null}
                                 </span>
                                 {it.documentation ? (
@@ -281,7 +371,7 @@ export default function PortalElementPage(props: PortalElementPageProps) {
                       {data.relations.incoming.map((g) => (
                         <div key={`in-${g.relType}`}>
                           <div style={{ opacity: 0.85, marginBottom: 4 }}>
-                            <code>{g.relType}</code> <span style={{ opacity: 0.7 }}>· {g.items.length}</span>
+                            {formatRelationshipTypeLabel({ type: g.relType })} <span style={{ opacity: 0.7 }}>· {g.items.length}</span>
                           </div>
                           <ul style={{ margin: 0, paddingLeft: 18 }}>
                             {g.items.map((it) => (
@@ -293,7 +383,7 @@ export default function PortalElementPage(props: PortalElementPageProps) {
                                 )}
                                 <span style={{ opacity: 0.75 }}> — </span>
                                 <span style={{ opacity: 0.85 }}>
-                                  <code>{it.type}</code>
+                                  {formatRelationshipTypeLabel({ type: it.type })}
                                   {it.name ? <span style={{ opacity: 0.85 }}> · {it.name}</span> : null}
                                 </span>
                                 {it.documentation ? (
@@ -365,22 +455,31 @@ export default function PortalElementPage(props: PortalElementPageProps) {
               </div>
             </Card>
 
-            <Card title="Properties">
+            <Card title="Other information">
               <div style={{ display: 'grid', gap: 10 }}>
                 {Array.isArray(data.element.taggedValues) && data.element.taggedValues.length ? (
                   <div>
                     <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Tagged values</div>
-                    <ul style={{ margin: 0, paddingLeft: 18 }}>
-                      {data.element.taggedValues.map((tv, idx) => {
-                        const key =
-                          tv && typeof tv === 'object' && typeof (tv as { id?: unknown }).id === 'string' ? (tv as { id: string }).id : String(idx);
-                        return (
-                          <li key={key} style={{ wordBreak: 'break-word' }}>
-                            {formatTaggedValue(tv)}
-                          </li>
-                        );
-                      })}
-                    </ul>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {data.element.taggedValues
+                        .map((tv) => readTaggedValue(tv))
+                        .filter(Boolean)
+                        .map((tv, idx) => {
+                          const t = tv as { label: string; type?: string; value: string };
+                          return (
+                            <div
+                              key={`${t.label}-${idx}`}
+                              style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) 2fr', gap: 10, alignItems: 'baseline' }}
+                            >
+                              <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.9 }}>
+                                {t.label}
+                                {t.type ? <span style={{ opacity: 0.7 }}> ({t.type})</span> : null}
+                              </div>
+                              <div style={{ wordBreak: 'break-word' }}>{t.value}</div>
+                            </div>
+                          );
+                        })}
+                    </div>
                   </div>
                 ) : (
                   <div style={{ opacity: 0.7 }}>(No tagged values)</div>
@@ -388,44 +487,12 @@ export default function PortalElementPage(props: PortalElementPageProps) {
 
                 {data.element.attrs != null ? (
                   <details>
-                    <summary style={{ cursor: 'pointer', opacity: 0.85 }}>Attributes (raw)</summary>
+                    <summary style={{ cursor: 'pointer', opacity: 0.85 }}>Raw attributes</summary>
                     <pre style={{ marginTop: 8, padding: 10, borderRadius: 10, border: '1px solid var(--borderColor, rgba(0,0,0,0.12))', overflow: 'auto' }}>
                       {safeJsonStringify(data.element.attrs)}
                     </pre>
                   </details>
                 ) : null}
-              </div>
-            </Card>
-
-            <Card title="Related elements">
-              {data.relatedElements.length ? (
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {data.relatedElements.slice(0, 30).map((e) => (
-                    <li key={e.id} style={{ marginBottom: 4 }}>
-                      <Link to={`/portal/e/${encodeURIComponent(e.id)}`}>{e.name || e.id}</Link>
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>
-                        <code>{e.type}</code>
-                        {e.kind ? <span> · {e.kind}</span> : null}
-                        {e.layer ? <span> · {e.layer}</span> : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div style={{ opacity: 0.7 }}>(none)</div>
-              )}
-              {data.relatedElements.length > 30 ? (
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>Showing 30 of {data.relatedElements.length}.</div>
-              ) : null}
-            </Card>
-
-            <Card title="Route info">
-              <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}>
-                {props.mode === 'externalId' ? 'Loaded via externalId' : 'Loaded via internal id'}
-              </div>
-              <div style={{ display: 'grid', gap: 6 }}>
-                <div style={{ fontSize: 12, opacity: 0.7 }}>Param</div>
-                <code style={{ wordBreak: 'break-all' }}>{label || '(missing param)'}</code>
               </div>
             </Card>
           </div>

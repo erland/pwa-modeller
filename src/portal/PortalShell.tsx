@@ -295,15 +295,36 @@ function PortalTopBar() {
 export function PortalShell() {
   return (
     <PortalStoreProvider>
-      <PortalTopBar />
-      <div style={styles.body}>
-        <Outlet />
+      <div style={styles.shell}>
+        {/*
+          The modeller app sets `body { overflow: hidden; }` and manages scrolling inside its own panels.
+          Portal mode needs its own scroll container, otherwise long fact sheets cannot be scrolled.
+        */}
+        <div style={styles.scroll}>
+          <PortalTopBar />
+          <div style={styles.body}>
+            <Outlet />
+          </div>
+        </div>
       </div>
     </PortalStoreProvider>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
+  shell: {
+    height: '100vh',
+    height: '100dvh',
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden'
+  },
+  scroll: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'auto'
+  },
   topBar: {
     display: 'flex',
     justifyContent: 'space-between',

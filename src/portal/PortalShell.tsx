@@ -345,7 +345,7 @@ const styles: Record<string, CSSProperties> = {
     padding: '7px 10px',
     borderRadius: 8,
     border: '1px solid var(--borderColor, rgba(0,0,0,0.2))'
-  },,
+  },
   searchResults: {
     position: 'absolute',
     top: 46,

@@ -153,11 +153,28 @@ export function isPortalIndexes(value: any): value is PortalIndexes {
 export type PortalElementFactSheetData = {
   elementId: string;
   element: any;
+  externalIdKeys: string[];
   usedInViews: { id: string; name: string; kind: string }[];
   relations: {
-    outgoing: { relType: string; relIds: string[] }[];
-    incoming: { relType: string; relIds: string[] }[];
+    outgoing: { relType: string; relIds: string[]; items: PortalFactSheetRelationItem[] }[];
+    incoming: { relType: string; relIds: string[]; items: PortalFactSheetRelationItem[] }[];
   };
+  relatedElements: { id: string; name: string; type: string; kind?: string; layer?: string }[];
+};
+
+export type PortalFactSheetRelationItem = {
+  id: string;
+  type: string;
+  kind?: string;
+  name?: string;
+  documentation?: string;
+  /** The element on the other side of this relationship (if any). */
+  otherElementId?: string;
+  otherElementName?: string;
+  otherElementType?: string;
+  otherElementKind?: string;
+  otherElementLayer?: string;
+  direction: 'outgoing' | 'incoming';
 };
 
 export function resolveElementIdFromExternalId(indexes: PortalIndexes, externalIdKey: string): string | null {
@@ -170,6 +187,10 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
   const el = model.elements?.[elementId];
   if (!el) return null;
 
+  const externalIdKeys = (el.externalIds ?? [])
+    .map(externalIdRefToKey)
+    .filter(Boolean);
+
   const usedIn = indexes.usedInViewsIndex[elementId] ?? [];
   const usedInViews = usedIn
     .map((viewId) => {
@@ -181,8 +202,46 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
 
   const groups = indexes.relationshipGroupsIndex[elementId] ?? { outgoing: {}, incoming: {} };
 
-  const outgoing = Object.entries(groups.outgoing).map(([relType, relIds]) => ({ relType, relIds }));
-  const incoming = Object.entries(groups.incoming).map(([relType, relIds]) => ({ relType, relIds }));
+  const relatedIds = new Set<string>();
+
+  function expandRel(relId: string, direction: 'outgoing' | 'incoming'): PortalFactSheetRelationItem {
+    const rel = (model.relationships?.[relId] ?? model.connectors?.[relId]) as any;
+    const type = String(rel?.type ?? 'Unknown');
+    const kind = rel?.kind;
+    const name = rel?.name;
+    const documentation = rel?.documentation;
+
+    const sourceId = rel?.sourceElementId;
+    const targetId = rel?.targetElementId;
+    const otherId = direction === 'outgoing' ? targetId : sourceId;
+    const otherEl = otherId ? (model.elements?.[otherId] as any) : null;
+    if (otherId) relatedIds.add(otherId);
+
+    return {
+      id: relId,
+      type,
+      kind,
+      name,
+      documentation,
+      otherElementId: otherId,
+      otherElementName: otherEl?.name,
+      otherElementType: otherEl ? String(otherEl.type ?? '') : undefined,
+      otherElementKind: otherEl?.kind,
+      otherElementLayer: otherEl?.layer,
+      direction
+    };
+  }
+
+  const outgoing = Object.entries(groups.outgoing).map(([relType, relIds]) => ({
+    relType,
+    relIds,
+    items: relIds.map((id) => expandRel(id, 'outgoing'))
+  }));
+  const incoming = Object.entries(groups.incoming).map(([relType, relIds]) => ({
+    relType,
+    relIds,
+    items: relIds.map((id) => expandRel(id, 'incoming'))
+  }));
 
   // Stable ordering for UI
   outgoing.sort((a, b) => a.relType.localeCompare(b.relType));
@@ -191,8 +250,17 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
   return {
     elementId,
     element: el,
+    externalIdKeys,
     usedInViews,
-    relations: { outgoing, incoming }
+    relations: { outgoing, incoming },
+    relatedElements: Array.from(relatedIds)
+      .map((id) => {
+        const e = (model.elements as any)?.[id];
+        if (!e) return null;
+        return { id, name: e.name, type: String(e.type ?? ''), kind: e.kind, layer: e.layer };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')) as any
   };
 }
 

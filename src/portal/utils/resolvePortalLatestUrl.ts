@@ -13,8 +13,20 @@ function normalizeUrl(value: unknown): string | null {
 
 function readQueryLatestUrl(): string | null {
   try {
-    const params = new URLSearchParams(window.location.search);
-    return normalizeUrl(params.get('bundleUrl') || params.get('latestUrl'));
+    // With hash-based routing, query params may live inside location.hash (e.g. "#/portal?latestUrl=…").
+    const candidates: string[] = [];
+    if (typeof window.location.search === 'string' && window.location.search.length > 1) candidates.push(window.location.search);
+    if (typeof window.location.hash === 'string') {
+      const idx = window.location.hash.indexOf('?');
+      if (idx >= 0) candidates.push(window.location.hash.slice(idx + 1));
+    }
+
+    for (const q of candidates) {
+      const params = new URLSearchParams(q.startsWith('?') ? q.slice(1) : q);
+      const v = normalizeUrl(params.get('bundleUrl') || params.get('latestUrl'));
+      if (v) return v;
+    }
+    return null;
   } catch {
     return null;
   }

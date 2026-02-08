@@ -150,10 +150,22 @@ async function tryReadPublicPortalConfig(): Promise<PortalPublicConfig | null> {
 
 function readQueryParams(): { bundleUrl?: string; channel?: string } {
   try {
-    const params = new URLSearchParams(window.location.search);
-    const bundleUrl = normalizeString(params.get('bundleUrl') || params.get('latestUrl')) ?? undefined;
-    const channel = normalizeString(params.get('channel')) ?? undefined;
-    return { bundleUrl, channel };
+    // With hash-based routing, query params may live inside location.hash (e.g. "#/portal?latestUrl=…&channel=test").
+    const candidates: string[] = [];
+    if (typeof window.location.search === 'string' && window.location.search.length > 1) candidates.push(window.location.search);
+    if (typeof window.location.hash === 'string') {
+      const idx = window.location.hash.indexOf('?');
+      if (idx >= 0) candidates.push(window.location.hash.slice(idx + 1));
+    }
+
+    for (const q of candidates) {
+      const params = new URLSearchParams(q.startsWith('?') ? q.slice(1) : q);
+      const bundleUrl = normalizeString(params.get('bundleUrl') || params.get('latestUrl')) ?? undefined;
+      const channel = normalizeString(params.get('channel')) ?? undefined;
+      if (bundleUrl || channel) return { bundleUrl, channel };
+    }
+
+    return {};
   } catch {
     return {};
   }

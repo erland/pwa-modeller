@@ -190,8 +190,8 @@ function PortalTopBar() {
                       setQuery('');
                     }}
                   >
-                    <div style={styles.searchResultTitle}>{r.label}</div>
-                    <div style={styles.searchResultMeta}>{r.meta}</div>
+                    <div style={styles.searchResultTitle}>{r.name}</div>
+                    <div style={styles.searchResultMeta}>{[r.type, r.kind, r.layer].filter(Boolean).join(' · ')}</div>
                   </button>
                 ))}
               </div>

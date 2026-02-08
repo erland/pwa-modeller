@@ -59,7 +59,7 @@ export default function PortalViewPage() {
             <span style={{ fontWeight: 700 }}>{view.name}</span>
             <span style={{ marginLeft: 8 }}>·</span>
             <span style={{ marginLeft: 8, opacity: 0.75 }}>
-              Nodes: {Object.keys(view.nodes ?? {}).length} · Connections: {(view.connections ?? []).length}
+              Nodes: {(view.layout?.nodes?.length ?? 0)} · Connections: {(view.connections ?? []).length}
             </span>
           </div>
 

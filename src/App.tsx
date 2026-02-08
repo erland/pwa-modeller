@@ -10,7 +10,7 @@ import WorkspacePage from './pages/WorkspacePage';
 
 import PublisherPage from './publisher/pages/PublisherPage';
 
-import PortalShell from './portal/PortalShell';
+import { PortalShell } from './portal/PortalShell';
 import PortalElementPage from './portal/pages/PortalElementPage';
 import PortalHomePage from './portal/pages/PortalHomePage';
 import PortalViewPage from './portal/pages/PortalViewPage';

@@ -27,7 +27,7 @@ type Props = {
 export function PortalDiagramViewer({ model, view, viewId, initialSelection }: Props) {
   const [selection, setSelection] = useState<Selection>(initialSelection ?? { kind: 'none' });
 
-  const notation = useMemo(() => getNotation(model.kind), [model.kind]);
+  const notation = useMemo(() => getNotation(view.kind), [view.kind]);
   const { nodes, bounds, surfacePadding, surfaceWidthModel, surfaceHeightModel } = useDiagramNodes(view);
 
   const viewport = useDiagramViewport({
@@ -100,7 +100,7 @@ export function PortalDiagramViewer({ model, view, viewId, initialSelection }: P
                 onBeginNodeDrag={noop}
                 onHoverAsRelationshipTarget={noopHoverTarget}
                 onStartLinkDrag={noopStartLinkDrag}
-                getElementBgVar={getElementBgVar}
+                getElementBgVar={(t: string) => getElementBgVar(t as any)}
               />
 
               <DiagramRelationshipsLayer

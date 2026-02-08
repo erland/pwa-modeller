@@ -84,17 +84,21 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-function formatTaggedValue(tv: any): string {
+type TaggedValueLike = { ns?: unknown; key?: unknown; type?: unknown; value?: unknown };
+
+function formatTaggedValue(tv: unknown): string {
+  if (!tv || typeof tv !== 'object') return '';
+  const t = tv as TaggedValueLike;
   if (!tv) return '';
-  const ns = (tv.ns ?? '').trim();
-  const key = (tv.key ?? '').trim();
-  const type = (tv.type ?? '').trim();
-  const value = String(tv.value ?? '');
+  const ns = typeof t.ns === 'string' ? t.ns.trim() : '';
+  const key = typeof t.key === 'string' ? t.key.trim() : '';
+  const type = typeof t.type === 'string' ? t.type.trim() : '';
+  const value = String(t.value ?? '');
   const label = ns ? `${ns}:${key}` : key;
   return type ? `${label} (${type}) = ${value}` : `${label} = ${value}`;
 }
 
-function safeJsonStringify(value: any, maxLen = 40000): string {
+function safeJsonStringify(value: unknown, maxLen = 40000): string {
   try {
     const s = JSON.stringify(value, null, 2);
     if (s.length <= maxLen) return s;
@@ -367,11 +371,15 @@ export default function PortalElementPage(props: PortalElementPageProps) {
                   <div>
                     <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Tagged values</div>
                     <ul style={{ margin: 0, paddingLeft: 18 }}>
-                      {data.element.taggedValues.map((tv: any) => (
-                        <li key={tv.id} style={{ wordBreak: 'break-word' }}>
-                          {formatTaggedValue(tv)}
-                        </li>
-                      ))}
+                      {data.element.taggedValues.map((tv, idx) => {
+                        const key =
+                          tv && typeof tv === 'object' && typeof (tv as { id?: unknown }).id === 'string' ? (tv as { id: string }).id : String(idx);
+                        return (
+                          <li key={key} style={{ wordBreak: 'break-word' }}>
+                            {formatTaggedValue(tv)}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ) : (

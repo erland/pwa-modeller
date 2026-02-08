@@ -64,11 +64,20 @@ export type PortalStoreState = {
   clearCache: () => Promise<void>;
 };
 
-function isModelLike(v: any): v is Model {
-  return Boolean(v && typeof v === 'object' && typeof v.elements === 'object' && typeof v.relationships === 'object' && typeof v.views === 'object');
+function isModelLike(v: unknown): v is Model {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o['elements'] === 'object' &&
+    o['elements'] !== null &&
+    typeof o['relationships'] === 'object' &&
+    o['relationships'] !== null &&
+    typeof o['views'] === 'object' &&
+    o['views'] !== null
+  );
 }
 
-function formatPortalError(e: any): string {
+function formatPortalError(e: unknown): string {
   if (e instanceof PortalFetchError) {
     const base = e.message;
     const details = e.details ? `\nDetails: ${e.details}` : '';
@@ -110,7 +119,7 @@ function formatPortalError(e: any): string {
     return `${base}${details}`;
   }
 
-  return e?.message ? String(e.message) : String(e);
+  return e instanceof Error ? e.message : String(e);
 }
 
 function normalizeString(value: unknown): string | null {
@@ -119,11 +128,21 @@ function normalizeString(value: unknown): string | null {
   return s.length > 0 ? s : null;
 }
 
-async function tryReadPublicPortalConfig(): Promise<any | null> {
+type PortalPublicConfig = {
+  portal?: {
+    defaultChannel?: string;
+    latestUrl?: string;
+    channels?: Record<string, { latestUrl?: string }>;
+  };
+};
+
+async function tryReadPublicPortalConfig(): Promise<PortalPublicConfig | null> {
   try {
     const resp = await fetch('/config.json', { cache: 'no-cache' });
     if (!resp.ok) return null;
-    return (await resp.json()) as any;
+    const json = (await resp.json()) as unknown;
+    if (!json || typeof json !== 'object') return null;
+    return json as PortalPublicConfig;
   } catch {
     return null;
   }
@@ -140,12 +159,12 @@ function readQueryParams(): { bundleUrl?: string; channel?: string } {
   }
 }
 
-function resolveLatestUrlFromConfig(cfg: any, channel: string): string | null {
+function resolveLatestUrlFromConfig(cfg: PortalPublicConfig, channel: string): string | null {
   // Backwards compatible:
   // - cfg.portal.latestUrl
   // - cfg.portal.channels[<channel>].latestUrl
-  const direct = normalizeString(cfg?.portal?.latestUrl);
-  const channelUrl = normalizeString(cfg?.portal?.channels?.[channel]?.latestUrl);
+  const direct = normalizeString(cfg.portal?.latestUrl);
+  const channelUrl = normalizeString(cfg.portal?.channels?.[channel]?.latestUrl);
   return channelUrl ?? direct ?? null;
 }
 
@@ -371,7 +390,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
       let latest: LatestPointer | null = null;
       try {
         latest = await fetchLatest(url);
-      } catch (e: any) {
+      } catch (e: unknown) {
         // Offline path: fall back to most recent cached bundle for this latestUrl
         const cached = await getMostRecentCachedBundle(url);
         if (cached) {
@@ -403,8 +422,8 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         const indexesUrl = resolveRelative(manifestUrl, manifest.entrypoints.indexes);
 
         const [modelJson, indexesJson] = await Promise.all([
-          fetchJsonWithLimit<any>(modelUrl, { maxBytes: PORTAL_MAX_BYTES.modelJson, label: 'model.json' }),
-          fetchJsonWithLimit<any>(indexesUrl, { maxBytes: PORTAL_MAX_BYTES.indexesJson, label: 'indexes.json' })
+          fetchJsonWithLimit<unknown>(modelUrl, { maxBytes: PORTAL_MAX_BYTES.modelJson, label: 'model.json' }),
+          fetchJsonWithLimit<unknown>(indexesUrl, { maxBytes: PORTAL_MAX_BYTES.indexesJson, label: 'indexes.json' })
         ]);
 
         if (!isModelLike(modelJson)) {
@@ -422,12 +441,12 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
           try {
             typedIndexes = buildPortalIndexes(typedModel);
             indexesDerived = true;
-          } catch (err: any) {
+          } catch (err: unknown) {
             throw new PortalFetchError({
               kind: 'schema',
               url: indexesUrl,
               message: 'indexes.json is invalid and could not be derived from model.json.',
-              details: err?.message ? String(err.message) : String(err)
+              details: err instanceof Error ? err.message : String(err)
             });
           }
         }
@@ -454,7 +473,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         });
 
         setStatus('ready');
-      } catch (e: any) {
+      } catch (e: unknown) {
         // Fallback: use cached bundle for *this* bundleId if present
         const cached = await getCachedBundle(url, latest.bundleId);
         if (cached) {
@@ -501,7 +520,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
       }
 
       return { updateAvailable, latest };
-    } catch (e: any) {
+    } catch (e: unknown) {
       setUpdateInfo({ state: 'error', message: formatPortalError(e) || 'Failed to check for updates' });
       return { updateAvailable: false };
     }

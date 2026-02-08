@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Deterministic, test-friendly builders for the EA Modeller core domain model.
  *

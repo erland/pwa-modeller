@@ -1,5 +1,6 @@
 import type { Model } from '../../domain';
 import type { PortalIndexes } from '../indexes/portalIndexes';
+import type { LatestPointer, PublishManifest } from './portalDataset';
 
 export type CachedPortalBundle = {
   key: string;
@@ -7,9 +8,9 @@ export type CachedPortalBundle = {
   bundleId: string;
   cachedAt: number;
 
-  latest: any;
+  latest: LatestPointer;
   manifestUrl: string;
-  manifest: any;
+  manifest: PublishManifest;
 
   model: Model;
   indexes: PortalIndexes;

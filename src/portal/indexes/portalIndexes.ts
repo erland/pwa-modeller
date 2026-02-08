@@ -1,4 +1,4 @@
-import type { Model, Relationship } from '../../domain';
+import type { Element, Model, Relationship } from '../../domain';
 
 export type PortalSearchEntry = {
   /** Internal element id */
@@ -82,7 +82,7 @@ export function buildPortalIndexes(model: Model): PortalIndexes {
       name: el.name ?? '',
       type: String(el.type ?? ''),
       kind: el.kind,
-      layer: (el as any).layer
+      layer: el.layer
     });
   }
 
@@ -115,21 +115,8 @@ export function buildPortalIndexes(model: Model): PortalIndexes {
     }
   }
 
-  // Optional connectors also represent relationships; we include them as well (best-effort)
-  for (const [relId, rel] of Object.entries(model.connectors ?? {})) {
-    // connectors use source/target as connector endpoints; we only index element endpoints if present.
-    const anyRel = rel as unknown as Relationship;
-    const sourceId = (anyRel as any).sourceElementId;
-    const targetId = (anyRel as any).targetElementId;
-    if (sourceId) {
-      const groups = ensureGroups(relationshipGroupsIndex, sourceId);
-      pushGrouped(groups.outgoing, String((anyRel as any).type ?? 'Unknown'), relId);
-    }
-    if (targetId) {
-      const groups = ensureGroups(relationshipGroupsIndex, targetId);
-      pushGrouped(groups.incoming, String((anyRel as any).type ?? 'Unknown'), relId);
-    }
-  }
+  // Note: `model.connectors` are junctions (And/Or) and do not have source/target endpoints in the domain model.
+  // We therefore exclude them from relationship indexing here.
 
   return {
     schemaVersion: 1,
@@ -140,19 +127,20 @@ export function buildPortalIndexes(model: Model): PortalIndexes {
   };
 }
 
-export function isPortalIndexes(value: any): value is PortalIndexes {
+export function isPortalIndexes(value: unknown): value is PortalIndexes {
   if (!value || typeof value !== 'object') return false;
-  if (value.schemaVersion !== 1) return false;
-  if (!value.externalIdIndex || typeof value.externalIdIndex !== 'object') return false;
-  if (!value.usedInViewsIndex || typeof value.usedInViewsIndex !== 'object') return false;
-  if (!value.relationshipGroupsIndex || typeof value.relationshipGroupsIndex !== 'object') return false;
-  if (!Array.isArray(value.searchIndex)) return false;
+  const v = value as Partial<PortalIndexes>;
+  if (v.schemaVersion !== 1) return false;
+  if (!v.externalIdIndex || typeof v.externalIdIndex !== 'object') return false;
+  if (!v.usedInViewsIndex || typeof v.usedInViewsIndex !== 'object') return false;
+  if (!v.relationshipGroupsIndex || typeof v.relationshipGroupsIndex !== 'object') return false;
+  if (!Array.isArray(v.searchIndex)) return false;
   return true;
 }
 
 export type PortalElementFactSheetData = {
   elementId: string;
-  element: any;
+  element: Element;
   externalIdKeys: string[];
   usedInViews: { id: string; name: string; kind: string }[];
   relations: {
@@ -205,7 +193,7 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
   const relatedIds = new Set<string>();
 
   function expandRel(relId: string, direction: 'outgoing' | 'incoming'): PortalFactSheetRelationItem {
-    const rel = (model.relationships?.[relId] ?? model.connectors?.[relId]) as any;
+    const rel: Relationship | undefined = model.relationships?.[relId];
     const type = String(rel?.type ?? 'Unknown');
     const kind = rel?.kind;
     const name = rel?.name;
@@ -214,7 +202,7 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
     const sourceId = rel?.sourceElementId;
     const targetId = rel?.targetElementId;
     const otherId = direction === 'outgoing' ? targetId : sourceId;
-    const otherEl = otherId ? (model.elements?.[otherId] as any) : null;
+    const otherEl = otherId ? model.elements?.[otherId] : undefined;
     if (otherId) relatedIds.add(otherId);
 
     return {
@@ -254,13 +242,20 @@ export function getElementFactSheetData(model: Model, indexes: PortalIndexes, el
     usedInViews,
     relations: { outgoing, incoming },
     relatedElements: Array.from(relatedIds)
-      .map((id) => {
-        const e = (model.elements as any)?.[id];
-        if (!e) return null;
-        return { id, name: e.name, type: String(e.type ?? ''), kind: e.kind, layer: e.layer };
+      .flatMap((id) => {
+        const e = model.elements?.[id];
+        if (!e) return [];
+        return [
+          {
+            id,
+            name: e.name,
+            type: String(e.type ?? ''),
+            kind: e.kind ? String(e.kind) : undefined,
+            layer: (e as { layer?: unknown }).layer ? String((e as { layer?: unknown }).layer) : undefined,
+          },
+        ];
       })
-      .filter(Boolean)
-      .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')) as any
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   };
 }
 

@@ -32,8 +32,12 @@ async function readPublicConfigLatestUrl(): Promise<string | null> {
   try {
     const res = await fetch('/config.json', { cache: 'no-cache' });
     if (!res.ok) return null;
-    const json: any = await res.json();
-    return normalizeUrl(json?.portal?.latestUrl);
+    const json = (await res.json()) as unknown;
+    if (!json || typeof json !== 'object') return null;
+    const portal = (json as { portal?: unknown }).portal;
+    if (!portal || typeof portal !== 'object') return null;
+    const latestUrl = (portal as { latestUrl?: unknown }).latestUrl;
+    return normalizeUrl(latestUrl);
   } catch {
     return null;
   }

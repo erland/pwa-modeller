@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type * as React from 'react';
-import type { Model, View } from '../../domain';
+import type { ElementType, Model, View } from '../../domain';
 import { getNotation } from '../../notations';
 import type { Selection } from '../../components/model/selection';
 
@@ -100,7 +100,7 @@ export function PortalDiagramViewer({ model, view, viewId, initialSelection }: P
                 onBeginNodeDrag={noop}
                 onHoverAsRelationshipTarget={noopHoverTarget}
                 onStartLinkDrag={noopStartLinkDrag}
-                getElementBgVar={(t: string) => getElementBgVar(t as any)}
+                getElementBgVar={(t: string) => getElementBgVar(t as ElementType)}
               />
 
               <DiagramRelationshipsLayer

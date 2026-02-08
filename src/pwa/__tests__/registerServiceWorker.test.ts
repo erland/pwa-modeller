@@ -48,11 +48,15 @@ describe('registerServiceWorker', () => {
     try {
       // @ts-expect-error cleanup
       delete (navigator as any).serviceWorker;
-    } catch {}
+    } catch (e) {
+      void e;
+    }
     try {
       // @ts-expect-error cleanup
       delete (window as any).caches;
-    } catch {}
+    } catch (e) {
+      void e;
+    }
   });
 
   test('no-ops when serviceWorker is not supported', () => {
@@ -61,7 +65,9 @@ describe('registerServiceWorker', () => {
     try {
       // @ts-expect-error cleanup
       delete (navigator as any).serviceWorker;
-    } catch {}
+    } catch (e) {
+      void e;
+    }
 
     registerServiceWorker();
 

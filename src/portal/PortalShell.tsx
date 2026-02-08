@@ -8,11 +8,11 @@ import { search as searchIndex } from './indexes/portalIndexes';
 
 const CHANNELS = ['prod', 'test', 'demo', 'custom'];
 
-function formatTestError(e: any): string {
+function formatTestError(e: unknown): string {
   if (e instanceof PortalFetchError) {
     return e.message + (e.details ? `\nDetails: ${e.details}` : '');
   }
-  return e?.message ? String(e.message) : String(e);
+  return e instanceof Error ? e.message : String(e);
 }
 
 function normalizeUrl(value: unknown): string | null {
@@ -88,7 +88,7 @@ function PortalTopBar() {
       setTestStatus('ok');
       const title = latest.title?.trim() ? ` — ${latest.title.trim()}` : '';
       setTestMessage(`OK: bundleId=${latest.bundleId}${title}`);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTestStatus('error');
       setTestMessage(formatTestError(e));
     }

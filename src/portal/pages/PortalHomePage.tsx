@@ -16,9 +16,7 @@ export default function PortalHomePage() {
             This portal is read-only.
           </div>
           {status === 'error' && error ? (
-            <div style={{ marginTop: 8, color: 'var(--danger, #b42318)' }}>
-              {error}
-            </div>
+            <div style={{ marginTop: 8, color: 'var(--danger, #b42318)', whiteSpace: 'pre-wrap' }}>{error}</div>
           ) : null}
           <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
             Configured latest.json URL:{' '}

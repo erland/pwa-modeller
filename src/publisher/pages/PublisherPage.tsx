@@ -171,11 +171,16 @@ export default function PublisherPage() {
 
             const exportName = state.status === 'imported' ? state.fileName : undefined;
 
-            const built = buildPublishBundleZip(model, { sourceTool: 'SparxEA', exportType: 'XMI', exportName });
-            downloadBytes(built.zipBytes, built.zipFileName);
-            setBundleInfo({ bundleId: built.bundleId, zipFileName: built.zipFileName });
-            // Default title suggestion (editable)
-            setLatestTitle(`EA Portal — ${exportName ?? built.bundleId}`);
+            try {
+              const built = buildPublishBundleZip(model, { sourceTool: 'SparxEA', exportType: 'XMI', exportName });
+              downloadBytes(built.zipBytes, built.zipFileName);
+              setBundleInfo({ bundleId: built.bundleId, zipFileName: built.zipFileName });
+              // Default title suggestion (editable)
+              setLatestTitle(`EA Portal — ${exportName ?? built.bundleId}`);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              setState({ status: 'error', message: msg });
+            }
           }}
         >
           3) Generate publish bundle

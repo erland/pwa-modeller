@@ -3,19 +3,16 @@ import type { CSSProperties } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { PortalStoreProvider, usePortalStore } from './store/usePortalStore';
+import { fetchLatest, PortalFetchError } from './data/portalDataset';
 import { search as searchIndex } from './indexes/portalIndexes';
 
 const PORTAL_LATEST_URL_LOCALSTORAGE_KEY = 'portal.latestUrl';
 
-type LatestPointer = {
-  bundleId: string;
-  manifestUrl: string;
-  title?: string;
-  channel?: string;
-};
-
-function isLatestPointer(v: any): v is LatestPointer {
-  return Boolean(v && typeof v === 'object' && typeof v.bundleId === 'string' && typeof v.manifestUrl === 'string');
+function formatTestError(e: any): string {
+  if (e instanceof PortalFetchError) {
+    return e.message + (e.details ? `\nDetails: ${e.details}` : '');
+  }
+  return e?.message ? String(e.message) : String(e);
 }
 
 function normalizeUrl(value: unknown): string | null {
@@ -70,24 +67,13 @@ function PortalTopBar() {
     setTestMessage('Fetching latest.json...');
 
     try {
-      const resp = await fetch(url, { cache: 'no-cache' });
-      if (!resp.ok) {
-        setTestStatus('error');
-        setTestMessage(`HTTP ${resp.status} while fetching latest.json`);
-        return;
-      }
-      const json = await resp.json();
-      if (!isLatestPointer(json)) {
-        setTestStatus('error');
-        setTestMessage('latest.json schema is invalid. Expected { bundleId, manifestUrl, (optional) title }.');
-        return;
-      }
+      const latest = await fetchLatest(url);
       setTestStatus('ok');
-      const title = typeof json.title === 'string' && json.title.trim() ? ` — ${json.title.trim()}` : '';
-      setTestMessage(`OK: bundleId=${json.bundleId}${title}`);
+      const title = latest.title?.trim() ? ` — ${latest.title.trim()}` : '';
+      setTestMessage(`OK: bundleId=${latest.bundleId}${title}`);
     } catch (e: any) {
       setTestStatus('error');
-      setTestMessage(e?.message ? String(e.message) : 'Failed to fetch latest.json');
+      setTestMessage(formatTestError(e));
     }
   };
 

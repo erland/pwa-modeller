@@ -2,6 +2,7 @@ import type { Model } from '../../domain';
 import { buildPortalIndexes } from '../../portal/indexes/portalIndexes';
 import { ZipWriter } from '../../export/zip/zipWriter';
 import { crc32 } from '../../export/zip/crc32';
+import { PORTAL_MAX_BYTES, formatBytes } from '../../portal/data/portalLimits';
 
 export type PublishManifestV1 = {
   schemaVersion: number;
@@ -65,6 +66,22 @@ export function buildPublishBundleZip(model: Model, opts: { sourceTool?: string;
 
   const modelJson = JSON.stringify(model);
   const indexesJson = JSON.stringify(indexes);
+
+  // Step 9 hardening: ensure produced bundles are within the portal's default limits.
+  const modelBytes = encUtf8(modelJson).byteLength;
+  const indexesBytes = encUtf8(indexesJson).byteLength;
+  if (modelBytes > PORTAL_MAX_BYTES.modelJson) {
+    throw new Error(
+      `model.json is too large (${formatBytes(modelBytes)}). Portal default limit is ${formatBytes(PORTAL_MAX_BYTES.modelJson)}. ` +
+        `Consider splitting the dataset, pruning views, or raising the limits.`
+    );
+  }
+  if (indexesBytes > PORTAL_MAX_BYTES.indexesJson) {
+    throw new Error(
+      `indexes.json is too large (${formatBytes(indexesBytes)}). Portal default limit is ${formatBytes(PORTAL_MAX_BYTES.indexesJson)}. ` +
+        `Consider pruning search/index detail or raising the limits.`
+    );
+  }
 
   // Bundle id: timestamp + short content hash
   const contentHash = shortHashHex(encUtf8(modelJson));

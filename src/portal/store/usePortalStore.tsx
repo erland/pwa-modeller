@@ -3,7 +3,8 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import type { Model } from '../../domain';
 import { buildPortalIndexes, isPortalIndexes, type PortalIndexes } from '../indexes/portalIndexes';
 import { clearCacheForLatestUrl, getCachedBundle, getMostRecentCachedBundle, putCachedBundle } from '../data/portalCache';
-import { fetchLatest, fetchManifest, resolveRelative, type LatestPointer, type PublishManifest } from '../data/portalDataset';
+import { fetchJsonWithLimit, fetchLatest, fetchManifest, resolveRelative, PortalFetchError, type LatestPointer, type PublishManifest } from '../data/portalDataset';
+import { PORTAL_MAX_BYTES, formatBytes } from '../data/portalLimits';
 
 export type PortalDatasetMeta = {
   title?: string;
@@ -44,6 +45,55 @@ export type PortalStoreState = {
   checkForUpdate: () => Promise<{ updateAvailable: boolean; latest?: LatestPointer }>;
   clearCache: () => Promise<void>;
 };
+
+function isModelLike(v: any): v is Model {
+  return Boolean(v && typeof v === 'object' && typeof v.elements === 'object' && typeof v.relationships === 'object' && typeof v.views === 'object');
+}
+
+function formatPortalError(e: any): string {
+  if (e instanceof PortalFetchError) {
+    const base = e.message;
+    const details = e.details ? `\nDetails: ${e.details}` : '';
+
+    if (e.kind === 'cors') {
+      return (
+        `${base}` +
+        `\nHint: This often means CORS is blocking cross-origin reads.` +
+        ` Ensure the host serves the files with an Access-Control-Allow-Origin header` +
+        ` (or host the bundle on the same origin as the portal).` +
+        details
+      );
+    }
+
+    if (e.kind === 'http') {
+      return `${base}\nHint: Verify the URL is correct and the file is publicly accessible.${details}`;
+    }
+
+    if (e.kind === 'parse') {
+      return `${base}\nHint: The server may be returning HTML (e.g., an error page) instead of JSON.${details}`;
+    }
+
+    if (e.kind === 'size') {
+      return (
+        `${base}` +
+        `\nHint: Portal limits are: model ≤ ${formatBytes(PORTAL_MAX_BYTES.modelJson)}, indexes ≤ ${formatBytes(PORTAL_MAX_BYTES.indexesJson)}.` +
+        ` You can tune these in src/portal/data/portalLimits.ts.`
+      );
+    }
+
+    if (e.kind === 'schema') {
+      return `${base}\nHint: The published files do not match the expected bundle format.`;
+    }
+
+    if (e.kind === 'timeout') {
+      return `${base}\nHint: The host might be slow. Try again or use a faster/static host.`;
+    }
+
+    return `${base}${details}`;
+  }
+
+  return e?.message ? String(e.message) : String(e);
+}
 
 const PortalStoreContext = createContext<PortalStoreState | null>(null);
 
@@ -206,7 +256,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         }
 
         setStatus('error');
-        setError(e?.message ? String(e.message) : 'Failed to fetch latest.json');
+        setError(formatPortalError(e) || 'Failed to fetch latest.json');
         return;
       }
 
@@ -219,13 +269,28 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         const indexesUrl = resolveRelative(manifestUrl, manifest.entrypoints.indexes);
 
         const [modelJson, indexesJson] = await Promise.all([
-          (await fetch(modelUrl, { cache: 'no-cache' })).json(),
-          (await fetch(indexesUrl, { cache: 'no-cache' })).json()
+          fetchJsonWithLimit<any>(modelUrl, { maxBytes: PORTAL_MAX_BYTES.modelJson, label: 'model.json' }),
+          fetchJsonWithLimit<any>(indexesUrl, { maxBytes: PORTAL_MAX_BYTES.indexesJson, label: 'indexes.json' })
         ]);
 
+        if (!isModelLike(modelJson)) {
+          throw new PortalFetchError({ kind: 'schema', url: modelUrl, message: 'model.json schema is invalid. Expected an object with { elements, relationships, views }.' });
+        }
+
         const typedModel = modelJson as Model;
-        const indexesDerived = !isPortalIndexes(indexesJson);
-        const typedIndexes: PortalIndexes = indexesDerived ? buildPortalIndexes(typedModel) : (indexesJson as PortalIndexes);
+        let typedIndexes: PortalIndexes;
+        let indexesDerived = false;
+        if (isPortalIndexes(indexesJson)) {
+          typedIndexes = indexesJson as PortalIndexes;
+        } else {
+          // Derive indexes if they are missing or invalid, but never let this crash the portal.
+          try {
+            typedIndexes = buildPortalIndexes(typedModel);
+            indexesDerived = true;
+          } catch (err: any) {
+            throw new PortalFetchError({ kind: 'schema', url: indexesUrl, message: 'indexes.json is invalid and could not be derived from model.json.', details: err?.message ? String(err.message) : String(err) });
+          }
+        }
 
 
         await putCachedBundle({
@@ -268,7 +333,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         }
 
         setStatus('error');
-        setError(e?.message ? String(e.message) : 'Failed to load published bundle');
+        setError(formatPortalError(e) || 'Failed to load published bundle');
       }
     },
     [applyBundleToState, latestUrl]

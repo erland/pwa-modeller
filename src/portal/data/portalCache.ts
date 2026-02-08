@@ -1,3 +1,6 @@
+import type { Model } from '../../domain';
+import type { PortalIndexes } from '../indexes/portalIndexes';
+
 export type CachedPortalBundle = {
   key: string;
   latestUrl: string;
@@ -8,8 +11,8 @@ export type CachedPortalBundle = {
   manifestUrl: string;
   manifest: any;
 
-  model: any;
-  indexes: any;
+  model: Model;
+  indexes: PortalIndexes;
 };
 
 const DB_NAME = 'ea-modeller-portal-cache';

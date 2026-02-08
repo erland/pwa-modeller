@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { Model } from '../../domain';
+import { buildPortalIndexes, isPortalIndexes, type PortalIndexes } from '../indexes/portalIndexes';
 import { clearCacheForLatestUrl, getCachedBundle, getMostRecentCachedBundle, putCachedBundle } from '../data/portalCache';
 import { fetchLatest, fetchManifest, resolveRelative, type LatestPointer, type PublishManifest } from '../data/portalDataset';
 
@@ -35,7 +36,7 @@ export type PortalStoreState = {
 
   datasetMeta: PortalDatasetMeta | null;
   model: Model | null;
-  indexes: any | null;
+  indexes: PortalIndexes | null;
 
   setLatestUrl: (latestUrl: string | null, source?: PortalLatestUrlSource) => void;
 
@@ -154,8 +155,9 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
       manifestUrl: string;
       manifest: PublishManifest;
       model: Model;
-      indexes: any;
+      indexes: PortalIndexes;
       loadedFromCache?: boolean;
+      indexesDerived?: boolean;
     }) => {
       setDatasetMeta({
         title: latest.title,
@@ -164,7 +166,8 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         schemaVersion: manifest.schemaVersion,
         latestUrl,
         manifestUrl,
-        loadedFromCache
+        loadedFromCache,
+        indexesDerived
       });
       setModel(model);
       setIndexes(indexes);
@@ -195,7 +198,8 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
             manifest: cached.manifest,
             model: cached.model,
             indexes: cached.indexes,
-            loadedFromCache: true
+            loadedFromCache: true,
+            indexesDerived: false
           });
           setStatus('ready');
           return;
@@ -220,6 +224,9 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
         ]);
 
         const typedModel = modelJson as Model;
+        const indexesDerived = !isPortalIndexes(indexesJson);
+        const typedIndexes: PortalIndexes = indexesDerived ? buildPortalIndexes(typedModel) : (indexesJson as PortalIndexes);
+
 
         await putCachedBundle({
           latestUrl: url,
@@ -228,7 +235,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
           manifestUrl,
           manifest,
           model: typedModel,
-          indexes: indexesJson
+          indexes: typedIndexes
         });
 
         applyBundleToState({
@@ -237,7 +244,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
           manifestUrl,
           manifest,
           model: typedModel,
-          indexes: indexesJson,
+          indexes: typedIndexes,
           loadedFromCache: false
         });
 
@@ -253,7 +260,8 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
             manifest: cached.manifest,
             model: cached.model,
             indexes: cached.indexes,
-            loadedFromCache: true
+            loadedFromCache: true,
+            indexesDerived: false
           });
           setStatus('ready');
           return;

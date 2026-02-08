@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { PortalStoreProvider, usePortalStore } from './store/usePortalStore';
+import { search as searchIndex } from './indexes/portalIndexes';
 
 const PORTAL_LATEST_URL_LOCALSTORAGE_KEY = 'portal.latestUrl';
 
@@ -26,7 +27,7 @@ function normalizeUrl(value: unknown): string | null {
 function PortalTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { datasetMeta, status, error, latest, setLatestUrl, load, clearCache } = usePortalStore();
+  const { datasetMeta, status, error, latest, indexes, setLatestUrl, load, clearCache } = usePortalStore();
   const [query, setQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [latestUrlDraft, setLatestUrlDraft] = useState<string>(latest.latestUrl ?? '');
@@ -108,12 +109,26 @@ function PortalTopBar() {
   };
 
   const onSearch = () => {
-    // Search will be implemented in Step 4/5 when we have indexes.
     if (!query.trim()) return;
-    // For now, just keep the input as a placeholder. No navigation.
+    if (!indexes) return;
+
+    const results = searchIndex(indexes, query, { limit: 10 });
+    if (!results.length) return;
+
+    // Navigate to best match (internal id route for now; Step 5 will prefer externalId permalinks).
+    navigate(`/portal/e/${encodeURIComponent(results[0].id)}`);
+    setQuery('');
   };
 
   const canSearch = Boolean(datasetMeta);
+  const searchResults = useMemo(() => {
+    if (!canSearch) return [];
+    if (!indexes) return [];
+    const q = query.trim();
+    if (!q) return [];
+    return searchIndex(indexes, q, { limit: 8 });
+  }, [canSearch, indexes, query]);
+
 
   return (
     <>
@@ -136,7 +151,7 @@ function PortalTopBar() {
         <input
           value={query}
           onChange={onChangeQuery}
-          placeholder={canSearch ? 'Search (coming soon)' : 'Load a dataset to search'}
+          placeholder={canSearch ? 'Search elements…' : 'Load a dataset to search'}
           disabled={!canSearch}
           style={styles.searchInput}
         />
@@ -146,6 +161,30 @@ function PortalTopBar() {
         <button onClick={openDialog} style={styles.button}>
           Change dataset
         </button>
+
+        {canSearch && query.trim() && searchResults.length > 0 && (
+          <div style={styles.searchResults}>
+            {searchResults.map((r) => (
+              <div
+                key={r.id}
+                style={styles.searchResultRow}
+                onMouseDown={(e) => {
+                  // prevent input blur
+                  e.preventDefault();
+                }}
+                onClick={() => {
+                  navigate(`/portal/e/${encodeURIComponent(r.id)}`);
+                  setQuery('');
+                }}
+                title={r.type}
+              >
+                <div style={styles.searchResultName}>{r.name || '(unnamed)'}</div>
+                <div style={styles.searchResultMeta}>{r.type}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
       </div>
 
       <div style={styles.topRight}>
@@ -287,6 +326,7 @@ const styles: Record<string, CSSProperties> = {
     opacity: 0.9
   },
   topCenter: {
+    position: 'relative',
     display: 'flex',
     alignItems: 'center',
     gap: 8,
@@ -305,6 +345,37 @@ const styles: Record<string, CSSProperties> = {
     padding: '7px 10px',
     borderRadius: 8,
     border: '1px solid var(--borderColor, rgba(0,0,0,0.2))'
+  },,
+  searchResults: {
+    position: 'absolute',
+    top: 46,
+    left: 0,
+    width: 'min(520px, 45vw)',
+    maxHeight: 320,
+    overflow: 'auto',
+    background: 'var(--panelBg, white)',
+    border: '1px solid var(--borderColor, rgba(0,0,0,0.12))',
+    borderRadius: 10,
+    boxShadow: '0 6px 16px rgba(0,0,0,0.08)',
+    zIndex: 10
+  },
+  searchResultRow: {
+    padding: '8px 10px',
+    cursor: 'pointer',
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 10
+  },
+  searchResultName: {
+    fontSize: 13,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap'
+  },
+  searchResultMeta: {
+    fontSize: 12,
+    opacity: 0.7,
+    whiteSpace: 'nowrap'
   },
   button: {
     padding: '7px 10px',

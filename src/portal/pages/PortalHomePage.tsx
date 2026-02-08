@@ -45,6 +45,9 @@ export default function PortalHomePage() {
             {datasetMeta.loadedFromCache ? (
               <span style={{ marginLeft: 10 }}>(loaded from cache)</span>
             ) : null}
+            {datasetMeta.indexesDerived ? (
+              <span style={{ marginLeft: 10 }}>(indexes derived in portal)</span>
+            ) : null}
           </div>
         </div>
       )}

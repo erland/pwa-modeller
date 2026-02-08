@@ -80,7 +80,7 @@ export default function AnalysisPage() {
       <AppShell
         title="EA Modeller"
         subtitle={shellSubtitle}
-        actions={<ModelActions onEditModelProps={() => setModelPropsOpen(true)} />}
+        actions={<ModelActions onEditModelProps={() => setModelPropsOpen(true)} activeViewId={null} />}
         leftSidebar={<ModelNavigator selection={selection} onSelect={setSelection} />}
         rightSidebar={
           <PropertiesPanel

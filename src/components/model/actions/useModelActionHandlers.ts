@@ -3,6 +3,7 @@ import type { NavigateFunction } from 'react-router-dom';
 import type { Model } from '../../../domain';
 
 import { useModelFileActions, type LastImportInfo } from './model/useModelFileActions';
+import { useModelPublishActions } from './model/useModelPublishActions';
 import { useModelElementActions } from './model/useModelElementActions';
 import { useModelRelationshipActions } from './model/useModelRelationshipActions';
 import { useModelViewActions } from './model/useModelViewActions';
@@ -15,6 +16,7 @@ export type UseModelActionHandlersArgs = {
   isDirty: boolean;
   navigate: NavigateFunction;
   onEditModelProps: () => void;
+  activeViewId: string | null;
 };
 
 /**
@@ -23,11 +25,12 @@ export type UseModelActionHandlersArgs = {
  * The return shape intentionally matches the pre-refactor API so consuming components
  * do not need to change.
  */
-export function useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps }: UseModelActionHandlersArgs) {
+export function useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps, activeViewId }: UseModelActionHandlersArgs) {
   const file = useModelFileActions({ model, fileName, isDirty, navigate });
   const elem = useModelElementActions({ onEditModelProps });
   const rel = useModelRelationshipActions();
   const view = useModelViewActions({ navigate });
+  const publish = useModelPublishActions({ model, fileName, activeViewId });
 
   return {
     // refs / inputs
@@ -66,9 +69,23 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
     doSaveAs: file.doSaveAs,
     doProperties: elem.doProperties,
     doAbout: view.doAbout,
+    doPublish: publish.openPublish,
     triggerDownload: file.triggerDownload,
     saveAsDefault: file.saveAsDefault,
     downloadImportReport: file.downloadImportReport,
+
+    // publish
+    publishDialogOpen: publish.publishDialogOpen,
+    setPublishDialogOpen: publish.setPublishDialogOpen,
+    publishing: publish.publishing,
+    publishError: publish.publishError,
+    publishTitle: publish.publishTitle,
+    setPublishTitle: publish.setPublishTitle,
+    publishScope: publish.publishScope,
+    setPublishScope: publish.setPublishScope,
+    currentViewLabel: publish.currentViewLabel,
+    canPublishView: publish.canPublishView,
+    runPublish: publish.doPublish,
 
     // helpers
     confirmReplaceIfDirty: file.confirmReplaceIfDirty,

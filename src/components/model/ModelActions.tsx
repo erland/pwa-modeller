@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useModelStore } from '../../store';
 import {
   ActionsMenuDialog,
+  PublishDialog,
   ImportDialog,
   ImportReportDialog,
   NewModelDialog,
@@ -14,13 +15,14 @@ import {
 
 type ModelActionsProps = {
   onEditModelProps: () => void;
+  activeViewId: string | null;
 };
 
-export function ModelActions({ onEditModelProps }: ModelActionsProps) {
+export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsProps) {
   const navigate = useNavigate();
   const { model, fileName, isDirty } = useModelStore((s) => s);
 
-  const ctrl = useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps });
+  const ctrl = useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps, activeViewId });
 
   const actions = useMemo(
     () =>
@@ -33,7 +35,8 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         onSave: ctrl.doSave,
         onSaveAs: ctrl.doSaveAs,
         onModel: ctrl.doProperties,
-        onAbout: ctrl.doAbout
+        onAbout: ctrl.doAbout,
+        onPublish: ctrl.doPublish
       }),
     [
       model,
@@ -43,7 +46,8 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
       ctrl.doProperties,
       ctrl.doSave,
       ctrl.doSaveAs,
-      ctrl.doAbout
+      ctrl.doAbout,
+      ctrl.doPublish
     ]
   );
 
@@ -101,6 +105,22 @@ export function ModelActions({ onEditModelProps }: ModelActionsProps) {
         importing={ctrl.importing}
         error={ctrl.importError}
         onChooseFile={ctrl.triggerLoadFilePicker}
+      />
+
+
+
+      <PublishDialog
+        isOpen={ctrl.publishDialogOpen}
+        onClose={() => ctrl.setPublishDialogOpen(false)}
+        title={ctrl.publishTitle}
+        setTitle={ctrl.setPublishTitle}
+        scope={ctrl.publishScope}
+        setScope={ctrl.setPublishScope}
+        currentViewLabel={ctrl.currentViewLabel}
+        canPublishView={ctrl.canPublishView}
+        publishing={ctrl.publishing}
+        error={ctrl.publishError}
+        onPublish={() => void ctrl.runPublish()}
       />
 
       <ImportReportDialog

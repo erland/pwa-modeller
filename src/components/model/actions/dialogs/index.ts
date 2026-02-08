@@ -8,3 +8,6 @@ export * from './OverlaySurveyExportDialog';
 export * from './OverlaySurveyImportDialog';
 export * from './OverlayResolveReportDialog';
 export * from './OverlayManageDialog';
+
+export { PublishDialog } from './PublishDialog';
+export type { PublishScope } from './PublishDialog';

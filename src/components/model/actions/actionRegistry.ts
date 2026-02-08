@@ -5,7 +5,8 @@ export type ModelActionId =
   | 'save'
   | 'saveAs'
   | 'model'
-  | 'about';
+  | 'about'
+  | 'publish';
 
 export type ModelAction = {
   id: ModelActionId;
@@ -25,6 +26,7 @@ type BuildRegistryArgs = {
   onSaveAs: () => void;
   onModel: () => void;
   onAbout: () => void;
+  onPublish: () => void;
 };
 
 /**
@@ -71,6 +73,13 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       label: 'Model',
       run: args.onModel,
       disabled: !modelLoaded
+    },
+    {
+      id: 'publish',
+      label: 'Publish to Portal…',
+      run: args.onPublish,
+      disabled: !modelLoaded,
+      title: !modelLoaded ? 'No model loaded' : undefined
     },
     {
       id: 'about',

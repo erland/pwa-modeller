@@ -75,7 +75,7 @@ export function PortalDiagramViewer({ model, view, viewId, initialSelection }: P
       </div>
 
       <div className="diagramCanvas">
-        <div className="diagramViewport" ref={viewport.viewportRef} aria-label="Portal diagram viewer">
+        <div className="diagramViewport" ref={viewport.viewportRef} aria-label="Portal diagram viewer" style={{ height: '70vh', minHeight: 420 }}>
           <div style={{ width: surfaceWidthModel * viewport.zoom, height: surfaceHeightModel * viewport.zoom, position: 'relative' }}>
             <div
               className="diagramSurface"

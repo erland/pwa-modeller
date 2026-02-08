@@ -118,6 +118,9 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
         setScope={ctrl.setPublishScope}
         currentViewLabel={ctrl.currentViewLabel}
         canPublishView={ctrl.canPublishView}
+        folderOptions={ctrl.folderOptions}
+        selectedFolderId={ctrl.selectedFolderId}
+        setSelectedFolderId={ctrl.setSelectedFolderId}
         publishing={ctrl.publishing}
         error={ctrl.publishError}
         onPublish={() => void ctrl.runPublish()}

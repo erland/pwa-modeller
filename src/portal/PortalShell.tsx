@@ -81,7 +81,7 @@ function PortalTopBar() {
     }
 
     setTestStatus('testing');
-    setTestMessage('Fetching latest.json...');
+    setTestMessage('Fetching latest.json…');
 
     try {
       const latest = await fetchLatest(url);

@@ -1,6 +1,6 @@
 import { Dialog } from '../../../dialog/Dialog';
 
-export type PublishScope = 'model' | 'view';
+export type PublishScope = 'model' | 'view' | 'folder';
 
 export type PublishDialogProps = {
   isOpen: boolean;
@@ -14,6 +14,10 @@ export type PublishDialogProps = {
 
   currentViewLabel: string | null;
   canPublishView: boolean;
+
+  folderOptions: Array<{ id: string; label: string }>;
+  selectedFolderId: string;
+  setSelectedFolderId: (v: string) => void;
 
   publishing: boolean;
   error: string | null;
@@ -30,6 +34,9 @@ export function PublishDialog({
   setScope,
   currentViewLabel,
   canPublishView,
+  folderOptions,
+  selectedFolderId,
+  setSelectedFolderId,
   publishing,
   error,
   onPublish
@@ -59,6 +66,9 @@ export function PublishDialog({
             <option value="view" disabled={!canPublishView}>
               Current view{currentViewLabel ? `: ${currentViewLabel}` : ''}
             </option>
+            <option value="folder" disabled={folderOptions.length === 0}>
+              Folder
+            </option>
           </select>
           {!canPublishView ? (
             <div style={{ fontSize: 12, opacity: 0.75 }}>
@@ -66,6 +76,24 @@ export function PublishDialog({
             </div>
           ) : null}
         </label>
+
+        {scope === 'folder' ? (
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>Folder</div>
+            <select
+              className="selectInput"
+              value={selectedFolderId}
+              onChange={(e) => setSelectedFolderId(e.currentTarget.value)}
+              disabled={folderOptions.length === 0}
+            >
+              {folderOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         {error ? (
           <div style={{ color: 'var(--danger, #b00020)', whiteSpace: 'pre-wrap', fontSize: 13 }}>{error}</div>

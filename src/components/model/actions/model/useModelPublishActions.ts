@@ -5,7 +5,7 @@ import { downloadTextFile } from '../../../../store';
 
 import { buildPublishBundleZip } from '../../../../publisher/lib/publishBundle';
 import { buildLatestPointerJson } from '../../../../publisher/lib/latestPointer';
-import { sliceModelForView } from '../../../../publisher/lib/sliceModel';
+import { sliceModelForFolder, sliceModelForView } from '../../../../publisher/lib/sliceModel';
 
 import type { PublishScope } from '../dialogs/PublishDialog';
 
@@ -30,6 +30,45 @@ export type UseModelPublishActionsArgs = {
   activeViewId: string | null;
 };
 
+function buildFolderOptions(model: Model | null): Array<{ id: string; label: string }> {
+  if (!model) return [];
+  const folders = model.folders ?? {};
+
+  // Prefer the root folder (kind=root) or folders with no parent.
+  const roots = Object.values(folders)
+    .filter((f) => f.kind === 'root' || !f.parentId)
+    .map((f) => f.id);
+
+  const visited = new Set<string>();
+  const out: Array<{ id: string; label: string }> = [];
+
+  const walk = (id: string, depth: number) => {
+    if (visited.has(id)) return;
+    visited.add(id);
+    const f = folders[id];
+    if (!f) return;
+    const indent = depth > 0 ? `${'\u00A0'.repeat(depth * 2)}• ` : '';
+    // Exclude the root folder from the picker to avoid duplicating the "Whole model" option.
+    if (f.kind !== 'root') {
+      out.push({ id, label: `${indent}${f.name}` });
+    }
+    for (const childId of f.folderIds ?? []) {
+      walk(childId, depth + 1);
+    }
+  };
+
+  for (const rid of roots) walk(rid, 0);
+
+  // Fallback: include any remaining folders not reachable from roots.
+  for (const f of Object.values(folders)) {
+    if (!visited.has(f.id) && f.kind !== 'root') {
+      out.push({ id: f.id, label: f.name });
+    }
+  }
+
+  return out;
+}
+
 export function useModelPublishActions({ model, fileName, activeViewId }: UseModelPublishActionsArgs) {
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -37,6 +76,8 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
 
   const [publishTitle, setPublishTitle] = useState('');
   const [publishScope, setPublishScope] = useState<PublishScope>('model');
+  const folderOptions = useMemo(() => buildFolderOptions(model), [model]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
 
   const currentViewLabel = useMemo(() => {
     if (!model) return null;
@@ -55,7 +96,11 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
     setPublishTitle(fallback);
     // Default scope: view if a view is active, otherwise whole model
     setPublishScope(canPublishView ? 'view' : 'model');
-  }, [canPublishView, fileName, model]);
+
+    // Default folder: first available folder in options
+    const firstFolderId = folderOptions[0]?.id ?? '';
+    setSelectedFolderId(firstFolderId);
+  }, [canPublishView, fileName, folderOptions, model]);
 
   const doPublish = useCallback(async () => {
     if (!model) return;
@@ -68,16 +113,23 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
               if (!activeViewId) throw new Error('No active view selected.');
               return sliceModelForView(model, activeViewId);
             })()
+          : publishScope === 'folder'
+          ? (() => {
+              if (!selectedFolderId) throw new Error('No folder selected.');
+              return sliceModelForFolder(model, selectedFolderId);
+            })()
           : model;
 
       const exportName =
         publishScope === 'view' && activeViewId && model.views?.[activeViewId]
           ? model.views[activeViewId].name
+          : publishScope === 'folder' && selectedFolderId && model.folders?.[selectedFolderId]
+          ? model.folders[selectedFolderId].name
           : fileName ?? model.metadata?.name;
 
       const bundle = buildPublishBundleZip(srcModel, {
         sourceTool: 'EA Modeller',
-        exportType: publishScope === 'view' ? 'ViewScope' : 'ModelScope',
+        exportType: publishScope === 'view' ? 'ViewScope' : publishScope === 'folder' ? 'FolderScope' : 'ModelScope',
         exportName
       });
 
@@ -99,7 +151,7 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
     } finally {
       setPublishing(false);
     }
-  }, [activeViewId, fileName, model, publishScope, publishTitle]);
+  }, [activeViewId, fileName, model, publishScope, publishTitle, selectedFolderId]);
 
   return {
     publishDialogOpen,
@@ -111,6 +163,10 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
     setPublishTitle,
     publishScope,
     setPublishScope,
+
+    folderOptions,
+    selectedFolderId,
+    setSelectedFolderId,
 
     currentViewLabel,
     canPublishView,

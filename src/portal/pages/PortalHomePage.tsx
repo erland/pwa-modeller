@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { usePortalStore } from '../store/usePortalStore';
 
 export default function PortalHomePage() {
-  const { datasetMeta } = usePortalStore();
+  const { datasetMeta, latest } = usePortalStore();
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -13,7 +13,16 @@ export default function PortalHomePage() {
         <div style={{ padding: 12, border: '1px solid var(--borderColor, rgba(0,0,0,0.12))', borderRadius: 12 }}>
           <strong>No dataset loaded.</strong>
           <div style={{ marginTop: 8, opacity: 0.85 }}>
-            This portal is read-only. Dataset loading will be implemented in Step 2 and Step 3.
+            This portal is read-only. Dataset loading will be implemented in Step 3.
+          </div>
+          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
+            Configured latest.json URL:{' '}
+            <code>{latest.latestUrl ?? '—'}</code>
+            {latest.latestUrlSource ? (
+              <span style={{ marginLeft: 8 }}>
+                (source: <strong>{latest.latestUrlSource}</strong>)
+              </span>
+            ) : null}
           </div>
         </div>
       ) : (

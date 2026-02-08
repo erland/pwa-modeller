@@ -6,7 +6,7 @@ export default function PortalHomePage() {
   const { datasetMeta, latest, status, error, updateInfo } = usePortalStore();
 
   return (
-    <div style={{ maxWidth: 900 }}>
+    <div style={{ width: '100%' }}>
       <h2 style={{ marginTop: 0 }}>Portal</h2>
 
       {!datasetMeta ? (

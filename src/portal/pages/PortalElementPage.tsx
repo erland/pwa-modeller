@@ -223,7 +223,7 @@ export default function PortalElementPage(props: PortalElementPageProps) {
   }, [data]);
 
   return (
-    <div style={{ maxWidth: 1100 }}>
+    <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ display: 'grid', gap: 6 }}>
           <div style={{ fontSize: 12, opacity: 0.75 }}>

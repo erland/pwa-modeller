@@ -1,17 +1,22 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { PortalDiagramViewer } from '../components/PortalDiagramViewer';
+import { PortalInspectorPanel } from '../components/PortalInspectorPanel';
+import type { Selection } from '../../components/model/selection';
 import { usePortalStore } from '../store/usePortalStore';
 
 export default function PortalViewPage() {
   const { id } = useParams();
-  const { datasetMeta, model, status } = usePortalStore();
+  const { datasetMeta, model, status, indexes } = usePortalStore();
+
+  const [selection, setSelection] = useState<Selection>({ kind: 'none' });
 
   const viewId = id ?? '';
   const view = model && id ? model.views[id] : null;
 
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{ marginTop: 0, marginBottom: 4 }}>View</h2>
         <div style={{ opacity: 0.7 }}>{view ? `“${view.name}”` : id ? `“${id}”` : '(missing param)'}</div>
@@ -63,7 +68,25 @@ export default function PortalViewPage() {
             </span>
           </div>
 
-          <PortalDiagramViewer model={model} view={view} viewId={viewId} />
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              alignItems: 'stretch',
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <PortalDiagramViewer
+                model={model}
+                view={view}
+                viewId={viewId}
+                selection={selection}
+                onSelectionChange={setSelection}
+              />
+            </div>
+
+            <PortalInspectorPanel model={model} selection={selection} indexes={indexes} />
+          </div>
         </div>
       )}
 

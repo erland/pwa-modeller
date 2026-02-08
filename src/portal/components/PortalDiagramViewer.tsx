@@ -16,6 +16,15 @@ type Props = {
   view: View;
   viewId: string;
   initialSelection?: Selection;
+  /**
+   * Controlled selection. If provided, the viewer will not keep its own
+   * selection state and will instead reflect this value.
+   */
+  selection?: Selection;
+  /**
+   * Called whenever the user selects a node/relationship or clears selection.
+   */
+  onSelectionChange?: (selection: Selection) => void;
 };
 
 /**
@@ -24,8 +33,17 @@ type Props = {
  * Uses the existing diagram layers (nodes + relationships) but disables all
  * mutation/drag/link creation behavior.
  */
-export function PortalDiagramViewer({ model, view, viewId, initialSelection }: Props) {
-  const [selection, setSelection] = useState<Selection>(initialSelection ?? { kind: 'none' });
+export function PortalDiagramViewer({ model, view, viewId, initialSelection, selection: controlledSelection, onSelectionChange }: Props) {
+  const [uncontrolledSelection, setUncontrolledSelection] = useState<Selection>(initialSelection ?? { kind: 'none' });
+  const selection = controlledSelection ?? uncontrolledSelection;
+
+  const setSelection = useCallback(
+    (next: Selection) => {
+      if (!controlledSelection) setUncontrolledSelection(next);
+      onSelectionChange?.(next);
+    },
+    [controlledSelection, onSelectionChange]
+  );
 
   const notation = useMemo(() => getNotation(view.kind), [view.kind]);
   const { nodes, bounds, surfacePadding, surfaceWidthModel, surfaceHeightModel } = useDiagramNodes(view);
@@ -46,7 +64,7 @@ export function PortalDiagramViewer({ model, view, viewId, initialSelection }: P
     // Only clear if user clicked directly on the surface background.
     if (e.target !== e.currentTarget) return;
     setSelection({ kind: 'none' });
-  }, []);
+  }, [setSelection]);
 
   // Read-only: disable all gesture handlers that would mutate the model.
   const noop = useCallback(() => void 0, []);

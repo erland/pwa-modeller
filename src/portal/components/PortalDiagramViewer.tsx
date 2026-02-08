@@ -54,7 +54,14 @@ export function PortalDiagramViewer({ model, view, viewId, initialSelection }: P
   const noopStartLinkDrag = useCallback(() => void 0, []);
 
   return (
-    <div>
+    <div className="portalReadOnlyDiagram">
+      <style>{`
+        .portalReadOnlyDiagram .diagramRelHandle,
+        .portalReadOnlyDiagram .diagramResizeHandle {
+          display: none !important;
+        }
+      `}</style>
+
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
         <button type="button" className="shellButton" onClick={viewport.zoomOut} title="Zoom out">
           −

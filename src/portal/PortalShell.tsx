@@ -26,12 +26,10 @@ function normalizeUrl(value: unknown): string | null {
 function PortalTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { datasetMeta, latest, setLatestUrl, setDatasetMeta } = usePortalStore();
+  const { datasetMeta, status, error, latest, setLatestUrl, load, clearCache } = usePortalStore();
   const [query, setQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [latestUrlDraft, setLatestUrlDraft] = useState<string>(latest.latestUrl ?? '');
-  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
-  const [testMessage, setTestMessage] = useState<string>('');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
 
@@ -41,6 +39,14 @@ function PortalTopBar() {
     const bundle = datasetMeta.bundleId ? ` — ${datasetMeta.bundleId}` : '';
     return `${title}${bundle}`;
   }, [datasetMeta]);
+
+  const statusLabel = useMemo(() => {
+    if (status === 'loading') return 'Loading…';
+    if (status === 'error') return 'Error';
+    if (datasetMeta?.loadedFromCache) return 'Cached';
+    if (status === 'ready') return 'Ready';
+    return '';
+  }, [datasetMeta?.loadedFromCache, status]);
 
   const onChangeQuery = (e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value);
 
@@ -97,8 +103,7 @@ function PortalTopBar() {
       // ignore
     }
     setLatestUrl(url, 'localStorage');
-    // Step 3 will actually load the dataset. For now, reset meta.
-    setDatasetMeta(null);
+    void load(url);
     setIsDialogOpen(false);
   };
 
@@ -120,6 +125,11 @@ function PortalTopBar() {
         <div style={styles.dataset} title={datasetLabel}>
           {datasetLabel}
         </div>
+        {statusLabel ? (
+          <div style={styles.statusPill} title={error ?? undefined}>
+            {statusLabel}
+          </div>
+        ) : null}
       </div>
 
       <div style={styles.topCenter}>
@@ -193,6 +203,13 @@ function PortalTopBar() {
               <button onClick={() => setIsDialogOpen(false)} style={styles.button}>
                 Cancel
               </button>
+              <button
+                onClick={() => void clearCache()}
+                style={styles.button}
+                title="Clears cached bundles for the current latest.json URL"
+              >
+                Clear cache
+              </button>
               <button onClick={testConnection} style={styles.button} disabled={testStatus === 'testing'}>
                 Test connection
               </button>
@@ -259,6 +276,15 @@ const styles: Record<string, CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     maxWidth: 420
+  },
+  statusPill: {
+    fontSize: 11,
+    fontWeight: 600,
+    padding: '2px 8px',
+    borderRadius: 999,
+    border: '1px solid var(--borderColor, rgba(0,0,0,0.18))',
+    background: 'rgba(0,0,0,0.03)',
+    opacity: 0.9
   },
   topCenter: {
     display: 'flex',

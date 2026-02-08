@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { usePortalStore } from '../store/usePortalStore';
 
 export default function PortalHomePage() {
-  const { datasetMeta, latest } = usePortalStore();
+  const { datasetMeta, latest, status, error } = usePortalStore();
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -11,10 +11,15 @@ export default function PortalHomePage() {
 
       {!datasetMeta ? (
         <div style={{ padding: 12, border: '1px solid var(--borderColor, rgba(0,0,0,0.12))', borderRadius: 12 }}>
-          <strong>No dataset loaded.</strong>
+          <strong>{status === 'loading' ? 'Loading dataset…' : status === 'error' ? 'Failed to load dataset.' : 'No dataset loaded.'}</strong>
           <div style={{ marginTop: 8, opacity: 0.85 }}>
-            This portal is read-only. Dataset loading will be implemented in Step 3.
+            This portal is read-only.
           </div>
+          {status === 'error' && error ? (
+            <div style={{ marginTop: 8, color: 'var(--danger, #b42318)' }}>
+              {error}
+            </div>
+          ) : null}
           <div style={{ marginTop: 10, fontSize: 12, opacity: 0.85 }}>
             Configured latest.json URL:{' '}
             <code>{latest.latestUrl ?? '—'}</code>
@@ -29,6 +34,17 @@ export default function PortalHomePage() {
         <div>
           <div style={{ opacity: 0.85 }}>
             Loaded dataset: <strong>{datasetMeta.title ?? 'Unnamed dataset'}</strong>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>
+            bundleId: <code>{datasetMeta.bundleId}</code>
+            {datasetMeta.createdAt ? (
+              <span style={{ marginLeft: 10 }}>
+                createdAt: <code>{datasetMeta.createdAt}</code>
+              </span>
+            ) : null}
+            {datasetMeta.loadedFromCache ? (
+              <span style={{ marginLeft: 10 }}>(loaded from cache)</span>
+            ) : null}
           </div>
         </div>
       )}

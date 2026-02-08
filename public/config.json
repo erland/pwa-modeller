@@ -1,0 +1,16 @@
+{
+  "portal": {
+    "defaultChannel": "prod",
+    "channels": {
+      "prod": {
+        "latestUrl": "/latest.json"
+      },
+      "test": {
+        "latestUrl": "/latest-test.json"
+      },
+      "demo": {
+        "latestUrl": "/latest-demo.json"
+      }
+    }
+  }
+}

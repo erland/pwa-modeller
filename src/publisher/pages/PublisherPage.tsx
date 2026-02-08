@@ -8,6 +8,7 @@ import { validateModelWithNotations } from '../../notations/validateModelWithNot
 import type { ValidationIssue } from '../../domain/validation/types';
 import { modelStore } from '../../store';
 import { buildPublishBundleZip } from '../lib/publishBundle';
+import { buildLatestPointerJson } from '../lib/latestPointer';
 
 type LoadState =
   | { status: 'idle' }
@@ -62,6 +63,8 @@ export default function PublisherPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [state, setState] = useState<LoadState>({ status: 'idle' });
   const [bundleInfo, setBundleInfo] = useState<{ bundleId: string; zipFileName: string } | null>(null);
+  const [latestTitle, setLatestTitle] = useState<string>('EA Portal');
+  const [copyMsg, setCopyMsg] = useState<string>('');
 
   // Reset bundle info when state changes away from imported.
   useEffect(() => {
@@ -171,6 +174,8 @@ export default function PublisherPage() {
             const built = buildPublishBundleZip(model, { sourceTool: 'SparxEA', exportType: 'XMI', exportName });
             downloadBytes(built.zipBytes, built.zipFileName);
             setBundleInfo({ bundleId: built.bundleId, zipFileName: built.zipFileName });
+            // Default title suggestion (editable)
+            setLatestTitle(`EA Portal — ${exportName ?? built.bundleId}`);
           }}
         >
           3) Generate publish bundle
@@ -270,6 +275,8 @@ export default function PublisherPage() {
               </div>
             </div>
 
+            {copyMsg ? <div className="hintText">{copyMsg}</div> : null}
+
             <details>
               <summary style={{ cursor: 'pointer' }}>Show import issues</summary>
               <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -320,16 +327,105 @@ export default function PublisherPage() {
       </div>
 
       {bundleInfo ? (
-        <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 12 }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>Bundle generated</div>
-          <div className="hintText" style={{ margin: 0 }}>
-            Downloaded: <b>{bundleInfo.zipFileName}</b>
+        <div style={{ border: '1px solid #ddd', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Bundle generated</div>
+            <div className="hintText" style={{ margin: 0 }}>
+              Downloaded: <b>{bundleInfo.zipFileName}</b>
+            </div>
+            <div className="hintText" style={{ margin: 0 }}>
+              bundleId: <b>{bundleInfo.bundleId}</b>
+            </div>
           </div>
-          <div className="hintText" style={{ margin: 0 }}>
-            bundleId: <b>{bundleInfo.bundleId}</b>
-          </div>
-          <div className="hintText" style={{ marginTop: 8 }}>
-            Next step will generate <code>latest.json</code> and hosting guidance.
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontWeight: 600 }}>Generate latest.json</div>
+            <div className="hintText" style={{ margin: 0 }}>
+              This small pointer file lets the Portal load the newest published bundle.
+            </div>
+
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 700 }}>
+              <span className="hintText">Title (optional)</span>
+              <input
+                value={latestTitle}
+                onChange={(e) => setLatestTitle(e.target.value)}
+                style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd' }}
+                placeholder="EA Portal (Prod)"
+              />
+            </label>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="shellButton"
+                onClick={() => {
+                  const latestJson = buildLatestPointerJson({ bundleId: bundleInfo.bundleId, title: latestTitle || undefined });
+                  downloadBytes(new TextEncoder().encode(latestJson), 'latest.json', 'application/json');
+                }}
+              >
+                Download latest.json
+              </button>
+
+              <button
+                type="button"
+                className="shellButton"
+                onClick={async () => {
+                  const latestJson = buildLatestPointerJson({ bundleId: bundleInfo.bundleId, title: latestTitle || undefined });
+                  try {
+                    await navigator.clipboard.writeText(latestJson);
+                    setCopyMsg('Copied latest.json to clipboard.');
+                    window.setTimeout(() => setCopyMsg(''), 2500);
+                  } catch {
+                    setCopyMsg('Could not copy in this browser.');
+                    window.setTimeout(() => setCopyMsg(''), 3500);
+                  }
+                }}
+              >
+                Copy latest.json
+              </button>
+            </div>
+
+            {copyMsg ? <div className="hintText">{copyMsg}</div> : null}
+
+            <details>
+              <summary style={{ cursor: 'pointer' }}>Show hosting guidance</summary>
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="hintText">
+                  Host the bundle folder and <code>latest.json</code> on any static web server (GitHub Pages works well).
+                </div>
+
+                <div style={{ border: '1px solid #eee', borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>1) Upload these files</div>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{`/latest.json
+/${bundleInfo.bundleId}/manifest.json
+/${bundleInfo.bundleId}/model.json
+/${bundleInfo.bundleId}/indexes.json`}</pre>
+                </div>
+
+                <div style={{ border: '1px solid #eee', borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>2) latest.json content</div>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                    {buildLatestPointerJson({ bundleId: bundleInfo.bundleId, title: latestTitle || undefined })}
+                  </pre>
+                </div>
+
+                <div style={{ border: '1px solid #eee', borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>3) Open the Portal</div>
+                  <div className="hintText" style={{ margin: 0 }}>
+                    In the Portal “Change dataset” dialog, set the latest URL to:
+                  </div>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{`${window.location.origin}${window.location.pathname}latest.json`}</pre>
+                  <div className="hintText" style={{ marginTop: 6 }}>
+                    Or open directly with a query param:
+                  </div>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{`${window.location.origin}${window.location.pathname}#/portal?bundleUrl=${encodeURIComponent('https://YOUR-HOST/latest.json')}`}</pre>
+                </div>
+
+                <div className="hintText">
+                  Notes: if hosting on a different domain, ensure the server allows CORS for JSON fetches.
+                </div>
+              </div>
+            </details>
           </div>
         </div>
       ) : null}

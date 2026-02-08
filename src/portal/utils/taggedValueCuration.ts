@@ -8,28 +8,75 @@ export type CuratedTaggedValue = {
   value: string;
 };
 
-// Curated allowlist terms (case-insensitive; substring match).
-// Keep this list small and human-oriented.
+// Curated allowlist terms.
+//
+// Notes:
+// - Case-insensitive; substring match.
+// - We also do a light "ASCII fold" (remove diacritics) so Swedish keys like
+//   "Ägare" and "Källa" can match reliably.
+// - Keep this list small and human-oriented (the goal is to show *metadata*,
+//   not dump all tool/vendor noise).
 const ALLOWLIST_TERMS = [
+  // English
   'owner',
   'status',
   'lifecycle',
   'criticality',
   'classification',
   'security',
+  'confidential',
   'pii',
+  'personaldata',
   'domain',
   'system',
   'source',
   'legal',
   'gdpr',
   'retention',
+  'archive',
+
+  // Swedish (common EA/IG terms)
+  'agare',
+  'ansvarig',
+  'status',
+  'livscykel',
+  'kritikalitet',
+  'klassning',
+  'klassificering',
+  'informationsklass',
+  'sakerhet',
+  'sekretess',
+  'personuppgift',
+  'domän',
+  'doman',
+  'system',
+  'kalla',
+  'juridik',
+  'gallring',
+  'bevarande',
 ];
 
+function foldKey(s: string): string {
+  // NFD + strip diacritics to make matching less brittle across languages.
+  // (Safe in modern browsers; falls back to original string if unsupported.)
+  try {
+    return s
+      .normalize('NFD')
+      // eslint-disable-next-line no-control-regex
+      .replace(/\p{Diacritic}+/gu, '')
+      .toLowerCase();
+  } catch {
+    return s.toLowerCase();
+  }
+}
+
 function isMeaningfulKey(key: string): boolean {
-  const k = normalizeKey(key).toLowerCase();
+  const k = foldKey(normalizeKey(key));
   if (!k) return false;
-  return ALLOWLIST_TERMS.some((t) => k === t || k.includes(t));
+  return ALLOWLIST_TERMS.some((t) => {
+    const tt = foldKey(t);
+    return k === tt || k.includes(tt);
+  });
 }
 
 function formatValue(tv: TaggedValue): string {

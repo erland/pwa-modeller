@@ -5,7 +5,7 @@ import type { Selection } from '../../components/model/selection';
 import { formatElementTypeLabel, formatRelationshipTypeLabel } from '../../components/ui/typeLabels';
 import { readUmlClassifierMembers, type UmlAttribute, type UmlOperation } from '../../domain/uml/members';
 import { isUmlClassifierTypeId } from '../../domain/uml/typeGroups';
-import { curateTaggedValues } from '../utils/taggedValueCuration';
+// We intentionally show *all* tagged values in the inspector (no curation).
 
 type PortalIndexesLike = {
   // Keep the prop flexible: the inspector skeleton should not *require* indexes.
@@ -13,6 +13,20 @@ type PortalIndexesLike = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [k: string]: any;
 } | null;
+
+type TaggedValueLike = { ns?: unknown; key?: unknown; type?: unknown; value?: unknown };
+
+function readTaggedValue(tv: unknown): { label: string; type?: string; value: string } | null {
+  if (!tv || typeof tv !== 'object') return null;
+  const t = tv as TaggedValueLike;
+  const ns = typeof t.ns === 'string' ? t.ns.trim() : '';
+  const key = typeof t.key === 'string' ? t.key.trim() : '';
+  const type = typeof t.type === 'string' ? t.type.trim() : '';
+  const value = String(t.value ?? '').trim();
+  const label = ns ? `${ns}:${key}` : key;
+  if (!label) return null;
+  return { label, type: type || undefined, value };
+}
 
 function Section(props: { title: string; children: React.ReactNode }) {
   return (
@@ -221,9 +235,8 @@ export function PortalInspectorPanel(props: {
           ? selected.relationship.taggedValues
           : undefined;
 
-    const hasAny = (list?.length ?? 0) > 0;
-    const curated = curateTaggedValues(list);
-    return { hasAny, curated };
+    const items = (list ?? []).map((tv) => readTaggedValue(tv)).filter(Boolean) as Array<{ label: string; type?: string; value: string }>;
+    return { hasAny: items.length > 0, items };
   }, [selected]);
 
   const relationshipDetails = useMemo(() => {
@@ -383,30 +396,35 @@ export function PortalInspectorPanel(props: {
 
       {taggedValuesInfo.hasAny ? (
         <Section title="Tagged values">
-          {taggedValuesInfo.curated.length ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {taggedValuesInfo.curated.map((t) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {taggedValuesInfo.items.map((t, idx) => (
+              <div
+                key={`${t.label}:${idx}`}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '160px 1fr',
+                  gap: 10,
+                  alignItems: 'start',
+                  fontSize: 12,
+                  lineHeight: 1.35,
+                }}
+              >
                 <div
-                  key={`${t.label}:${t.value}`}
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: '140px 1fr',
-                    gap: 10,
-                    alignItems: 'start',
-                    fontSize: 12,
-                    lineHeight: 1.35,
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    opacity: 0.9,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
                   }}
+                  title={t.label}
                 >
-                  <div style={{ fontWeight: 800, opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis' }} title={t.label}>
-                    {t.label}
-                  </div>
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{t.value}</div>
+                  {t.label}
+                  {t.type ? <span style={{ opacity: 0.7 }}> ({t.type})</span> : null}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, opacity: 0.75 }}>No key metadata.</div>
-          )}
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{t.value}</div>
+              </div>
+            ))}
+          </div>
         </Section>
       ) : null}
     </div>

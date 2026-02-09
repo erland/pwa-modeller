@@ -1,14 +1,56 @@
 import * as React from 'react';
-import { useCallback, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import type { Key } from '@react-types/shared';
+
+import '../../styles/shell.css';
 
 import { usePortalStore } from '../store/usePortalStore';
 import { getElementFactSheetData, resolveElementIdFromExternalId } from '../indexes/portalIndexes';
+
+import { PortalNavigationTree } from '../components/PortalNavigationTree';
+import { buildPortalNavTree } from '../navigation/buildPortalNavTree';
+import type { NavNode } from '../navigation/types';
 
 import { formatElementTypeLabel, formatRelationshipTypeLabel } from '../../components/ui/typeLabels';
 import { readUmlClassifierMembers, type UmlAttribute, type UmlOperation } from '../../domain/uml/members';
 
 type PortalElementPageProps = { mode: 'internalId' } | { mode: 'externalId' };
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+
+    type MqlCompat = MediaQueryList & {
+      addEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
+      removeEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
+      addListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
+      removeListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
+    };
+
+    const mqlCompat = mql as MqlCompat;
+    if (typeof mqlCompat.addEventListener === 'function') {
+      mqlCompat.addEventListener('change', onChange);
+      return () => mqlCompat.removeEventListener?.('change', onChange);
+    }
+    if (typeof mqlCompat.addListener === 'function') {
+      mqlCompat.addListener(onChange);
+      return () => mqlCompat.removeListener?.(onChange);
+    }
+    return;
+  }, [query]);
+
+  return matches;
+}
 
 function Card(props: { title?: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
@@ -173,8 +215,99 @@ function safeJsonStringify(value: unknown, maxLen = 40000): string {
 
 export default function PortalElementPage(props: PortalElementPageProps) {
   const params = useParams();
-  const { datasetMeta, model, indexes } = usePortalStore();
+  const navigate = useNavigate();
+  const { datasetMeta, model, indexes, rootFolderId, status } = usePortalStore();
   const [copied, setCopied] = useState<string | null>(null);
+
+  const isSmall = useMediaQuery('(max-width: 720px)');
+  // For the element fact sheet we intentionally do NOT show the inspector; the fact sheet occupies the whole workspace.
+
+  // Persisted sidebar widths (dock mode only)
+  const DEFAULT_LEFT_WIDTH = 320;
+  const MIN_LEFT_WIDTH = 220;
+  const MIN_MAIN_WIDTH = 360;
+
+  const [leftWidth, setLeftWidth] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
+    const n = Number(window.localStorage.getItem('portalLeftWidthPx'));
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_LEFT_WIDTH;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('portalLeftWidthPx', String(Math.round(leftWidth)));
+  }, [leftWidth]);
+
+  const [leftOpen, setLeftOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const v = window.localStorage.getItem('portalLeftOpen');
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    return window.innerWidth > 900;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('portalLeftOpen', String(Boolean(leftOpen)));
+  }, [leftOpen]);
+
+  // When entering small screens, close the drawer by default.
+  useEffect(() => {
+    if (isSmall) setLeftOpen(false);
+  }, [isSmall]);
+
+  const shellBodyRef = useRef<HTMLDivElement | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const leftDocked = leftOpen && !isSmall;
+
+  useEffect(() => {
+    if (!isResizing) return;
+    const onMove = (ev: PointerEvent) => {
+      const el = shellBodyRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+      const maxLeft = Math.max(MIN_LEFT_WIDTH, rect.width - MIN_MAIN_WIDTH);
+      const next = clamp(ev.clientX - rect.left, MIN_LEFT_WIDTH, maxLeft);
+      setLeftWidth(next);
+    };
+    const onUp = () => setIsResizing(false);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [isResizing]);
+
+  const treeData = useMemo(() => {
+    if (!model) return [];
+    return buildPortalNavTree({ model, rootFolderId, includeElements: true });
+  }, [model, rootFolderId]);
+
+  function findNodeById(nodes: NavNode[], nodeId: string): NavNode | null {
+    for (const n of nodes) {
+      if (n.id === nodeId) return n;
+      if (n.children) {
+        const hit = findNodeById(n.children, nodeId);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
+  function findPathToNode(nodes: NavNode[], nodeId: string, acc: string[] = []): string[] | null {
+    for (const n of nodes) {
+      if (n.id === nodeId) return acc;
+      if (n.children && n.children.length) {
+        const hit = findPathToNode(n.children, nodeId, [...acc, n.id]);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<Key>>(new Set());
 
   const resolvedElementId = useMemo(() => {
     if (!datasetMeta || !model || !indexes) return null;
@@ -222,8 +355,118 @@ export default function PortalElementPage(props: PortalElementPageProps) {
     return m;
   }, [data]);
 
+  const selectedNodeId = useMemo(() => {
+    if (!resolvedElementId) return null;
+    const candidate = `element:${resolvedElementId}`;
+    return findNodeById(treeData, candidate) ? candidate : null;
+  }, [resolvedElementId, treeData]);
+
+  // Auto-expand the path to the selected element so it is always visible.
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    const path = findPathToNode(treeData, selectedNodeId);
+    if (!path || !path.length) return;
+    setExpandedNodeIds((prev) => {
+      const next = new Set(prev);
+      for (const k of path) next.add(k);
+      return next;
+    });
+  }, [selectedNodeId, treeData]);
+
+  const onActivateNode = (node: NavNode) => {
+    if (node.kind === 'view') {
+      const vid = node.payloadRef.viewId;
+      if (vid) navigate(`/portal/v/${encodeURIComponent(vid)}`);
+      return;
+    }
+    if (node.kind === 'element') {
+      const eid = node.payloadRef.elementId;
+      if (eid) navigate(`/portal/e/${encodeURIComponent(eid)}`);
+    }
+  };
+
+  const showBackdrop = isSmall && leftOpen;
+
   return (
-    <div style={{ width: '100%' }}>
+    <div className={['shell', isResizing ? 'isResizing' : null].filter(Boolean).join(' ')} style={{ width: '100%', minHeight: 0 }}>
+      <div
+        ref={shellBodyRef}
+        style={
+          {
+            '--shellLeftWidth': `${Math.round(leftWidth)}px`,
+          } as CSSProperties
+        }
+        className={['shellBody', leftDocked ? 'isLeftDockedOpen' : null].filter(Boolean).join(' ')}
+      >
+        {/* Left: navigation */}
+        <aside
+          className={['shellSidebar', 'shellSidebarLeft', leftOpen ? 'isOpen' : null].filter(Boolean).join(' ')}
+          aria-label="Portal navigation"
+        >
+          <div className="shellSidebarHeader">
+            <div style={{ minWidth: 0 }}>
+              <div className="shellSidebarTitle">Navigation</div>
+              <div style={{ fontSize: 12, opacity: 0.75, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {datasetMeta?.title?.trim() || (status === 'loading' ? 'Loading…' : 'No dataset loaded')}
+              </div>
+            </div>
+            <button type="button" className="shellIconButton" aria-label="Close navigation" onClick={() => setLeftOpen(false)}>
+              ✕
+            </button>
+          </div>
+          <div className="shellSidebarContent" style={{ padding: 0 }}>
+            <div className="navigator" style={{ border: 'none', background: 'transparent', height: '100%', minHeight: 0 }}>
+              <div className="navTreeWrap" style={{ minHeight: 0 }}>
+                <PortalNavigationTree
+                  treeData={treeData}
+                  selectedNodeId={selectedNodeId}
+                  expandedNodeIds={expandedNodeIds}
+                  onExpandedNodeIdsChange={setExpandedNodeIds}
+                  onActivateNode={onActivateNode}
+                  activeViewId={undefined}
+                  showFilter
+                />
+              </div>
+            </div>
+          </div>
+          {leftDocked ? (
+            <div
+              className="shellResizer shellResizerLeft"
+              role="separator"
+              aria-label="Resize navigation"
+              title="Drag to resize (double-click to reset)"
+              onDoubleClick={() => setLeftWidth(DEFAULT_LEFT_WIDTH)}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                setIsResizing(true);
+              }}
+            />
+          ) : null}
+        </aside>
+
+        {/* Main */}
+        <main className="shellMain" style={{ minHeight: 0 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+              <h2 style={{ marginTop: 0, marginBottom: 4 }}>Fact sheet</h2>
+              <div style={{ opacity: 0.7 }}>{data ? `“${elementDisplayName}”` : resolvedElementId ? `“${resolvedElementId}”` : ''}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="shellIconButton"
+                aria-label="Toggle navigation"
+                onClick={() => setLeftOpen((v) => !v)}
+                title={leftOpen ? 'Hide navigation' : 'Show navigation'}
+              >
+                ☰
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ display: 'grid', gap: 6 }}>
           <div style={{ fontSize: 12, opacity: 0.75 }}>
@@ -498,6 +741,13 @@ export default function PortalElementPage(props: PortalElementPageProps) {
           </div>
         </div>
       )}
+          </div>
+        </main>
+
+        {showBackdrop ? (
+          <div className="shellBackdrop" aria-hidden="true" onClick={() => setLeftOpen(false)} />
+        ) : null}
+      </div>
     </div>
   );
 }

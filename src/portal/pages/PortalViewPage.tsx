@@ -87,13 +87,29 @@ export default function PortalViewPage() {
 
   const [leftOpen, setLeftOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
+    const v = window.localStorage.getItem('portalLeftOpen');
+    if (v === 'true') return true;
+    if (v === 'false') return false;
     // Default: open on desktop-ish.
     return window.innerWidth > 900;
   });
   const [rightOpen, setRightOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
+    const v = window.localStorage.getItem('portalRightOpen');
+    if (v === 'true') return true;
+    if (v === 'false') return false;
     return window.innerWidth > 1100;
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('portalLeftOpen', String(Boolean(leftOpen)));
+  }, [leftOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('portalRightOpen', String(Boolean(rightOpen)));
+  }, [rightOpen]);
 
   // When entering small screens, close drawers by default.
   useEffect(() => {
@@ -243,11 +259,22 @@ export default function PortalViewPage() {
 
       if (presentInView && viewId) {
         setSelection({ kind: 'viewNode', viewId, elementId: eid });
+        if (!rightOpen) setRightOpen(true);
         return;
       }
 
       // Otherwise navigate to the element fact sheet page.
       navigate(`/portal/e/${encodeURIComponent(eid)}`);
+    }
+  };
+
+  const onSelectionChange = (next: Selection) => {
+    setSelection(next);
+    // Auto-show the inspector when the user selects something inspectable.
+    if (!rightOpen) {
+      if (next.kind === 'element' || next.kind === 'viewNode' || next.kind === 'viewNodes' || next.kind === 'relationship') {
+        setRightOpen(true);
+      }
     }
   };
 
@@ -405,7 +432,7 @@ export default function PortalViewPage() {
                 view={view}
                 viewId={viewId}
                 selection={selection}
-                onSelectionChange={setSelection}
+                onSelectionChange={onSelectionChange}
               />
             </div>
           )}
@@ -427,7 +454,17 @@ export default function PortalViewPage() {
             </button>
           </div>
           <div className="shellSidebarContent">
-            {model ? <PortalInspectorPanel model={model} selection={selection} indexes={indexes} /> : null}
+            {model ? (
+              <PortalInspectorPanel
+                model={model}
+                selection={selection}
+                indexes={indexes}
+                onOpenFactSheet={(elementId) => {
+                  // Keep left nav state as-is; switch the main workspace to the fact sheet.
+                  navigate(`/portal/e/${encodeURIComponent(elementId)}`);
+                }}
+              />
+            ) : null}
           </div>
           {rightDocked ? (
             <div

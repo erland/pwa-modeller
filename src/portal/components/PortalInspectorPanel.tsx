@@ -172,6 +172,7 @@ export function PortalInspectorPanel(props: {
   model: Model;
   selection: Selection;
   indexes?: PortalIndexesLike;
+  onOpenFactSheet?: (elementId: string) => void;
 }) {
   const { model, selection } = props;
   const [docExpanded, setDocExpanded] = useState(false);
@@ -295,9 +296,8 @@ export function PortalInspectorPanel(props: {
   return (
     <div
       style={{
-        width: 400,
-        minWidth: 360,
-        maxWidth: 460,
+        width: '100%',
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
@@ -312,7 +312,31 @@ export function PortalInspectorPanel(props: {
       >
         {header ? (
           <>
-            <div style={{ fontSize: 16, fontWeight: 900, lineHeight: 1.2 }}>{header.title}</div>
+            {header.kind === 'element' && selected.kind === 'element' && typeof props.onOpenFactSheet === 'function' ? (
+              <button
+                type="button"
+                onClick={() => props.onOpenFactSheet?.(selected.elementId)}
+                title="Open fact sheet"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'baseline',
+                  gap: 6,
+                  textAlign: 'left',
+                  fontSize: 16,
+                  fontWeight: 900,
+                  lineHeight: 1.2,
+                  padding: 0,
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>{header.title}</span>
+                <span style={{ fontSize: 12, opacity: 0.7 }}>↗</span>
+              </button>
+            ) : (
+              <div style={{ fontSize: 16, fontWeight: 900, lineHeight: 1.2 }}>{header.title}</div>
+            )}
             <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>{header.subtitle}</div>
           </>
         ) : (

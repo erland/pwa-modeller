@@ -2,6 +2,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 
 import type { Model } from '../../domain';
 import { buildPortalIndexes, isPortalIndexes, type PortalIndexes } from '../indexes/portalIndexes';
+import { getPortalRootFolderId } from '../navigation/portalNavSource';
 import { clearCacheForLatestUrl, getCachedBundle, getMostRecentCachedBundle, putCachedBundle } from '../data/portalCache';
 import { fetchJsonWithLimit, fetchLatest, fetchManifest, resolveRelative, PortalFetchError, type LatestPointer, type PublishManifest } from '../data/portalDataset';
 import { PORTAL_MAX_BYTES, formatBytes } from '../data/portalLimits';
@@ -52,6 +53,9 @@ export type PortalStoreState = {
   datasetMeta: PortalDatasetMeta | null;
   model: Model | null;
   indexes: PortalIndexes | null;
+
+  /** Root folder id used for portal navigation tree (Step 1). */
+  rootFolderId: string | null;
 
   updateInfo: PortalUpdateInfo;
 
@@ -195,6 +199,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
   const [datasetMeta, setDatasetMeta] = useState<PortalDatasetMeta | null>(null);
   const [model, setModel] = useState<Model | null>(null);
   const [indexes, setIndexes] = useState<PortalIndexes | null>(null);
+  const [rootFolderId, setRootFolderId] = useState<string | null>(null);
 
   const [updateInfo, setUpdateInfo] = useState<PortalUpdateInfo>({ state: 'none' });
 
@@ -377,6 +382,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
       });
       setModel(model);
       setIndexes(indexes);
+      setRootFolderId(getPortalRootFolderId(model));
     },
     []
   );
@@ -563,6 +569,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
       datasetMeta,
       model,
       indexes,
+      rootFolderId,
       updateInfo,
       setChannel,
       setLatestUrl,
@@ -571,7 +578,7 @@ export function PortalStoreProvider({ children }: { children: ReactNode }) {
       applyUpdate,
       clearCache
     }),
-    [channel, channelSource, datasetMeta, error, indexes, latestUrl, latestUrlSource, model, status, updateInfo, load, checkForUpdate, applyUpdate, clearCache]
+    [channel, channelSource, datasetMeta, error, indexes, rootFolderId, latestUrl, latestUrlSource, model, status, updateInfo, load, checkForUpdate, applyUpdate, clearCache]
   );
 
   return <PortalStoreContext.Provider value={value}>{children}</PortalStoreContext.Provider>;

@@ -87,6 +87,14 @@ export type IRElement = {
    */
   folderId?: IRId | null;
 
+  /**
+   * Optional semantic containment reference (element-in-element).
+   * If present, this indicates the element is owned/contained by another element.
+   * Importers should only set this when the source format has a clear
+   * containment/ownership concept (e.g. BPMN SubProcess containing flow nodes).
+   */
+  parentElementId?: IRId | null;
+
   properties?: Record<string, string>;
   taggedValues?: IRTaggedValue[];
   externalIds?: IRExternalId[];

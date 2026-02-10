@@ -29,6 +29,21 @@ export function applyElements(ctx: ApplyImportContext): void {
 
   const isStringId = (x: unknown): x is string => typeof x === 'string' && x.trim().length > 0;
 
+  const mapParentRef = (opts: { ownerId: string; ownerName?: string; parentRef: unknown }): string | undefined => {
+    const { ownerId, ownerName, parentRef } = opts;
+    if (parentRef === null || parentRef === undefined) return undefined;
+    if (!isStringId(parentRef)) {
+      pushWarning(report, `Import: element "${ownerName ?? ownerId}" has non-string parentElementId (cleared)`);
+      return undefined;
+    }
+    const mapped = mappings.elements[parentRef];
+    if (!mapped) {
+      pushWarning(report, `Import: element "${ownerName ?? ownerId}" references missing parentElementId "${parentRef}" (cleared)`);
+      return undefined;
+    }
+    return mapped;
+  };
+
   const mapBpmnRefStrict = (opts: {
     ownerId: string;
     ownerName?: string;
@@ -194,6 +209,8 @@ export function applyElements(ctx: ApplyImportContext): void {
     const externalIds = toExternalIds(el.externalIds, sourceSystem, el.id);
     const taggedValues = toTaggedValues(el.taggedValues, sourceSystem);
 
+    const parentElementId = mapParentRef({ ownerId: el.id, ownerName: el.name ?? undefined, parentRef: (el as any).parentElementId });
+
     const layer =
       isNonArchimate
         ? undefined
@@ -247,6 +264,7 @@ export function applyElements(ctx: ApplyImportContext): void {
       ...createElement({
         id: internalId,
         name: el.name ?? '',
+        ...(parentElementId ? { parentElementId } : {}),
         ...(layer ? { layer } : {}),
         type,
         documentation: el.documentation,

@@ -85,6 +85,25 @@ function parseActivityAttrs(el: Element, typeId: string): Record<string, unknown
   return Object.keys(attrs).length ? attrs : undefined;
 }
 
+function detectContainingSubProcessId(el: Element): string | undefined {
+  // BPMN nesting is expressed structurally in XML: a <subProcess> may contain flow nodes as descendants.
+  // We consider the closest ancestor <subProcess> (excluding the element itself).
+  // Note: in some DOM implementations (notably jsdom for XML), `parentElement` may be null.
+  // Walk via parentNode and filter to element nodes for robustness.
+  let p: Node | null = el.parentNode;
+  while (p) {
+    if (p.nodeType === Node.ELEMENT_NODE) {
+      const pe = p as Element;
+      if (localName(pe) === 'subprocess') {
+        const pid = (attr(pe, 'id') ?? '').trim();
+        return pid || undefined;
+      }
+    }
+    p = p.parentNode;
+  }
+  return undefined;
+}
+
 function parseEventAttrs(el: Element, typeId: string): Record<string, unknown> | undefined {
   // Map internal event types to the domain eventKind values used in attrs.eventDefinition.
   let eventKind: 'start' | 'end' | 'intermediateCatch' | 'intermediateThrow' | 'boundary' | null = null;
@@ -327,6 +346,13 @@ export function parseElements(ctx: ParseContext) {
 
       const extTags = extractExtensionSummary(el);
 
+      // Semantic containment: flow nodes nested inside a SubProcess.
+      // Avoid applying this to top-level structural containers.
+      const parentSubProcessId =
+        typeId === 'bpmn.process' || typeId === 'bpmn.pool' || typeId === 'bpmn.lane'
+          ? undefined
+          : detectContainingSubProcessId(el);
+
       const attrs =
         parseEventAttrs(el, typeId) ??
         parseLaneAttrs(el, typeId) ??
@@ -364,6 +390,7 @@ export function parseElements(ctx: ParseContext) {
         name,
         documentation,
         externalIds: [{ system: 'bpmn2', id, kind: 'element' }],
+        ...(parentSubProcessId && parentSubProcessId !== id ? { parentElementId: parentSubProcessId } : {}),
         ...(attrs ? { attrs } : {}),
         meta: {
           sourceLocalName: localName(el),

@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { importModel } from '../framework/importModel';
 import { applyImportIR } from '../apply/applyImportIR';
 import { modelStore } from '../../store';
+import { parseBpmn2Xml } from '../bpmn2';
 
 function readFixture(name: string): string {
   const p = path.resolve(__dirname, '../__fixtures__/bpmn2/ea', name);
@@ -82,5 +83,40 @@ describe('BPMN2 import (fixtures)', () => {
     const rels = Object.values(model!.relationships);
     expect(rels.length).toBeGreaterThan(0);
     expect(rels.some((r) => (r.type ?? '').startsWith('bpmn.'))).toBe(true);
+  });
+
+  it('maps SubProcess containment to element.parentElementId when available', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  targetNamespace="http://example.com/bpmn">
+  <process id="Process_1" isExecutable="false">
+    <subProcess id="Sub_1" name="Sub">
+      <task id="Task_1" name="Inner Task" />
+    </subProcess>
+  </process>
+</definitions>`;
+
+    const parsed = parseBpmn2Xml(xml);
+    const sub = parsed.importIR.elements.find((e) => e.id === 'Sub_1');
+    const task = parsed.importIR.elements.find((e) => e.id === 'Task_1');
+
+    expect(sub).toBeTruthy();
+    expect(task).toBeTruthy();
+    expect((task as any).parentElementId).toBe('Sub_1');
+
+    // Also verify the containment is preserved when applied to the domain model.
+    modelStore.reset();
+    const report = { source: 'bpmn2', messages: [], warnings: [], errors: [] } as any;
+    applyImportIR(parsed.importIR, report);
+    const model = modelStore.getState().model;
+    expect(model).not.toBeNull();
+
+    const taskEl = Object.values(model!.elements).find((e) => e.externalIds?.some((x) => x.system === 'bpmn2' && x.id === 'Task_1')) as any;
+    const subEl = Object.values(model!.elements).find((e) => e.externalIds?.some((x) => x.system === 'bpmn2' && x.id === 'Sub_1')) as any;
+
+    expect(taskEl).toBeTruthy();
+    expect(subEl).toBeTruthy();
+    expect(taskEl.parentElementId).toBe(subEl.id);
   });
 });

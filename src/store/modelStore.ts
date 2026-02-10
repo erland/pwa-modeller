@@ -15,26 +15,18 @@ import type {
   ViewConnectionAnchorSide,
 } from '../domain';
 import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode, LayoutOutput } from '../domain/layout/types';
-import { extractLayoutInputForView, fitArchiMateBoxToText, computeLayoutSignature } from '../domain/layout';
-import { adjustEdgeRoutesForMovedNodes, nudgeOverlaps, snapToGrid } from '../domain/layout/post';
-import { createEmptyModel, materializeViewConnectionsForView, computeVisibleRelationshipIdsForView } from '../domain';
+import { createEmptyModel } from '../domain';
 import {
   connectorMutations,
   elementMutations,
-  folderMutations,
-  layoutMutations,
-  autoLayoutMutations,
-  alignMutations,
-  arrangeMutations,
-  fitToTextMutations,
   modelMutations,
   bpmnMutations,
   relationshipMutations,
-  viewMutations,
-  viewObjectMutations
 } from './mutations';
 import type { TaggedValueInput } from './mutations';
-import { findFolderIdByKind } from './mutations/helpers';
+import { createViewOps } from './ops/viewOps';
+import { createLayoutOps } from './ops/layoutOps';
+import { createFolderOps } from './ops/folderOps';
 
 export type ModelStoreState = {
   model: Model | null;
@@ -109,6 +101,22 @@ export class ModelStore {
     mutator(nextModel);
     this.setState({ model: nextModel, isDirty: markDirty ? true : this.state.isDirty });
   };
+
+  // Operation modules (SoC split): keep ModelStore API stable, delegate implementation.
+  private viewOps = createViewOps({ updateModel: this.updateModel });
+
+  private layoutOps = createLayoutOps({
+    getModel: () => this.state.model,
+    getModelOrThrow: () => {
+      const m = this.state.model;
+      if (!m) throw new Error('No model loaded');
+      return m;
+    },
+    updateModel: this.updateModel,
+    autoLayoutCacheByView: this.autoLayoutCacheByView,
+  });
+
+  private folderOps = createFolderOps({ updateModel: this.updateModel });
 
   /** Replace the current model. */
   loadModel = (model: Model, fileName: string | null = null): void => {
@@ -278,62 +286,17 @@ export class ModelStore {
   // Views
   // -------------------------
 
-  addView = (view: View, folderId?: string): void => {
-    this.updateModel((model) => viewMutations.addView(model, view, folderId));
-  };
+  addView = (view: View, folderId?: string): void => this.viewOps.addView(view, folderId);
 
-  updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => {
-    this.updateModel((model) => viewMutations.updateView(model, viewId, patch));
-  };
+  updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.viewOps.updateView(viewId, patch);
 
-  ensureViewConnections = (viewId: string): void => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) return;
-      const nextConnections = materializeViewConnectionsForView(model, view);
-
-      // If this view uses explicit relationship visibility, prune any stale ids
-      // (e.g. deleted relationships) to keep the stored list tidy.
-      const rv = view.relationshipVisibility;
-      if (rv?.mode === 'explicit') {
-        const raw = Array.isArray(rv.relationshipIds) ? rv.relationshipIds : [];
-        const pruned = Array.from(
-          new Set(raw.filter((id) => typeof id === 'string' && id.length > 0 && Boolean(model.relationships[id])))
-        ).sort((a, b) => a.localeCompare(b));
-        model.views[viewId] = {
-          ...view,
-          relationshipVisibility: { mode: 'explicit', relationshipIds: pruned },
-          connections: nextConnections,
-        };
-        return;
-      }
-
-      model.views[viewId] = { ...view, connections: nextConnections };
-    });
-  };
+  ensureViewConnections = (viewId: string): void => this.viewOps.ensureViewConnections(viewId);
 
   /**
    * If the target view uses explicit relationship visibility, include the given relationship id.
    * This is used to keep "explicit" views usable when creating relationships interactively.
    */
-  includeRelationshipInView = (viewId: string, relationshipId: string): void => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) return;
-      const rv = view.relationshipVisibility;
-      if (!rv || rv.mode !== 'explicit') return;
-      if (!relationshipId || !model.relationships[relationshipId]) return;
-
-      const nextIds = Array.from(
-        new Set([...(Array.isArray(rv.relationshipIds) ? rv.relationshipIds : []), relationshipId].filter((id) => typeof id === 'string' && id.length > 0))
-      ).sort((a, b) => a.localeCompare(b));
-
-      model.views[viewId] = {
-        ...view,
-        relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
-      };
-    });
-  };
+  includeRelationshipInView = (viewId: string, relationshipId: string): void => this.viewOps.includeRelationshipInView(viewId, relationshipId);
 
   /**
    * Hide a specific relationship in a view.
@@ -342,36 +305,7 @@ export class ModelStore {
    * converted to explicit mode using the view's *current* visible relationships
    * as the starting allow-list.
    */
-  hideRelationshipInView = (viewId: string, relationshipId: string): void => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) return;
-      if (!relationshipId || !model.relationships[relationshipId]) return;
-
-      const currentIds =
-        view.relationshipVisibility?.mode === 'explicit'
-          ? (Array.isArray(view.relationshipVisibility.relationshipIds)
-              ? view.relationshipVisibility.relationshipIds
-              : [])
-          : computeVisibleRelationshipIdsForView(model, view);
-
-      const nextIds = Array.from(
-        new Set(
-          currentIds
-            .filter((id) => typeof id === 'string' && id.length > 0)
-            .filter((id) => id !== relationshipId)
-        )
-      ).sort((a, b) => a.localeCompare(b));
-
-      const nextView: View = {
-        ...view,
-        relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
-      };
-
-      // Re-materialize connections so the hidden relationship disappears from the diagram.
-      model.views[viewId] = { ...nextView, connections: materializeViewConnectionsForView(model, nextView) };
-    });
-  };
+  hideRelationshipInView = (viewId: string, relationshipId: string): void => this.viewOps.hideRelationshipInView(viewId, relationshipId);
 
   /**
    * Show (include) a specific relationship in a view that uses explicit visibility.
@@ -380,170 +314,58 @@ export class ModelStore {
    * converted to explicit mode using the view's *current* visible relationships
    * as the starting allow-list.
    */
-  showRelationshipInView = (viewId: string, relationshipId: string): void => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view) return;
-      if (!relationshipId || !model.relationships[relationshipId]) return;
+  showRelationshipInView = (viewId: string, relationshipId: string): void => this.viewOps.showRelationshipInView(viewId, relationshipId);
 
-      const currentIds =
-        view.relationshipVisibility?.mode === 'explicit'
-          ? (Array.isArray(view.relationshipVisibility.relationshipIds)
-              ? view.relationshipVisibility.relationshipIds
-              : [])
-          : computeVisibleRelationshipIdsForView(model, view);
-
-      const nextIds = Array.from(
-        new Set([
-          ...currentIds.filter((id) => typeof id === 'string' && id.length > 0),
-          relationshipId,
-        ])
-      ).sort((a, b) => a.localeCompare(b));
-
-      const nextView: View = {
-        ...view,
-        relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
-      };
-
-      model.views[viewId] = { ...nextView, connections: materializeViewConnectionsForView(model, nextView) };
-    });
-  };
-
-  setViewConnectionRoute = (viewId: string, connectionId: string, kind: ViewConnectionRouteKind): void => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view || !Array.isArray(view.connections)) return;
-      const idx = view.connections.findIndex((c) => c.id === connectionId);
-      if (idx < 0) return;
-
-      const current = view.connections[idx];
-      const nextConn = {
-        ...current,
-        route: { ...(current.route ?? { kind: 'orthogonal' }), kind },
-      };
-      const nextConnections = [...view.connections];
-      nextConnections[idx] = nextConn;
-      model.views[viewId] = { ...view, connections: nextConnections };
-    });
-  };
+  setViewConnectionRoute = (viewId: string, connectionId: string, kind: ViewConnectionRouteKind): void => this.viewOps.setViewConnectionRoute(viewId, connectionId, kind);
 
   setViewConnectionEndpointAnchors = (
     viewId: string,
     connectionId: string,
     patch: { sourceAnchor?: ViewConnectionAnchorSide; targetAnchor?: ViewConnectionAnchorSide }
-  ): void => {
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view || !Array.isArray(view.connections)) return;
-      const idx = view.connections.findIndex((c) => c.id === connectionId);
-      if (idx < 0) return;
+  ): void => this.viewOps.setViewConnectionEndpointAnchors(viewId, connectionId, patch);
 
-      const current = view.connections[idx];
-      const nextConn = {
-        ...current,
-        // Allow explicitly clearing anchors by passing `undefined`.
-        // Using nullish coalescing here would prevent clearing back to auto.
-        sourceAnchor: 'sourceAnchor' in patch ? patch.sourceAnchor : current.sourceAnchor,
-        targetAnchor: 'targetAnchor' in patch ? patch.targetAnchor : current.targetAnchor,
-      };
-      const nextConnections = [...view.connections];
-      nextConnections[idx] = nextConn;
-      model.views[viewId] = { ...view, connections: nextConnections };
-    });
-  };
+  upsertViewTaggedValue = (viewId: string, entry: TaggedValueInput): void => this.viewOps.upsertViewTaggedValue(viewId, entry);
 
-  upsertViewTaggedValue = (viewId: string, entry: TaggedValueInput): void => {
-    this.updateModel((model) => viewMutations.upsertViewTaggedValue(model, viewId, entry));
-  };
+  removeViewTaggedValue = (viewId: string, taggedValueId: string): void => this.viewOps.removeViewTaggedValue(viewId, taggedValueId);
 
-  removeViewTaggedValue = (viewId: string, taggedValueId: string): void => {
-    this.updateModel((model) => viewMutations.removeViewTaggedValue(model, viewId, taggedValueId));
-  };
-
-  updateViewFormatting = (viewId: string, patch: Partial<ViewFormatting>): void => {
-    this.updateModel((model) => viewMutations.updateViewFormatting(model, viewId, patch));
-  };
+  updateViewFormatting = (viewId: string, patch: Partial<ViewFormatting>): void => this.viewOps.updateViewFormatting(viewId, patch);
 
   /** Clone a view (including its layout) into the same folder as the original. Returns the new view id. */
-  cloneView = (viewId: string): string | null => {
-    let created: string | null = null;
-    this.updateModel((model) => {
-      created = viewMutations.cloneView(model, viewId);
-    });
-    return created;
-  };
+  cloneView = (viewId: string): string | null => this.viewOps.cloneView(viewId);
 
-  deleteView = (viewId: string): void => {
-    this.updateModel((model) => viewMutations.deleteView(model, viewId));
-  };
+  deleteView = (viewId: string): void => this.viewOps.deleteView(viewId);
 
   // -------------------------
   // View-only (diagram) objects
   // -------------------------
 
   /** Add a view-local object to a view (and optionally a layout node). This does not touch the model element graph. */
-  addViewObject = (viewId: string, obj: ViewObject, node?: ViewNodeLayout): void => {
-    this.updateModel((model) => viewObjectMutations.addViewObject(model, viewId, obj, node));
-  };
+  addViewObject = (viewId: string, obj: ViewObject, node?: ViewNodeLayout): void => this.viewOps.addViewObject(viewId, obj, node);
 
   /** Create a new view-local object and place it into the view at the given cursor position. Returns the object id. */
-  createViewObjectInViewAt = (viewId: string, type: ViewObjectType, x: number, y: number): string => {
-    let created = '';
-    this.updateModel((model) => {
-      created = viewObjectMutations.createViewObjectInViewAt(model, viewId, type, x, y);
-    });
-    return created;
-  };
+  createViewObjectInViewAt = (viewId: string, type: ViewObjectType, x: number, y: number): string => this.viewOps.createViewObjectInViewAt(viewId, type, x, y);
 
-  updateViewObject = (viewId: string, objectId: string, patch: Partial<Omit<ViewObject, 'id'>>): void => {
-    this.updateModel((model) => viewObjectMutations.updateViewObject(model, viewId, objectId, patch));
-  };
+  updateViewObject = (viewId: string, objectId: string, patch: Partial<Omit<ViewObject, 'id'>>): void => this.viewOps.updateViewObject(viewId, objectId, patch);
 
-  deleteViewObject = (viewId: string, objectId: string): void => {
-    this.updateModel((model) => viewObjectMutations.deleteViewObject(model, viewId, objectId));
-  };
+  deleteViewObject = (viewId: string, objectId: string): void => this.viewOps.deleteViewObject(viewId, objectId);
 
   // -------------------------
   // Diagram layout (per view)
   // -------------------------
 
-  updateViewNodeLayout = (viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void => {
-    this.updateModel((model) => layoutMutations.updateViewNodeLayout(model, viewId, elementId, patch));
-  };
+  updateViewNodeLayout = (viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void => this.viewOps.updateViewNodeLayout(viewId, elementId, patch);
 
   /** Adds an element to a view's layout as a positioned node (idempotent). */
-  addElementToView = (viewId: string, elementId: string): string => {
-    let result = elementId;
-    this.updateModel((model) => {
-      result = layoutMutations.addElementToView(model, viewId, elementId);
-    });
-    return result;
-  };
+  addElementToView = (viewId: string, elementId: string): string => this.viewOps.addElementToView(viewId, elementId);
 
-  addElementToViewAt = (viewId: string, elementId: string, x: number, y: number): string => {
-    let result = elementId;
-    this.updateModel((model) => {
-      result = layoutMutations.addElementToViewAt(model, viewId, elementId, x, y);
-    });
-    return result;
-  };
+  addElementToViewAt = (viewId: string, elementId: string, x: number, y: number): string => this.layoutOps.addElementToViewAt(viewId, elementId, x, y);
 
   /** Adds a connector (junction) to a view at a specific position (idempotent). */
-  addConnectorToViewAt = (viewId: string, connectorId: string, x: number, y: number): string => {
-    let result = connectorId;
-    this.updateModel((model) => {
-      result = layoutMutations.addConnectorToViewAt(model, viewId, connectorId, x, y);
-    });
-    return result;
-  };
+  addConnectorToViewAt = (viewId: string, connectorId: string, x: number, y: number): string => this.layoutOps.addConnectorToViewAt(viewId, connectorId, x, y);
 
-  removeElementFromView = (viewId: string, elementId: string): void => {
-    this.updateModel((model) => layoutMutations.removeElementFromView(model, viewId, elementId));
-  };
+  removeElementFromView = (viewId: string, elementId: string): void => this.layoutOps.removeElementFromView(viewId, elementId);
 
-  updateViewNodePosition = (viewId: string, elementId: string, x: number, y: number): void => {
-    this.updateModel((model) => layoutMutations.updateViewNodePosition(model, viewId, elementId, x, y));
-  };
+  updateViewNodePosition = (viewId: string, elementId: string, x: number, y: number): void => this.layoutOps.updateViewNodePosition(viewId, elementId, x, y);
 
   /** Updates position of an element-node, connector-node, or view-object node in a view. */
   updateViewNodePositionAny = (
@@ -551,9 +373,7 @@ export class ModelStore {
     ref: { elementId?: string; connectorId?: string; objectId?: string },
     x: number,
     y: number
-  ): void => {
-    this.updateModel((model) => layoutMutations.updateViewNodePositionAny(model, viewId, ref, x, y));
-  };
+  ): void => this.layoutOps.updateViewNodePositionAny(viewId, ref, x, y);
 
   /**
    * Batch position update for multiple nodes (element/connector/object) in a view.
@@ -563,314 +383,63 @@ export class ModelStore {
   updateViewNodePositionsAny = (
     viewId: string,
     updates: Array<{ ref: { elementId?: string; connectorId?: string; objectId?: string }; x: number; y: number }>
-  ): void => {
-    this.updateModel((model) => layoutMutations.updateViewNodePositionsAny(model, viewId, updates));
-  };
+  ): void => this.layoutOps.updateViewNodePositionsAny(viewId, updates);
 
   /** Updates layout properties on an element-node, connector-node, or view-object node in a view. */
   updateViewNodeLayoutAny = (
     viewId: string,
     ref: { elementId?: string; connectorId?: string; objectId?: string },
     patch: Partial<Omit<ViewNodeLayout, 'elementId' | 'connectorId' | 'objectId'>>
-  ): void => {
-    this.updateModel((model) => layoutMutations.updateViewNodeLayoutAny(model, viewId, ref, patch));
-  };
+  ): void => this.layoutOps.updateViewNodeLayoutAny(viewId, ref, patch);
 
   /** Align element nodes in a view based on the current selection. */
-  alignViewElements = (viewId: string, elementIds: string[], mode: AlignMode): void => {
-    this.updateModel((model) => alignMutations.alignViewElements(model, viewId, elementIds, mode));
-  };
+  alignViewElements = (viewId: string, elementIds: string[], mode: AlignMode): void => this.layoutOps.alignViewElements(viewId, elementIds, mode);
 
   /** Distribute selected element nodes evenly within a view. */
-  distributeViewElements = (viewId: string, elementIds: string[], mode: DistributeMode): void => {
-    this.updateModel((model) => arrangeMutations.distributeViewElements(model, viewId, elementIds, mode));
-  };
+  distributeViewElements = (viewId: string, elementIds: string[], mode: DistributeMode): void => this.layoutOps.distributeViewElements(viewId, elementIds, mode);
 
   /** Make selected element nodes the same size within a view. */
-  sameSizeViewElements = (viewId: string, elementIds: string[], mode: SameSizeMode): void => {
-    this.updateModel((model) => arrangeMutations.sameSizeViewElements(model, viewId, elementIds, mode));
-  };
+  sameSizeViewElements = (viewId: string, elementIds: string[], mode: SameSizeMode): void => this.layoutOps.sameSizeViewElements(viewId, elementIds, mode);
 
   /**
    * Resize selected ArchiMate element boxes so their visible text fits.
    *
    * Only applies to element-backed nodes in the given view.
    */
-  fitViewElementsToText = (viewId: string, elementIds: string[]): void => {
-    if (elementIds.length === 0) return;
-    this.updateModel((model) => {
-      const view = model.views[viewId];
-      if (!view || view.kind !== 'archimate' || !view.layout) return;
+  fitViewElementsToText = (viewId: string, elementIds: string[]): void => this.layoutOps.fitViewElementsToText(viewId, elementIds);
 
-      const idSet = new Set(elementIds);
-      const updates: Array<{ elementId: string; width: number; height: number }> = [];
-
-      for (const n of view.layout.nodes) {
-        if (!n.elementId) continue;
-        if (!idSet.has(n.elementId)) continue;
-        const el = model.elements[n.elementId];
-        if (!el) continue;
-        const { width, height } = fitArchiMateBoxToText(el, n);
-        updates.push({ elementId: n.elementId, width, height });
-      }
-
-      if (updates.length === 0) return;
-      fitToTextMutations.applyViewElementSizes(model, viewId, updates);
-    });
-  };
-
-  autoLayoutView = async (viewId: string, options: AutoLayoutOptions = {}, selectionNodeIds?: string[]): Promise<void> => {
-    const current = this.state.model;
-    if (!current) throw new Error('No model loaded');
-
-    const view = current.views[viewId];
-    if (!view) throw new Error(`View not found: ${viewId}`);
-
-    // Dedupe selection ids for determinism.
-    const selection = Array.isArray(selectionNodeIds)
-      ? Array.from(new Set(selectionNodeIds.filter((id) => typeof id === 'string' && id.length > 0))).sort((a, b) => a.localeCompare(b))
-      : [];
-
-    const extracted = extractLayoutInputForView(current, viewId, options, selection);
-    if (extracted.nodes.length === 0) return;
-
-    const hasHierarchy = extracted.nodes.some((n) => typeof n.parentId === 'string' && n.parentId.length > 0);
-    const isBpmnHierarchical = view.kind === 'bpmn' && hasHierarchy;
-    const isUmlHierarchical = view.kind === 'uml' && hasHierarchy;
-
-    const readCurrentNodePos = (): Record<string, { x: number; y: number; width: number; height: number }> => {
-      const fresh = this.state.model?.views[viewId];
-      const out: Record<string, { x: number; y: number; width: number; height: number }> = {};
-      const rawNodes = fresh?.layout?.nodes ?? [];
-      for (const n of rawNodes) {
-        const id = n.elementId ?? n.connectorId;
-        if (!id) continue;
-        out[id] = { x: n.x, y: n.y, width: n.width, height: n.height };
-      }
-      return out;
-    };
-
-    const shouldSkipCommit = (positions: Record<string, { x: number; y: number }>, geometryById?: Record<string, { width?: number; height?: number }>, hasEdgeRoutes?: boolean): boolean => {
-      // If we have edge routes, play it safe and commit (routing may differ even if positions match).
-      if (hasEdgeRoutes) return false;
-
-      const cur = readCurrentNodePos();
-      for (const [id, p] of Object.entries(positions)) {
-        const c = cur[id];
-        if (!c) return false;
-        if (c.x !== p.x || c.y !== p.y) return false;
-      }
-
-      if (geometryById) {
-        for (const [id, g] of Object.entries(geometryById)) {
-          const c = cur[id];
-          if (!c) return false;
-          if (typeof g.width === 'number' && c.width !== g.width) return false;
-          if (typeof g.height === 'number' && c.height !== g.height) return false;
-        }
-      }
-
-      return true;
-    };
-
-    if (isBpmnHierarchical || isUmlHierarchical) {
-      const { elkLayoutHierarchical } = await import('../domain/layout/elk/elkLayoutHierarchical');
-
-      const prepared = isBpmnHierarchical
-        ? (await import('../domain/layout/bpmn/prepareBpmnHierarchicalInput')).prepareBpmnHierarchicalInput(extracted, options)
-        : (await import('../domain/layout/uml/prepareUmlHierarchicalInput')).prepareUmlHierarchicalInput(extracted, options);
-
-      const signature = computeLayoutSignature({
-        viewId,
-        viewKind: view.kind,
-        mode: 'hierarchical',
-        input: prepared.input,
-        options,
-        selectionNodeIds: selection
-      });
-
-      const cached = this.autoLayoutCacheByView.get(viewId);
-      const base = cached && cached.signature === signature ? cached.output : await elkLayoutHierarchical(prepared.input, options);
-      if (!cached || cached.signature !== signature) {
-        this.autoLayoutCacheByView.set(viewId, { signature, output: base });
-      }
-
-      // Clone output so we don't mutate cached results.
-      const output = {
-        positions: { ...base.positions },
-        edgeRoutes: base.edgeRoutes ? { ...base.edgeRoutes } : undefined
-      };
-
-      // Respect locked nodes (override positions) if requested.
-      const fixedIds = new Set<string>();
-      if (options.respectLocked) {
-        const fresh = this.state.model?.views[viewId];
-        const rawNodes = fresh?.layout?.nodes ?? [];
-        for (const n of rawNodes) {
-          if (!n.locked) continue;
-          const id = n.elementId ?? n.connectorId;
-          if (!id) continue;
-          fixedIds.add(id);
-          output.positions[id] = { x: n.x, y: n.y };
-        }
-      }
-
-      const originalPositions = { ...output.positions };
-
-      // Snap to grid (deterministic + tidy). Avoid overlap nudge for hierarchical layouts,
-      // as it can push children outside containers.
-      const GRID = 10;
-      const snapped = snapToGrid(output.positions, GRID, fixedIds);
-      const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, prepared.input.edges, originalPositions, snapped);
-
-      // Build geometry updates: positions for all nodes, sizes for container nodes.
-      const geometryById: Record<string, { x?: number; y?: number; width?: number; height?: number }> = {};
-      for (const [id, pos] of Object.entries(snapped)) {
-        geometryById[id] = { ...(geometryById[id] ?? {}), x: pos.x, y: pos.y };
-      }
-
-      // Apply computed sizes to container nodes only.
-      const childrenByParent = new Map<string, string[]>();
-      for (const n of prepared.input.nodes) {
-        if (!n.parentId) continue;
-        const list = childrenByParent.get(n.parentId) ?? [];
-        list.push(n.id);
-        childrenByParent.set(n.parentId, list);
-      }
-      for (const [containerId, kids] of childrenByParent.entries()) {
-        if (kids.length === 0) continue;
-        const s = prepared.sizes[containerId];
-        if (!s) continue;
-        geometryById[containerId] = { ...(geometryById[containerId] ?? {}), width: s.width, height: s.height };
-      }
-
-      if (shouldSkipCommit(snapped, geometryById, Boolean(edgeRoutes && Object.keys(edgeRoutes).length))) return;
-
-      this.updateModel((model) => {
-        autoLayoutMutations.autoLayoutViewGeometry(model, viewId, geometryById, edgeRoutes);
-      });
-      return;
-    }
-
-    // Lazy-load ELK so it doesn't get pulled into the main bundle until the user runs auto-layout.
-    const { elkLayout } = await import('../domain/layout/elk/elkLayout');
-
-    const signature = computeLayoutSignature({
-      viewId,
-      viewKind: view.kind,
-      mode: 'flat',
-      input: extracted,
-      options,
-      selectionNodeIds: selection
-    });
-
-    const cached = this.autoLayoutCacheByView.get(viewId);
-    const base = cached && cached.signature === signature ? cached.output : await elkLayout(extracted, options);
-    if (!cached || cached.signature !== signature) {
-      this.autoLayoutCacheByView.set(viewId, { signature, output: base });
-    }
-
-    // Clone output so we don't mutate cached results.
-    const output = {
-      positions: { ...base.positions },
-      edgeRoutes: base.edgeRoutes ? { ...base.edgeRoutes } : undefined
-    };
-
-    // Post-pass tidy: keep pinned nodes fixed (if requested), snap to grid, then nudge overlaps.
-    const fixedIds = new Set<string>();
-
-    if (options.respectLocked) {
-      const fresh = this.state.model?.views[viewId];
-      const rawNodes = fresh?.layout?.nodes ?? [];
-      for (const n of rawNodes) {
-        if (!n.locked) continue;
-        const id = n.elementId ?? n.connectorId;
-        if (!id) continue;
-        fixedIds.add(id);
-        output.positions[id] = { x: n.x, y: n.y };
-      }
-    }
-
-    const originalPositions = { ...output.positions };
-
-    // Snap to grid first (keeps things tidy and deterministic).
-    const GRID = 10;
-    let positions = snapToGrid(output.positions, GRID, fixedIds);
-
-    // Then nudge remaining overlaps. Use node sizes from the layout input.
-    const nudgeNodes = [...extracted.nodes]
-      .map((n) => ({ id: n.id, w: n.width, h: n.height }))
-      .sort((a, b) => a.id.localeCompare(b.id));
-
-    positions = nudgeOverlaps(nudgeNodes, positions, { padding: 10, fixedIds });
-
-    const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, extracted.edges, originalPositions, positions);
-
-    if (shouldSkipCommit(positions, undefined, Boolean(edgeRoutes && Object.keys(edgeRoutes).length))) return;
-
-    this.updateModel((model) => {
-      autoLayoutMutations.autoLayoutView(model, viewId, positions, edgeRoutes);
-    });
-  };
+  autoLayoutView = (viewId: string, options: AutoLayoutOptions = {}, selectionNodeIds?: string[]): Promise<void> => this.layoutOps.autoLayoutView(viewId, options, selectionNodeIds);
 
 
   // -------------------------
   // Folders
   // -------------------------
 
-  createFolder = (parentId: string, name: string): string => {
-    let created = '';
-    this.updateModel((model) => {
-      created = folderMutations.createFolder(model, parentId, name);
-    });
-    return created;
-  };
+  createFolder = (parentId: string, name: string): string => this.folderOps.createFolder(parentId, name);
 
-  moveElementToFolder = (elementId: string, targetFolderId: string): void => {
-    this.updateModel((model) => folderMutations.moveElementToFolder(model, elementId, targetFolderId));
-  };
+  moveElementToFolder = (elementId: string, targetFolderId: string): void => this.folderOps.moveElementToFolder(elementId, targetFolderId);
 
-  moveViewToFolder = (viewId: string, targetFolderId: string): void => {
-    this.updateModel((model) => folderMutations.moveViewToFolder(model, viewId, targetFolderId));
-  };
+  moveViewToFolder = (viewId: string, targetFolderId: string): void => this.folderOps.moveViewToFolder(viewId, targetFolderId);
 
-  moveViewToElement = (viewId: string, elementId: string): void => {
-    this.updateModel((model) => folderMutations.moveViewToElement(model, viewId, elementId));
-  };
+  moveViewToElement = (viewId: string, elementId: string): void => this.folderOps.moveViewToElement(viewId, elementId);
 
-  moveFolderToFolder = (folderId: string, targetFolderId: string): void => {
-    this.updateModel((model) => folderMutations.moveFolderToFolder(model, folderId, targetFolderId));
-  };
+  moveFolderToFolder = (folderId: string, targetFolderId: string): void => this.folderOps.moveFolderToFolder(folderId, targetFolderId);
 
   // -------------------------
   // Folder extensions (taggedValues/externalIds)
   // -------------------------
 
-  updateFolder = (folderId: string, patch: Partial<Omit<Folder, 'id'>>): void => {
-    this.updateModel((model) => folderMutations.updateFolder(model, folderId, patch));
-  };
+  updateFolder = (folderId: string, patch: Partial<Omit<Folder, 'id'>>): void => this.folderOps.updateFolder(folderId, patch);
 
-  renameFolder = (folderId: string, name: string): void => {
-    this.updateModel((model) => folderMutations.renameFolder(model, folderId, name));
-  };
+  renameFolder = (folderId: string, name: string): void => this.folderOps.renameFolder(folderId, name);
 
   deleteFolder = (
     folderId: string,
     options?: { mode?: 'move'; targetFolderId?: string } | { mode: 'deleteContents' }
-  ): void => {
-    this.updateModel((model) => folderMutations.deleteFolder(model, folderId, options));
-  };
+  ): void => this.folderOps.deleteFolder(folderId, options);
 
   /** Ensure a model has the root folder structure (used by future migrations). */
-  ensureRootFolders = (): void => {
-    this.updateModel(
-      (model) => {
-        // Will throw if missing, which is fine for now.
-        findFolderIdByKind(model, 'root');
-      },
-      false
-    );
-  };
+  ensureRootFolders = (): void => this.folderOps.ensureRootFolders();
 }
 
 /** Factory used by tests and to create isolated store instances. */

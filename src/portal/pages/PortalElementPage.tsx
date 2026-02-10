@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import type { Key } from '@react-types/shared';
 
 import '../../styles/shell.css';
@@ -11,15 +11,20 @@ import { getElementFactSheetData, resolveElementIdFromExternalId } from '../inde
 import { PortalNavigationTree } from '../components/PortalNavigationTree';
 import type { NavNode } from '../navigation/types';
 import { usePortalNavTree } from '../hooks/usePortalNavTree';
+import { findNavNodeById, findPathToNavNode } from '../indexes/navTreeSelectors';
 
-import { formatElementTypeLabel, formatRelationshipTypeLabel } from '../../components/ui/typeLabels';
 import { usePortalMediaQuery } from '../hooks/usePortalMediaQuery';
 import { usePersistedNumber } from '../hooks/usePersistedNumber';
-import { Card, Pill, SmallButton } from '../components/factsheet/FactSheetPrimitives';
+import { Card } from '../components/factsheet/FactSheetPrimitives';
+import { ElementFactSheetHeader } from '../components/factsheet/ElementFactSheetHeader';
+import { ElementSummaryCard } from '../components/factsheet/ElementSummaryCard';
+import { ElementUmlMembersCards } from '../components/factsheet/ElementUmlMembersCards';
+import { ElementRelationshipsCard } from '../components/factsheet/ElementRelationshipsCard';
+import { ElementUsedInViewsCard } from '../components/factsheet/ElementUsedInViewsCard';
+import { ElementIdentifiersCard } from '../components/factsheet/ElementIdentifiersCard';
+import { ElementOtherInfoCard } from '../components/factsheet/ElementOtherInfoCard';
 import { copyText } from '../utils/copyText';
-import { readTaggedValue } from '../utils/taggedValues';
-import { isUmlClassifierType, formatUmlAttribute, formatUmlOperation } from '../utils/umlFormatters';
-import { safeJsonStringify } from '../utils/safeJsonStringify';
+import { isUmlClassifierType } from '../utils/umlFormatters';
 import { readUmlClassifierMembers } from '../../domain/uml/members';
 
 type PortalElementPageProps = { mode: 'internalId' } | { mode: 'externalId' };
@@ -83,28 +88,6 @@ export default function PortalElementPage(props: PortalElementPageProps) {
 
   const treeData = usePortalNavTree(model, rootFolderId);
 
-  function findNodeById(nodes: NavNode[], nodeId: string): NavNode | null {
-    for (const n of nodes) {
-      if (n.id === nodeId) return n;
-      if (n.children) {
-        const hit = findNodeById(n.children, nodeId);
-        if (hit) return hit;
-      }
-    }
-    return null;
-  }
-
-  function findPathToNode(nodes: NavNode[], nodeId: string, acc: string[] = []): string[] | null {
-    for (const n of nodes) {
-      if (n.id === nodeId) return acc;
-      if (n.children && n.children.length) {
-        const hit = findPathToNode(n.children, nodeId, [...acc, n.id]);
-        if (hit) return hit;
-      }
-    }
-    return null;
-  }
-
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<Key>>(new Set());
 
   const resolvedElementId = useMemo(() => {
@@ -142,7 +125,6 @@ export default function PortalElementPage(props: PortalElementPageProps) {
 
   const elementDisplayName = data?.element?.name || '(unnamed)';
   const elementType = data ? String(data.element?.type ?? '') : '';
-  const elementTypeLabel = data ? formatElementTypeLabel({ type: elementType }) : '';
   const elementKind = data?.element?.kind;
   const elementLayer = data?.element?.layer;
 
@@ -156,13 +138,13 @@ export default function PortalElementPage(props: PortalElementPageProps) {
   const selectedNodeId = useMemo(() => {
     if (!resolvedElementId) return null;
     const candidate = `element:${resolvedElementId}`;
-    return findNodeById(treeData, candidate) ? candidate : null;
+    return findNavNodeById(treeData, candidate) ? candidate : null;
   }, [resolvedElementId, treeData]);
 
   // Auto-expand the path to the selected element so it is always visible.
   useEffect(() => {
     if (!selectedNodeId) return;
-    const path = findPathToNode(treeData, selectedNodeId);
+    const path = findPathToNavNode(treeData, selectedNodeId);
     if (!path || !path.length) return;
     setExpandedNodeIds((prev) => {
       const next = new Set(prev);
@@ -265,43 +247,19 @@ export default function PortalElementPage(props: PortalElementPageProps) {
           </div>
 
           <div style={{ marginTop: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            <Link to="/portal">Portal</Link>
-            <span style={{ opacity: 0.6 }}> / </span>
-            <span>Element</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0 }}>{data ? elementDisplayName : 'Element'}</h2>
             {data ? (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <Pill>
-                  {elementTypeLabel || 'Unknown'}
-                </Pill>
-                {elementKind ? <Pill>{elementKind}</Pill> : null}
-                {elementLayer ? <Pill>{elementLayer}</Pill> : null}
-              </div>
+              <ElementFactSheetHeader
+                elementDisplayName={elementDisplayName}
+                elementType={elementType}
+                elementKind={elementKind}
+                elementLayer={elementLayer}
+                internalLink={internalLink}
+                bestExternalIdKey={bestExternalIdKey}
+                externalLink={externalLink}
+                copied={copied}
+                onCopy={onCopy}
+              />
             ) : null}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {data ? (
-            <>
-              <SmallButton title="Copy internal link" onClick={() => onCopy('internal-link', internalLink)}>
-                Copy link
-              </SmallButton>
-              {bestExternalIdKey ? (
-                <SmallButton title="Copy externalId link" onClick={() => onCopy('external-link', externalLink)}>
-                  Copy externalId link
-                </SmallButton>
-              ) : null}
-            </>
-          ) : null}
-          {copied ? <span style={{ fontSize: 12, opacity: 0.75 }}>{copied === 'copy-failed' ? 'Copy failed' : 'Copied'}</span> : null}
-        </div>
-      </div>
 
       {!datasetMeta ? (
         <Card>
@@ -335,207 +293,16 @@ export default function PortalElementPage(props: PortalElementPageProps) {
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, alignItems: 'start' }}>
           {/* Main column */}
           <div style={{ display: 'grid', gap: 12 }}>
-            <Card title="Summary">
-              {data.element.documentation ? (
-                <div style={{ whiteSpace: 'pre-wrap' }}>{data.element.documentation}</div>
-              ) : (
-                <div style={{ opacity: 0.7 }}>(No description)</div>
-              )}
-            </Card>
-
-            {umlMembers && umlMembers.attributes.length ? (
-              <Card title="Attributes">
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {umlMembers.attributes.map((a, idx) => (
-                    <li key={`${a.name}-${idx}`} style={{ marginBottom: 4, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
-                      {formatUmlAttribute(a)}
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            ) : null}
-
-            {umlMembers && umlMembers.operations.length ? (
-              <Card title="Operations">
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {umlMembers.operations.map((o, idx) => (
-                    <li key={`${o.name}-${idx}`} style={{ marginBottom: 4, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
-                      {formatUmlOperation(o)}
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            ) : null}
-
-            <Card title="Relationships">
-              <div style={{ display: 'grid', gap: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Outgoing</div>
-                  {data.relations.outgoing.length ? (
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {data.relations.outgoing.map((g) => (
-                        <div key={`out-${g.relType}`}>
-                          <div style={{ opacity: 0.85, marginBottom: 4 }}>
-                            {formatRelationshipTypeLabel({ type: g.relType })} <span style={{ opacity: 0.7 }}>· {g.items.length}</span>
-                          </div>
-                          <ul style={{ margin: 0, paddingLeft: 18 }}>
-                            {g.items.map((it) => (
-                              <li key={it.id} style={{ marginBottom: 4 }}>
-                                {it.otherElementId ? (
-                                  <Link to={`/portal/e/${encodeURIComponent(it.otherElementId)}`}>{it.otherElementName || it.otherElementId}</Link>
-                                ) : (
-                                  <span style={{ opacity: 0.7 }}>(non-element endpoint)</span>
-                                )}
-                                <span style={{ opacity: 0.75 }}> — </span>
-                                <span style={{ opacity: 0.85 }}>
-                                  {formatRelationshipTypeLabel({ type: it.type })}
-                                  {it.name ? <span style={{ opacity: 0.85 }}> · {it.name}</span> : null}
-                                </span>
-                                {it.documentation ? (
-                                  <div style={{ opacity: 0.75, fontSize: 12, marginTop: 2, whiteSpace: 'pre-wrap' }}>{it.documentation}</div>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ opacity: 0.7 }}>(none)</div>
-                  )}
-                </div>
-
-                <div style={{ borderTop: '1px solid var(--borderColor, rgba(0,0,0,0.12))', paddingTop: 10 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Incoming</div>
-                  {data.relations.incoming.length ? (
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {data.relations.incoming.map((g) => (
-                        <div key={`in-${g.relType}`}>
-                          <div style={{ opacity: 0.85, marginBottom: 4 }}>
-                            {formatRelationshipTypeLabel({ type: g.relType })} <span style={{ opacity: 0.7 }}>· {g.items.length}</span>
-                          </div>
-                          <ul style={{ margin: 0, paddingLeft: 18 }}>
-                            {g.items.map((it) => (
-                              <li key={it.id} style={{ marginBottom: 4 }}>
-                                {it.otherElementId ? (
-                                  <Link to={`/portal/e/${encodeURIComponent(it.otherElementId)}`}>{it.otherElementName || it.otherElementId}</Link>
-                                ) : (
-                                  <span style={{ opacity: 0.7 }}>(non-element endpoint)</span>
-                                )}
-                                <span style={{ opacity: 0.75 }}> — </span>
-                                <span style={{ opacity: 0.85 }}>
-                                  {formatRelationshipTypeLabel({ type: it.type })}
-                                  {it.name ? <span style={{ opacity: 0.85 }}> · {it.name}</span> : null}
-                                </span>
-                                {it.documentation ? (
-                                  <div style={{ opacity: 0.75, fontSize: 12, marginTop: 2, whiteSpace: 'pre-wrap' }}>{it.documentation}</div>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ opacity: 0.7 }}>(none)</div>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            <Card title="Used in views">
-              {data.usedInViews.length ? (
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {data.usedInViews.map((v) => (
-                    <li key={v.id}>
-                      <Link to={`/portal/v/${encodeURIComponent(v.id)}`}>{v.name}</Link> <span style={{ opacity: 0.7 }}>({v.kind})</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div style={{ opacity: 0.7 }}>(none)</div>
-              )}
-            </Card>
+            <ElementSummaryCard documentation={data.element.documentation} />
+            <ElementUmlMembersCards umlMembers={umlMembers} />
+            <ElementRelationshipsCard relations={data.relations} />
+            <ElementUsedInViewsCard usedInViews={data.usedInViews} />
           </div>
 
           {/* Sidebar */}
           <div style={{ display: 'grid', gap: 12 }}>
-            <Card
-              title="Identifiers"
-              right={
-                <SmallButton title="Copy internal id" onClick={() => onCopy('id', data.elementId)}>
-                  Copy id
-                </SmallButton>
-              }
-            >
-              <div style={{ display: 'grid', gap: 8 }}>
-                <div>
-                  <div style={{ fontSize: 12, opacity: 0.7 }}>Internal id</div>
-                  <code style={{ wordBreak: 'break-all' }}>{data.elementId}</code>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 12, opacity: 0.7 }}>External ids</div>
-                  {data.externalIdKeys.length ? (
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      {data.externalIdKeys.map((k) => (
-                        <div key={k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                          <Link to={`/portal/e/ext/${encodeURIComponent(k)}`} style={{ wordBreak: 'break-all' }}>
-                            {k}
-                          </Link>
-                          <SmallButton title="Copy external id" onClick={() => onCopy('externalId', k)}>
-                            Copy
-                          </SmallButton>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ opacity: 0.7 }}>(none)</div>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            <Card title="Other information">
-              <div style={{ display: 'grid', gap: 10 }}>
-                {Array.isArray(data.element.taggedValues) && data.element.taggedValues.length ? (
-                  <div>
-                    <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Tagged values</div>
-                    <div style={{ display: 'grid', gap: 6 }}>
-                      {data.element.taggedValues
-                        .map((tv) => readTaggedValue(tv))
-                        .filter(Boolean)
-                        .map((tv, idx) => {
-                          const t = tv as { label: string; type?: string; value: string };
-                          return (
-                            <div
-                              key={`${t.label}-${idx}`}
-                              style={{ display: 'grid', gridTemplateColumns: 'minmax(140px, 1fr) 2fr', gap: 10, alignItems: 'baseline' }}
-                            >
-                              <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', opacity: 0.9 }}>
-                                {t.label}
-                                {t.type ? <span style={{ opacity: 0.7 }}> ({t.type})</span> : null}
-                              </div>
-                              <div style={{ wordBreak: 'break-word' }}>{t.value}</div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ opacity: 0.7 }}>(No tagged values)</div>
-                )}
-
-                {data.element.attrs != null ? (
-                  <details>
-                    <summary style={{ cursor: 'pointer', opacity: 0.85 }}>Raw attributes</summary>
-                    <pre style={{ marginTop: 8, padding: 10, borderRadius: 10, border: '1px solid var(--borderColor, rgba(0,0,0,0.12))', overflow: 'auto' }}>
-                      {safeJsonStringify(data.element.attrs)}
-                    </pre>
-                  </details>
-                ) : null}
-              </div>
-            </Card>
+            <ElementIdentifiersCard elementId={data.elementId} externalIdKeys={data.externalIdKeys} onCopy={onCopy} />
+            <ElementOtherInfoCard taggedValues={data.element.taggedValues} attrs={data.element.attrs} />
           </div>
         </div>
       )}

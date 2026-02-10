@@ -13,6 +13,7 @@ import { PortalInspectorPanel } from '../components/PortalInspectorPanel';
 import { PortalNavigationTree } from '../components/PortalNavigationTree';
 import { usePortalNavTree } from '../hooks/usePortalNavTree';
 import type { NavNode } from '../navigation/types';
+import { findNavNodeById, findPathToNavNode } from '../indexes/navTreeSelectors';
 import type { Selection } from '../../components/model/selection';
 import { usePortalStore } from '../store/usePortalStore';
 
@@ -129,27 +130,7 @@ export default function PortalViewPage() {
   }, [viewId]);
   const treeData = usePortalNavTree(model, rootFolderId);
 
-  function findNodeById(nodes: NavNode[], nodeId: string): NavNode | null {
-    for (const n of nodes) {
-      if (n.id === nodeId) return n;
-      if (n.children) {
-        const hit = findNodeById(n.children, nodeId);
-        if (hit) return hit;
-      }
-    }
-    return null;
-  }
-
-  function findPathToNode(nodes: NavNode[], nodeId: string, acc: string[] = []): string[] | null {
-    for (const n of nodes) {
-      if (n.id === nodeId) return acc;
-      if (n.children && n.children.length) {
-        const hit = findPathToNode(n.children, nodeId, [...acc, n.id]);
-        if (hit) return hit;
-      }
-    }
-    return null;
-  }
+  // nav tree helpers live in portal/indexes/navTreeSelectors
 
   const preferredSelectedNodeId = useMemo(() => {
     // Keep the tree selection aligned with what the user is focused on.
@@ -166,12 +147,12 @@ export default function PortalViewPage() {
 
     if (elementId) {
       const candidate = `element:${elementId}`;
-      if (findNodeById(treeData, candidate)) return candidate;
+      if (findNavNodeById(treeData, candidate)) return candidate;
     }
 
     if (viewId) {
       const candidate = `view:${viewId}`;
-      if (findNodeById(treeData, candidate)) return candidate;
+      if (findNavNodeById(treeData, candidate)) return candidate;
     }
     return null;
   }, [selection, treeData, viewId]);
@@ -179,7 +160,7 @@ export default function PortalViewPage() {
   // Auto-expand the path to the active item so it is always visible.
   useEffect(() => {
     if (!preferredSelectedNodeId) return;
-    const path = findPathToNode(treeData, preferredSelectedNodeId);
+    const path = findPathToNavNode(treeData, preferredSelectedNodeId);
     if (!path || !path.length) return;
     setExpandedNodeIds((prev) => {
       const next = new Set(prev);

@@ -26,10 +26,10 @@ export function parseMeffXml(xmlText: string, fileNameForMessages = 'model.xml')
     addWarning(report, 'MEFF: XML parser reported an error while reading "' + fileNameForMessages + '": ' + parserError);
   }
 
-  const { folders, refToFolder } = parseOrganizations(doc, report);
-  const views = parseViews(doc, report, refToFolder);
+  const { folders, refToFolder, refToParentRef } = parseOrganizations(doc, report);
+  const views = parseViews(doc, report, refToFolder, refToParentRef);
 
-  const elements = parseMeffElements(doc, report, refToFolder);
+  const elements = parseMeffElements(doc, report, refToFolder, refToParentRef);
   const relationships = parseMeffRelationships(doc, report);
 
   const ir: IRModel = {

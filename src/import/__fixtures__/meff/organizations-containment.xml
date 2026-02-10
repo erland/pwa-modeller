@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://www.opengroup.org/xsd/archimate/3.0/"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <name>Containment Sample</name>
+
+  <organizations>
+    <item identifier="f1">
+      <label>Folder A</label>
+
+      <!-- Application is referenced, and its nested items represent browser-style ownership. -->
+      <item identifierRef="app1">
+        <item identifierRef="sub1"/>
+        <item identifierRef="sub2"/>
+        <item identifierRef="vApp"/>
+      </item>
+    </item>
+  </organizations>
+
+  <elements>
+    <element identifier="app1" xsi:type="ApplicationComponent">
+      <name>Archimate Application 1</name>
+    </element>
+    <element identifier="sub1" xsi:type="ApplicationComponent">
+      <name>Archimate Subsystem 1</name>
+    </element>
+    <element identifier="sub2" xsi:type="ApplicationComponent">
+      <name>Archimate Subsystem 2</name>
+    </element>
+  </elements>
+
+  <views>
+    <view identifier="vApp">
+      <name>View Archimate Application 1</name>
+      <node identifier="n1" elementRef="app1" x="10" y="20" w="160" h="70" />
+      <node identifier="n2" elementRef="sub1" x="10" y="120" w="160" h="70" />
+    </view>
+  </views>
+</model>

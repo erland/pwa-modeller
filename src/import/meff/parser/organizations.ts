@@ -12,16 +12,19 @@ export type OrgParseResult = {
   folders: IRFolder[];
   /** References (element ids, view ids, etc.) to their folder ids. */
   refToFolder: Map<IRId, IRId>;
+  /** Nested reference ownership (e.g., element-in-element) based on the organizations tree. */
+  refToParentRef: Map<IRId, IRId>;
 };
 
 export function parseOrganizations(doc: Document, report: ImportReport): OrgParseResult {
   const folders: IRFolder[] = [];
   const refToFolder = new Map<IRId, IRId>();
+  const refToParentRef = new Map<IRId, IRId>();
 
   // Some exporters namespace/prefix the tags (e.g. <ns0:organizations>), so we must match localName.
   const orgRoot = findFirstByLocalName(doc, ['organizations', 'organization']);
 
-  if (!orgRoot) return { folders, refToFolder };
+  if (!orgRoot) return { folders, refToFolder, refToParentRef };
 
   let autoId = 0;
 
@@ -31,16 +34,46 @@ export function parseOrganizations(doc: Document, report: ImportReport): OrgPars
     return `org-auto-${autoId}`;
   };
 
-  const handleRefChild = (child: Element, folderId: IRId) => {
+  const handleRefChild = (child: Element, folderId: IRId | null, parentRef: IRId | null) => {
     const ref =
       attrAny(child, ['identifierref', 'identifierRef', 'ref', 'idref', 'elementref', 'elementRef']) ??
       childText(child, 'identifierRef') ??
       childText(child, 'ref');
-    if (ref && !refToFolder.has(ref)) refToFolder.set(ref, folderId);
+    if (ref && folderId && !refToFolder.has(ref)) refToFolder.set(ref, folderId);
+
+    // If this reference is nested under a reference-only item, treat it as semantic ownership/containment.
+    if (ref && parentRef && !refToParentRef.has(ref)) refToParentRef.set(ref, parentRef);
   };
 
-  const walkItem = (itemEl: Element, parentId: IRId | null) => {
-    // Consider <item> or <organization> nodes as folders if they have a label/name or children.
+  const walkItem = (itemEl: Element, parentFolderId: IRId | null, currentFolderId: IRId | null, parentRef: IRId | null) => {
+    // MEFF <organizations> uses <item> for both folders and references.
+    // If the node has an identifierRef but no label/name, treat it as a reference container (NOT a folder).
+    const ref =
+      attrAny(itemEl, ['identifierref', 'identifierRef', 'ref', 'idref', 'elementref', 'elementRef']) ??
+      childText(itemEl, 'identifierRef') ??
+      childText(itemEl, 'ref');
+
+    const hasLabel =
+      childText(itemEl, 'label') != null ||
+      childText(itemEl, 'name') != null ||
+      attrAny(itemEl, ['label', 'name']) != null;
+
+    if (ref && !hasLabel) {
+      // Reference-only node: map the ref to current folder and allow its children to inherit ownership.
+      handleRefChild(itemEl, currentFolderId, parentRef);
+      const nextParentRef = ref.trim().length ? ref.trim() : parentRef;
+      for (const child of Array.from(itemEl.children)) {
+        const ln = localName(child);
+        if (ln === 'item' || ln === 'organization' || ln === 'folder') {
+          walkItem(child, parentFolderId, currentFolderId, nextParentRef);
+        } else {
+          handleRefChild(child, currentFolderId, nextParentRef);
+        }
+      }
+      return;
+    }
+
+    // Folder/group node
     const id = makeFolderId(attrAny(itemEl, ['identifier', 'id']));
     const name =
       childText(itemEl, 'label') ??
@@ -51,39 +84,23 @@ export function parseOrganizations(doc: Document, report: ImportReport): OrgPars
     const folder: IRFolder = {
       id,
       name,
-      parentId: parentId ?? null,
+      parentId: null,
       documentation: childText(itemEl, 'documentation') ?? undefined,
       properties: parsePropertiesToRecord(itemEl),
       taggedValues: parseTaggedValues(itemEl)
     };
+
+    // Parent the folder under the provided parent folder (as group nesting).
+    folder.parentId = parentFolderId;
     folders.push(folder);
 
     for (const child of Array.from(itemEl.children)) {
       const ln = localName(child);
       if (ln === 'item' || ln === 'organization' || ln === 'folder') {
-        // A child may be a reference-only item (identifierRef) OR a nested group.
-        const hasRef =
-          attrAny(child, ['identifierref', 'identifierRef', 'ref', 'idref', 'elementref', 'elementRef']) != null;
-        const hasLabel =
-          childText(child, 'label') != null ||
-          childText(child, 'name') != null ||
-          attrAny(child, ['label', 'name']) != null;
-        const hasNested = Array.from(child.children).some(
-          (c) => isElementNode(c) && ['item', 'organization', 'folder'].includes(localName(c))
-        );
-        if (hasRef && !hasLabel && !hasNested) {
-          handleRefChild(child, folder.id);
-        } else if (hasRef && !hasLabel && hasNested) {
-          // Some exporters wrap nested groups in a node that also has identifierRef; treat as group and still collect refs.
-          handleRefChild(child, folder.id);
-          walkItem(child, folder.id);
-        } else {
-          // Treat as nested folder/group.
-          walkItem(child, folder.id);
-        }
+        walkItem(child, folder.id, folder.id, null);
       } else {
         // Sometimes refs are not wrapped in <item>; allow direct reference tags.
-        handleRefChild(child, folder.id);
+        handleRefChild(child, folder.id, null);
       }
     }
   };
@@ -95,7 +112,7 @@ export function parseOrganizations(doc: Document, report: ImportReport): OrgPars
   });
 
   if (rootChildren.length) {
-    for (const c of rootChildren) walkItem(c, null);
+    for (const c of rootChildren) walkItem(c, null, null, null);
   } else if (isElementNode(orgRoot) && (localName(orgRoot) === 'organization' || localName(orgRoot) === 'organizations')) {
     // Some tools put folder-like attributes on <organizations> itself.
     // In that case, treat its children as refs.
@@ -103,10 +120,10 @@ export function parseOrganizations(doc: Document, report: ImportReport): OrgPars
     const pseudoName =
       childText(orgRoot, 'label') ?? childText(orgRoot, 'name') ?? attrAny(orgRoot, ['label', 'name']) ?? 'Organization';
     folders.push({ id: pseudoId, name: pseudoName, parentId: null });
-    for (const child of Array.from(orgRoot.children)) handleRefChild(child, pseudoId);
+    for (const child of Array.from(orgRoot.children)) handleRefChild(child, pseudoId, null);
   } else {
     addWarning(report, 'MEFF: Found <organizations> section, but could not interpret its structure.');
   }
 
-  return { folders, refToFolder };
+  return { folders, refToFolder, refToParentRef };
 }

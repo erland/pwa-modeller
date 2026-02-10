@@ -76,4 +76,43 @@ describe('MEFF import (fixtures)', () => {
     const weird = res.ir.elements.find((e) => e.id === 'e1');
     expect(weird?.type).toBe('Unknown');
   });
+
+  it('maps organizations nesting to containment (element.parentElementId) and view ownership', async () => {
+    const xml = readFixture('organizations-containment.xml');
+    const file = new File([xml], 'organizations-containment.xml', { type: 'application/xml' });
+
+    const res = await importModel(file);
+
+    const app = res.ir.elements.find((e) => e.id === 'app1');
+    const sub1 = res.ir.elements.find((e) => e.id === 'sub1');
+    const sub2 = res.ir.elements.find((e) => e.id === 'sub2');
+    expect(app).toBeTruthy();
+    expect(sub1).toBeTruthy();
+    expect(sub2).toBeTruthy();
+    expect((sub1 as any).parentElementId).toBe('app1');
+    expect((sub2 as any).parentElementId).toBe('app1');
+
+    const v = res.ir.views.find((x) => x.id === 'vApp');
+    expect(v).toBeTruthy();
+    expect((v as any).meta?.owningElementId).toBe('app1');
+
+    // Apply and verify internal IDs preserve the containment + view ownerRef.
+    applyImportIR(res.ir, res.report);
+    const model = modelStore.getState().model;
+    expect(model).not.toBeNull();
+
+    const appEl = Object.values(model!.elements).find((e) => e.name === 'Archimate Application 1');
+    const sub1El = Object.values(model!.elements).find((e) => e.name === 'Archimate Subsystem 1');
+    const sub2El = Object.values(model!.elements).find((e) => e.name === 'Archimate Subsystem 2');
+    expect(appEl).toBeTruthy();
+    expect(sub1El).toBeTruthy();
+    expect(sub2El).toBeTruthy();
+    expect(sub1El!.parentElementId).toBe(appEl!.id);
+    expect(sub2El!.parentElementId).toBe(appEl!.id);
+
+    const view = Object.values(model!.views).find((vv) => vv.name === 'View Archimate Application 1');
+    expect(view).toBeTruthy();
+    expect(view!.ownerRef).toBeTruthy();
+    expect(view!.ownerRef!.id).toBe(appEl!.id);
+  });
 });

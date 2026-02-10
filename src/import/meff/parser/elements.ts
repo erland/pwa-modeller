@@ -12,7 +12,12 @@ import { parseTaggedValues } from './taggedValues';
 /**
  * Parse <elements> section of MEFF into IR elements.
  */
-export function parseMeffElements(doc: Document, report: ImportReport, refToFolder: Map<IRId, IRId>): IRElement[] {
+export function parseMeffElements(
+  doc: Document,
+  report: ImportReport,
+  refToFolder: Map<IRId, IRId>,
+  refToParentRef: Map<IRId, IRId>
+): IRElement[] {
   const elements: IRElement[] = [];
 
   const elementsRoot = findFirstByLocalName(doc, ['elements']);
@@ -39,6 +44,7 @@ export function parseMeffElements(doc: Document, report: ImportReport, refToFold
       const documentation = childText(el, 'documentation') ?? undefined;
 
       const folderId = refToFolder.get(id) ?? null;
+      const parentElementId = refToParentRef.get(id) ?? null;
 
       elements.push({
         id,
@@ -46,6 +52,7 @@ export function parseMeffElements(doc: Document, report: ImportReport, refToFold
         name: safeName,
         documentation,
         folderId: folderId ?? undefined,
+        parentElementId: parentElementId ?? undefined,
         properties: parsePropertiesToRecord(el),
         taggedValues: parseTaggedValues(el),
         meta: {

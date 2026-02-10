@@ -78,7 +78,12 @@ function meffNodeKindFromType(rawType: string | null): { kind: IRViewNode['kind'
 /**
  * Parse views/diagrams from a MEFF document into IR views.
  */
-export function parseViews(doc: Document, report: ImportReport, refToFolder: Map<IRId, IRId>): IRView[] {
+export function parseViews(
+  doc: Document,
+  report: ImportReport,
+  refToFolder: Map<IRId, IRId>,
+  refToParentRef: Map<IRId, IRId>
+): IRView[] {
   // Some exporters namespace/prefix the tags (e.g. <ns0:views>), so we must match localName.
   const viewsRoot = findFirstByLocalName(doc, ['views', 'diagrams']);
 
@@ -115,6 +120,7 @@ export function parseViews(doc: Document, report: ImportReport, refToFolder: Map
       undefined;
 
     const folderId = refToFolder.get(id) ?? null;
+    const owningElementId = refToParentRef.get(id) ?? undefined;
 
     const nodes: IRViewNode[] = [];
     const connections: IRViewConnection[] = [];
@@ -241,7 +247,6 @@ export function parseViews(doc: Document, report: ImportReport, refToFolder: Map
         }
       });
     }
-
     views.push({
       id,
       name,
@@ -251,7 +256,8 @@ export function parseViews(doc: Document, report: ImportReport, refToFolder: Map
       nodes,
       connections,
       meta: {
-        source: 'archimate-meff'
+        source: 'archimate-meff',
+        ...(owningElementId ? { owningElementId } : {})
       }
     });
   }

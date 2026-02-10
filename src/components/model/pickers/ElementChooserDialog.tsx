@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Element, Model } from '../../../domain';
-import { getElementTypeLabel } from '../../../domain';
+import { buildElementParentFolderIndex, buildFolderParentIndex, getElementTypeLabel, getFolderPathLabel } from '../../../domain';
 import { Dialog } from '../../dialog/Dialog';
 
 type Props = {
@@ -29,38 +29,8 @@ function getRootFolderId(model: Model): string {
   );
 }
 
-function buildElementParentFolderMap(model: Model): Map<string, string> {
-  const m = new Map<string, string>();
-  for (const f of Object.values(model.folders)) {
-    for (const elId of f.elementIds ?? []) {
-      if (!m.has(elId)) m.set(elId, f.id);
-    }
-  }
-  return m;
-}
-
-function buildFolderParentMap(model: Model): Map<string, string> {
-  const m = new Map<string, string>();
-  for (const f of Object.values(model.folders)) {
-    for (const childId of f.folderIds ?? []) {
-      if (!m.has(childId)) m.set(childId, f.id);
-    }
-  }
-  return m;
-}
-
-function folderPathLabel(model: Model, folderId: string, parentById: Map<string, string>): string {
-  const parts: string[] = [];
-  let cur: string | undefined = folderId;
-  let guard = 0;
-  while (cur && guard++ < 1000) {
-    const f = model.folders[cur];
-    if (!f) break;
-    if (f.kind !== 'root') parts.push(f.name);
-    cur = parentById.get(cur);
-  }
-  parts.reverse();
-  return parts.join(' / ');
+function folderPathLabel(model: Model, folderId: string, parentById: Map<string, string | null>): string {
+  return getFolderPathLabel(model, folderId, parentById, { includeRoot: false });
 }
 
 function elementDisplayLabel(el: Element): string {
@@ -75,8 +45,8 @@ export function ElementChooserDialog({ title, isOpen, model, value, onClose, onC
   const [selectedId, setSelectedId] = useState<string>('');
 
   const rootFolderId = useMemo(() => getRootFolderId(model), [model]);
-  const elementParentFolder = useMemo(() => buildElementParentFolderMap(model), [model]);
-  const folderParent = useMemo(() => buildFolderParentMap(model), [model]);
+  const elementParentFolder = useMemo(() => buildElementParentFolderIndex(model), [model]);
+  const folderParent = useMemo(() => buildFolderParentIndex(model), [model]);
 
   useEffect(() => {
     if (!isOpen) return;

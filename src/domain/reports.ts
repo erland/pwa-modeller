@@ -1,5 +1,6 @@
-import type { ArchimateLayer, ElementType, Folder, Model } from './types';
+import type { ArchimateLayer, ElementType, Model } from './types';
 import { VIEWPOINTS, getViewpointById } from './config/viewpoints';
+import { buildElementParentFolderIndex, buildFolderParentIndex, getFolderPathLabel } from './indexes/paths';
 
 export type ElementReportCategoryId =
   | 'all'
@@ -41,31 +42,19 @@ export type RelationshipReportRow = {
   documentation: string;
 };
 
-function findFolderContainingElement(model: Model, elementId: string): string | null {
+function buildViewParentFolderIndex(model: Model): Map<string, string> {
+  const idx = new Map<string, string>();
   for (const folder of Object.values(model.folders)) {
-    if (folder.elementIds.includes(elementId)) return folder.id;
+    for (const viewId of folder.viewIds ?? []) {
+      if (!idx.has(viewId)) idx.set(viewId, folder.id);
+    }
   }
-  return null;
+  return idx;
 }
 
-function findFolderContainingView(model: Model, viewId: string): string | null {
-  for (const folder of Object.values(model.folders)) {
-    if (folder.viewIds.includes(viewId)) return folder.id;
-  }
-  return null;
-}
-
-function folderPath(model: Model, folderId: string | null): string {
+function folderPath(model: Model, folderId: string | null, folderParent: Map<string, string | null>): string {
   if (!folderId) return '';
-  const names: string[] = [];
-  // Folder ids can be stale (e.g., after import/migration), so treat lookup as optional.
-  let cur: Folder | undefined = model.folders[folderId];
-  while (cur) {
-    // Include root in paths. With a unified navigator, the root folder is user-facing (e.g. "Model").
-    names.push(cur.name);
-    cur = cur.parentId ? model.folders[cur.parentId] : undefined;
-  }
-  return names.reverse().join(' / ');
+  return getFolderPathLabel(model, folderId, folderParent, { includeRoot: true });
 }
 
 function categoryToTypes(category: ElementReportCategoryId): ElementType[] | null {
@@ -87,6 +76,9 @@ export function generateElementReport(
 
   const types = typeFilter !== 'all' ? ([typeFilter] as ElementType[]) : categoryToTypes(category);
 
+  const folderParent = buildFolderParentIndex(model);
+  const elementParentFolder = buildElementParentFolderIndex(model);
+
   return Object.values(model.elements)
     .filter((e) => (types ? types.includes(e.type) : true))
     .filter((e) => (layerFilter === 'all' ? true : e.layer === layerFilter))
@@ -95,12 +87,14 @@ export function generateElementReport(
       name: e.name,
       type: e.type,
       layer: e.layer ?? '',
-      folderPath: folderPath(model, findFolderContainingElement(model, e.id))
+      folderPath: folderPath(model, elementParentFolder.get(e.id) ?? null, folderParent)
     }))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
 export function generateViewInventoryReport(model: Model): ViewInventoryRow[] {
+  const folderParent = buildFolderParentIndex(model);
+  const viewParentFolder = buildViewParentFolderIndex(model);
   return Object.values(model.views)
     .map((v) => {
       const vp = getViewpointById(v.viewpointId) ?? VIEWPOINTS.find((x) => x.id === v.viewpointId);
@@ -109,7 +103,7 @@ export function generateViewInventoryReport(model: Model): ViewInventoryRow[] {
         name: v.name,
         viewpoint: vp?.name ?? v.viewpointId,
         documentation: v.documentation ?? '',
-        folderPath: folderPath(model, findFolderContainingView(model, v.id))
+        folderPath: folderPath(model, viewParentFolder.get(v.id) ?? null, folderParent)
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));

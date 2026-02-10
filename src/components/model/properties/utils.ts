@@ -1,4 +1,5 @@
 import type { Folder, Model, Relationship } from '../../../domain';
+import { getFolderPathLabel } from '../../../domain';
 
 export function getElementLabel(model: Model, elementId: string): string {
   const el = model.elements[elementId];
@@ -27,21 +28,7 @@ export function findFolderByKind(model: Model, kind: Folder['kind']): Folder {
 }
 
 export function folderPathLabel(model: Model, folderId: string): string {
-  const start = model.folders[folderId];
-  if (!start) return folderId;
-
-  const parts: string[] = [];
-  const visited = new Set<string>();
-  let current: Folder | undefined = start;
-
-  while (current && !visited.has(current.id)) {
-    visited.add(current.id);
-    parts.unshift(current.name);
-    if (!current.parentId) break;
-    current = model.folders[current.parentId];
-  }
-
-  return parts.join(' / ');
+  return getFolderPathLabel(model, folderId);
 }
 
 export function findFolderContaining(model: Model, kind: 'element' | 'view', id: string): string | null {

@@ -36,4 +36,8 @@ export * from './sanitize/persistedTaggedValues';
 export * from './containment/containment';
 export * from './containment/applyContainmentInvariants';
 
+export * from './indexes/paths';
+export * from './indexes/containmentPaths';
+export * from './indexes/uiIndexes';
+
 export * from './uml/members';

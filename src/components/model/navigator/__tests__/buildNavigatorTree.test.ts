@@ -72,4 +72,30 @@ describe('buildNavigatorTreeData', () => {
     // Ensure owned views are not rendered as top-level folder views.
     expect(nodes.some((n) => n.kind === 'view' && (n.viewId === owned1.id || n.viewId === owned2.id))).toBe(false);
   });
+
+  test('renders semantically nested elements under their parent element (containment)', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const rootId = Object.values(model.folders).find((f) => f.kind === 'root')!.id;
+
+    const parent = createElement({ id: 'p', name: 'Parent', layer: 'Business', type: 'BusinessActor' });
+    const child = createElement({ id: 'c', name: 'Child', layer: 'Business', type: 'BusinessRole', parentElementId: parent.id });
+    const sibling = createElement({ id: 's', name: 'Sibling', layer: 'Business', type: 'BusinessRole' });
+
+    model.elements[parent.id] = parent;
+    model.elements[child.id] = child;
+    model.elements[sibling.id] = sibling;
+    model.folders[rootId].elementIds.push(parent.id, child.id, sibling.id);
+
+    const nodes = buildNavigatorTreeData({ model, rootFolderId: rootId, searchTerm: '' });
+
+    // Child should not appear at top level.
+    expect(nodes.some((n) => n.kind === 'element' && n.elementId === child.id)).toBe(false);
+
+    const parentNode = nodes.find((n) => n.kind === 'element' && n.elementId === parent.id);
+    expect(parentNode).toBeTruthy();
+    expect(parentNode!.children?.some((n) => n.kind === 'element' && n.elementId === child.id)).toBe(true);
+
+    // Sibling remains top-level.
+    expect(nodes.some((n) => n.kind === 'element' && n.elementId === sibling.id)).toBe(true);
+  });
 });

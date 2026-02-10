@@ -38,6 +38,8 @@ type Props = {
   onMoveViewToFolder?: (viewId: string, targetFolderId: string) => void;
   /** Optional handler: center a view under an element when dropped on an element in the tree. */
   onMoveViewToElement?: (viewId: string, targetElementId: string) => void;
+  /** Optional handler: move an element under another element (semantic containment) when dropped on an element in the tree. */
+  onMoveElementToElement?: (elementId: string, targetElementId: string) => void;
   /** Optional handler: move a folder under another folder when dropped on a folder in the tree. */
   onMoveFolderToFolder?: (folderId: string, targetFolderId: string) => void;
 };
@@ -63,6 +65,7 @@ export function ModelNavigatorTree({
   onMoveElementToFolder,
   onMoveViewToFolder,
   onMoveViewToElement,
+  onMoveElementToElement,
   onMoveFolderToFolder
 }: Props) {
   const treeWrapRef = useRef<HTMLDivElement | null>(null);
@@ -72,6 +75,7 @@ export function ModelNavigatorTree({
     onMoveElementToFolder,
     onMoveViewToFolder,
     onMoveViewToElement,
+    onMoveElementToElement,
     onMoveFolderToFolder
   });
 

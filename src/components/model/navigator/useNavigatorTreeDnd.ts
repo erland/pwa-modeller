@@ -20,6 +20,8 @@ type Options = {
   onMoveViewToFolder?: (viewId: string, targetFolderId: string) => void;
   /** Optional handler: center a view under an element when dropped on an element in the tree. */
   onMoveViewToElement?: (viewId: string, targetElementId: string) => void;
+  /** Optional handler: move an element under another element (semantic containment) when dropped on an element in the tree. */
+  onMoveElementToElement?: (elementId: string, targetElementId: string) => void;
   /** Optional handler: move a folder under another folder when dropped on a folder in the tree. */
   onMoveFolderToFolder?: (folderId: string, targetFolderId: string) => void;
 };
@@ -35,6 +37,7 @@ export function useNavigatorTreeDnd({
   onMoveElementToFolder,
   onMoveViewToFolder,
   onMoveViewToElement,
+  onMoveElementToElement,
   onMoveFolderToFolder
 }: Options) {
   const currentDropElRef = useRef<HTMLElement | null>(null);
@@ -51,7 +54,7 @@ export function useNavigatorTreeDnd({
     };
 
     const onDragOver = (e: DragEvent) => {
-      if (!onMoveElementToFolder && !onMoveViewToFolder && !onMoveFolderToFolder && !onMoveViewToElement) return;
+      if (!onMoveElementToFolder && !onMoveViewToFolder && !onMoveFolderToFolder && !onMoveViewToElement && !onMoveElementToElement) return;
       if (!isMaybeSupportedDrag(e.dataTransfer)) {
         clearHighlight();
         return;
@@ -71,8 +74,13 @@ export function useNavigatorTreeDnd({
         const types = Array.from(e.dataTransfer?.types ?? []);
         const isElementRow = row.dataset.kind === 'element';
         if (isElementRow) {
-          // If we can see it's an element/folder drag, reject.
-          if (types.includes(DND_ELEMENT_MIME) || types.includes(DND_FOLDER_MIME)) {
+          // Element rows can accept view drops (center view) and optionally element drops (reparent).
+          if (types.includes(DND_FOLDER_MIME)) {
+            clearHighlight();
+            return;
+          }
+
+          if (types.includes(DND_ELEMENT_MIME) && !onMoveElementToElement) {
             clearHighlight();
             return;
           }
@@ -101,7 +109,7 @@ export function useNavigatorTreeDnd({
     };
 
     const onDrop = (e: DragEvent) => {
-      if (!onMoveElementToFolder && !onMoveViewToFolder && !onMoveFolderToFolder && !onMoveViewToElement) return;
+      if (!onMoveElementToFolder && !onMoveViewToFolder && !onMoveFolderToFolder && !onMoveViewToElement && !onMoveElementToElement) return;
 
       const elementId = parseDraggedElementId(e.dataTransfer);
       const viewId = parseDraggedViewId(e.dataTransfer);
@@ -114,6 +122,23 @@ export function useNavigatorTreeDnd({
       const elementIdTarget = elementRow?.dataset.elementid;
 
       clearHighlight();
+
+      // Allow dropping an element onto an element to reparent (semantic containment).
+      if (elementId && elementIdTarget && onMoveElementToElement) {
+        if (elementId === elementIdTarget) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dndLog('tree element drop (element)', { elementId, elementIdTarget, types: Array.from(e.dataTransfer?.types ?? []) });
+        try {
+          if (window.confirm('Nest this element under the target element?')) {
+            onMoveElementToElement(elementId, elementIdTarget);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          window.alert(msg);
+        }
+        return;
+      }
 
       // Allow dropping a view onto an element to center the view under that element.
       if (viewId && elementIdTarget && onMoveViewToElement) {
@@ -196,5 +221,5 @@ export function useNavigatorTreeDnd({
       document.removeEventListener('dragend', onDragEnd, true);
       clearHighlight();
     };
-  }, [treeWrapRef, onMoveElementToFolder, onMoveViewToFolder, onMoveFolderToFolder, onMoveViewToElement]);
+  }, [treeWrapRef, onMoveElementToFolder, onMoveViewToFolder, onMoveFolderToFolder, onMoveViewToElement, onMoveElementToElement]);
 }

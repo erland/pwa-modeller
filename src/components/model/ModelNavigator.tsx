@@ -130,6 +130,9 @@ export function ModelNavigator({ selection, onSelect }: Props) {
           onMoveViewToElement={(viewId, targetElementId) => {
             modelStore.moveViewToElement(viewId, targetElementId);
           }}
+          onMoveElementToElement={(elementId, targetElementId) => {
+            modelStore.moveElementToParent(elementId, targetElementId);
+          }}
           onMoveFolderToFolder={(folderId, targetFolderId) => {
             modelStore.moveFolderToFolder(folderId, targetFolderId);
           }}

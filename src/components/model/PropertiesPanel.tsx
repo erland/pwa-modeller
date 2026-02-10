@@ -58,6 +58,8 @@ export function PropertiesPanel({ selection, onSelect, onEditModelProps, activeV
     setBpmnDataObjectReferenceRef: (refId, dataObjectId) => modelStore.setBpmnDataObjectReferenceRef(refId, dataObjectId),
     setBpmnDataStoreReferenceRef: (refId, dataStoreId) => modelStore.setBpmnDataStoreReferenceRef(refId, dataStoreId),
     moveElementToFolder: (elementId, folderId) => modelStore.moveElementToFolder(elementId, folderId),
+    moveElementToParent: (childId, parentId) => modelStore.moveElementToParent(childId, parentId),
+    detachElementToRoot: (childId) => modelStore.detachElementToRoot(childId),
     deleteElement: (elementId) => modelStore.deleteElement(elementId),
 
     updateRelationship: (relationshipId, patch) => modelStore.updateRelationship(relationshipId, patch),

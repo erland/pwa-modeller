@@ -163,6 +163,25 @@ body {
   cursor: pointer;
 }
 
+
+.linkButton {
+  padding: 2px 4px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.9;
+}
+
+.linkButton:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
 .shellButton:disabled {
   opacity: 0.55;
   cursor: not-allowed;

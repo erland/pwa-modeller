@@ -35,6 +35,10 @@ export type ModelActions = {
   setBpmnDataStoreReferenceRef: (refId: string, dataStoreId: string | null) => void;
 
   moveElementToFolder: (elementId: string, folderId: string) => void;
+  /** Semantic containment: set/clear parent element (nested elements). */
+  moveElementToParent: (childId: string, parentId: string | null) => void;
+  /** Convenience: detach semantic containment to root. */
+  detachElementToRoot: (childId: string) => void;
   deleteElement: (elementId: string) => void;
 
   updateRelationship: (relationshipId: string, patch: Partial<Relationship> & { type?: RelationshipType }) => void;

@@ -11,6 +11,7 @@ import { ExternalIdsSection } from '../sections/ExternalIdsSection';
 import { OverlayTagsSection } from '../sections/OverlayTagsSection';
 import { TaggedValuesSection } from '../sections/TaggedValuesSection';
 import { ElementBasicsSection } from './sections/ElementBasicsSection';
+import { ElementContainmentSection } from './sections/ElementContainmentSection';
 import { ElementRelationshipsSection } from './sections/ElementRelationshipsSection';
 import { ElementTraceSection } from './sections/ElementTraceSection';
 import { useElementRelationships } from './hooks/useElementRelationships';
@@ -70,6 +71,14 @@ export function CommonElementProperties({ model, elementId, actions, elementFold
         elementFolders={elementFolders}
         elementTypeOptions={elementTypeOptions}
         kindTypeLabelById={kindTypeLabelById}
+      />
+
+      <ElementContainmentSection
+        model={model}
+        elementId={el.id}
+        actions={actions}
+        currentFolderId={currentFolderId}
+        onSelect={onSelectSafe}
       />
 
       {notationSections ? <PropertiesPanelHost sections={notationSections} /> : null}

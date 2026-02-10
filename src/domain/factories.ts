@@ -110,6 +110,7 @@ export function createElement(input: CreateElementInput): Element {
 
   return {
     id: input.id ?? createId('el'),
+    parentElementId: input.parentElementId && input.parentElementId.trim() ? input.parentElementId.trim() : undefined,
     kind,
     name: input.name.trim(),
     layer: input.layer,

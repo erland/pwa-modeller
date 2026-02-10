@@ -261,6 +261,8 @@ export interface ViewObject {
 
 export interface Element extends HasTaggedValues, HasExternalIds {
   id: string;
+  /** Optional semantic containment (canonical parent Element). */
+  parentElementId?: string;
   /** Optional semantic kind; if omitted, inferred from `type` (defaults to 'archimate'). */
   kind?: ModelKind;
   name: string;

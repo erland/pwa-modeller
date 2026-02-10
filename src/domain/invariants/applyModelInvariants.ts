@@ -1,4 +1,5 @@
 import type { Model } from '../types';
+import { applyContainmentInvariants } from '../containment/applyContainmentInvariants';
 import { ensureModelViewConnections } from '../viewConnections';
 
 /**
@@ -9,7 +10,8 @@ import { ensureModelViewConnections } from '../viewConnections';
  * sanitization and migrations.
  */
 export function applyModelInvariants(model: Model): Model {
+  const withContainment = applyContainmentInvariants(model);
   // Ensure per-view materialized connections match the relationships currently
   // considered visible in each view.
-  return ensureModelViewConnections(model);
+  return ensureModelViewConnections(withContainment);
 }

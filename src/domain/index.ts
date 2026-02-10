@@ -33,4 +33,7 @@ export * from './viewConnections';
 export * from './invariants/applyModelInvariants';
 export * from './sanitize/persistedTaggedValues';
 
+export * from './containment/containment';
+export * from './containment/applyContainmentInvariants';
+
 export * from './uml/members';

@@ -329,6 +329,7 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     // v9 introduces view.kind (diagram notation).
     // v10 normalizes BPMN attrs for non-activity containers and global defs.
     // v11 renames UML attribute datatype fields (type/typeName/typeRef -> dataTypeName/dataTypeRef).
-    schemaVersion: 11
+    // v12 introduces Element.parentElementId (nested elements / containment).
+    schemaVersion: 12
   };
 }

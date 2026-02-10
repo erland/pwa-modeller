@@ -421,6 +421,37 @@ function migrateV10ToV11(model: Model): Model {
   return model;
 }
 
+/**
+ * v11 -> v12 migration:
+ * - Introduce Element.parentElementId (nested elements / containment).
+ *
+ * Older models simply lack the field; this migration primarily bumps schemaVersion
+ * and normalizes any existing parentElementId values if present.
+ */
+function migrateV11ToV12(model: Model): Model {
+  for (const eid of Object.keys(model.elements)) {
+    const el: any = (model.elements as any)[eid];
+    if (!el || typeof el !== 'object') continue;
+
+    const v = el.parentElementId;
+    if (v == null) {
+      delete el.parentElementId;
+      continue;
+    }
+
+    if (typeof v === 'string') {
+      const t = v.trim();
+      if (t) el.parentElementId = t;
+      else delete el.parentElementId;
+    } else {
+      delete el.parentElementId;
+    }
+  }
+
+  model.schemaVersion = 12;
+  return model;
+}
+
 
 export type MigrationResult = {
   model: Model;
@@ -488,6 +519,12 @@ export function runMigrations(model: Model): MigrationResult {
   if (v < 11) {
     model = migrateV10ToV11(model);
     notes.push('migrate v10 -> v11');
+  }
+
+  if (v < 12) {
+    model = migrateV11ToV12(model);
+    notes.push('migrate v11 -> v12');
+    v = getSchemaVersion(model);
   }
 
   return { model, migratedFromVersion, notes };

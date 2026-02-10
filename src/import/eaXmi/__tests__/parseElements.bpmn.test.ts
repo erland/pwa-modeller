@@ -41,4 +41,18 @@ describe('eaXmi BPMN element parsing (Step 5A)', () => {
     // No warnings expected for the fixture.
     expect(report.warnings).toEqual([]);
   });
+
+  test('maps BPMN Activity profile tag to a supported BPMN activity element type', () => {
+    const xml = readFixture('ea-xmi-bpmn-activity.xml');
+    const doc = parseXml(xml);
+    const report = createImportReport('ea-xmi-uml');
+
+    const { elements } = parseEaXmiBpmnProfileElementsToElements(doc, report);
+
+    const byId = new Map(elements.map((e) => [e.id, e]));
+
+    // EA exports "Activity" in BPMN profiles for generic tasks.
+    expect(byId.get('BA1')?.type).toBe('bpmn.task');
+    expect(byId.get('BA1')?.name).toBe('Work');
+  });
 });

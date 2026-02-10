@@ -234,11 +234,34 @@ const BPMN_ELEMENT_BY_KEY: Readonly<Record<string, QualifiedElementType>> = (() 
   out[keyify('participant')] = 'bpmn.pool';
   out[keyify('pool')] = 'bpmn.pool';
 
+  // EA often exports BPMN nodes with generic metaclasses/stereotypes like "Activity"
+  // even when the diagram is BPMN. Map those to the closest supported BPMN node.
+  out[keyify('activity')] = 'bpmn.task';
+  out[keyify('callactivity')] = 'bpmn.callActivity';
+  out[keyify('subprocess')] = 'bpmn.subProcess';
+
+  // Task specializations that may appear in EA exports but are not distinct types in the app.
+  // Treat them as generic tasks.
+  out[keyify('receivetask')] = 'bpmn.task';
+  out[keyify('sendtask')] = 'bpmn.task';
+  out[keyify('businessruletask')] = 'bpmn.task';
+  out[keyify('scripttask')] = 'bpmn.scriptTask';
+  out[keyify('servicetask')] = 'bpmn.serviceTask';
+  out[keyify('usertask')] = 'bpmn.userTask';
+  out[keyify('manualtask')] = 'bpmn.manualTask';
+
   // Gateways are often exported as ExclusiveGateway rather than GatewayExclusive.
   out[keyify('exclusivegateway')] = 'bpmn.gatewayExclusive';
   out[keyify('parallelgateway')] = 'bpmn.gatewayParallel';
   out[keyify('inclusivegateway')] = 'bpmn.gatewayInclusive';
   out[keyify('eventbasedgateway')] = 'bpmn.gatewayEventBased';
+
+  // Artifacts / data (EA sometimes omits "Reference" suffixes)
+  out[keyify('dataobject')] = 'bpmn.dataObjectReference';
+  out[keyify('dataobjectreference')] = 'bpmn.dataObjectReference';
+  out[keyify('datastore')] = 'bpmn.dataStoreReference';
+  out[keyify('datastorereference')] = 'bpmn.dataStoreReference';
+  out[keyify('textannotation')] = 'bpmn.textAnnotation';
 
   return out;
 })();

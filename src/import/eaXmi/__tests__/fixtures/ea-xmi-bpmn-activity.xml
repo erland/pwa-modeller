@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI
+  xmi:version="2.1"
+  xmlns:xmi="http://schema.omg.org/spec/XMI/2.1"
+  xmlns:uml="http://www.omg.org/spec/UML/20131001"
+  xmlns:BPMN2="http://www.sparxsystems.com/profiles/BPMN2.0/1.0"
+>
+  <uml:Model xmi:id="M1" name="BPMN Activity Fixture">
+    <BPMN2:StartEvent xmi:id="BS1" name="Start" />
+    <BPMN2:Activity xmi:id="BA1" name="Work" />
+    <BPMN2:EndEvent xmi:id="BE1" name="End" />
+
+    <BPMN2:SequenceFlow xmi:id="BF1" name="Flow 1" source="BS1" target="BA1" />
+    <BPMN2:SequenceFlow xmi:id="BF2" name="Flow 2" source="BA1" target="BE1" />
+  </uml:Model>
+</xmi:XMI>

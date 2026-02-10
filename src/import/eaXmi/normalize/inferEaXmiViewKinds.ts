@@ -8,18 +8,40 @@ import type { IRModel, IRView } from '../../framework/ir';
  *
  * Result is stored on `view.meta.viewKind` and consumed by applyViews().
  */
-export function inferEaXmiViewKinds(views: IRView[] | undefined, elements: IRModel['elements'] | undefined): IRView[] | undefined {
+export function inferEaXmiViewKinds(
+  views: IRView[] | undefined,
+  elements: IRModel['elements'] | undefined,
+  relationships: IRModel['relationships'] | undefined
+): IRView[] | undefined {
   if (!views) return views;
-  if (!elements || elements.length === 0) return views;
+  const hasElements = !!elements && elements.length > 0;
+  const hasRels = !!relationships && relationships.length > 0;
+  if (!hasElements && !hasRels) return views;
 
-  const typeById: Record<string, string> = {};
-  for (const e of elements) {
-    if (typeof e?.id === 'string' && typeof (e as any).type === 'string') {
-      typeById[e.id] = (e as any).type;
-    }
+  // EA XMI IR elements/relationships normally have an explicit `kind` field (archimate/uml/bpmn).
+  // The `type` field is not reliable for kind inference because ArchiMate types are e.g. "ApplicationComponent"
+  // (no "archimate." prefix), whereas UML/BPMN often use prefixed types.
+  const kindByElementId: Record<string, 'archimate' | 'uml' | 'bpmn'> = {};
+  const typeByElementId: Record<string, string> = {};
+  for (const e of elements ?? []) {
+    const id = typeof e?.id === 'string' ? e.id : undefined;
+    if (!id) continue;
+    const k = (e as any).kind;
+    if (k === 'archimate' || k === 'uml' || k === 'bpmn') kindByElementId[id] = k;
+    if (typeof (e as any).type === 'string') typeByElementId[id] = (e as any).type;
   }
 
-  const scoreKind = (t: string): 'archimate' | 'uml' | 'bpmn' | undefined => {
+  const kindByRelationshipId: Record<string, 'archimate' | 'uml' | 'bpmn'> = {};
+  const typeByRelationshipId: Record<string, string> = {};
+  for (const r of relationships ?? []) {
+    const id = typeof r?.id === 'string' ? r.id : undefined;
+    if (!id) continue;
+    const k = (r as any).kind;
+    if (k === 'archimate' || k === 'uml' || k === 'bpmn') kindByRelationshipId[id] = k;
+    if (typeof (r as any).type === 'string') typeByRelationshipId[id] = (r as any).type;
+  }
+
+  const scoreKindFromType = (t: string): 'archimate' | 'uml' | 'bpmn' | undefined => {
     const tt = (t ?? '').toLowerCase();
     if (tt.startsWith('bpmn.')) return 'bpmn';
     if (tt.startsWith('uml.')) return 'uml';
@@ -44,21 +66,35 @@ export function inferEaXmiViewKinds(views: IRView[] | undefined, elements: IRMod
 
   for (const v of views) {
     const counts = { archimate: 0, uml: 0, bpmn: 0 } as Record<'archimate'|'uml'|'bpmn', number>;
+    let evidence = 0;
 
     for (const n of v.nodes ?? []) {
       const elId = (n as any).elementId;
       if (typeof elId !== 'string') continue;
-      const t = typeById[elId];
-      if (!t) continue;
-      const k = scoreKind(t);
-      if (k) counts[k] += 1;
+      const k = kindByElementId[elId] ?? scoreKindFromType(typeByElementId[elId] ?? '');
+      if (!k) continue;
+      counts[k] += 1;
+      evidence += 1;
     }
 
+    for (const c of v.connections ?? []) {
+      const relId = (c as any).relationshipId;
+      if (typeof relId !== 'string') continue;
+      const k = kindByRelationshipId[relId] ?? scoreKindFromType(typeByRelationshipId[relId] ?? '');
+      if (!k) continue;
+      counts[k] += 1;
+      evidence += 1;
+    }
+
+
     // Gentle hinting from EA diagram type if present (but do not override strong content signal).
-    const diaType = (v.viewpoint ?? (v.meta as any)?.eaDiagramType ?? '').toString().toLowerCase();
-    if (diaType.includes('bpmn')) counts.bpmn += 0.5;
-    if (diaType.includes('uml')) counts.uml += 0.5;
-    if (diaType.includes('archimate')) counts.archimate += 0.25;
+    if (evidence > 0) {
+      const diaType = ((v.meta as any)?.eaDiagramType ?? v.viewpoint ?? '').toString().toLowerCase();
+      if (diaType.includes('bpmn')) counts.bpmn += 0.5;
+      if (diaType.includes('uml')) counts.uml += 0.5;
+      if (diaType.includes('archimate')) counts.archimate += 0.25;
+    }
+
 
     const inferred = decide(counts);
 

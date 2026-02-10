@@ -1,9 +1,80 @@
 import type { ApplyImportContext } from '../applyImportTypes';
 import type { Ref, View, ViewNodeLayout, ViewObject, ViewObjectType, ViewRelationshipLayout } from '../../../domain';
 import { createId, createView, createViewObject, materializeViewConnectionsForView } from '../../../domain';
+import { getViewpointById } from '../../../domain/config/viewpoints';
 import { modelStore } from '../../../store';
 import { pushWarning, resolveViewpointId, toExternalIds, toTaggedValues } from '../applyImportHelpers';
 import { fixViewZOrder } from '../postprocess/fixViewZOrder';
+
+type Kind = 'archimate' | 'uml' | 'bpmn';
+
+function kindForViewpointId(viewpointId: string): Kind | undefined {
+  const vp = getViewpointById(viewpointId);
+  if (!vp) return undefined;
+
+  // Heuristic: our built-in UML/BPMN viewpoints use element type prefixes.
+  if ((vp.allowedElementTypes ?? []).some((t) => t.startsWith('bpmn.'))) return 'bpmn';
+  if ((vp.allowedElementTypes ?? []).some((t) => t.startsWith('uml.'))) return 'uml';
+  return 'archimate';
+}
+
+function normalizeViewpointIdForKind(currentViewpointId: string, kind: Kind): string {
+  const existingKind = kindForViewpointId(currentViewpointId);
+  if (existingKind === kind) return currentViewpointId;
+
+  // Unknown viewpoint or mismatched viewpoint: set a safe default for the view kind.
+  return defaultViewpointIdForKind(kind);
+}
+
+
+function defaultViewpointIdForKind(kind: Kind): string {
+  switch (kind) {
+    case 'uml':
+      return 'uml-class';
+    case 'bpmn':
+      return 'bpmn-process';
+    case 'archimate':
+    default:
+      return 'layered';
+  }
+}
+
+function inferViewKindFromMaterializedContent(model: any, view: View): Kind | undefined {
+  let archimate = 0;
+  let uml = 0;
+  let bpmn = 0;
+
+  for (const n of view.layout?.nodes ?? []) {
+    const elementId = (n as any).elementId as string | undefined;
+    if (!elementId) continue;
+    const k = model?.elements?.[elementId]?.kind as Kind | undefined;
+    if (k === 'archimate') archimate++;
+    else if (k === 'uml') uml++;
+    else if (k === 'bpmn') bpmn++;
+  }
+
+  for (const r of view.layout?.relationships ?? []) {
+    const relationshipId = (r as any).relationshipId as string | undefined;
+    if (!relationshipId) continue;
+    const k = model?.relationships?.[relationshipId]?.kind as Kind | undefined;
+    if (k === 'archimate') archimate++;
+    else if (k === 'uml') uml++;
+    else if (k === 'bpmn') bpmn++;
+  }
+
+  const total = archimate + uml + bpmn;
+  if (total === 0) return undefined;
+
+  const max = Math.max(archimate, uml, bpmn);
+  const winners: Kind[] = [];
+  if (bpmn === max) winners.push('bpmn');
+  if (uml === max) winners.push('uml');
+  if (archimate === max) winners.push('archimate');
+
+  // Tie-break only when we have actual evidence.
+  // Prefer BPMN over UML over ArchiMate as it tends to be exported via UML base types in EA.
+  return winners[0];
+}
 
 export function applyViews(ctx: ApplyImportContext): void {
   const { ir, sourceSystem, report, inferredViewKind, rootFolderId, mappings } = ctx;
@@ -189,6 +260,26 @@ const view: View = {
       }
     } catch (e) {
       pushWarning(report, `Failed to normalize z-order in view "${v.name}": ${(e as Error).message}`);
+    }
+
+    // Finalize: infer view kind from the *materialized* view content (resolved internal element/relationship kinds).
+    // This corrects cases where EA exports misleading diagram type metadata.
+    try {
+      const latestModel = modelStore.getState().model;
+      const latestView = latestModel?.views[internalId];
+      if (latestModel && latestView) {
+        const inferred = inferViewKindFromMaterializedContent(latestModel, latestView);
+        const effectiveKind: Kind = inferred ?? (latestView.kind as Kind);
+        const nextViewpointId = normalizeViewpointIdForKind(latestView.viewpointId, effectiveKind);
+
+        // If inferred kind differs, update kind. Also normalize viewpoint id even when kind didn't change,
+        // because some imports stamp 'layered' (ArchiMate) on UML/BPMN views.
+        if (effectiveKind !== (latestView.kind as Kind) || nextViewpointId !== latestView.viewpointId) {
+          modelStore.updateView(internalId, { kind: effectiveKind, viewpointId: nextViewpointId });
+        }
+      }
+    } catch (e) {
+      pushWarning(report, `Failed to infer view kind for view "${v.name}": ${(e as Error).message}`);
     }
 
   }

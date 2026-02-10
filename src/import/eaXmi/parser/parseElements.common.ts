@@ -103,6 +103,43 @@ export function buildEaExtensionDocumentationIndex(doc: Document): Map<string, s
   return out;
 }
 
+function extractEaExtensionOwnerRef(extEl: Element): string | undefined {
+  // EA vendor-extension record example:
+  // <element xmi:idref="EAID_…"> <model owner="EAID_PARENT" …/> </element>
+  // Some exports use "parent" instead of "owner".
+  for (const ch of Array.from(extEl.children)) {
+    if (localName(ch) !== 'model') continue;
+    const v =
+      attrAny(ch, ['owner', 'parent', 'ownerid', 'ownerId', 'parentid', 'parentId', 'owner_id', 'parent_id'])?.trim();
+    if (v) return v;
+  }
+  return undefined;
+}
+
+/**
+ * Build an index of EA semantic ownership (element containment) based on EA's XMI vendor extension.
+ *
+ * Sparx EA often stores ownership for browser nesting as:
+ *  <xmi:Extension> … <elements><element xmi:idref="CHILD"><model owner="PARENT"/></element></elements> …
+ */
+export function buildEaExtensionElementOwnerIndex(doc: Document): Map<string, string> {
+  const out = new Map<string, string>();
+  const all = doc.getElementsByTagName('*');
+  for (let i = 0; i < all.length; i++) {
+    const el = all.item(i);
+    if (!el) continue;
+    if (!isInsideXmiExtension(el)) continue;
+    if (localName(el) !== 'element') continue;
+
+    const idref = attrAny(el, ['xmi:idref', 'idref'])?.trim();
+    if (!idref) continue;
+
+    const owner = extractEaExtensionOwnerRef(el);
+    if (owner) out.set(idref, owner);
+  }
+  return out;
+}
+
 export function metaClassFromXmiType(xmiType: string | undefined): string | undefined {
   const t = (xmiType ?? '').trim();
   if (!t) return undefined;

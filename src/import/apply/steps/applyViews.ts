@@ -1,5 +1,5 @@
 import type { ApplyImportContext } from '../applyImportTypes';
-import type { View, ViewNodeLayout, ViewObject, ViewObjectType, ViewRelationshipLayout } from '../../../domain';
+import type { Ref, View, ViewNodeLayout, ViewObject, ViewObjectType, ViewRelationshipLayout } from '../../../domain';
 import { createId, createView, createViewObject, materializeViewConnectionsForView } from '../../../domain';
 import { modelStore } from '../../../store';
 import { pushWarning, resolveViewpointId, toExternalIds, toTaggedValues } from '../applyImportHelpers';
@@ -19,13 +19,27 @@ export function applyViews(ctx: ApplyImportContext): void {
 
     const viewpointId = resolveViewpointId(v.viewpoint);
 
+    // Optional view ownership (used e.g. by EA XMI imports where diagrams are nested under elements in the browser tree).
+    // Importers may place an external element id in v.meta. We resolve it through mappings and set View.ownerRef.
+    const metaOwner = v.meta && typeof v.meta === 'object' ? (v.meta as any).owningElementId : undefined;
+    let ownerRef: Ref | undefined;
+    if (typeof metaOwner === 'string' && metaOwner.trim()) {
+      const internalOwner = mappings.elements[metaOwner.trim()];
+      if (internalOwner) {
+        const modelNow = modelStore.getState().model;
+        const kind = modelNow?.elements[internalOwner]?.kind ?? inferredViewKind;
+        ownerRef = { kind, id: internalOwner };
+      }
+    }
+
     const view: View = {
       ...createView({
         id: internalId,
         name: v.name ?? 'View',
         kind: inferredViewKind,
         viewpointId,
-        documentation: v.documentation
+        documentation: v.documentation,
+        ...(ownerRef ? { ownerRef } : {})
       }),
       externalIds,
       taggedValues

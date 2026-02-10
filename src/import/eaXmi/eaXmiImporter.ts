@@ -10,6 +10,7 @@ import {
   parseEaXmiBpmnProfileElementsToElements,
   parseEaXmiClassifiersToElements,
 } from './parseElements';
+import { buildEaExtensionElementOwnerIndex } from './parser/parseElements.common';
 import { parseEaXmiArchiMateProfileRelationships, parseEaXmiBpmnProfileRelationships, parseEaXmiRelationships } from './parseRelationships';
 import { parseEaXmiArchiMateConnectorRelationships } from './parseEaConnectorsArchiMateRelationships';
 import { parseEaXmiUmlConnectorRelationships } from './parseEaConnectorsUmlRelationships';
@@ -168,7 +169,17 @@ export const eaXmiImporter: Importer<IRModel> = {
       }
       elById.set(e.id, e);
     }
-    const elements = Array.from(elById.values());
+
+    // Step 5B: semantic ownership / containment (EA browser nesting)
+    // EA often stores element ownership in the vendor extension (<xmi:Extension>), not in the UML tree.
+    // We translate <element xmi:idref="CHILD"><model owner|parent="PARENT"/></element> into IR.parentElementId.
+    const ownerByIdRef = buildEaExtensionElementOwnerIndex(doc);
+    const elements = Array.from(elById.values()).map((e) => {
+      const owner = ownerByIdRef.get(e.id);
+      if (!owner) return e;
+      // Keep as external id; later apply step will resolve via mappings and will warn/drop if missing.
+      return { ...e, parentElementId: owner };
+    });
 
     // Step B1a: discover diagrams (views) from EA's XMI extension.
     // We do this early because some export files are "mixed" (contain ArchiMate/BPMN stereotypes alongside UML diagrams).

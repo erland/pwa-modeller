@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xmi:XMI
+  xmlns:xmi="http://schema.omg.org/spec/XMI/2.1"
+  xmlns:uml="http://www.omg.org/spec/UML/20131001"
+  xmlns:ArchiMate3="http://www.sparxsystems.com/profiles/ArchiMate3/1.0">
+  <xmi:Extension extender="Enterprise Architect">
+    <elements>
+      <element xmi:idref="AChild">
+        <model owner="AParent" />
+      </element>
+    </elements>
+    <diagrams>
+      <diagram xmi:id="D1" name="Owned diagram" type="ArchiMate">
+        <model parent="AParent" />
+      </diagram>
+    </diagrams>
+  </xmi:Extension>
+  <uml:Model xmi:id="M1" name="Model">
+    <ArchiMate3:ArchiMate_ApplicationComponent xmi:id="AParent" name="Archimate Application 1" />
+    <ArchiMate3:ArchiMate_ApplicationComponent xmi:id="AChild" name="Archimate Subsystem 1" />
+  </uml:Model>
+</xmi:XMI>

@@ -108,6 +108,22 @@ function pickOwningPackageRef(el: Element): string | undefined {
   return undefined;
 }
 
+function pickOwningElementRef(el: Element): string | undefined {
+  // EA may store owning element as <model parent="EAID_…" /> or occasionally as a <parent xmi:idref="…"/> node.
+  for (const ch of Array.from(el.children)) {
+    const ln = localName(ch);
+    if (ln === 'parent' || ln === 'owner') {
+      const ref = attrAny(ch, ['xmi:idref', 'idref', 'ref', 'href', 'xmi:id'])?.trim();
+      if (ref) return ref;
+    }
+    if (ln === 'model') {
+      const v = attrAny(ch, ['parent', 'owner', 'parentid', 'parentId', 'ownerid', 'ownerId'])?.trim();
+      if (v) return v;
+    }
+  }
+  return undefined;
+}
+
 function pickNotes(el: Element): string | undefined {
   const direct = attrAny(el, [...EA_DIAGRAM_NOTES_ATTRS])?.trim();
   if (direct) return direct;
@@ -158,6 +174,7 @@ export function parseEaDiagramCatalog(doc: Document, report: ImportReport): Pars
     const name = pickDiagramName(el, `Diagram ${views.length + 1}`);
     const diagramType = pickDiagramType(el);
     const owningPackageId = pickOwningPackageRef(el);
+    const owningElementId = pickOwningElementRef(el);
     const notes = pickNotes(el);
 
     views.push({
@@ -173,6 +190,7 @@ export function parseEaDiagramCatalog(doc: Document, report: ImportReport): Pars
         sourceSystem: 'sparx-ea',
         ...(diagramType ? { eaDiagramType: diagramType } : {}),
         ...(owningPackageId ? { owningPackageId } : {}),
+        ...(owningElementId ? { owningElementId } : {}),
       },
     });
   }

@@ -5,15 +5,16 @@
   "description": "Enterprise Architecture Modeling PWA (ArchiMate 3.2) \u2013 MVP",
   "scripts": {
     "dev": "vite",
-    "build": "npm run check:ellipsis && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit && vite build",
+    "build": "npm run check:ellipsis && npm run check:boundaries && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit && vite build",
     "preview": "vite preview",
-    "test": "npm run check:ellipsis && jest",
+    "test": "npm run check:ellipsis && npm run check:boundaries && jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "lint": "eslint .",
+    "lint": "npm run check:boundaries && eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
-    "check:ellipsis": "node scripts/check-no-dotdotdot.mjs"
+    "check:ellipsis": "node scripts/check-no-dotdotdot.mjs",
+    "check:boundaries": "node scripts/check-domain-boundaries.mjs"
   },
   "dependencies": {
     "@react-types/shared": "^3.32.1",

@@ -105,50 +105,10 @@ function nodeRect(n: ViewNodeLayout): { x: number; y: number; w: number; h: numb
 }
 
 
+
 export function createViewSvg(model: Model, viewId: string): string {
   const view = model.views[viewId];
   if (!view) throw new Error(`View not found: ${viewId}`);
-
-  const nodes0 = view.layout?.nodes ?? [];
-  const orderedNodes = [...nodes0]
-    .filter((n) => Boolean(n.elementId || n.connectorId || n.objectId))
-    .sort((a, b) => {
-      const za = typeof a.zIndex === 'number' ? a.zIndex : 0;
-      const zb = typeof b.zIndex === 'number' ? b.zIndex : 0;
-      const ka = a.elementId ?? a.connectorId ?? a.objectId ?? '';
-      const kb = b.elementId ?? b.connectorId ?? b.objectId ?? '';
-      return za - zb || ka.localeCompare(kb);
-    });
-
-  const padding = 20;
-  const b = boundsForNodes(
-    orderedNodes.map((n) => {
-      const { w, h } = nodeSize(n);
-      return { ...n, width: w, height: h };
-    })
-  );
-
-  // Minimum size for empty views.
-  const width = Math.max(640, b.maxX - b.minX + padding * 2);
-  const height = Math.max(420, b.maxY - b.minY + padding * 2);
-  const offsetX = -b.minX + padding;
-  const offsetY = -b.minY + padding;
-
-  // Apply export offset to all nodes.
-  const nodes: ViewNodeLayout[] = orderedNodes.map((n) => ({
-    ...n,
-    x: n.x + offsetX,
-    y: n.y + offsetY,
-    width: nodeSize(n).w,
-    height: nodeSize(n).h,
-  }));
-
-  const nodeByKey = new Map<string, ViewNodeLayout>();
-  for (const n of nodes) {
-    const r = nodeRefFromLayout(n);
-    if (!r) continue;
-    nodeByKey.set(refKey(r), n);
-  }
 
   type RelItem = {
     id: string;
@@ -158,134 +118,218 @@ export function createViewSvg(model: Model, viewId: string): string {
     visual: RelationshipVisual;
   };
 
-  // Group connections by unordered endpoint pair so parallel relationships are offset consistently.
-  const visibleConnections: ViewConnection[] = (view.connections ?? []).filter((c) => {
-    const sKey = refKey({ kind: c.source.kind, id: c.source.id });
-    const tKey = refKey({ kind: c.target.kind, id: c.target.id });
-    return Boolean(nodeByKey.get(sKey) && nodeByKey.get(tKey) && model.relationships[c.relationshipId]);
-  });
+  const padding = 20;
 
-  const groups = new Map<string, ViewConnection[]>();
-  for (const c of visibleConnections) {
-    const a = refKey({ kind: c.source.kind, id: c.source.id });
-    const bKey = refKey({ kind: c.target.kind, id: c.target.id });
-    const groupKey = [a, bKey].sort().join('|');
-    const arr = groups.get(groupKey) ?? [];
-    arr.push(c);
-    groups.set(groupKey, arr);
-  }
+  const getOrderedNodes = (): ViewNodeLayout[] => {
+    const nodes0 = view.layout?.nodes ?? [];
+    return [...nodes0]
+      .filter((n) => Boolean(n.elementId || n.connectorId || n.objectId))
+      .sort((a, b) => {
+        const za = typeof a.zIndex === 'number' ? a.zIndex : 0;
+        const zb = typeof b.zIndex === 'number' ? b.zIndex : 0;
+        const ka = a.elementId ?? a.connectorId ?? a.objectId ?? '';
+        const kb = b.elementId ?? b.connectorId ?? b.objectId ?? '';
+        return za - zb || ka.localeCompare(kb);
+      });
+  };
 
-  const relItems: RelItem[] = [];
-  const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
-  for (const [groupKey, conns] of groups) {
-    // Stable order inside group.
-    const sorted = [...conns].sort((a, b) => a.relationshipId.localeCompare(b.relationshipId) || a.id.localeCompare(b.id));
-    const total = sorted.length;
+  const computeViewport = (orderedNodes: ViewNodeLayout[]): { width: number; height: number; offsetX: number; offsetY: number } => {
+    const b = boundsForNodes(
+      orderedNodes.map((n) => {
+        const { w, h } = nodeSize(n);
+        return { ...n, width: w, height: h };
+      })
+    );
 
-    const parts = groupKey.split('|');
-    const aNode = nodeByKey.get(parts[0]);
-    const bNode = nodeByKey.get(parts[1]);
-    const aC = aNode ? nodeCenter(aNode) : null;
-    const bC = bNode ? nodeCenter(bNode) : null;
+    // Minimum size for empty views.
+    const width = Math.max(640, b.maxX - b.minX + padding * 2);
+    const height = Math.max(420, b.maxY - b.minY + padding * 2);
+    const offsetX = -b.minX + padding;
+    const offsetY = -b.minY + padding;
+    return { width, height, offsetX, offsetY };
+  };
 
-    for (let i = 0; i < sorted.length; i += 1) {
-      const conn = sorted[i];
-      const rel = model.relationships[conn.relationshipId];
-      if (!rel) continue;
+  const translateNodes = (orderedNodes: ViewNodeLayout[], viewport: { offsetX: number; offsetY: number }): ViewNodeLayout[] => {
+    const { offsetX, offsetY } = viewport;
+    return orderedNodes.map((n) => ({
+      ...n,
+      x: n.x + offsetX,
+      y: n.y + offsetY,
+      width: nodeSize(n).w,
+      height: nodeSize(n).h,
+    }));
+  };
 
-      const sNode = nodeByKey.get(refKey({ kind: conn.source.kind, id: conn.source.id }));
-      const tNode = nodeByKey.get(refKey({ kind: conn.target.kind, id: conn.target.id }));
-      if (!sNode || !tNode) continue;
-
-      const sc = nodeCenter(sNode);
-      const tc = nodeCenter(tNode);
-
-      // Prefer border anchors (like in the canvas).
-      const { start, end } = rectAlignedOrthogonalAnchorsWithEndpointAnchors(sNode, tNode, conn.sourceAnchor, conn.targetAnchor);
-
-      // Translate any stored bendpoints.
-      const translatedPoints = conn.points ? conn.points.map((p) => ({ x: p.x + offsetX, y: p.y + offsetY })) : undefined;
-
-      // Centralized routing (straight/orthogonal) using the shared path generator.
-      const sKey = refKey({ kind: conn.source.kind, id: conn.source.id });
-      const tKey = refKey({ kind: conn.target.kind, id: conn.target.id });
-      const obstacles = nodes
-        .filter((n) => {
-          const r = nodeRefFromLayout(n);
-          if (!r) return false;
-          const k = refKey(r);
-          return k !== sKey && k !== tKey;
-        })
-        .map(nodeRect);
-
-      obstaclesById.set(conn.id, obstacles);
-
-      const gridSize = view.formatting?.gridSize;
-      const hints = {
-        ...orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, gridSize),
-        obstacles,
-        obstacleMargin: gridSize ? gridSize / 2 : 10,
-      };
-      let points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end, hints }).points;
-
-      if (conn.route.kind === 'orthogonal') {
-        points = adjustOrthogonalConnectionEndpoints(points, sNode, tNode, { stubLength: gridSize ? gridSize / 2 : 10 });
-      }
-
-      // Parallel relationship offset.
-      if (total > 1) {
-        const spacing = 14;
-        const offsetIndex = i - (total - 1) / 2;
-        const offset = offsetIndex * spacing;
-        const perp = aC && bC ? unitPerp(aC, bC) : unitPerp(sc, tc);
-        points = offsetPolyline(points, perp, offset);
-      }
-
-      const visual = relationshipVisual(rel, (view.kind ?? 'archimate') as 'archimate' | 'uml' | 'bpmn');
-      relItems.push({ id: conn.id, relId: conn.relationshipId, points, label: getRelationshipTypeLabel(rel.type), visual });
+  const buildNodeIndex = (nodes: ViewNodeLayout[]): Map<string, ViewNodeLayout> => {
+    const nodeByKey = new Map<string, ViewNodeLayout>();
+    for (const n of nodes) {
+      const r = nodeRefFromLayout(n);
+      if (!r) continue;
+      nodeByKey.set(refKey(r), n);
     }
-  }
+    return nodeByKey;
+  };
 
-  // Apply cheap lane offsets across all relationships before emitting SVG paths.
-  const laneAdjusted = applyLaneOffsetsSafely(
-    relItems.map((it) => ({ id: it.id, points: it.points })),
-    {
-      gridSize: view.formatting?.gridSize,
-      obstaclesById,
-      obstacleMargin: view.formatting?.gridSize ? view.formatting?.gridSize / 2 : 10,
+  const computeRelationshipItems = (
+    nodes: ViewNodeLayout[],
+    nodeByKey: Map<string, ViewNodeLayout>,
+    viewport: { offsetX: number; offsetY: number }
+  ): { relItems: RelItem[]; obstaclesById: Map<string, Array<{ x: number; y: number; w: number; h: number }>> } => {
+    const { offsetX, offsetY } = viewport;
+
+    // Group connections by unordered endpoint pair so parallel relationships are offset consistently.
+    const visibleConnections: ViewConnection[] = (view.connections ?? []).filter((c) => {
+      const sKey = refKey({ kind: c.source.kind, id: c.source.id });
+      const tKey = refKey({ kind: c.target.kind, id: c.target.id });
+      return Boolean(nodeByKey.get(sKey) && nodeByKey.get(tKey) && model.relationships[c.relationshipId]);
+    });
+
+    const groups = new Map<string, ViewConnection[]>();
+    for (const c of visibleConnections) {
+      const a = refKey({ kind: c.source.kind, id: c.source.id });
+      const bKey = refKey({ kind: c.target.kind, id: c.target.id });
+      const groupKey = [a, bKey].sort().join('|');
+      const arr = groups.get(groupKey) ?? [];
+      arr.push(c);
+      groups.set(groupKey, arr);
     }
-  );
-  const lanePointsById = new Map<string, Point[]>();
-  for (const it of laneAdjusted) lanePointsById.set(it.id, it.points);
 
-  const linesSvg = relItems
-    .map((it) => {
-      const points = lanePointsById.get(it.id) ?? it.points;
-      const d = polylineToSvgPath(points);
-      const mid = polylineMidPoint(points);
-      const markerStart = it.visual.markerStartId ? ` marker-start="url(#${it.visual.markerStartId})"` : '';
-      const markerEnd = it.visual.markerEndId ? ` marker-end="url(#${it.visual.markerEndId})"` : '';
-      const dash = it.visual.dasharray ? ` stroke-dasharray="${it.visual.dasharray}"` : '';
-      const midLabel = it.visual.midLabel
-        ? `<text x="${mid.x}" y="${mid.y - 6}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" font-weight="800" fill="rgba(0,0,0,0.65)" text-anchor="middle">${escapeXml(
-            it.visual.midLabel
-          )}</text>`
-        : '';
+    const relItems: RelItem[] = [];
+    const obstaclesById = new Map<string, Array<{ x: number; y: number; w: number; h: number }>>();
 
-      // Keep the type label in exports (helps interpretation if arrow styles are unfamiliar).
-      // If we also render a midLabel, push the type label down a bit to avoid overlap.
-      const labelY = it.visual.midLabel ? mid.y + 10 : mid.y - 4;
-      const label = `<text x="${mid.x}" y="${labelY}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#334155" text-anchor="middle">${escapeXml(
-        it.label
-      )}</text>`;
+    for (const [groupKey, conns] of groups) {
+      // Stable order inside group.
+      const sorted = [...conns].sort((a, b) => a.relationshipId.localeCompare(b.relationshipId) || a.id.localeCompare(b.id));
+      const total = sorted.length;
 
-      return [
-        `<path d="${d}" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="2"${dash}${markerStart}${markerEnd} />`,
-        midLabel,
-        label,
-      ].join('');
-    })
-    .join('');
+      const parts = groupKey.split('|');
+      const aNode = nodeByKey.get(parts[0]);
+      const bNode = nodeByKey.get(parts[1]);
+      const aC = aNode ? nodeCenter(aNode) : null;
+      const bC = bNode ? nodeCenter(bNode) : null;
+
+      for (let i = 0; i < sorted.length; i += 1) {
+        const conn = sorted[i];
+        const rel = model.relationships[conn.relationshipId];
+        if (!rel) continue;
+
+        const sNode = nodeByKey.get(refKey({ kind: conn.source.kind, id: conn.source.id }));
+        const tNode = nodeByKey.get(refKey({ kind: conn.target.kind, id: conn.target.id }));
+        if (!sNode || !tNode) continue;
+
+        const sc = nodeCenter(sNode);
+        const tc = nodeCenter(tNode);
+
+        // Prefer border anchors (like in the canvas).
+        const { start, end } = rectAlignedOrthogonalAnchorsWithEndpointAnchors(sNode, tNode, conn.sourceAnchor, conn.targetAnchor);
+
+        // Translate any stored bendpoints.
+        const translatedPoints = conn.points ? conn.points.map((p) => ({ x: p.x + offsetX, y: p.y + offsetY })) : undefined;
+
+        // Centralized routing (straight/orthogonal) using the shared path generator.
+        const sKey = refKey({ kind: conn.source.kind, id: conn.source.id });
+        const tKey = refKey({ kind: conn.target.kind, id: conn.target.id });
+        const obstacles = nodes
+          .filter((n) => {
+            const r = nodeRefFromLayout(n);
+            if (!r) return false;
+            const k = refKey(r);
+            return k !== sKey && k !== tKey;
+          })
+          .map(nodeRect);
+
+        obstaclesById.set(conn.id, obstacles);
+
+        const gridSize = view.formatting?.gridSize;
+        const hints = {
+          ...orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, gridSize),
+          obstacles,
+          obstacleMargin: gridSize ? gridSize / 2 : 10,
+        };
+        let points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end, hints }).points;
+
+        if (conn.route.kind === 'orthogonal') {
+          points = adjustOrthogonalConnectionEndpoints(points, sNode, tNode, { stubLength: gridSize ? gridSize / 2 : 10 });
+        }
+
+        // Parallel relationship offset.
+        if (total > 1) {
+          const spacing = 14;
+          const offsetIndex = i - (total - 1) / 2;
+          const offset = offsetIndex * spacing;
+          const perp = aC && bC ? unitPerp(aC, bC) : unitPerp(sc, tc);
+          points = offsetPolyline(points, perp, offset);
+        }
+
+        const visual = relationshipVisual(rel, (view.kind ?? 'archimate') as 'archimate' | 'uml' | 'bpmn');
+        relItems.push({ id: conn.id, relId: conn.relationshipId, points, label: getRelationshipTypeLabel(rel.type), visual });
+      }
+    }
+
+    return { relItems, obstaclesById };
+  };
+
+  const applyLaneOffsetsForExport = (
+    relItems: RelItem[],
+    obstaclesById: Map<string, Array<{ x: number; y: number; w: number; h: number }>>
+  ): Map<string, Point[]> => {
+    // Apply cheap lane offsets across all relationships before emitting SVG paths.
+    const laneAdjusted = applyLaneOffsetsSafely(
+      relItems.map((it) => ({ id: it.id, points: it.points })),
+      {
+        gridSize: view.formatting?.gridSize,
+        obstaclesById,
+        obstacleMargin: view.formatting?.gridSize ? view.formatting?.gridSize / 2 : 10,
+      }
+    );
+    const lanePointsById = new Map<string, Point[]>();
+    for (const it of laneAdjusted) lanePointsById.set(it.id, it.points);
+    return lanePointsById;
+  };
+
+  const renderLinesSvg = (relItems: RelItem[], lanePointsById: Map<string, Point[]>): string => {
+    return relItems
+      .map((it) => {
+        const points = lanePointsById.get(it.id) ?? it.points;
+        const d = polylineToSvgPath(points);
+        const mid = polylineMidPoint(points);
+        const markerStart = it.visual.markerStartId ? ` marker-start="url(#${it.visual.markerStartId})"` : '';
+        const markerEnd = it.visual.markerEndId ? ` marker-end="url(#${it.visual.markerEndId})"` : '';
+        const dash = it.visual.dasharray ? ` stroke-dasharray="${it.visual.dasharray}"` : '';
+        const midLabel = it.visual.midLabel
+          ? `<text x="${mid.x}" y="${mid.y - 6}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" font-weight="800" fill="rgba(0,0,0,0.65)" text-anchor="middle">${escapeXml(
+              it.visual.midLabel
+            )}</text>`
+          : '';
+
+        // Keep the type label in exports (helps interpretation if arrow styles are unfamiliar).
+        // If we also render a midLabel, push the type label down a bit to avoid overlap.
+        const labelY = it.visual.midLabel ? mid.y + 10 : mid.y - 4;
+        const label = `<text x="${mid.x}" y="${labelY}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#334155" text-anchor="middle">${escapeXml(
+          it.label
+        )}</text>`;
+
+        return [
+          `<path d="${d}" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="2"${dash}${markerStart}${markerEnd} />`,
+          midLabel,
+          label,
+        ].join('');
+      })
+      .join('');
+  };
+
+  const orderedNodes = getOrderedNodes();
+  const viewport = computeViewport(orderedNodes);
+
+  // Apply export offset to all nodes.
+  const nodes = translateNodes(orderedNodes, viewport);
+  const nodeByKey = buildNodeIndex(nodes);
+
+  const { relItems, obstaclesById } = computeRelationshipItems(nodes, nodeByKey, viewport);
+  const lanePointsById = applyLaneOffsetsForExport(relItems, obstaclesById);
+  const linesSvg = renderLinesSvg(relItems, lanePointsById);
+
+  const { width, height } = viewport;
 
   const isContainerType = (typeId: string): boolean => typeId === 'bpmn.pool' || typeId === 'bpmn.lane';
   const isObjectType = (t: unknown): t is 'Note' | 'Label' | 'GroupBox' | 'Divider' =>
@@ -305,7 +349,12 @@ export function createViewSvg(model: Model, viewId: string): string {
     return 'start';
   };
 
-  const renderMultilineText = (x: number, y: number, text: string, opts: { fontSize: number; fontWeight?: number; fill: string; anchor: 'start' | 'middle' | 'end' }): string => {
+  const renderMultilineText = (
+    x: number,
+    y: number,
+    text: string,
+    opts: { fontSize: number; fontWeight?: number; fill: string; anchor: 'start' | 'middle' | 'end' }
+  ): string => {
     const lines = text.split(/\r?\n/);
     const lh = Math.round(opts.fontSize * 1.25);
     return `<text x="${x}" y="${y}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="${opts.fontSize}"${

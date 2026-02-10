@@ -1,4 +1,12 @@
 import type { Element, Model, Relationship } from '../../domain';
+import {
+  buildElementChildrenIndex,
+  buildElementParentFolderIndex,
+  buildElementParentIndex,
+  buildFolderParentIndex,
+  getElementContainmentPathLabel,
+  getFolderPathLabel
+} from '../../domain';
 
 export type PortalSearchEntry = {
   /** Internal element id */
@@ -9,6 +17,10 @@ export type PortalSearchEntry = {
   type: string;
   kind?: string;
   layer?: string;
+  /** Folder path label (best-effort) for UI/search. */
+  folderPath?: string;
+  /** Containment path label (best-effort) for UI/search. */
+  containmentPath?: string;
 };
 
 export type PortalRelationshipRef = {
@@ -24,7 +36,7 @@ export type PortalRelationshipGroups = {
   incoming: Record<string, string[]>; // relType -> relIds
 };
 
-export type PortalIndexes = {
+export type PortalIndexesV1 = {
   /** Schema version for indexes.json (independent of model schema). */
   schemaVersion: 1;
   /** externalIdKey -> internal element id */
@@ -36,6 +48,29 @@ export type PortalIndexes = {
   /** Minimal search entries; kept small for fast loads */
   searchIndex: PortalSearchEntry[];
 };
+
+export type PortalIndexesV2 = {
+  /** Schema version for indexes.json (independent of model schema). */
+  schemaVersion: 2;
+  /** externalIdKey -> internal element id */
+  externalIdIndex: Record<string, string>;
+  /** internal element id -> view ids where the element is present as a node */
+  usedInViewsIndex: Record<string, string[]>;
+  /** internal element id -> grouped rel ids */
+  relationshipGroupsIndex: Record<string, PortalRelationshipGroups>;
+  /** internal element id -> folder id where it is stored (first hit wins) */
+  elementFolderIdIndex: Record<string, string>;
+  /** folder id -> parent folder id (null for root-level folders) */
+  folderParentIndex: Record<string, string | null>;
+  /** internal element id -> semantic parent element id (null for root) */
+  elementParentIndex: Record<string, string | null>;
+  /** internal element id -> semantic child element ids */
+  elementChildrenIndex: Record<string, string[]>;
+  /** Minimal search entries; kept small for fast loads */
+  searchIndex: PortalSearchEntry[];
+};
+
+export type PortalIndexes = PortalIndexesV1 | PortalIndexesV2;
 
 export function externalIdRefToKey(ref: { system: string; id: string; scope?: string }): string {
   const system = (ref.system ?? '').trim();
@@ -59,11 +94,34 @@ function pushGrouped(map: Record<string, string[]>, key: string, value: string) 
   else map[key] = [value];
 }
 
-export function buildPortalIndexes(model: Model): PortalIndexes {
+export function buildPortalIndexes(model: Model): PortalIndexesV2 {
   const externalIdIndex: Record<string, string> = Object.create(null);
   const usedInViewsIndex: Record<string, string[]> = Object.create(null);
   const relationshipGroupsIndex: Record<string, PortalRelationshipGroups> = Object.create(null);
   const searchIndex: PortalSearchEntry[] = [];
+
+  // Folder + containment indexes (kept as plain objects for JSON portability)
+  const folderParent = buildFolderParentIndex(model);
+  const elementParentFolder = buildElementParentFolderIndex(model);
+  const elementParent = buildElementParentIndex(model);
+  const elementChildren = buildElementChildrenIndex(model);
+
+  const folderParentIndex: Record<string, string | null> = Object.create(null);
+  for (const [k, v] of folderParent.entries()) folderParentIndex[k] = v;
+
+  const elementFolderIdIndex: Record<string, string> = Object.create(null);
+  for (const [k, v] of elementParentFolder.entries()) {
+    if (v) elementFolderIdIndex[k] = v;
+  }
+
+  const elementParentIndex: Record<string, string | null> = Object.create(null);
+  for (const [k, v] of elementParent.entries()) elementParentIndex[k] = v;
+
+  const elementChildrenIndex: Record<string, string[]> = Object.create(null);
+  for (const [k, v] of elementChildren.entries()) {
+    if (k == null) continue; // Root bucket is not needed for portal lookups
+    elementChildrenIndex[k] = v.slice();
+  }
 
   // Elements
   for (const [id, el] of Object.entries(model.elements ?? {})) {
@@ -76,13 +134,20 @@ export function buildPortalIndexes(model: Model): PortalIndexes {
       if (externalIdIndex[key] == null) externalIdIndex[key] = id;
     }
 
+    const folderId = elementParentFolder.get(id) ?? null;
+    const folderPath = folderId ? getFolderPathLabel(model, folderId, folderParent, { includeRoot: false }) : undefined;
+    // Containment paths have no explicit "root" segment; the helper already returns root → … → self.
+    const containmentPath = getElementContainmentPathLabel(model, id, elementParent);
+
     searchIndex.push({
       id,
       externalIds: externalIds.length ? externalIds : undefined,
       name: el.name ?? '',
       type: String(el.type ?? ''),
       kind: el.kind,
-      layer: el.layer
+      layer: el.layer,
+      ...(folderPath ? { folderPath } : {}),
+      ...(containmentPath ? { containmentPath } : {})
     });
   }
 
@@ -119,21 +184,41 @@ export function buildPortalIndexes(model: Model): PortalIndexes {
   // We therefore exclude them from relationship indexing here.
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     externalIdIndex,
     usedInViewsIndex,
     relationshipGroupsIndex,
+    elementFolderIdIndex,
+    folderParentIndex,
+    elementParentIndex,
+    elementChildrenIndex,
     searchIndex
   };
 }
 
 export function isPortalIndexes(value: unknown): value is PortalIndexes {
   if (!value || typeof value !== 'object') return false;
-  const v = value as Partial<PortalIndexes>;
-  if (v.schemaVersion !== 1) return false;
+  const v = value as any;
+  const sv = v.schemaVersion;
+
+  // v1 compatibility: allow older bundles and rebuild indexes later if needed.
+  if (sv === 1) {
+    if (!v.externalIdIndex || typeof v.externalIdIndex !== 'object') return false;
+    if (!v.usedInViewsIndex || typeof v.usedInViewsIndex !== 'object') return false;
+    if (!v.relationshipGroupsIndex || typeof v.relationshipGroupsIndex !== 'object') return false;
+    if (!Array.isArray(v.searchIndex)) return false;
+    return true;
+  }
+
+  // v2
+  if (sv !== 2) return false;
   if (!v.externalIdIndex || typeof v.externalIdIndex !== 'object') return false;
   if (!v.usedInViewsIndex || typeof v.usedInViewsIndex !== 'object') return false;
   if (!v.relationshipGroupsIndex || typeof v.relationshipGroupsIndex !== 'object') return false;
+  if (!v.elementFolderIdIndex || typeof v.elementFolderIdIndex !== 'object') return false;
+  if (!v.folderParentIndex || typeof v.folderParentIndex !== 'object') return false;
+  if (!v.elementParentIndex || typeof v.elementParentIndex !== 'object') return false;
+  if (!v.elementChildrenIndex || typeof v.elementChildrenIndex !== 'object') return false;
   if (!Array.isArray(v.searchIndex)) return false;
   return true;
 }

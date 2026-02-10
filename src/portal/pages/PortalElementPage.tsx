@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -21,7 +20,7 @@ import { copyText } from '../utils/copyText';
 import { readTaggedValue } from '../utils/taggedValues';
 import { isUmlClassifierType, formatUmlAttribute, formatUmlOperation } from '../utils/umlFormatters';
 import { safeJsonStringify } from '../utils/safeJsonStringify';
-import { readUmlClassifierMembers, type UmlAttribute, type UmlOperation } from '../../domain/uml/members';
+import { readUmlClassifierMembers } from '../../domain/uml/members';
 
 type PortalElementPageProps = { mode: 'internalId' } | { mode: 'externalId' };
 

@@ -57,7 +57,7 @@ function walk(dir) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'coverage') continue;
-      out.push(...walk(full));
+      for (const f of walk(full)) out.push(f);
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name);
       if (CODE_EXTS.includes(ext)) out.push(full);
@@ -79,7 +79,7 @@ function extractImportSpecifiers(code) {
   /** @type {string[]} */
   const imports = [];
 
-  // import ... from 'x'
+  // import … from 'x' (best-effort)
   for (const m of cleaned.matchAll(/\bimport\s+[\s\S]*?\s+from\s+['"]([^'"]+)['"];?/g)) {
     imports.push(m[1]);
   }

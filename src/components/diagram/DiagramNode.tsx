@@ -52,6 +52,8 @@ type Props = {
   linkDrag: DiagramLinkDrag | null;
   /** Value assigned to CSS var --diagram-node-bg */
   bgVar: string;
+  /** Optional tooltip (e.g., breadcrumb path). */
+  tooltip?: string;
   onSelectNode: (viewId: string, elementId: string, additive: boolean) => void;
 
   onBeginNodeDrag: (state: DiagramNodeDragState) => void;
@@ -69,6 +71,7 @@ export function DiagramNode({
   isSelected,
   linkDrag,
   bgVar,
+  tooltip,
   onSelectNode,
   onBeginNodeDrag,
   onHoverAsRelationshipTarget,
@@ -122,6 +125,7 @@ export function DiagramNode({
       role="button"
       tabIndex={0}
       aria-label={`Diagram node ${el.name || '(unnamed)'}`}
+      title={tooltip}
       onClick={(e) => {
         if (linkDrag) return;
         onSelectNode(activeViewId, el.id, Boolean(e.shiftKey));

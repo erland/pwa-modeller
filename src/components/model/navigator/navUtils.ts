@@ -40,8 +40,11 @@ export function selectionToKey(selection: Selection): string | null {
     case 'view':
       return makeKey('view', selection.viewId);
     case 'viewNode':
-      // In the navigator we highlight the parent view.
-      return makeKey('view', selection.viewId);
+      // Selecting a node in a diagram should sync to the underlying element in the navigator.
+      return makeKey('element', selection.elementId);
+    case 'viewNodes':
+      // For multi-select, keep the parent view highlighted (unless it is a single node).
+      return selection.elementIds.length === 1 ? makeKey('element', selection.elementIds[0]!) : makeKey('view', selection.viewId);
     case 'viewObject':
       // View-only objects are not shown in the navigator; highlight the parent view.
       return makeKey('view', selection.viewId);

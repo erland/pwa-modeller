@@ -1,4 +1,5 @@
 import type { Model, View, ViewNodeLayout, ViewObject } from '../../../domain';
+import { getElementContainmentPathLabel } from '../../../domain';
 import type { Notation } from '../../../notations';
 import type { Selection } from '../../model/selection';
 import { DiagramNode, type DiagramLinkDrag, type DiagramNodeDragState } from '../DiagramNode';
@@ -82,6 +83,8 @@ export function DiagramNodesLayer({
 
           const bgVar = getElementBgVar(el.type);
 
+          const tooltip = getElementContainmentPathLabel(model, el.id);
+
           const isSelected =
             (selection.kind === 'viewNode' &&
               selection.viewId === activeView.id &&
@@ -100,6 +103,7 @@ export function DiagramNodesLayer({
               isSelected={isSelected}
               linkDrag={linkDrag}
               bgVar={bgVar}
+              tooltip={tooltip}
               onSelectNode={handleSelectNode}
               onBeginNodeDrag={onBeginNodeDrag}
               onHoverAsRelationshipTarget={onHoverAsRelationshipTarget}

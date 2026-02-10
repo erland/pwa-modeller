@@ -5,6 +5,7 @@ import { validateCommonSchemaExtensions } from './rules/schemaExtensions';
 import { validateCommonIdUniqueness } from './rules/idUniqueness';
 import { validateCommonRelationshipConsistency } from './rules/relationshipConsistency';
 import { validateCommonFolderStructure } from './rules/folderStructure';
+import { validateCommonContainment } from './rules/containment';
 import { validateCommonViewLayoutDuplicates } from './rules/viewLayoutDuplicates';
 import { validateCommonViewLayoutNodes } from './rules/viewLayoutNodes';
 import { validateCommonViewLayoutRelationships } from './rules/viewLayoutRelationships';
@@ -20,6 +21,7 @@ export const commonValidationRules: CommonValidationRule[] = [
   validateCommonIdUniqueness,
   validateCommonRelationshipConsistency,
   validateCommonFolderStructure,
+  validateCommonContainment,
   validateCommonViewLayoutDuplicates,
   validateCommonViewLayoutNodes,
   validateCommonViewLayoutRelationships,

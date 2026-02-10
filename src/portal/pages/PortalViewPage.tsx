@@ -5,55 +5,24 @@ import type { Key } from '@react-types/shared';
 
 import '../../styles/shell.css';
 
+import { usePortalMediaQuery } from '../hooks/usePortalMediaQuery';
+import { usePersistedNumber } from '../hooks/usePersistedNumber';
+
 import { PortalDiagramViewer } from '../components/PortalDiagramViewer';
 import { PortalInspectorPanel } from '../components/PortalInspectorPanel';
 import { PortalNavigationTree } from '../components/PortalNavigationTree';
-import { buildPortalNavTree } from '../navigation/buildPortalNavTree';
+import { usePortalNavTree } from '../hooks/usePortalNavTree';
 import type { NavNode } from '../navigation/types';
 import type { Selection } from '../../components/model/selection';
 import { usePortalStore } from '../store/usePortalStore';
-
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia(query).matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mql = window.matchMedia(query);
-    const onChange = () => setMatches(mql.matches);
-    onChange();
-
-    type MqlCompat = MediaQueryList & {
-      addEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
-      removeEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
-      addListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
-      removeListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
-    };
-
-    const mqlCompat = mql as MqlCompat;
-    if (typeof mqlCompat.addEventListener === 'function') {
-      mqlCompat.addEventListener('change', onChange);
-      return () => mqlCompat.removeEventListener?.('change', onChange);
-    }
-    if (typeof mqlCompat.addListener === 'function') {
-      mqlCompat.addListener(onChange);
-      return () => mqlCompat.removeListener?.(onChange);
-    }
-    return;
-  }, [query]);
-
-  return matches;
-}
 
 export default function PortalViewPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { datasetMeta, model, status, indexes, rootFolderId } = usePortalStore();
 
-  const isSmall = useMediaQuery('(max-width: 720px)');
-  const isMedium = useMediaQuery('(max-width: 1100px)');
+  const isSmall = usePortalMediaQuery('(max-width: 720px)');
+  const isMedium = usePortalMediaQuery('(max-width: 1100px)');
   const rightOverlay = !isSmall && isMedium;
 
   // Persisted sidebar widths (dock mode only)
@@ -63,27 +32,9 @@ export default function PortalViewPage() {
   const MIN_RIGHT_WIDTH = 260;
   const MIN_MAIN_WIDTH = 360;
 
-  const [leftWidth, setLeftWidth] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
-    const n = Number(window.localStorage.getItem('portalLeftWidthPx'));
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_LEFT_WIDTH;
-  });
+  const [leftWidth, setLeftWidth] = usePersistedNumber('portalLeftWidthPx', DEFAULT_LEFT_WIDTH);
 
-  const [rightWidth, setRightWidth] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_RIGHT_WIDTH;
-    const n = Number(window.localStorage.getItem('portalRightWidthPx'));
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_RIGHT_WIDTH;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('portalLeftWidthPx', String(Math.round(leftWidth)));
-  }, [leftWidth]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('portalRightWidthPx', String(Math.round(rightWidth)));
-  }, [rightWidth]);
+  const [rightWidth, setRightWidth] = usePersistedNumber('portalRightWidthPx', DEFAULT_RIGHT_WIDTH);
 
   const [leftOpen, setLeftOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -176,12 +127,7 @@ export default function PortalViewPage() {
   useEffect(() => {
     setSelection({ kind: 'none' });
   }, [viewId]);
-
-  const treeData = useMemo(() => {
-    if (!model) return [];
-    // Step 6: include elements to support element navigation + cross-highlighting.
-    return buildPortalNavTree({ model, rootFolderId, includeElements: true });
-  }, [model, rootFolderId]);
+  const treeData = usePortalNavTree(model, rootFolderId);
 
   function findNodeById(nodes: NavNode[], nodeId: string): NavNode | null {
     for (const n of nodes) {

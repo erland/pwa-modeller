@@ -5,7 +5,10 @@ import { buildPortalIndexes, isPortalIndexes, type PortalIndexes } from '../inde
 import { getPortalRootFolderId } from '../navigation/portalNavSource';
 import { clearCacheForLatestUrl, getCachedBundle, getMostRecentCachedBundle, putCachedBundle } from '../data/portalCache';
 import { fetchJsonWithLimit, fetchLatest, fetchManifest, resolveRelative, PortalFetchError, type LatestPointer, type PublishManifest } from '../data/portalDataset';
-import { PORTAL_MAX_BYTES, formatBytes } from '../data/portalLimits';
+import { PORTAL_MAX_BYTES } from '../data/portalLimits';
+import { readQueryParams, resolveLatestUrlFromConfig, tryReadPublicPortalConfig, normalizeString, type PortalChannelSource, type PortalLatestUrlSource, type PortalLatestUrlState } from './portalConfig';
+import { formatPortalError, isModelLike } from './portalErrors';
+import { PORTAL_CHANNEL_LOCALSTORAGE_KEY, PORTAL_LATEST_URL_LEGACY_KEY, portalLatestUrlKeyForChannel } from './portalLocalStorage';
 
 export type PortalDatasetMeta = {
   title?: string;
@@ -18,20 +21,6 @@ export type PortalDatasetMeta = {
   indexesDerived?: boolean;
 };
 
-export type PortalLatestUrlSource = 'query' | 'localStorage' | 'publicConfig' | 'fallback';
-export type PortalChannelSource = 'query' | 'localStorage' | 'publicConfig' | 'fallback';
-
-export type PortalLatestUrlState = {
-  /** The active channel (prod/test/demo/custom/other). */
-  channel: string;
-  channelSource: PortalChannelSource | null;
-
-  /** The configured URL to `latest.json` (may be null until resolved). */
-  latestUrl: string | null;
-  /** How the URL was resolved (query param, localStorage, or public config). */
-  latestUrlSource: PortalLatestUrlSource | null;
-};
-
 export type PortalLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export type PortalUpdateInfo =
@@ -39,10 +28,6 @@ export type PortalUpdateInfo =
   | { state: 'checking' }
   | { state: 'available'; currentBundleId: string; latestBundleId: string; latestTitle?: string }
   | { state: 'error'; message: string };
-
-const PORTAL_CHANNEL_LOCALSTORAGE_KEY = 'portal.channel';
-const PORTAL_LATEST_URL_LEGACY_KEY = 'portal.latestUrl';
-const portalLatestUrlKeyForChannel = (channel: string) => `portal.latestUrl.${channel}`;
 
 export type PortalStoreState = {
   latest: PortalLatestUrlState;
@@ -54,7 +39,6 @@ export type PortalStoreState = {
   model: Model | null;
   indexes: PortalIndexes | null;
 
-  /** Root folder id used for portal navigation tree (Step 1). */
   rootFolderId: string | null;
 
   updateInfo: PortalUpdateInfo;
@@ -67,122 +51,6 @@ export type PortalStoreState = {
   applyUpdate: () => Promise<void>;
   clearCache: () => Promise<void>;
 };
-
-function isModelLike(v: unknown): v is Model {
-  if (!v || typeof v !== 'object') return false;
-  const o = v as Record<string, unknown>;
-  return (
-    typeof o['elements'] === 'object' &&
-    o['elements'] !== null &&
-    typeof o['relationships'] === 'object' &&
-    o['relationships'] !== null &&
-    typeof o['views'] === 'object' &&
-    o['views'] !== null
-  );
-}
-
-function formatPortalError(e: unknown): string {
-  if (e instanceof PortalFetchError) {
-    const base = e.message;
-    const details = e.details ? `\nDetails: ${e.details}` : '';
-
-    if (e.kind === 'cors') {
-      return (
-        `${base}` +
-        `\nHint: This often means CORS is blocking cross-origin reads.` +
-        ` Ensure the host serves the files with an Access-Control-Allow-Origin header` +
-        ` (or host the bundle on the same origin as the portal).` +
-        details
-      );
-    }
-
-    if (e.kind === 'http') {
-      return `${base}\nHint: Verify the URL is correct and the file is publicly accessible.${details}`;
-    }
-
-    if (e.kind === 'parse') {
-      return `${base}\nHint: The server may be returning HTML (e.g., an error page) instead of JSON.${details}`;
-    }
-
-    if (e.kind === 'size') {
-      return (
-        `${base}` +
-        `\nHint: Portal limits are: model ≤ ${formatBytes(PORTAL_MAX_BYTES.modelJson)}, indexes ≤ ${formatBytes(PORTAL_MAX_BYTES.indexesJson)}.` +
-        ` You can tune these in src/portal/data/portalLimits.ts.`
-      );
-    }
-
-    if (e.kind === 'schema') {
-      return `${base}\nHint: The published files do not match the expected bundle format.`;
-    }
-
-    if (e.kind === 'timeout') {
-      return `${base}\nHint: The host might be slow. Try again or use a faster/static host.`;
-    }
-
-    return `${base}${details}`;
-  }
-
-  return e instanceof Error ? e.message : String(e);
-}
-
-function normalizeString(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const s = value.trim();
-  return s.length > 0 ? s : null;
-}
-
-type PortalPublicConfig = {
-  portal?: {
-    defaultChannel?: string;
-    latestUrl?: string;
-    channels?: Record<string, { latestUrl?: string }>;
-  };
-};
-
-async function tryReadPublicPortalConfig(): Promise<PortalPublicConfig | null> {
-  try {
-    const resp = await fetch('/config.json', { cache: 'no-cache' });
-    if (!resp.ok) return null;
-    const json = (await resp.json()) as unknown;
-    if (!json || typeof json !== 'object') return null;
-    return json as PortalPublicConfig;
-  } catch {
-    return null;
-  }
-}
-
-function readQueryParams(): { bundleUrl?: string; channel?: string } {
-  try {
-    // With hash-based routing, query params may live inside location.hash (e.g. "#/portal?latestUrl=…&channel=test").
-    const candidates: string[] = [];
-    if (typeof window.location.search === 'string' && window.location.search.length > 1) candidates.push(window.location.search);
-    if (typeof window.location.hash === 'string') {
-      const idx = window.location.hash.indexOf('?');
-      if (idx >= 0) candidates.push(window.location.hash.slice(idx + 1));
-    }
-
-    for (const q of candidates) {
-      const params = new URLSearchParams(q.startsWith('?') ? q.slice(1) : q);
-      const bundleUrl = normalizeString(params.get('bundleUrl') || params.get('latestUrl')) ?? undefined;
-      const channel = normalizeString(params.get('channel')) ?? undefined;
-      if (bundleUrl || channel) return { bundleUrl, channel };
-    }
-
-    return {};
-  } catch {
-    return {};
-  }
-}
-
-function resolveLatestUrlFromConfig(cfg: PortalPublicConfig, channel: string): string | null {
-  // Backwards compatible:
-  // - cfg.portal.latestUrl
-  // - cfg.portal.channels[<channel>].latestUrl
-  const direct = normalizeString(cfg.portal?.latestUrl);
-  const channelUrl = normalizeString(cfg.portal?.channels?.[channel]?.latestUrl);
-  return channelUrl ?? direct ?? null;
-}
 
 const PortalStoreContext = createContext<PortalStoreState | null>(null);
 

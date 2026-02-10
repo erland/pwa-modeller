@@ -10,208 +10,20 @@ import { usePortalStore } from '../store/usePortalStore';
 import { getElementFactSheetData, resolveElementIdFromExternalId } from '../indexes/portalIndexes';
 
 import { PortalNavigationTree } from '../components/PortalNavigationTree';
-import { buildPortalNavTree } from '../navigation/buildPortalNavTree';
 import type { NavNode } from '../navigation/types';
+import { usePortalNavTree } from '../hooks/usePortalNavTree';
 
 import { formatElementTypeLabel, formatRelationshipTypeLabel } from '../../components/ui/typeLabels';
+import { usePortalMediaQuery } from '../hooks/usePortalMediaQuery';
+import { usePersistedNumber } from '../hooks/usePersistedNumber';
+import { Card, Pill, SmallButton } from '../components/factsheet/FactSheetPrimitives';
+import { copyText } from '../utils/copyText';
+import { readTaggedValue } from '../utils/taggedValues';
+import { isUmlClassifierType, formatUmlAttribute, formatUmlOperation } from '../utils/umlFormatters';
+import { safeJsonStringify } from '../utils/safeJsonStringify';
 import { readUmlClassifierMembers, type UmlAttribute, type UmlOperation } from '../../domain/uml/members';
 
 type PortalElementPageProps = { mode: 'internalId' } | { mode: 'externalId' };
-
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia(query).matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mql = window.matchMedia(query);
-    const onChange = () => setMatches(mql.matches);
-    onChange();
-
-    type MqlCompat = MediaQueryList & {
-      addEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
-      removeEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
-      addListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
-      removeListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
-    };
-
-    const mqlCompat = mql as MqlCompat;
-    if (typeof mqlCompat.addEventListener === 'function') {
-      mqlCompat.addEventListener('change', onChange);
-      return () => mqlCompat.removeEventListener?.('change', onChange);
-    }
-    if (typeof mqlCompat.addListener === 'function') {
-      mqlCompat.addListener(onChange);
-      return () => mqlCompat.removeListener?.(onChange);
-    }
-    return;
-  }, [query]);
-
-  return matches;
-}
-
-function Card(props: { title?: string; children: React.ReactNode; right?: React.ReactNode }) {
-  return (
-    <div style={{ padding: 12, border: '1px solid var(--borderColor, rgba(0,0,0,0.12))', borderRadius: 12 }}>
-      {props.title ? (
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-          <div style={{ fontWeight: 800 }}>{props.title}</div>
-          {props.right ? <div>{props.right}</div> : null}
-        </div>
-      ) : null}
-      {props.children}
-    </div>
-  );
-}
-
-function Pill(props: { children: React.ReactNode }) {
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '2px 8px',
-        borderRadius: 999,
-        border: '1px solid var(--borderColor, rgba(0,0,0,0.12))',
-        fontSize: 12,
-        opacity: 0.9
-      }}
-    >
-      {props.children}
-    </span>
-  );
-}
-
-function SmallButton(props: { onClick?: () => void; children: React.ReactNode; title?: string }) {
-  return (
-    <button
-      type="button"
-      title={props.title}
-      onClick={props.onClick}
-      style={{
-        padding: '4px 8px',
-        borderRadius: 10,
-        border: '1px solid var(--borderColor, rgba(0,0,0,0.12))',
-        background: 'transparent',
-        cursor: 'pointer'
-      }}
-    >
-      {props.children}
-    </button>
-  );
-}
-
-async function copyText(text: string): Promise<boolean> {
-  const t = (text ?? '').trim();
-  if (!t) return false;
-
-  try {
-    await navigator.clipboard.writeText(t);
-    return true;
-  } catch {
-    // Best-effort fallback
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = t;
-      ta.style.position = 'fixed';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-}
-
-type TaggedValueLike = { ns?: unknown; key?: unknown; type?: unknown; value?: unknown };
-
-function readTaggedValue(tv: unknown): { label: string; type?: string; value: string } | null {
-  if (!tv || typeof tv !== 'object') return null;
-  const t = tv as TaggedValueLike;
-  const ns = typeof t.ns === 'string' ? t.ns.trim() : '';
-  const key = typeof t.key === 'string' ? t.key.trim() : '';
-  const type = typeof t.type === 'string' ? t.type.trim() : '';
-  const value = String(t.value ?? '');
-  const label = ns ? `${ns}:${key}` : key;
-  if (!label) return null;
-  return { label, type: type || undefined, value };
-}
-
-function isUmlClassifierType(t: string): boolean {
-  return t === 'uml.class' || t === 'uml.associationClass' || t === 'uml.interface' || t === 'uml.datatype';
-}
-
-function formatUmlVisibility(v?: string): string {
-  switch (v) {
-    case 'public':
-      return '+';
-    case 'private':
-      return '-';
-    case 'protected':
-      return '#';
-    case 'package':
-      return '~';
-  }
-  return '';
-}
-
-function formatMultiplicity(m?: { lower?: string; upper?: string }): string {
-  const lo = (m?.lower ?? '').trim();
-  const hi = (m?.upper ?? '').trim();
-  if (!lo && !hi) return '';
-  if (!hi) return `[${lo}]`;
-  return `[${lo || '0'}..${hi}]`;
-}
-
-function formatUmlAttribute(a: UmlAttribute): string {
-  const vis = formatUmlVisibility(a.visibility);
-  const name = a.name?.trim() ?? '';
-  const type = (a.dataTypeName ?? '').trim();
-  const mult = formatMultiplicity(a.multiplicity);
-  const def = (a.defaultValue ?? '').trim();
-  const parts: string[] = [];
-  if (vis) parts.push(vis);
-  parts.push(name || '(unnamed)');
-  if (type) parts.push(`: ${type}`);
-  if (mult) parts.push(` ${mult}`);
-  if (a.isStatic) parts.push(' {static}');
-  if (def) parts.push(` = ${def}`);
-  return parts.join('');
-}
-
-function formatUmlOperation(o: UmlOperation): string {
-  const vis = formatUmlVisibility(o.visibility);
-  const name = o.name?.trim() ?? '';
-  const params = (o.params ?? []).map((p) => {
-    const pn = (p.name ?? '').trim();
-    const pt = (p.type ?? '').trim();
-    return pt ? `${pn}: ${pt}` : pn;
-  });
-  const returnType = (o.returnType ?? '').trim();
-  const parts: string[] = [];
-  if (vis) parts.push(vis);
-  parts.push(`${name || '(unnamed)'}(${params.filter(Boolean).join(', ')})`);
-  if (returnType) parts.push(`: ${returnType}`);
-  if (o.isAbstract) parts.push(' {abstract}');
-  if (o.isStatic) parts.push(' {static}');
-  return parts.join('');
-}
-
-function safeJsonStringify(value: unknown, maxLen = 40000): string {
-  try {
-    const s = JSON.stringify(value, null, 2);
-    if (s.length <= maxLen) return s;
-    return `${s.slice(0, maxLen)}\n…(truncated)…`;
-  } catch {
-    return String(value);
-  }
-}
 
 export default function PortalElementPage(props: PortalElementPageProps) {
   const params = useParams();
@@ -219,24 +31,14 @@ export default function PortalElementPage(props: PortalElementPageProps) {
   const { datasetMeta, model, indexes, rootFolderId, status } = usePortalStore();
   const [copied, setCopied] = useState<string | null>(null);
 
-  const isSmall = useMediaQuery('(max-width: 720px)');
+  const isSmall = usePortalMediaQuery('(max-width: 720px)');
   // For the element fact sheet we intentionally do NOT show the inspector; the fact sheet occupies the whole workspace.
-
   // Persisted sidebar widths (dock mode only)
   const DEFAULT_LEFT_WIDTH = 320;
   const MIN_LEFT_WIDTH = 220;
   const MIN_MAIN_WIDTH = 360;
 
-  const [leftWidth, setLeftWidth] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
-    const n = Number(window.localStorage.getItem('portalLeftWidthPx'));
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_LEFT_WIDTH;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('portalLeftWidthPx', String(Math.round(leftWidth)));
-  }, [leftWidth]);
+  const [leftWidth, setLeftWidth] = usePersistedNumber('portalLeftWidthPx', DEFAULT_LEFT_WIDTH);
 
   const [leftOpen, setLeftOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -280,10 +82,7 @@ export default function PortalElementPage(props: PortalElementPageProps) {
     };
   }, [isResizing]);
 
-  const treeData = useMemo(() => {
-    if (!model) return [];
-    return buildPortalNavTree({ model, rootFolderId, includeElements: true });
-  }, [model, rootFolderId]);
+  const treeData = usePortalNavTree(model, rootFolderId);
 
   function findNodeById(nodes: NavNode[], nodeId: string): NavNode | null {
     for (const n of nodes) {

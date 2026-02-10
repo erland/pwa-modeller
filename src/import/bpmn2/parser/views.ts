@@ -89,7 +89,8 @@ function ensureViewShowsAllBpmnElements(
       isVisualElementType: isBpmnVisualElementType,
       defaultSizeForType: defaultSizeForBpmnType,
       isContainerElementType: isBpmnContainerType,
-      containerPriority: (t) => (t === 'bpmn.lane' ? 0 : t === 'bpmn.pool' ? 1 : 2),
+      containerPriority: (t: string | undefined) =>
+        t === 'bpmn.lane' ? 0 : t === 'bpmn.pool' ? 1 : 2,
       preferredContainerIdByElementId: preferredLaneByFlowNodeId,
       enableNeighborVoting: true,
       enableAutoConnections: true,

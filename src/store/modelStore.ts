@@ -27,6 +27,7 @@ import type { TaggedValueInput } from './mutations';
 import { createViewOps } from './ops/viewOps';
 import { createLayoutOps } from './ops/layoutOps';
 import { createFolderOps } from './ops/folderOps';
+import { createElementOps } from './ops/elementOps';
 
 export type ModelStoreState = {
   model: Model | null;
@@ -118,6 +119,8 @@ export class ModelStore {
 
   private folderOps = createFolderOps({ updateModel: this.updateModel });
 
+  private elementOps = createElementOps({ updateModel: this.updateModel });
+
   /** Replace the current model. */
   loadModel = (model: Model, fileName: string | null = null): void => {
     this.setState({ model, fileName, isDirty: false });
@@ -191,6 +194,19 @@ export class ModelStore {
 
   deleteElement = (elementId: string): void => {
     this.updateModel((model) => elementMutations.deleteElement(model, elementId));
+  };
+
+  /**
+   * Move element under another element (or null for root).
+   * This updates Element.parentElementId (semantic containment), not folder membership.
+   */
+  moveElementToParent = (childId: string, parentId: string | null): void => {
+    this.elementOps.moveElementToParent(childId, parentId);
+  };
+
+  /** Convenience alias: clears parentElementId. */
+  detachElementToRoot = (childId: string): void => {
+    this.elementOps.detachElementToRoot(childId);
   };
 
   // -------------------------

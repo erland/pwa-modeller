@@ -141,6 +141,22 @@ export function deleteRelationshipInModel(model: Model, relationshipId: string):
 export function deleteElementInModel(model: Model, elementId: string): void {
   if (!model.elements[elementId]) return;
 
+  // Reparent children to the deleted element's parent (recommended semantics).
+  // This keeps the containment tree connected and prevents accidental data loss.
+  const deleted = model.elements[elementId];
+  const parentOfDeleted = deleted.parentElementId;
+  for (const child of Object.values(model.elements)) {
+    if (child.parentElementId === elementId) {
+      model.elements[child.id] = {
+        ...child,
+        parentElementId: parentOfDeleted
+      };
+    }
+  }
+
+  // If the deleted element itself had an invalid parent (shouldn't happen after invariants),
+  // keep it as-is; we only care about preserving its children.
+
   // Remove element itself
   const nextElements = { ...model.elements };
   delete nextElements[elementId];

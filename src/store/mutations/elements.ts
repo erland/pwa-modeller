@@ -1,5 +1,6 @@
 import type { Element, Model, TaggedValue } from '../../domain';
 import {
+  canSetParent,
   createId,
   removeTaggedValue,
   sanitizeUnknownTypeForElement,
@@ -26,6 +27,30 @@ export function updateElement(model: Model, elementId: string, patch: Partial<Om
   const sanitized = sanitizeUnknownTypeForElement(merged);
   sanitized.externalIds = tidyExternalIds(sanitized.externalIds);
   model.elements[elementId] = sanitized;
+}
+
+/**
+ * Sets (or clears) the semantic parent for an element.
+ *
+ * This is distinct from folder membership. Folders remain an organizational tree,
+ * while parentElementId represents canonical structural containment.
+ */
+export function setElementParent(model: Model, childId: string, parentId: string | null): void {
+  const child = model.elements[childId];
+  if (!child) throw new Error(`Element not found: ${childId}`);
+
+  const normalizedParentId = typeof parentId === 'string' && parentId.trim().length ? parentId.trim() : null;
+  const result = canSetParent(model, childId, normalizedParentId);
+  if (!result.ok) throw new Error(result.reason);
+
+  // No-op if nothing changes.
+  const nextParent = normalizedParentId ?? undefined;
+  if (child.parentElementId === nextParent) return;
+
+  model.elements[childId] = {
+    ...child,
+    parentElementId: nextParent
+  };
 }
 
 export function upsertElementTaggedValue(model: Model, elementId: string, entry: TaggedValueInput): void {

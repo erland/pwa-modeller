@@ -39,6 +39,14 @@ export function moveElementToFolder(model: Model, elementId: string, targetFolde
   const from = getFolder(model, fromId);
   const to = getFolder(model, targetFolderId);
 
+  // When moving an element between folders, detach it from any semantic parent.
+  // Folders are organizational, while containment is semantic; moving folders should
+  // not implicitly keep the element nested under a parent that might be elsewhere.
+  const el = model.elements[elementId];
+  if (el && el.parentElementId) {
+    model.elements[elementId] = { ...el, parentElementId: undefined };
+  }
+
   model.folders[fromId] = { ...from, elementIds: from.elementIds.filter((id) => id !== elementId) };
   model.folders[targetFolderId] = { ...to, elementIds: [...to.elementIds, elementId] };
 }

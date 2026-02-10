@@ -1,6 +1,7 @@
 import type { IRModel } from '../framework/ir';
 
 import { applyBpmnContainmentToViews } from './normalize/applyBpmnContainmentToViews';
+import { inferEaXmiViewKinds } from './normalize/inferEaXmiViewKinds';
 import { finalizeEaXmiMeta } from './normalize/finalizeEaXmiMeta';
 import { normalizeEaXmiElements } from './normalize/normalizeEaXmiElements';
 import { normalizeEaXmiRelationships } from './normalize/normalizeEaXmiRelationships';
@@ -52,7 +53,7 @@ export function normalizeEaXmiImportIR(ir: IRModel | undefined, opts?: Normalize
   const viewsResolved = resolveEaXmiViews(ir.views, folderIds, elementLookup, relationshipLookup, relationships, opts);
 
   // Step 3: BPMN-specific containment heuristics in views.
-  const views = applyBpmnContainmentToViews(viewsResolved, elementsBase);
+  const views = inferEaXmiViewKinds(applyBpmnContainmentToViews(viewsResolved, elementsBase), elementsBase);
 
   // Step 3 (UML Activity): view-driven containment/ownership hints.
   const elements = normalizeUmlActivityContainment({ ...ir, elements: elementsBase }, views);

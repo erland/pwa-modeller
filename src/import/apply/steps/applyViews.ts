@@ -32,11 +32,14 @@ export function applyViews(ctx: ApplyImportContext): void {
       }
     }
 
-    const view: View = {
+    
+    const metaKind = (v.meta as any)?.viewKind;
+    const viewKind = metaKind === 'archimate' || metaKind === 'uml' || metaKind === 'bpmn' ? metaKind : inferredViewKind;
+const view: View = {
       ...createView({
         id: internalId,
         name: v.name ?? 'View',
-        kind: inferredViewKind,
+        kind: viewKind,
         viewpointId,
         documentation: v.documentation,
         ...(ownerRef ? { ownerRef } : {})

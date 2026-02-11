@@ -123,7 +123,10 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
         setSelectedFolderId={ctrl.setSelectedFolderId}
         publishing={ctrl.publishing}
         error={ctrl.publishError}
+        success={ctrl.publishSuccess}
+        publishServerResult={ctrl.publishServerResult}
         onPublish={() => void ctrl.runPublish()}
+        onPublishToServer={() => void ctrl.runPublishToServer()}
       />
 
       <ImportReportDialog

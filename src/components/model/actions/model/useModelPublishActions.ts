@@ -6,6 +6,8 @@ import { downloadTextFile } from '../../../../store';
 import { buildPublishBundleZip } from '../../../../publisher/lib/publishBundle';
 import { buildLatestPointerJson } from '../../../../publisher/lib/latestPointer';
 import { sliceModelForFolder, sliceModelForView } from '../../../../publisher/lib/sliceModel';
+import { loadPublishServerSettings } from '../../../../publisher/server/publishServerSettings';
+import { publishZip } from '../../../../publisher/server/publishServerClient';
 
 import type { PublishScope } from '../dialogs/PublishDialog';
 
@@ -73,6 +75,14 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
+  const [publishServerResult, setPublishServerResult] = useState<{
+    datasetId: string;
+    bundleId: string;
+    publishedAt?: string;
+    latestUrl?: string;
+    manifestUrl?: string;
+  } | null>(null);
 
   const [publishTitle, setPublishTitle] = useState('');
   const [publishScope, setPublishScope] = useState<PublishScope>('model');
@@ -91,6 +101,8 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
     if (!model) return;
     setPublishDialogOpen(true);
     setPublishError(null);
+    setPublishSuccess(null);
+    setPublishServerResult(null);
     // Default title: current file name or model name
     const fallback = fileName ?? model.metadata?.name ?? 'EA Portal dataset';
     setPublishTitle(fallback);
@@ -147,6 +159,95 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
       setPublishDialogOpen(false);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
+      setPublishSuccess(null);
+      setPublishError(msg);
+    } finally {
+      setPublishing(false);
+    }
+  }, [activeViewId, fileName, model, publishScope, publishTitle, selectedFolderId]);
+
+  /**
+   * Step 0 placeholder: the Publish dialog is our integration point for "Publish to Server".
+   * Later steps will implement building the same bundle ZIP and uploading it via the publishing-server API.
+   */
+  const doPublishToServer = useCallback(async () => {
+    const s = loadPublishServerSettings();
+    const baseUrl = s.baseUrl?.trim();
+    const datasetId = s.datasetId?.trim();
+
+    if (!baseUrl) {
+      setPublishError('Publishing server is not configured yet. Set a "Server base URL" in the Publish dialog, then try again.');
+      return;
+    }
+    if (!datasetId) {
+      setPublishError('Dataset ID is not set yet. Set a "Dataset ID" in the Publish dialog, then try again.');
+      return;
+    }
+    if (!model) {
+      setPublishError('No model is loaded.');
+      return;
+    }
+
+    setPublishing(true);
+    setPublishError(null);
+    setPublishSuccess(null);
+    setPublishServerResult(null);
+
+    try {
+      // Build the same bundle ZIP as the manual publish flow, but upload it to the server.
+      const srcModel =
+        publishScope === 'view' && activeViewId
+          ? sliceModelForView(model, activeViewId)
+          : publishScope === 'folder' && selectedFolderId
+          ? sliceModelForFolder(model, selectedFolderId)
+          : model;
+
+      const exportName =
+        publishScope === 'view' && activeViewId && model.views?.[activeViewId]
+          ? model.views[activeViewId].name
+          : publishScope === 'folder' && selectedFolderId && model.folders?.[selectedFolderId]
+          ? model.folders[selectedFolderId].name
+          : fileName ?? model.metadata?.name;
+
+      const bundle = buildPublishBundleZip(srcModel, {
+        sourceTool: 'EA Modeller',
+        exportType: publishScope === 'view' ? 'ViewScope' : publishScope === 'folder' ? 'FolderScope' : 'ModelScope',
+        exportName
+      });
+
+      // NOTE: Server publishing uploads ONLY the bundle ZIP.
+      // Do NOT upload the manual latest.json; the server generates/updates its own datasets/<id>/latest.json.
+      const res = await publishZip({
+        baseUrl,
+        datasetId,
+        zipBytes: bundle.zipBytes,
+        zipFileName: bundle.zipFileName,
+        title: publishTitle?.trim() ? publishTitle.trim() : undefined
+      });
+
+      const lines: string[] = [
+        `Published to server`,
+        `Dataset: ${res.datasetId}`,
+        `Bundle: ${res.bundleId}`,
+        res.publishedAt ? `Published at: ${res.publishedAt}` : ''
+      ].filter(Boolean);
+
+      if (res.urls?.latest) lines.push(`Latest: ${res.urls.latest}`);
+      if (res.urls?.manifest) lines.push(`Manifest: ${res.urls.manifest}`);
+
+      setPublishServerResult({
+        datasetId: res.datasetId,
+        bundleId: res.bundleId,
+        publishedAt: res.publishedAt,
+        latestUrl: (res.urls?.latest ?? undefined),
+        manifestUrl: (res.urls?.manifest ?? undefined),
+      });
+
+      setPublishSuccess(lines.join('\\n'));
+      setPublishDialogOpen(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setPublishSuccess(null);
       setPublishError(msg);
     } finally {
       setPublishing(false);
@@ -158,6 +259,8 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
     setPublishDialogOpen,
     publishing,
     publishError,
+    publishSuccess,
+    publishServerResult,
 
     publishTitle,
     setPublishTitle,
@@ -172,6 +275,7 @@ export function useModelPublishActions({ model, fileName, activeViewId }: UseMod
     canPublishView,
 
     openPublish,
-    doPublish
+    doPublish,
+    doPublishToServer
   };
 }

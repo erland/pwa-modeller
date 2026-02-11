@@ -79,6 +79,8 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
     setPublishDialogOpen: publish.setPublishDialogOpen,
     publishing: publish.publishing,
     publishError: publish.publishError,
+    publishSuccess: publish.publishSuccess,
+    publishServerResult: publish.publishServerResult,
     publishTitle: publish.publishTitle,
     setPublishTitle: publish.setPublishTitle,
     publishScope: publish.publishScope,
@@ -89,6 +91,7 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
     currentViewLabel: publish.currentViewLabel,
     canPublishView: publish.canPublishView,
     runPublish: publish.doPublish,
+    runPublishToServer: publish.doPublishToServer,
 
     // helpers
     confirmReplaceIfDirty: file.confirmReplaceIfDirty,

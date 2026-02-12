@@ -1,6 +1,6 @@
 import type { AutoLayoutOptions, LayoutInput, LayoutOutput } from '../../../../domain/layout/types';
 import { computeLayoutSignature } from '../../../../domain/layout';
-import { adjustEdgeRoutesForMovedNodes, snapToGrid } from '../../../../domain/layout/post';
+import { snapToGrid } from '../../../../domain/layout/post';
 import type { Model } from '../../../../domain';
 import { autoLayoutMutations } from '../../../mutations';
 import type { LayoutOpsDeps } from '../layoutOpsTypes';
@@ -49,13 +49,14 @@ export async function runHierarchicalAutoLayout(args: {
     output.positions[id] = { x: p.x, y: p.y };
   }
 
-  const originalPositions = { ...output.positions };
-
   // Snap to grid (deterministic + tidy). Avoid overlap nudge for hierarchical layouts,
   // as it can push children outside containers.
   const GRID = 10;
   const snapped = snapToGrid(output.positions, GRID, fixedIds);
-  const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, prepared.input.edges, originalPositions, snapped);
+  // NOTE: We intentionally do NOT persist ELK edge routes.
+  // Persisted bend-points tend to become stale when users later drag nodes,
+  // resulting in odd "sticking" corners. Let the built-in router recompute.
+  const edgeRoutes = undefined;
 
   // Build geometry updates: positions for all nodes, sizes for container nodes.
   const geometryById: Record<string, { x?: number; y?: number; width?: number; height?: number }> = {};

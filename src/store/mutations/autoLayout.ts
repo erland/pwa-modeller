@@ -60,8 +60,9 @@ function normalizeBendPoints(points: Point[]): Point[] {
 
 function clearManualEdgePointsForView(model: Model, viewId: string): void {
   const view = getView(model, viewId);
-  // For UML/BPMN we prefer the built-in router over persisted bend-points from ELK.
-  // Persisted points cause stale/odd routing when nodes move after auto-layout.
+  // We prefer the built-in router over persisted bend-points from ELK.
+  // Persisted points cause stale/odd routing when nodes move after auto-layout
+  // ("sticking" corners), and can even yield non-orthogonal segments.
   let changed = false;
 
   const nextConnections = (view.connections ?? []).map((c: ViewConnection) => {
@@ -75,8 +76,8 @@ function clearManualEdgePointsForView(model: Model, viewId: string): void {
       // Always reset endpoint anchoring overrides on auto layout.
       sourceAnchor: undefined,
       targetAnchor: undefined,
-      // For UML/BPMN we also reset persisted bendpoints.
-      points: view.kind === 'archimate' ? c.points : undefined,
+      // Always reset persisted bend-points so the router can recompute cleanly.
+      points: undefined,
     };
   });
 

@@ -1,6 +1,6 @@
 import type { AutoLayoutOptions, LayoutInput, LayoutOutput } from '../../../../domain/layout/types';
 import { computeLayoutSignature } from '../../../../domain/layout';
-import { adjustEdgeRoutesForMovedNodes, nudgeOverlaps, snapToGrid } from '../../../../domain/layout/post';
+import { nudgeOverlaps, snapToGrid } from '../../../../domain/layout/post';
 import type { Model } from '../../../../domain';
 import { autoLayoutMutations } from '../../../mutations';
 import type { LayoutOpsDeps } from '../layoutOpsTypes';
@@ -48,8 +48,6 @@ export async function runFlatAutoLayout(args: {
     output.positions[id] = { x: p.x, y: p.y };
   }
 
-  const originalPositions = { ...output.positions };
-
   // Snap to grid first (keeps things tidy and deterministic).
   const GRID = 10;
   let positions = snapToGrid(output.positions, GRID, fixedIds);
@@ -61,7 +59,11 @@ export async function runFlatAutoLayout(args: {
 
   positions = nudgeOverlaps(nudgeNodes, positions, { padding: 10, fixedIds });
 
-  const edgeRoutes = adjustEdgeRoutesForMovedNodes(output.edgeRoutes, extracted.edges, originalPositions, positions);
+  // NOTE: We intentionally do NOT persist ELK edge routes.
+  // Persisted bend-points tend to become stale when users later drag nodes,
+  // resulting in odd "sticking" corners (especially visible in ArchiMate).
+  // The built-in router should be the single source of truth for interactive routing.
+  const edgeRoutes = undefined;
 
   const currentGeometry = readCurrentNodeGeometryById(getModel(), viewId);
   if (shouldSkipCommit(currentGeometry, positions, undefined, Boolean(edgeRoutes && Object.keys(edgeRoutes).length))) {

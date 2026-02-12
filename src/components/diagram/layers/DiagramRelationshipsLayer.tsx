@@ -87,6 +87,7 @@ export function DiagramRelationshipsLayer({
 
       const sKey = refKey(nodeRefFromLayout(s)!);
       const tKey = refKey(nodeRefFromLayout(t)!);
+      const isSelf = sKey === tKey;
       const obstacles = nodes
         .filter((n) => {
           const r = nodeRefFromLayout(n);
@@ -96,12 +97,16 @@ export function DiagramRelationshipsLayer({
         })
         .map(nodeRect);
 
+      const selfBounds = isSelf ? nodeRect(s) : undefined;
+
       obstaclesById.set(conn.id, obstacles);
 
       const hints = {
         ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
         obstacles,
         obstacleMargin: gridSize ? gridSize / 2 : 10,
+        selfLoop: isSelf,
+        selfBounds,
       };
       let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
 

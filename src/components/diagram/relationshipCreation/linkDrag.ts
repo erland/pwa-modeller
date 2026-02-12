@@ -33,11 +33,10 @@ export function hitTestRelationshipTarget(args: {
   model: Model | null;
   nodes: ViewNodeLayout[];
   viewId: string;
-  sourceRef: ConnectableRef;
   point: Point;
 }): ConnectableRef | null {
-  const { model, nodes, viewId, sourceRef, point } = args;
-  const rawTargetRef = hitTestConnectable(nodes, point, sourceRef);
+  const { model, nodes, viewId, point } = args;
+  const rawTargetRef = hitTestConnectable(nodes, point, null); // allow self-relationships
   return filterDropTarget({ model, viewId, targetRef: rawTargetRef });
 }
 
@@ -48,7 +47,7 @@ export function updateLinkDragOnMove(args: {
   point: Point;
 }): DiagramLinkDrag {
   const { prev, model, nodes, point } = args;
-  const targetRef = hitTestRelationshipTarget({ model, nodes, viewId: prev.viewId, sourceRef: prev.sourceRef, point });
+  const targetRef = hitTestRelationshipTarget({ model, nodes, viewId: prev.viewId, point });
   return { ...prev, currentPoint: point, targetRef };
 }
 
@@ -59,7 +58,7 @@ export function resolveLinkDragTargetOnUp(args: {
   point: Point | null;
 }): ConnectableRef | null {
   const { prev, model, nodes, point } = args;
-  if (point) return hitTestRelationshipTarget({ model, nodes, viewId: prev.viewId, sourceRef: prev.sourceRef, point });
+  if (point) return hitTestRelationshipTarget({ model, nodes, viewId: prev.viewId, point });
   // If we can't compute a point (rare), fall back to current targetRef
   return filterDropTarget({ model, viewId: prev.viewId, targetRef: prev.targetRef ?? null });
 }

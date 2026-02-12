@@ -837,6 +837,11 @@ body {
   outline-offset: 2px;
 }
 
+.diagramConnectorNode.isRelSelfTarget {
+  outline: 2px dashed rgba(234, 179, 8, 0.90);
+  outline-offset: 2px;
+}
+
 .diagramConnectorNode.isRelSource {
   outline: 2px solid rgba(59, 130, 246, 0.70);
   outline-offset: 2px;
@@ -857,6 +862,11 @@ body {
 
 .diagramNode.isRelTarget {
   outline: 2px solid rgba(34, 197, 94, 0.85);
+  outline-offset: 2px;
+}
+
+.diagramNode.isRelSelfTarget {
+  outline: 2px dashed rgba(234, 179, 8, 0.90);
   outline-offset: 2px;
 }
 

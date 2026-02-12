@@ -9,6 +9,7 @@ export type DiagramLinkDrag = {
   viewId: string;
   sourceRef: ConnectableRef;
   sourcePoint: Point;
+  startPoint: Point;
   currentPoint: Point;
   targetRef: ConnectableRef | null;
 };
@@ -87,6 +88,7 @@ export function DiagramNode({
 
   const selfRef: ConnectableRef = { kind: 'element', id: el.id };
   const isRelTarget = Boolean(linkDrag && sameRef(linkDrag.targetRef, selfRef) && !sameRef(linkDrag.sourceRef, selfRef));
+  const isRelSelfTarget = Boolean(linkDrag && sameRef(linkDrag.targetRef, selfRef) && sameRef(linkDrag.sourceRef, selfRef));
   const isRelSource = Boolean(linkDrag && sameRef(linkDrag.sourceRef, selfRef));
 
   const w = n.width ?? 120;
@@ -110,6 +112,7 @@ export function DiagramNode({
         (isSelected ? ' isSelected' : '') +
         (n.highlighted ? ' isHighlighted' : '') +
         (isRelTarget ? ' isRelTarget' : '') +
+	        (isRelSelfTarget ? ' isRelSelfTarget' : '') +
         (isRelSource ? ' isRelSource' : '')
       }
       style={
@@ -199,7 +202,7 @@ export function DiagramNode({
         type="button"
         className="diagramRelHandle"
         aria-label={`Create relationship from ${el.name || '(unnamed)'}`}
-        title="Drag to another element to create a relationship"
+        title="Drag to an element (including itself) to create a relationship"
         onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -213,6 +216,7 @@ export function DiagramNode({
             viewId: activeViewId,
             sourceRef: selfRef,
             sourcePoint,
+            startPoint: p,
             currentPoint: p,
             targetRef: null,
           });

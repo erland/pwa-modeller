@@ -30,6 +30,16 @@ export type OrthogonalRoutingHints = {
 
   /** Additional margin added around obstacles (in model units). Defaults to gridSize/2. */
   obstacleMargin?: number;
+
+  /**
+   * When true, force generation of a self-loop polyline (used when a relationship connects
+   * an element to itself). This guarantees an orthogonal polyline with at least 3 segments
+   * (4+ points) and distinct start/end directions.
+   */
+  selfLoop?: boolean;
+
+  /** Bounds of the self node (model coordinates). Used to ensure the loop routes outside the node. */
+  selfBounds?: { x: number; y: number; w: number; h: number };
 };
 
 function manhattanLength(points: Point[]): number {
@@ -177,7 +187,45 @@ function chooseBestCandidate(candidates: Point[][], hints?: OrthogonalRoutingHin
   return simplifyPolyline(best ?? candidates[0] ?? []);
 }
 
+function selfLoopPolyline(a: Point, b: Point, hints?: OrthogonalRoutingHints): Point[] {
+  // Ensure a stable, orthogonal "loop" that goes outside the owning node.
+  const grid = hints?.gridSize ?? 0;
+  const baseStep = grid && grid > 0 ? Math.max(2 * grid, 40) : 40;
+
+  const bounds = hints?.selfBounds;
+  const right = bounds ? bounds.x + bounds.w : Math.max(a.x, b.x);
+  const left = bounds ? bounds.x : Math.min(a.x, b.x);
+  const top = bounds ? bounds.y : Math.min(a.y, b.y);
+  const bottom = bounds ? bounds.y + bounds.h : Math.max(a.y, b.y);
+
+  // Prefer routing outwards on the side that is "closest" to the start point.
+  const outX = a.x >= (left + (bounds ? bounds.w / 2 : 0)) ? right + baseStep : left - baseStep;
+  const outY = a.y <= (top + (bounds ? bounds.h / 2 : 0)) ? top - baseStep : bottom + baseStep;
+
+  // If endpoints are equal (should be rare due to different anchors), draw a small square.
+  if (a.x === b.x && a.y === b.y) {
+    return simplifyPolyline([a, { x: outX, y: a.y }, { x: outX, y: outY }, { x: a.x, y: outY }, b]);
+  }
+
+  // If aligned horizontally, route via an offset Y channel to guarantee 3 segments.
+  if (a.y === b.y) {
+    return simplifyPolyline([a, { x: a.x, y: outY }, { x: b.x, y: outY }, b]);
+  }
+
+  // If aligned vertically, route via an offset X channel to guarantee 3 segments.
+  if (a.x === b.x) {
+    return simplifyPolyline([a, { x: outX, y: a.y }, { x: outX, y: b.y }, b]);
+  }
+
+  // General case: use an offset X channel (3 segments).
+  return simplifyPolyline([a, { x: outX, y: a.y }, { x: outX, y: b.y }, b]);
+}
+
 export function orthogonalAutoPolyline(a: Point, b: Point, hints?: OrthogonalRoutingHints): Point[] {
+  if (hints?.selfLoop) {
+    return selfLoopPolyline(a, b, hints);
+  }
+
   const hasObstacles = !!(hints?.obstacles && hints.obstacles.length > 0);
   const aligned = a.x === b.x || a.y === b.y;
 

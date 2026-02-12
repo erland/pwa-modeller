@@ -98,6 +98,7 @@ export function useDiagramConnections({ model, activeView, nodes }: Args) {
       };
       const sKey = refKey(nodeRefFromLayout(s)!);
       const tKey = refKey(nodeRefFromLayout(t)!);
+      const isSelf = sKey === tKey;
       const obstacles = nodes
         .filter((n) => {
           const r = nodeRefFromLayout(n);
@@ -107,6 +108,8 @@ export function useDiagramConnections({ model, activeView, nodes }: Args) {
         })
         .map(nodeRect);
 
+      const selfBounds = isSelf ? nodeRect(s) : undefined;
+
       obstaclesById.set(conn.id, obstacles);
 
       const gridSize = activeView.formatting?.gridSize;
@@ -114,6 +117,8 @@ export function useDiagramConnections({ model, activeView, nodes }: Args) {
         ...orthogonalRoutingHintsFromAnchors(s, start, t, end, gridSize),
         obstacles,
         obstacleMargin: gridSize ? gridSize / 2 : 10,
+        selfLoop: isSelf,
+        selfBounds,
       };
       let points: Point[] = getConnectionPath(conn, { a: start, b: end, hints }).points;
 

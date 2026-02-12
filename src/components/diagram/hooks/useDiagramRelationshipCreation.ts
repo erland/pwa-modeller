@@ -82,7 +82,13 @@ export function useDiagramRelationshipCreation({ model, nodes, clientToModelPoin
 
         const target = resolveLinkDragTargetOnUp({ prev, model, nodes, point: p });
 
-        if (target && !sameRef(target, prev.sourceRef)) {
+        const endPoint = p ?? prev.currentPoint;
+        const dx = endPoint.x - prev.startPoint.x;
+        const dy = endPoint.y - prev.startPoint.y;
+        const movedEnough = dx * dx + dy * dy >= 25; // >= 5px in model coords
+
+        // Allow self-relationships if the user actually dragged (not just clicked).
+        if (target && (!sameRef(target, prev.sourceRef) || movedEnough)) {
           setPendingCreateRel({ viewId: prev.viewId, sourceRef: prev.sourceRef, targetRef: target });
           // We'll pick the dialog default via effect below, but set a safe initial value immediately.
           setPendingRelType(lastRelType);

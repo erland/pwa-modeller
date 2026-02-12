@@ -199,6 +199,7 @@ export function computeRelationshipItems(args: {
 
       const sKey = refKey({ kind: conn.source.kind, id: conn.source.id });
       const tKey = refKey({ kind: conn.target.kind, id: conn.target.id });
+      const isSelf = sKey === tKey;
       const obstacles: Array<{ x: number; y: number; w: number; h: number }> = [];
       for (const n of nodes) {
         const r = nodeRefFromLayout(n);
@@ -209,11 +210,15 @@ export function computeRelationshipItems(args: {
       }
       obstaclesById.set(conn.id, obstacles);
 
+      const selfBounds = isSelf ? nodeRect(sNode) : undefined;
+
       const gridSize = view.formatting?.gridSize;
       const hints = {
         ...orthogonalRoutingHintsFromAnchors(sNode, start, tNode, end, gridSize),
         obstacles,
         obstacleMargin: gridSize ? gridSize / 2 : 10,
+        selfLoop: isSelf,
+        selfBounds,
       };
 
       let points = getConnectionPath({ route: conn.route, points: translatedPoints }, { a: start, b: end, hints }).points;

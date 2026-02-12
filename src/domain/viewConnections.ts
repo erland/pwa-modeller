@@ -127,6 +127,13 @@ export function materializeViewConnectionsForView(model: Model, view: View): Vie
         source: prev.source ?? sourceRef,
         target: prev.target ?? targetRef,
         route: prev.route?.kind ? prev.route : { kind: 'orthogonal' },
+        // For self-relationships, ensure we have stable anchor hints so the route is visible.
+        ...(keyOf(sourceRef) === keyOf(targetRef)
+          ? {
+              sourceAnchor: prev.sourceAnchor ?? 'right',
+              targetAnchor: prev.targetAnchor ?? 'top',
+            }
+          : null),
       });
     } else {
       next.push({
@@ -136,6 +143,9 @@ export function materializeViewConnectionsForView(model: Model, view: View): Vie
         source: sourceRef,
         target: targetRef,
         route: { kind: 'orthogonal' },
+        ...(keyOf(sourceRef) === keyOf(targetRef)
+          ? { sourceAnchor: 'right', targetAnchor: 'top' }
+          : null),
       });
     }
   }

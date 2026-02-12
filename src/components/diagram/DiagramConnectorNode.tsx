@@ -36,6 +36,7 @@ export function DiagramConnectorNode({
   const selfRef: ConnectableRef = { kind: 'connector', id: c.id };
 
   const isRelTarget = Boolean(linkDrag && sameRef(linkDrag.targetRef, selfRef) && !sameRef(linkDrag.sourceRef, selfRef));
+  const isRelSelfTarget = Boolean(linkDrag && sameRef(linkDrag.targetRef, selfRef) && sameRef(linkDrag.sourceRef, selfRef));
   const isRelSource = Boolean(linkDrag && sameRef(linkDrag.sourceRef, selfRef));
 
   const w = n.width ?? 24;
@@ -51,6 +52,7 @@ export function DiagramConnectorNode({
         (isSelected ? ' isSelected' : '') +
         (n.highlighted ? ' isHighlighted' : '') +
         (isRelTarget ? ' isRelTarget' : '') +
+	        (isRelSelfTarget ? ' isRelSelfTarget' : '') +
         (isRelSource ? ' isRelSource' : '')
       }
       style={
@@ -119,6 +121,7 @@ export function DiagramConnectorNode({
             viewId: activeViewId,
             sourceRef: selfRef,
             sourcePoint,
+            startPoint: p,
             currentPoint: p,
             targetRef: null,
           });

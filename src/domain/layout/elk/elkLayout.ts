@@ -1,5 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { AutoLayoutOptions, LayoutDirection, LayoutInput, LayoutOutput } from '../types';
+import { simpleRadialLayout } from '../radial/simpleRadialLayout';
 import { buildElkRootOptions } from './presetElkOptions';
 
 type ElkNode = {
@@ -70,6 +71,12 @@ function edgeRoutingToElk(edgeRouting: AutoLayoutOptions['edgeRouting']): 'POLYL
  * - "locked" nodes are not enforced at this stage; handle that in a post-pass if needed.
  */
 export async function elkLayout(input: LayoutInput, options: AutoLayoutOptions = {}): Promise<LayoutOutput> {
+  // ELK radial is unstable in the current elkjs bundle (can cause stack overflows).
+  // Use a minimal deterministic radial layout instead.
+  if (options.preset === 'radial') {
+    return simpleRadialLayout(input, options);
+  }
+
   const spacing = options.spacing ?? 80;
 
   const rootOptions = buildElkRootOptions(spacing, options, { hierarchical: false, hasHierarchy: false });

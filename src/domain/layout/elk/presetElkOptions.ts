@@ -67,6 +67,12 @@ export function buildElkRootOptions(
       presetNodeNode = Math.round(nodeNode * 0.9);
       break;
     case 'flow_bands':
+      // Banded ArchiMate layouts need more horizontal room so the router can find clear channels.
+      presetNodeNode = Math.round(nodeNode * 1.25);
+      presetEdgeNode = Math.round(edgeNode * 1.15);
+      presetEdgeEdge = Math.round(edgeEdge * 1.15);
+      break;
+    case 'flow':
     case 'flow':
     default:
       break;

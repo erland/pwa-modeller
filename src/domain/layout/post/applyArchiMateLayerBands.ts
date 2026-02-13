@@ -2,6 +2,8 @@ import type { ArchimateLayer } from '../../types';
 import type { LayoutNodeInput, LayoutOutput } from '../types';
 
 export type ArchiMateBandOptions = {
+  /** Minimum horizontal gap between nodes within the same band (in px). */
+  minGap?: number;
   /** Vertical gap between bands (in px). */
   bandGap?: number;
   /** Grid size used for snapping band Y positions. */
@@ -45,6 +47,7 @@ export function applyArchiMateLayerBands(
   options: ArchiMateBandOptions = {}
 ): LayoutOutput['positions'] {
   const bandGap = options.bandGap ?? 90;
+  const minGap = options.minGap ?? 80;
   const grid = options.grid ?? 10;
   const fixedIds = options.fixedIds ?? new Set<string>();
 
@@ -100,6 +103,34 @@ export function applyArchiMateLayerBands(
       const p = out[n.id];
       if (!p) continue;
       out[n.id] = { x: p.x, y: yBand };
+    }
+  }
+
+
+  // Enforce a simple minimum horizontal gap within each band so the orthogonal router
+  // can find clear "channels" between neighboring nodes. This is intentionally
+  // lightweight: it only shifts nodes to the right, and never moves fixed nodes.
+  for (const band of order) {
+    const nodesInBand = byBand[band]
+      .slice()
+      .sort((a, b) => (out[a.id]?.x ?? 0) - (out[b.id]?.x ?? 0));
+
+    let prevRight = -Infinity;
+    for (const n of nodesInBand) {
+      const p = out[n.id];
+      if (!p) continue;
+      const w = Math.max(1, n.width ?? 1);
+
+      if (fixedIds.has(n.id)) {
+        prevRight = Math.max(prevRight, p.x + w);
+        continue;
+      }
+
+      const desiredX = prevRight === -Infinity ? p.x : Math.max(p.x, prevRight + minGap);
+      if (desiredX !== p.x) {
+        out[n.id] = { x: desiredX, y: p.y };
+      }
+      prevRight = (out[n.id]?.x ?? p.x) + w;
     }
   }
 

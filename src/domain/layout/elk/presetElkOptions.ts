@@ -57,10 +57,12 @@ export function buildElkRootOptions(
       presetEdgeEdge = Math.round(edgeEdge * 1.2);
       break;
     case 'network':
-      // Stress (force-like) benefits from slightly larger separation.
-      presetNodeNode = Math.round(nodeNode * 1.2);
-      presetEdgeNode = Math.round(edgeNode * 1.1);
-      presetEdgeEdge = Math.round(edgeEdge * 1.1);
+      // Stress (force-like) defaults are often too compact for readability,
+      // especially when combined with orthogonal routing. "Network" should be
+      // spacious by default so relationships get clear channels.
+      presetNodeNode = Math.round(nodeNode * 1.75);
+      presetEdgeNode = Math.round(edgeNode * 1.4);
+      presetEdgeEdge = Math.round(edgeEdge * 1.25);
       break;
     case 'tree':
       // Trees often look better a bit tighter.
@@ -72,7 +74,6 @@ export function buildElkRootOptions(
       presetEdgeNode = Math.round(edgeNode * 1.15);
       presetEdgeEdge = Math.round(edgeEdge * 1.15);
       break;
-    case 'flow':
     case 'flow':
     default:
       break;

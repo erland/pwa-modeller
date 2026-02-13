@@ -10,8 +10,11 @@ function fnv1a32(str: string): string {
   return h.toString(16).padStart(8, '0');
 }
 
-function effectiveOptions(options: AutoLayoutOptions): Required<Pick<AutoLayoutOptions, 'direction' | 'spacing' | 'edgeRouting' | 'scope' | 'respectLocked' | 'lockSelection'>> {
+function effectiveOptions(
+  options: AutoLayoutOptions
+): Required<Pick<AutoLayoutOptions, 'preset' | 'direction' | 'spacing' | 'edgeRouting' | 'scope' | 'respectLocked' | 'lockSelection'>> {
   return {
+    preset: options.preset ?? 'flow',
     direction: options.direction ?? 'RIGHT',
     spacing: options.spacing ?? 80,
     edgeRouting: options.edgeRouting ?? 'POLYLINE',
@@ -89,6 +92,7 @@ export function computeLayoutSignature(params: {
     `view=${params.viewId}`,
     `kind=${params.viewKind}`,
     `mode=${params.mode}`,
+    `preset=${opt.preset}`,
     `dir=${opt.direction}`,
     `space=${opt.spacing}`,
     `route=${opt.edgeRouting}`,

@@ -1,5 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { AutoLayoutOptions, LayoutDirection, LayoutInput, LayoutOutput } from '../types';
+import { presetToElkAlgorithm } from './presetToElkAlgorithm';
 
 type ElkNode = {
   id: string;
@@ -84,7 +85,7 @@ export async function elkLayout(input: LayoutInput, options: AutoLayoutOptions =
   const root: ElkNode = {
     id: 'root',
     layoutOptions: {
-      'elk.algorithm': 'layered',
+      'elk.algorithm': presetToElkAlgorithm(options.preset),
       'elk.direction': directionToElk(options.direction),
       'elk.edgeRouting': edgeRoutingToElk(options.edgeRouting),
       // General spacing between nodes.

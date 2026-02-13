@@ -115,7 +115,7 @@ export function AutoLayoutDialog({ isOpen, onClose, initialOptions, onRun, viewK
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p className="hintText" style={{ margin: 0 }}>
-          Arranges nodes using an auto-layout preset. (Preset wiring is introduced in Step 1; algorithm mapping is added in Step 2.)
+          Arranges nodes using an auto-layout preset. Tip: use Flow for processes, Tree for decomposition, Network for dense landscapes, and Radial for hub-and-spoke.
         </p>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} aria-label="Auto layout presets">

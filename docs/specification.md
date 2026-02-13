@@ -380,3 +380,9 @@ The following features are not part of the initial functional scope but are iden
   7. Generate a simple report listing all Application Components (or another element type) in tabular form.
 
 If all acceptance criteria are met and no critical defects are present in core workflows (model creation, editing, saving, and opening), the MVP is considered functionally complete.
+
+---
+
+## Auto layout
+
+See `docs/auto-layout.md` for available auto-layout presets and guidance on when to use each.

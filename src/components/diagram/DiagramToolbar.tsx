@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { AlignMode, AutoLayoutOptions, DistributeMode, Model, SameSizeMode, View } from '../../domain';
 
@@ -78,11 +78,32 @@ export function DiagramToolbar({
   const [alignDialogOpen, setAlignDialogOpen] = useState(false);
 
   const [autoLayoutDialogOpen, setAutoLayoutDialogOpen] = useState(false);
-  const [autoLayoutSettingsByKind, setAutoLayoutSettingsByKind] = useState<Record<string, AutoLayoutOptions>>({
-    archimate: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 80, edgeRouting: 'POLYLINE', respectLocked: true },
-    bpmn: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 100, edgeRouting: 'ORTHOGONAL', respectLocked: true },
-    uml: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 110, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+  const [autoLayoutSettingsByKind, setAutoLayoutSettingsByKind] = useState<Record<string, AutoLayoutOptions>>(() => {
+    const defaults: Record<string, AutoLayoutOptions> = {
+      // Defaults tuned per notation; users can override via the dialog.
+      archimate: { preset: 'flow_bands', scope: 'all', direction: 'RIGHT', spacing: 80, edgeRouting: 'POLYLINE', respectLocked: true },
+      bpmn: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 100, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+      uml: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 110, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+    };
+
+    try {
+      const raw = localStorage.getItem('eaModeller:autoLayoutSettingsByKind');
+      if (!raw) return defaults;
+      const parsed = JSON.parse(raw) as Record<string, AutoLayoutOptions>;
+      return { ...defaults, ...(parsed ?? {}) };
+    } catch {
+      return defaults;
+    }
   });
+
+  // Persist last used settings (including preset) so the dialog remembers user preference.
+  useEffect(() => {
+    try {
+      localStorage.setItem('eaModeller:autoLayoutSettingsByKind', JSON.stringify(autoLayoutSettingsByKind));
+    } catch {
+      // Ignore persistence errors (e.g., private mode / quota), UX remains functional.
+    }
+  }, [autoLayoutSettingsByKind]);
 
   const selectedNodeCount = useMemo(() => {
     if (!activeViewId) return 0;

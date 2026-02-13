@@ -193,14 +193,27 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
       if (!activeViewId || !activeView) return;
       try {
         const defaultsByKind: Record<string, AutoLayoutOptions> = {
-          archimate: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 80, edgeRouting: 'POLYLINE', respectLocked: true },
+          archimate: { preset: 'flow_bands', scope: 'all', direction: 'RIGHT', spacing: 80, edgeRouting: 'POLYLINE', respectLocked: true },
           bpmn: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 100, edgeRouting: 'ORTHOGONAL', respectLocked: true },
           uml: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 110, edgeRouting: 'ORTHOGONAL', respectLocked: true },
         };
 
+        // If the user has previously used the Auto Layout dialog, prefer those persisted settings as the baseline.
+        let persisted: AutoLayoutOptions | undefined;
+        try {
+          const raw = localStorage.getItem('eaModeller:autoLayoutSettingsByKind');
+          if (raw) {
+            const parsed = JSON.parse(raw) as Record<string, AutoLayoutOptions>;
+            persisted = parsed?.[activeView.kind];
+          }
+        } catch {
+          // ignore
+        }
+
         // Defaults tuned per notation, but overridable via the dialog.
         const options: AutoLayoutOptions = {
           ...(defaultsByKind[activeView.kind] ?? defaultsByKind.archimate),
+          ...(persisted ?? {}),
           ...overrides,
         };
 

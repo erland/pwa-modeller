@@ -4,6 +4,9 @@ export type EdgeRoutingStyle = 'POLYLINE' | 'ORTHOGONAL';
 
 export type AutoLayoutScope = 'all' | 'selection';
 
+// High-level layout style presets (wiring to algorithms happens in later steps).
+export type LayoutPreset = 'flow' | 'tree' | 'network' | 'radial' | 'flow_bands';
+
 // Arrange / alignment utilities.
 export type AlignMode = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 
@@ -12,6 +15,12 @@ export type DistributeMode = 'horizontal' | 'vertical';
 export type SameSizeMode = 'width' | 'height' | 'both';
 
 export interface AutoLayoutOptions {
+  /**
+   * High-level preset for auto layout.
+   * Step 1 introduces the API + UI selector; later steps wire this to different ELK algorithms.
+   */
+  preset?: LayoutPreset;
+
   /**
    * Layout direction for layered layouts.
    * - RIGHT: left-to-right

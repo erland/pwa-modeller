@@ -193,9 +193,9 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
       if (!activeViewId || !activeView) return;
       try {
         const defaultsByKind: Record<string, AutoLayoutOptions> = {
-          archimate: { scope: 'all', direction: 'RIGHT', spacing: 80, edgeRouting: 'POLYLINE', respectLocked: true },
-          bpmn: { scope: 'all', direction: 'RIGHT', spacing: 100, edgeRouting: 'ORTHOGONAL', respectLocked: true },
-          uml: { scope: 'all', direction: 'RIGHT', spacing: 110, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+          archimate: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 80, edgeRouting: 'POLYLINE', respectLocked: true },
+          bpmn: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 100, edgeRouting: 'ORTHOGONAL', respectLocked: true },
+          uml: { preset: 'flow', scope: 'all', direction: 'RIGHT', spacing: 110, edgeRouting: 'ORTHOGONAL', respectLocked: true },
         };
 
         // Defaults tuned per notation, but overridable via the dialog.

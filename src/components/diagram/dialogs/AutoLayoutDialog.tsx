@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { AutoLayoutOptions, EdgeRoutingStyle, LayoutDirection, View } from '../../../domain';
+import type { AutoLayoutOptions, EdgeRoutingStyle, LayoutDirection, LayoutPreset, View } from '../../../domain';
 
 import { Dialog } from '../../dialog/Dialog';
 
@@ -23,6 +23,7 @@ const SPACING_PRESETS: Array<{ label: string; value: number }> = [
 ];
 
 export function AutoLayoutDialog({ isOpen, onClose, initialOptions, onRun, viewKind, hasSelection = false }: Props) {
+  const [preset, setPreset] = useState<LayoutPreset>('flow');
   const [direction, setDirection] = useState<LayoutDirection>('RIGHT');
   const [spacing, setSpacing] = useState<number>(80);
   const [edgeRouting, setEdgeRouting] = useState<EdgeRoutingStyle>('POLYLINE');
@@ -32,13 +33,27 @@ export function AutoLayoutDialog({ isOpen, onClose, initialOptions, onRun, viewK
 
   useEffect(() => {
     if (!isOpen) return;
+    setPreset(initialOptions.preset ?? 'flow');
     setDirection(initialOptions.direction ?? 'RIGHT');
     setSpacing(initialOptions.spacing ?? 80);
     setEdgeRouting(initialOptions.edgeRouting ?? 'POLYLINE');
     setScope(initialOptions.scope ?? 'all');
     setRespectLocked(initialOptions.respectLocked ?? true);
     setLockSelection(initialOptions.lockSelection ?? false);
-  }, [isOpen, initialOptions.direction, initialOptions.edgeRouting, initialOptions.respectLocked, initialOptions.scope, initialOptions.spacing, initialOptions.lockSelection]);
+  }, [isOpen, initialOptions.preset, initialOptions.direction, initialOptions.edgeRouting, initialOptions.respectLocked, initialOptions.scope, initialOptions.spacing, initialOptions.lockSelection]);
+
+  const layoutPresets = useMemo(() => {
+    const base: Array<{ value: LayoutPreset; label: string }> = [
+      { value: 'flow', label: 'Flow (Layered)' },
+      { value: 'tree', label: 'Tree' },
+      { value: 'network', label: 'Network' },
+      { value: 'radial', label: 'Radial' },
+    ];
+    if (viewKind === 'archimate') {
+      return [...base, { value: 'flow_bands', label: 'Flow + Layer Bands (ArchiMate)' }];
+    }
+    return base;
+  }, [viewKind]);
 
   const presets = useMemo(() => {
     if (viewKind === 'bpmn') {
@@ -82,6 +97,7 @@ export function AutoLayoutDialog({ isOpen, onClose, initialOptions, onRun, viewK
             className="shellButton"
             onClick={() => {
               const opts: AutoLayoutOptions = {
+                preset,
                 direction,
                 spacing,
                 edgeRouting,
@@ -99,7 +115,7 @@ export function AutoLayoutDialog({ isOpen, onClose, initialOptions, onRun, viewK
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p className="hintText" style={{ margin: 0 }}>
-          Arranges nodes using a layered layout. Locked nodes can be kept fixed.
+          Arranges nodes using an auto-layout preset. (Preset wiring is introduced in Step 1; algorithm mapping is added in Step 2.)
         </p>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} aria-label="Auto layout presets">
@@ -132,6 +148,21 @@ export function AutoLayoutDialog({ isOpen, onClose, initialOptions, onRun, viewK
           >
             <option value="all">All nodes in view</option>
             <option value="selection">Selected nodes</option>
+          </select>
+
+          <label htmlFor="auto-layout-preset">Preset</label>
+          <select
+            id="auto-layout-preset"
+            className="selectInput"
+            value={preset}
+            onChange={(e) => setPreset(e.target.value as LayoutPreset)}
+            title="Layout preset"
+          >
+            {layoutPresets.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
           </select>
 
           <label htmlFor="auto-layout-direction">Direction</label>

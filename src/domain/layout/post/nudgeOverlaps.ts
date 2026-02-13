@@ -9,6 +9,12 @@ export type NudgeNode = {
 export type NudgeOptions = {
   padding?: number;
   fixedIds?: ReadonlySet<string>;
+  /**
+   * Resolution mode:
+   * - 'x'  : only shift along X (keeps rows/bands stable)
+   * - 'xy' : allow shifting along X or Y (better for dense free-form views)
+   */
+  mode?: 'x' | 'xy';
   /** Safety cap to prevent infinite loops on pathological input. */
   maxIterations?: number;
 };
@@ -42,6 +48,7 @@ export function nudgeOverlaps(
   const padding = options.padding ?? 10;
   const fixedIds = options.fixedIds ?? new Set<string>();
   const maxIterations = options.maxIterations ?? 2000;
+  const mode = options.mode ?? 'x';
 
   // Only consider nodes we have positions for.
   const present = nodes
@@ -71,7 +78,7 @@ export function nudgeOverlaps(
     }
 
     let x = start.x;
-    const y = start.y;
+    let y = start.y;
     let iterations = 0;
 
     while (iterations++ < maxIterations) {
@@ -79,8 +86,47 @@ export function nudgeOverlaps(
       const blocker = placed.find((p) => overlaps(r, p.rect));
       if (!blocker) break;
 
-      // Shift to the right of the blocker.
-      x = blocker.rect.x + blocker.rect.w + padding;
+      // Candidate moves.
+      // Always include "right"; optionally consider "down" and "up".
+      const candidates: { x: number; y: number; tag: 'right' | 'down' | 'up' }[] = [
+        { x: blocker.rect.x + blocker.rect.w + padding, y, tag: 'right' },
+      ];
+      if (mode === 'xy') {
+        candidates.push(
+          { x, y: blocker.rect.y + blocker.rect.h + padding, tag: 'down' },
+          { x, y: blocker.rect.y - node.h - padding, tag: 'up' }
+        );
+      }
+
+      // Pick the candidate that causes the fewest overlaps with already placed nodes.
+      // Tie-breaker: smallest movement; then deterministic tag priority.
+      const tagPriority: Record<string, number> = { right: 0, down: 1, up: 2 };
+
+      let best = candidates[0];
+      let bestOverlaps = Number.POSITIVE_INFINITY;
+      let bestMove = Number.POSITIVE_INFINITY;
+      let bestTag = Number.POSITIVE_INFINITY;
+
+      for (const c of candidates) {
+        const rr = rectOf(node, { x: c.x, y: c.y });
+        const count = placed.reduce((acc, p) => acc + (overlaps(rr, p.rect) ? 1 : 0), 0);
+        const move = Math.abs(c.x - x) + Math.abs(c.y - y);
+        const pri = tagPriority[c.tag];
+
+        if (
+          count < bestOverlaps ||
+          (count === bestOverlaps && move < bestMove) ||
+          (count === bestOverlaps && move === bestMove && pri < bestTag)
+        ) {
+          best = c;
+          bestOverlaps = count;
+          bestMove = move;
+          bestTag = pri;
+        }
+      }
+
+      x = best.x;
+      y = best.y;
     }
 
     out[node.id] = { x, y };

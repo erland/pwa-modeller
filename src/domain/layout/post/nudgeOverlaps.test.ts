@@ -28,4 +28,34 @@ describe('nudgeOverlaps', () => {
     expect(overlaps(rA, rB)).toBe(false);
     expect(out.B.x).toBeGreaterThanOrEqual(110);
   });
+
+  it('in xy mode can choose vertical nudges when x-only would keep colliding', () => {
+    const nodes: NudgeNode[] = [
+      { id: 'D', w: 100, h: 100 },
+      { id: 'A', w: 100, h: 50 },
+      { id: 'B', w: 100, h: 50 }
+    ];
+
+    // D is slightly above, so it is "earlier" in stable order and acts as a blocker.
+    const positions = {
+      D: { x: 110, y: -10 },
+      A: { x: 0, y: 0 },
+      B: { x: 50, y: 0 }
+    };
+
+    const out = nudgeOverlaps(nodes, positions, {
+      padding: 10,
+      fixedIds: new Set(['D', 'A']),
+      mode: 'xy'
+    });
+
+    const rA = rect(nodes[1], out.A);
+    const rB = rect(nodes[2], out.B);
+    const rD = rect(nodes[0], out.D);
+
+    expect(overlaps(rA, rB)).toBe(false);
+    expect(overlaps(rD, rB)).toBe(false);
+    // Should have moved off the original row (up or down) rather than only pushing right.
+    expect(out.B.y).not.toBe(0);
+  });
 });

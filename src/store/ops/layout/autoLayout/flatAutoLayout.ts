@@ -65,7 +65,10 @@ export async function runFlatAutoLayout(args: {
     .map((n) => ({ id: n.id, w: n.width, h: n.height }))
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  positions = nudgeOverlaps(nudgeNodes, positions, { padding: 10, fixedIds });
+  // In banded ArchiMate mode we keep Y stable (only shift X) to preserve band rows.
+  // For other flat layouts we allow X/Y nudges to reduce drift on dense views.
+  const nudgeMode = viewKind === 'archimate' && options.preset === 'flow_bands' ? 'x' : 'xy';
+  positions = nudgeOverlaps(nudgeNodes, positions, { padding: 10, fixedIds, mode: nudgeMode });
 
   // NOTE: We intentionally do NOT persist ELK edge routes.
   // Persisted bend-points tend to become stale when users later drag nodes,

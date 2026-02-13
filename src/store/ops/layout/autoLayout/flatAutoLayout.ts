@@ -1,6 +1,6 @@
 import type { AutoLayoutOptions, LayoutInput, LayoutOutput } from '../../../../domain/layout/types';
 import { computeLayoutSignature } from '../../../../domain/layout';
-import { nudgeOverlaps, snapToGrid } from '../../../../domain/layout/post';
+import { applyArchiMateLayerBands, nudgeOverlaps, snapToGrid } from '../../../../domain/layout/post';
 import type { Model } from '../../../../domain';
 import { autoLayoutMutations } from '../../../mutations';
 import type { LayoutOpsDeps } from '../layoutOpsTypes';
@@ -51,6 +51,14 @@ export async function runFlatAutoLayout(args: {
   // Snap to grid first (keeps things tidy and deterministic).
   const GRID = 10;
   let positions = snapToGrid(output.positions, GRID, fixedIds);
+
+  // Optional ArchiMate "layer bands" layout: normalize Y into Business/Application/Technology rows.
+  // This is intentionally lightweight; `nudgeOverlaps()` will then only shift X within each band.
+  if (viewKind === 'archimate' && options.preset === 'flow_bands') {
+    positions = applyArchiMateLayerBands(extracted.nodes, positions, { grid: GRID, fixedIds });
+    // Keep band rows on-grid.
+    positions = snapToGrid(positions, GRID, fixedIds);
+  }
 
   // Then nudge remaining overlaps. Use node sizes from the layout input.
   const nudgeNodes = [...extracted.nodes]

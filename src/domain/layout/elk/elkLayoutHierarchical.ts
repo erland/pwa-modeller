@@ -1,7 +1,7 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 
 import type { AutoLayoutOptions, LayoutDirection, LayoutInput, LayoutOutput } from '../types';
-import { presetToElkAlgorithm } from './presetToElkAlgorithm';
+import { buildElkRootOptions } from './presetElkOptions';
 
 type ElkNode = {
   id: string;
@@ -79,6 +79,13 @@ function edgeRoutingToElk(edgeRouting: AutoLayoutOptions['edgeRouting']): 'POLYL
 export async function elkLayoutHierarchical(input: LayoutInput, options: AutoLayoutOptions = {}): Promise<LayoutOutput> {
   const spacing = options.spacing ?? 80;
 
+  const hasHierarchy = input.nodes.some((n) => !!n.parentId);
+  const rootOptions = buildElkRootOptions(spacing, options, { hierarchical: true, hasHierarchy });
+
+  // Slightly larger container padding helps "round" layouts (radial/stress) not collide
+  // with container borders when hierarchy is present.
+  const containerPadding = options.preset === 'radial' || options.preset === 'network' ? 60 : 40;
+
   const nodes = [...input.nodes].sort((a, b) => a.id.localeCompare(b.id));
   const edges = [...input.edges].sort((a, b) => {
     const s = a.sourceId.localeCompare(b.sourceId);
@@ -111,7 +118,7 @@ export async function elkLayoutHierarchical(input: LayoutInput, options: AutoLay
         ? {
             layoutOptions: {
               // Standard ELK padding syntax.
-              'elk.padding': '[top=40,left=40,bottom=40,right=40]',
+              'elk.padding': `[top=${containerPadding},left=${containerPadding},bottom=${containerPadding},right=${containerPadding}]`,
             },
             children: childIds.sort((a, b) => a.localeCompare(b)).map(buildNode),
           }
@@ -140,13 +147,9 @@ export async function elkLayoutHierarchical(input: LayoutInput, options: AutoLay
   const root: ElkNode = {
     id: 'root',
     layoutOptions: {
-      'elk.algorithm': presetToElkAlgorithm(options.preset),
       'elk.direction': directionToElk(options.direction),
       'elk.edgeRouting': edgeRoutingToElk(options.edgeRouting),
-      'elk.spacing.nodeNode': String(spacing),
-      'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing),
-      'elk.spacing.edgeNode': String(Math.max(20, Math.floor(spacing / 3))),
-      'elk.spacing.edgeEdge': String(Math.max(10, Math.floor(spacing / 4))),
+      ...rootOptions.layoutOptions,
     },
     children: topLevelIds.sort((a, b) => a.localeCompare(b)).map(buildNode),
     edges: edges.map((e) => ({

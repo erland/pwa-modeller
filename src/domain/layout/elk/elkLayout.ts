@@ -1,6 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { AutoLayoutOptions, LayoutDirection, LayoutInput, LayoutOutput } from '../types';
-import { presetToElkAlgorithm } from './presetToElkAlgorithm';
+import { buildElkRootOptions } from './presetElkOptions';
 
 type ElkNode = {
   id: string;
@@ -72,6 +72,8 @@ function edgeRoutingToElk(edgeRouting: AutoLayoutOptions['edgeRouting']): 'POLYL
 export async function elkLayout(input: LayoutInput, options: AutoLayoutOptions = {}): Promise<LayoutOutput> {
   const spacing = options.spacing ?? 80;
 
+  const rootOptions = buildElkRootOptions(spacing, options, { hierarchical: false, hasHierarchy: false });
+
   // Keep ordering stable for deterministic results.
   const nodes = [...input.nodes].sort((a, b) => a.id.localeCompare(b.id));
   const edges = [...input.edges].sort((a, b) => {
@@ -85,16 +87,9 @@ export async function elkLayout(input: LayoutInput, options: AutoLayoutOptions =
   const root: ElkNode = {
     id: 'root',
     layoutOptions: {
-      'elk.algorithm': presetToElkAlgorithm(options.preset),
       'elk.direction': directionToElk(options.direction),
       'elk.edgeRouting': edgeRoutingToElk(options.edgeRouting),
-      // General spacing between nodes.
-      'elk.spacing.nodeNode': String(spacing),
-      // Spacing between layers in layered layouts.
-      'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing),
-      // A bit of breathing room so labels/handles don't feel cramped.
-      'elk.spacing.edgeNode': String(Math.max(20, Math.floor(spacing / 3))),
-      'elk.spacing.edgeEdge': String(Math.max(10, Math.floor(spacing / 4))),
+      ...rootOptions.layoutOptions,
     },
     children: nodes.map((n) => ({
       id: n.id,

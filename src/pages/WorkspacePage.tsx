@@ -155,7 +155,16 @@ export default function WorkspacePage() {
           modelStore.removeElementFromView(selection.viewId, selection.elementId);
           setSelection({ kind: 'view', viewId: selection.viewId });
           return;
-        case 'viewObject': {
+        case 'viewNodes': {
+          // Remove multiple selected elements from the current view (diagram objects remain).
+          const uniqueIds = Array.from(new Set(selection.elementIds));
+          for (const elementId of uniqueIds) {
+            modelStore.removeElementFromView(selection.viewId, elementId);
+          }
+          setSelection({ kind: 'view', viewId: selection.viewId });
+          return;
+        }
+case 'viewObject': {
           const ok = window.confirm('Delete this diagram object?');
           if (ok) {
             modelStore.deleteViewObject(selection.viewId, selection.objectId);

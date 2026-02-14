@@ -16,6 +16,9 @@ import { resolveOverlayAgainstModel } from '../resolve';
 import type { ResolveReport } from '../resolve';
 import { getEffectiveTagsForElement, getEffectiveTagsForRelationship } from '../effectiveTags';
 
+import { parseCsv, toCsvLine } from './csv';
+export { parseCsv } from './csv';
+
 export type SurveyTargetSet = 'elements' | 'relationships' | 'both';
 
 export type SurveyExportOptions = {
@@ -47,138 +50,6 @@ export type SurveyImportResult = {
 
 const FIXED_COLS = ['kind', 'target_id', 'ref_scheme', 'ref_scope', 'ref_value', 'name', 'type'] as const;
 
-function escapeCsvCell(v: string): string {
-  const s = (v ?? '').toString();
-  if (!s) return '';
-  if (/[\n\r",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-function toCsvLine(cells: string[]): string {
-  return cells.map(escapeCsvCell).join(',');
-}
-
-type CsvDelimiter = ',' | ';' | '\t';
-
-function countDelimsInSample(sample: string, delim: CsvDelimiter): number {
-  let count = 0;
-  let inQuotes = false;
-  for (let i = 0; i < sample.length; i++) {
-    const ch = sample[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        const next = sample[i + 1];
-        if (next === '"') {
-          i++;
-          continue;
-        }
-        inQuotes = false;
-      }
-      continue;
-    }
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-    if (ch === delim) count++;
-    if (ch === '\n' || ch === '\r') break;
-  }
-  return count;
-}
-
-function detectDelimiter(text: string): CsvDelimiter {
-  const s = (text ?? '').toString();
-  // Use the first non-empty line as the sample (usually the header).
-  const lines = s.split(/\r?\n/);
-  const sample = (lines.find((l) => l.trim().length > 0) ?? '').toString();
-  const candidates: CsvDelimiter[] = [',', ';', '\t'];
-  let best: CsvDelimiter = ',';
-  let bestCount = -1;
-  for (const d of candidates) {
-    const c = countDelimsInSample(sample, d);
-    if (c > bestCount) {
-      bestCount = c;
-      best = d;
-    }
-  }
-  return best;
-}
-
-/** Minimal CSV parser (RFC4180-ish). Handles quoted fields, commas/semicolons/tabs, CRLF/LF. */
-export function parseCsv(text: string, delimiter?: CsvDelimiter): string[][] {
-  const out: string[][] = [];
-  const s = (text ?? '').toString();
-
-  const delim: CsvDelimiter = delimiter ?? detectDelimiter(s);
-
-  let row: string[] = [];
-  let cell = '';
-  let i = 0;
-  let inQuotes = false;
-
-  const pushCell = () => {
-    row.push(cell);
-    cell = '';
-  };
-  const pushRow = () => {
-    // ignore trailing empty row
-    if (row.length === 1 && row[0] === '' && out.length === 0) {
-      row = [];
-      return;
-    }
-    out.push(row);
-    row = [];
-  };
-
-  while (i < s.length) {
-    const ch = s[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        const next = s[i + 1];
-        if (next === '"') {
-          cell += '"';
-          i += 2;
-          continue;
-        }
-        inQuotes = false;
-        i++;
-        continue;
-      }
-      cell += ch;
-      i++;
-      continue;
-    }
-
-    if (ch === '"') {
-      inQuotes = true;
-      i++;
-      continue;
-    }
-
-    if (ch === delim) {
-      pushCell();
-      i++;
-      continue;
-    }
-
-    if (ch === '\n' || ch === '\r') {
-      pushCell();
-      pushRow();
-      // swallow CRLF
-      if (ch === '\r' && s[i + 1] === '\n') i++;
-      i++;
-      continue;
-    }
-
-    cell += ch;
-    i++;
-  }
-
-  // last cell/row
-  pushCell();
-  if (row.some((c) => c !== '') || out.length > 0) pushRow();
-  return out;
-}
 
 function normalizeTagKeys(keys: string[]): string[] {
   const set = new Set<string>();
@@ -362,7 +233,7 @@ export function importOverlaySurveyCsvToStore(args: {
     };
   }
 
-  const header = rows[0].map((h) => (h ?? '').toString().trim());
+  const header = rows[0].map((h: unknown) => (h ?? '').toString().trim());
   const missing = FIXED_COLS.filter((c) => !header.includes(c));
   if (missing.length) {
     warnings.push(`missing required columns: ${missing.join(', ')}`);
@@ -380,7 +251,7 @@ export function importOverlaySurveyCsvToStore(args: {
   // Start at 1 to skip header.
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
-    if (!row || row.every((c) => (c ?? '') === '')) {
+    if (!row || row.every((c: unknown) => (c ?? '') === '')) {
       rowsSkipped++;
       continue;
     }

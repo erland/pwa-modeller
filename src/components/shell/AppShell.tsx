@@ -5,9 +5,9 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import '../../styles/shell.css';
 import { computeModelSignature } from '../../domain';
 import { loadOverlayExportMarker, useModelStore, useOverlayStore } from '../../store';
-import { initRelationshipValidationMatrixFromBundledTable } from '../../domain/config/archimatePalette';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
+import { useAppInit } from '../../app/init/useAppInit';
 
 type AppShellProps = {
   title: string;
@@ -124,10 +124,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const overlayExportMarker = overlaySignature ? loadOverlayExportMarker(overlaySignature) : null;
   const overlayExportDirty = overlayCount > 0 && (!overlayExportMarker || overlayExportMarker.version !== overlayVersion);
 
-  // We always use strict ArchiMate relationship validation now. Best-effort preload.
-  useEffect(() => {
-    void initRelationshipValidationMatrixFromBundledTable().catch(() => undefined);
-  }, []);
+  useAppInit();
 
   const online = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();

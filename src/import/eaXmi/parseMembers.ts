@@ -106,6 +106,48 @@ function readDefaultValue(el: Element): string | undefined {
   return t || undefined;
 }
 
+
+function simplifyJavaType(javaType: string): string {
+  const s = (javaType ?? '').trim();
+  if (!s) return s;
+  // Replace fully-qualified class names with their simple name.
+  // Example: java.util.List<java.lang.String> -> List<String>
+  return s.replace(/\b[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)+\b/g, (m) => {
+    const parts = m.split('.');
+    return parts[parts.length - 1] ?? m;
+  });
+}
+
+function readJavaToXmiAnnotationValue(el: Element, source: string): string | undefined {
+  // <eAnnotations source="…"><details key="value" value="…"/></eAnnotations>
+  const anns = childrenByLocalName(el, 'eannotations');
+  for (const a of anns) {
+    const src = (attr(a, 'source') ?? '').trim();
+    if (src !== source) continue;
+    const details = childrenByLocalName(a, 'details');
+    for (const d of details) {
+      const key = (attr(d, 'key') ?? '').trim();
+      if (key !== 'value') continue;
+      const val = (attrAny(d, ['value', 'body', 'text']) ?? d.textContent ?? '').trim();
+      if (val) return val;
+    }
+  }
+  return undefined;
+}
+
+function resolveJavaToXmiDisplayType(el: Element): string | undefined {
+  const javaTypeRaw = readJavaToXmiAnnotationValue(el, 'java-to-xmi:javaType');
+  if (javaTypeRaw) return simplifyJavaType(javaTypeRaw);
+
+  const typeArgsRaw = readJavaToXmiAnnotationValue(el, 'java-to-xmi:typeArgs');
+  const args = (typeArgsRaw ?? '').trim();
+  if (!args) return undefined;
+
+  // If we only have typeArgs, we'll try to build Base<Args> from the resolved UML type name.
+  // Callers can decide how to combine it.
+  return simplifyJavaType(args);
+}
+
 function parseAttributeLikeElement(
   attributeEl: Element,
   resolver: TypeNameResolver,
@@ -118,6 +160,7 @@ function parseAttributeLikeElement(
   const isStatic = parseBool(attrAny(attributeEl, ['isStatic', 'static']));
   // Prevent historical bug where the UML metaclass (uml:Property) was mistakenly treated as datatype.
   const type = resolver.resolveFromElement(attributeEl, 'uml:Property');
+  const javaTypeDisplay = resolveJavaToXmiDisplayType(attributeEl);
   const multiplicity = readMultiplicity(attributeEl);
   const defaultValue = readDefaultValue(attributeEl);
 
@@ -125,7 +168,12 @@ function parseAttributeLikeElement(
   // Step 6 refactor: keep datatype fields explicit.
   outAttr.metaclass = 'uml:Property';
   if (type.ref) outAttr.dataTypeRef = type.ref;
-  if (type.name) outAttr.dataTypeName = type.name;
+  if (javaTypeDisplay) {
+    // Prefer exporter-provided Java generic type info when available (e.g. List<String>).
+    outAttr.dataTypeName = javaTypeDisplay.includes('<') ? javaTypeDisplay : (type.name ? `${type.name}<${javaTypeDisplay}>` : javaTypeDisplay);
+  } else if (type.name) {
+    outAttr.dataTypeName = type.name;
+  }
   if (multiplicity) outAttr.multiplicity = multiplicity;
   if (vis) outAttr.visibility = vis;
   if (typeof isStatic === 'boolean' && isStatic) outAttr.isStatic = true;
@@ -196,9 +244,14 @@ function parseOwnedOperations(
       const dir = (attr(p, 'direction') ?? '').trim();
       // Defensive: never treat the UML metaclass token as a datatype.
       const typeName = resolver.resolveFromElement(p, 'uml:Parameter').name;
+      const javaTypeRaw = readJavaToXmiAnnotationValue(p, 'java-to-xmi:javaType');
+      const typeArgsRaw = readJavaToXmiAnnotationValue(p, 'java-to-xmi:typeArgs');
+      const javaTypeName = javaTypeRaw ? simplifyJavaType(javaTypeRaw) : undefined;
+      const typeArgsName = (!javaTypeName && typeArgsRaw) ? simplifyJavaType(typeArgsRaw) : undefined;
+      const effectiveTypeName = javaTypeName ? javaTypeName : (typeArgsName && typeName ? `${typeName}<${typeArgsName}>` : typeName);
 
       if (dir === 'return') {
-        if (typeName) returnType = typeName;
+        if (effectiveTypeName) returnType = effectiveTypeName;
         continue;
       }
 
@@ -206,7 +259,7 @@ function parseOwnedOperations(
       if (!pn) continue;
 
       const param: EaXmiUmlParameter = { name: pn };
-      if (typeName) param.type = typeName;
+      if (effectiveTypeName) param.type = effectiveTypeName;
       params.push(param);
     }
 

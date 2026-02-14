@@ -1,8 +1,11 @@
 import type * as React from 'react';
+import type { Key } from '@react-types/shared';
 
 import type { NavNode } from './types';
-import { DND_ELEMENT_MIME, DND_FOLDER_MIME, DND_VIEW_MIME } from './types';
+import { DND_ELEMENT_MIME, DND_ELEMENTS_MIME, DND_FOLDER_MIME, DND_VIEW_MIME } from './types';
 import { dndLog } from './dndUtils';
+import { elementIdsFromKeys } from './navKey';
+
 
 type Result = {
   draggable: boolean;
@@ -10,7 +13,12 @@ type Result = {
   onDragEnd: (e: React.DragEvent<HTMLDivElement>) => void;
 };
 
-export function useNavigatorRowDnd(node: NavNode): Result {
+export function useNavigatorRowDnd(
+  node: NavNode,
+  selectedKeys: Set<Key>,
+  getRecentMultiSelectedElementIds: () => string[],
+  restoreRecentMultiSelectionForDrag?: (draggedElementId: string | null | undefined) => void
+): Result {
   const draggable =
     (node.kind === 'element' && Boolean(node.elementId))
     || (node.kind === 'view' && Boolean(node.viewId))
@@ -36,9 +44,36 @@ export function useNavigatorRowDnd(node: NavNode): Result {
       types: Array.from(e.dataTransfer?.types ?? []),
     });
 
+    // If the dragged item is an element and part of the current multi-selection, include all selected elements.
+        const selectedElementIds =
+      node.kind === 'element' && node.elementId && selectedKeys.has(node.key)
+        ? elementIdsFromKeys(selectedKeys)
+        : [];
+
+    // Fallback: if selection collapses during drag initiation, try using the recent multi-selection snapshot.
+    const recent = getRecentMultiSelectedElementIds();
+    const effectiveElementIds =
+      selectedElementIds.length > 1
+        ? selectedElementIds
+        : node.kind === 'element' && node.elementId && recent.length > 1 && recent.includes(node.elementId)
+          ? recent
+          : selectedElementIds;
+
+    const isMultiElementDrag = effectiveElementIds.length > 1;
+
+    // Keep visual selection stable while dragging: releasing Cmd/Shift can cause the Tree
+    // to temporarily collapse selection to the pressed row.
+    if (node.kind === 'element' && node.elementId && isMultiElementDrag) {
+      try {
+        restoreRecentMultiSelectionForDrag?.(node.elementId);
+      } catch {
+        // ignore
+      }
+    }
+
     const payload =
       node.kind === 'element' && node.elementId
-        ? { mime: DND_ELEMENT_MIME, id: node.elementId, effectAllowed: 'copyMove' as const }
+        ? { mime: DND_ELEMENT_MIME, id: node.elementId, effectAllowed: 'copyMove' as const, elementIds: isMultiElementDrag ? effectiveElementIds : undefined }
         : node.kind === 'view' && node.viewId
           ? { mime: DND_VIEW_MIME, id: node.viewId, effectAllowed: 'move' as const }
           : node.kind === 'folder' && node.folderId && node.canRename
@@ -49,7 +84,20 @@ export function useNavigatorRowDnd(node: NavNode): Result {
 
     try {
       e.dataTransfer.setData(payload.mime, payload.id);
-      e.dataTransfer.setData('text/plain', `pwa-modeller:${node.kind}:${payload.id}`);
+
+      // Best-effort multi-element payload.
+      if (payload.mime === DND_ELEMENT_MIME && payload.elementIds && payload.elementIds.length > 1) {
+        try {
+          const json = JSON.stringify(payload.elementIds);
+          e.dataTransfer.setData(DND_ELEMENTS_MIME, json);
+          e.dataTransfer.setData('text/plain', `pwa-modeller:elements:${json}`);
+        } catch {
+          // Fallback to single element text payload.
+          e.dataTransfer.setData('text/plain', `pwa-modeller:element:${payload.id}`);
+        }
+      } else {
+        e.dataTransfer.setData('text/plain', `pwa-modeller:${node.kind}:${payload.id}`);
+      }
       // Also set legacy plain id for consumers that expect it (best-effort).
       try {
         e.dataTransfer.setData('text/pwa-modeller-legacy-id', payload.id);
@@ -91,6 +139,14 @@ export function useNavigatorRowDnd(node: NavNode): Result {
   };
 
   const onDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
+    // Restore multi-selection after drop: some trees collapse selection on pointer up.
+    if (node.kind === 'element' && node.elementId) {
+      try {
+        restoreRecentMultiSelectionForDrag?.(node.elementId);
+      } catch {
+        // ignore
+      }
+    }
     try {
       window.dispatchEvent(new CustomEvent('modelNavigator:dragend'));
     } catch {

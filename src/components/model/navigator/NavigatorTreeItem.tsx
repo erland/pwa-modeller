@@ -12,11 +12,16 @@ type Props = {
   node: NavNode;
   depth: number;
 
+  // Selection state (used for multi-drag).
+  selectedKeys: Set<Key>;
+
+  getRecentMultiSelectedElementIds: () => string[];
+  restoreRecentMultiSelectionForDrag: (draggedElementId: string | null | undefined) => void;
+
   expandedKeys: Set<Key>;
   toggleExpanded: (nodeKey: string) => void;
 
   // Selection
-  handleSelectionChange: (keys: unknown) => void;
 
   // Inline rename state
   editingKey: string | null;
@@ -39,9 +44,11 @@ type Props = {
 export function NavigatorTreeItem({
   node,
   depth,
+  selectedKeys,
+  getRecentMultiSelectedElementIds,
+  restoreRecentMultiSelectionForDrag,
   expandedKeys,
   toggleExpanded,
-  handleSelectionChange,
   editingKey,
   editingValue,
   setEditingValue,
@@ -71,7 +78,9 @@ export function NavigatorTreeItem({
           title={title}
           hasChildren={hasChildren}
           isExpanded={isExpanded}
-          handleSelectionChange={handleSelectionChange}
+          selectedKeys={selectedKeys}
+          getRecentMultiSelectedElementIds={getRecentMultiSelectedElementIds}
+          restoreRecentMultiSelectionForDrag={restoreRecentMultiSelectionForDrag}
           toggleExpanded={toggleExpanded}
           isEditing={isEditing}
           editingValue={editingValue}
@@ -93,9 +102,11 @@ export function NavigatorTreeItem({
               node={c}
               depth={depth + 1}
               key={c.key}
+              selectedKeys={selectedKeys}
+              getRecentMultiSelectedElementIds={getRecentMultiSelectedElementIds}
+              restoreRecentMultiSelectionForDrag={restoreRecentMultiSelectionForDrag}
               expandedKeys={expandedKeys}
               toggleExpanded={toggleExpanded}
-              handleSelectionChange={handleSelectionChange}
               editingKey={editingKey}
               editingValue={editingValue}
               setEditingValue={setEditingValue}

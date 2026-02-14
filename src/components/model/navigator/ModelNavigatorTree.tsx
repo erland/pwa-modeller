@@ -14,7 +14,9 @@ type Props = {
   /** The technical root folder id. UI hides the root node but we still need a drop/create target for it. */
   rootFolderId: string;
   treeData: NavNode[];
-  selectedKey: string | null;
+  selectedKeys: Set<Key>;
+  getRecentMultiSelectedElementIds: () => string[];
+  restoreRecentMultiSelectionForDrag: (draggedElementId: string | null | undefined) => void;
   expandedKeys: Set<Key>;
   setExpandedKeys: React.Dispatch<React.SetStateAction<Set<Key>>>;
   handleSelectionChange: (keys: unknown) => void;
@@ -52,7 +54,9 @@ type Props = {
 export function ModelNavigatorTree({
   rootFolderId,
   treeData,
-  selectedKey,
+  selectedKeys,
+  getRecentMultiSelectedElementIds,
+  restoreRecentMultiSelectionForDrag,
   expandedKeys,
   setExpandedKeys,
   handleSelectionChange,
@@ -145,9 +149,10 @@ export function ModelNavigatorTree({
 
       <Tree
         aria-label="Model navigator"
-        selectionMode="single"
+        selectionMode="multiple"
+        selectionBehavior="replace"
         // Keep selection controlled by the Workspace selection state.
-        selectedKeys={selectedKey ? new Set([selectedKey]) : new Set()}
+        selectedKeys={selectedKeys}
         onSelectionChange={handleSelectionChange}
         expandedKeys={expandedKeys}
         onExpandedChange={(keys) =>
@@ -184,9 +189,11 @@ export function ModelNavigatorTree({
             node={n}
             depth={0}
             key={n.key}
+            selectedKeys={selectedKeys}
+            getRecentMultiSelectedElementIds={getRecentMultiSelectedElementIds}
+            restoreRecentMultiSelectionForDrag={restoreRecentMultiSelectionForDrag}
             expandedKeys={expandedKeys}
             toggleExpanded={toggleExpanded}
-            handleSelectionChange={handleSelectionChange}
             editingKey={editingKey}
             editingValue={editingValue}
             setEditingValue={setEditingValue}

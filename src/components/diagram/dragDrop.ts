@@ -1,18 +1,20 @@
 // Drag payload for dragging an element from the tree into a view.
 // NOTE: must match the MIME used by the navigator drag source.
 const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
+// Drag payload for dragging multiple elements from the tree into a view.
+const DND_ELEMENTS_MIME = 'application/x-pwa-modeller-element-ids';
 
 export function dataTransferHasElement(dt: DataTransfer | null): boolean {
   if (!dt) return false;
   const types = Array.from(dt.types ?? []);
-  if (types.includes(DND_ELEMENT_MIME)) return true;
+  if (types.includes(DND_ELEMENT_MIME) || types.includes(DND_ELEMENTS_MIME)) return true;
 
   // Many browsers (and some iOS/Safari versions) only reliably expose 'text/plain' during DnD.
   if (types.includes('text/plain')) {
     const s = String(dt.getData('text/plain') || '');
     // If we can detect our prefixed payload, only treat element drags as droppable on the canvas.
     if (s.startsWith('pwa-modeller:')) {
-      return s.startsWith('pwa-modeller:element:');
+      return s.startsWith('pwa-modeller:element:') || s.startsWith('pwa-modeller:elements:');
     }
     // If empty or unrecognized, fall back to allowing it (legacy behavior).
     return true;
@@ -45,4 +47,40 @@ export function readDraggedElementId(dt: DataTransfer | null): string | null {
 
   // Legacy fallback: plain element id.
   return s;
+}
+
+export function readDraggedElementIds(dt: DataTransfer | null): string[] {
+  if (!dt) return [];
+
+  // Prefer explicit multi-element payload.
+  const typed = dt.getData(DND_ELEMENTS_MIME);
+  if (typed) {
+    try {
+      const parsed = JSON.parse(String(typed));
+      if (Array.isArray(parsed)) {
+        return parsed.map((x) => String(x)).filter(Boolean);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const raw = dt.getData('text/plain');
+  if (raw) {
+    const s = String(raw);
+    if (s.startsWith('pwa-modeller:elements:')) {
+      const json = s.substring('pwa-modeller:elements:'.length);
+      try {
+        const parsed = JSON.parse(json);
+        if (Array.isArray(parsed)) {
+          return parsed.map((x) => String(x)).filter(Boolean);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  const single = readDraggedElementId(dt);
+  return single ? [single] : [];
 }

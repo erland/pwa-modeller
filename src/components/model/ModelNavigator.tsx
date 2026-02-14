@@ -55,6 +55,19 @@ export function ModelNavigator({ selection, onSelect }: Props) {
     });
   }, [model, rootFolder, searchTerm]);
 
+  const currentViewId =
+    selection.kind === 'view'
+      ? selection.viewId
+      : selection.kind === 'viewNode'
+        ? selection.viewId
+        : selection.kind === 'viewNodes'
+          ? selection.viewId
+          : selection.kind === 'viewObject'
+            ? selection.viewId
+            : selection.kind === 'relationship'
+              ? (selection.viewId ?? null)
+              : null;
+
   const nav = useNavigatorState({ model, treeData, searchTerm, selection, onSelect });
 
   const openCreateFolder = (parentFolderId: string) => {
@@ -100,13 +113,20 @@ export function ModelNavigator({ selection, onSelect }: Props) {
         onCreateFolder={openCreateFolder}
         onCreateElement={openCreateElement}
         onCreateView={openCreateView}
+        currentViewId={currentViewId}
+        multiSelectedElementIds={nav.selectedElementIds}
+        onAddElementsToCurrentView={(viewId, elementIds) => {
+          modelStore.addElementsToViewFromNavigator(viewId, elementIds, { autoLayout: true });
+        }}
       />
 
       <div className="navTreeWrap" onKeyDown={nav.onTreeKeyDown}>
         <ModelNavigatorTree
           rootFolderId={rootFolder.id}
           treeData={treeData}
-          selectedKey={nav.selectedKey}
+          selectedKeys={nav.selectedKeys}
+          getRecentMultiSelectedElementIds={nav.getRecentMultiSelectedElementIds}
+          restoreRecentMultiSelectionForDrag={nav.restoreRecentMultiSelectionForDrag}
           expandedKeys={nav.expandedKeys}
           setExpandedKeys={nav.setExpandedKeys}
           handleSelectionChange={nav.handleSelectionChange}

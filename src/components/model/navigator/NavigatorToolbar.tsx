@@ -22,6 +22,11 @@ type Props = {
   onCreateFolder: (parentFolderId: string) => void;
   onCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
   onCreateView: (opts?: { targetFolderId?: string; ownerElementId?: string; initialKind?: ModelKind }) => void;
+
+  /** Multi-select support: add selected elements to the currently open view (if any). */
+  currentViewId: string | null;
+  multiSelectedElementIds: string[];
+  onAddElementsToCurrentView: (viewId: string, elementIds: string[]) => void;
 };
 
 export function NavigatorToolbar({
@@ -34,7 +39,10 @@ export function NavigatorToolbar({
   setSearchQuery,
   onCreateFolder,
   onCreateElement,
-  onCreateView
+  onCreateView,
+  currentViewId,
+  multiSelectedElementIds,
+  onAddElementsToCurrentView
 }: Props) {
   return (
     <div className="navigatorHeader">
@@ -60,6 +68,19 @@ export function NavigatorToolbar({
             onClick={() => setSearchQuery('')}
           >
             ✕
+          </button>
+        )}
+
+
+        {currentViewId && multiSelectedElementIds.length > 0 && (
+          <button
+            type="button"
+            className="miniButton"
+            aria-label={`Add ${multiSelectedElementIds.length} element(s) to current view`}
+            onClick={() => onAddElementsToCurrentView(currentViewId, multiSelectedElementIds)}
+            title="Add selected elements to the current view"
+          >
+            ⇢ View ({multiSelectedElementIds.length})
           </button>
         )}
 

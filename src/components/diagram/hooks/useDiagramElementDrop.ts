@@ -4,7 +4,7 @@ import type { Model } from '../../../domain';
 import { modelStore } from '../../../store';
 import { getNotation } from '../../../notations';
 import type { Selection } from '../../model/selection';
-import { dataTransferHasElement, readDraggedElementId } from '../dragDrop';
+import { dataTransferHasElement, readDraggedElementIds } from '../dragDrop';
 
 type Args = {
   model: Model | null;
@@ -36,34 +36,47 @@ export function useDiagramElementDrop({ model, activeViewId, zoom, viewportRef, 
     (e: React.DragEvent<HTMLDivElement>) => {
       setIsDragOver(false);
       if (!model || !activeViewId) return;
-      const elementId = readDraggedElementId(e.dataTransfer);
-      if (!elementId) return;
-      if (!model.elements[elementId]) return;
+      const elementIds = readDraggedElementIds(e.dataTransfer);
+      if (!elementIds.length) return;
       const view = model.views[activeViewId];
-      const element = model.elements[elementId];
-      if (view && element) {
+      if (view) {
         const notation = getNotation(view.kind ?? 'archimate');
-        if (!notation.canCreateNode({ nodeType: element.type })) {
-          // Not allowed in this view's notation.
+        // Filter by existence + notation rules.
+        const allowed = elementIds
+          .filter((id) => Boolean(model.elements[id]))
+          .filter((id) => notation.canCreateNode({ nodeType: model.elements[id]!.type }));
+
+        if (!allowed.length) return;
+
+        e.preventDefault();
+
+        const vp = viewportRef.current;
+        if (!vp) {
+          // Fallback: add at default positions.
+          for (const id of allowed) modelStore.addElementToView(activeViewId, id);
+          onSelect({ kind: 'viewNode', viewId: activeViewId, elementId: allowed[0]! });
           return;
         }
-      }
 
-      e.preventDefault();
+        const rect = vp.getBoundingClientRect();
+        const x0 = (vp.scrollLeft + (e.clientX - rect.left)) / zoom;
+        const y0 = (vp.scrollTop + (e.clientY - rect.top)) / zoom;
 
-      const vp = viewportRef.current;
-      if (!vp) {
-        modelStore.addElementToView(activeViewId, elementId);
-        onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
+        // Drop multiple elements in a simple grid around the cursor.
+        const step = 24;
+        const cols = Math.max(1, Math.min(6, Math.ceil(Math.sqrt(allowed.length))));
+        for (let i = 0; i < allowed.length; i++) {
+          const id = allowed[i]!;
+          const dx = (i % cols) * step;
+          const dy = Math.floor(i / cols) * step;
+          modelStore.addElementToViewAt(activeViewId, id, x0 + dx, y0 + dy);
+        }
+
+        onSelect({ kind: 'viewNode', viewId: activeViewId, elementId: allowed[0]! });
         return;
       }
 
-      const rect = vp.getBoundingClientRect();
-      const x = (vp.scrollLeft + (e.clientX - rect.left)) / zoom;
-      const y = (vp.scrollTop + (e.clientY - rect.top)) / zoom;
-
-      modelStore.addElementToViewAt(activeViewId, elementId, x, y);
-      onSelect({ kind: 'viewNode', viewId: activeViewId, elementId });
+      // If no view (shouldn't happen), do nothing.
     },
     [activeViewId, model, onSelect, viewportRef, zoom]
   );

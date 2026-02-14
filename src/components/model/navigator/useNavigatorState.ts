@@ -16,6 +16,8 @@ import {
   selectionToKey
 } from './navUtils';
 
+import { elementIdsFromKeys } from './navKey';
+
 type Args = {
   model: Model | null;
   treeData: NavNode[] | null;
@@ -38,6 +40,27 @@ export function useNavigatorState({ model, treeData, searchTerm, selection, onSe
 
   const selectedKey = selectionToKey(selection);
 
+
+  // Support multi-select in the tree (used for "add many to view").
+  // Keep it controlled so it stays in sync with workspace selection.
+  const [selectedKeys, setSelectedKeys] = useState<Set<Key>>(() => (selectedKey ? new Set<Key>([selectedKey]) : new Set<Key>()));
+  const prevSelectedKeysRef = useRef<Set<Key>>(new Set<Key>());
+  // Remember the most recent *multi* selection so we can keep multi-drag stable even if the
+  // underlying Tree selection briefly collapses during drag initiation (press/drag quirks),
+  // or on drop (pointer up can also replace-select the pressed row).
+  //
+  // We store a snapshot of the full selectedKeys set (not only element ids) because key formats
+  // may evolve, and reconstructing keys can inadvertently drop items.
+  const recentMultiSelectedKeysRef = useRef<Set<Key>>(new Set<Key>());
+
+// When the user changes selection via the navigator (including multi-select), we still
+  // synchronize a *primary* item to the workspace selection (via onSelect). That workspace
+  // selection flows back into this hook as `selection`.
+  //
+  // Without a guard, the "sync to workspace" effect below would immediately collapse the
+  // multi-selection back to a single key.
+  const suppressWorkspaceSelectionSyncRef = useRef(false);
+
   // Expansion policy:
   // - Default: collapsed (show only top-level nodes)
   // - When searching: expand sections so results are visible
@@ -47,6 +70,20 @@ export function useNavigatorState({ model, treeData, searchTerm, selection, onSe
     setExpandedKeys(new Set());
     autoExpandedModelIdRef.current = null;
   }, [model?.id]);
+
+  useEffect(() => {
+    // Keep tree selection in sync with workspace selection when selection is programmatic.
+    if (suppressWorkspaceSelectionSyncRef.current) return;
+    if (!selectedKey) {
+      setSelectedKeys(new Set());
+      prevSelectedKeysRef.current = new Set();
+      return;
+    }
+    setSelectedKeys(new Set([selectedKey]));
+    prevSelectedKeysRef.current = new Set([selectedKey]);
+  }, [selectedKey]);
+
+
 
   useEffect(() => {
     if (!treeData) return;
@@ -176,21 +213,46 @@ export function useNavigatorState({ model, treeData, searchTerm, selection, onSe
   }
 
   function handleSelectionChange(keys: unknown) {
-    // react-aria-components uses Set<Key> for single selection.
-    const set = keys as Set<Key>;
+    const set = keys === 'all' ? new Set<Key>() : (keys as Set<Key>);
     const first = set?.values?.().next?.().value as string | undefined;
     if (!first) {
-      // iOS/Safari can transiently emit an empty selection set on touchend
-      // (effectively a deselect). We keep the previous selection instead of
-      // snapping back to the model/root, since selection is controlled by
-      // Workspace state and will re-assert the last selected key.
+      // iOS/Safari can transiently emit an empty selection set on touchend.
+      // Keep the previous selection instead of snapping to "none".
       return;
     }
-    const parsed = parseKey(first);
-    if (!parsed) {
-      // Same reasoning as above: ignore transient/invalid selection changes.
-      return;
+
+    setSelectedKeys(set);
+
+        // Update recent multi-selection snapshot for multi-drag.
+    if (set.size > 1) {
+      recentMultiSelectedKeysRef.current = new Set(set);
+    } else if (set.size === 0) {
+      recentMultiSelectedKeysRef.current = new Set<Key>();
     }
+
+    const prev = prevSelectedKeysRef.current;
+    prevSelectedKeysRef.current = new Set(set);
+
+    // Choose a primary key to synchronize with Workspace selection:
+    // prefer the newly-added key when multi-selecting, otherwise fall back to the first.
+    let primary: string | undefined;
+    for (const k of set) {
+      if (!prev.has(k)) {
+        primary = String(k);
+        break;
+      }
+    }
+    if (!primary) primary = String(first);
+
+    const parsed = parseKey(primary);
+    if (!parsed) return;
+
+    // Guard against the workspace-selection sync effect collapsing the multi-selection.
+    suppressWorkspaceSelectionSyncRef.current = true;
+    queueMicrotask(() => {
+      suppressWorkspaceSelectionSyncRef.current = false;
+    });
+
     switch (parsed.kind) {
       case 'folder':
         onSelect({ kind: 'folder', folderId: parsed.id });
@@ -204,9 +266,7 @@ export function useNavigatorState({ model, treeData, searchTerm, selection, onSe
       case 'relationship':
         onSelect({ kind: 'relationship', relationshipId: parsed.id });
         return;
-      case 'section':
       default:
-        onSelect({ kind: 'model' });
         return;
     }
   }
@@ -219,8 +279,34 @@ export function useNavigatorState({ model, treeData, searchTerm, selection, onSe
     if (node) startEditing(node);
   }
 
+  
+      function getRecentMultiSelectedElementIds(): string[] {
+    if (selectedKeys.size > 1) return elementIdsFromKeys(selectedKeys);
+    const keys = recentMultiSelectedKeysRef.current;
+    if (keys && keys.size > 1) return elementIdsFromKeys(keys);
+    return elementIdsFromKeys(selectedKeys);
+  }
+
+const restoreRecentMultiSelectionForDrag = (draggedElementId: string | null | undefined) => {
+    if (!draggedElementId) return;
+    const keys = recentMultiSelectedKeysRef.current;
+    if (!keys || keys.size < 2) return;
+
+    // Only restore if the dragged element is part of the recent multi-selection snapshot.
+    const ids = elementIdsFromKeys(keys);
+    if (!ids.includes(draggedElementId)) return;
+
+    // Restore selection for visual stability while dragging and after drop.
+    setSelectedKeys(new Set(keys));
+    prevSelectedKeysRef.current = new Set(keys);
+  };
+
   return {
     selectedKey,
+    selectedKeys,
+    getRecentMultiSelectedElementIds,
+    restoreRecentMultiSelectionForDrag,
+    selectedElementIds: elementIdsFromKeys(selectedKeys),
     expandedKeys,
     setExpandedKeys,
     editingKey,

@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import type { Key } from '@react-types/shared';
 import { Button } from 'react-aria-components';
 
 import type { NavNode } from './types';
@@ -16,7 +17,9 @@ type Props = {
   isExpanded: boolean;
 
   // Selection / expand
-  handleSelectionChange: (keys: unknown) => void;
+  selectedKeys: Set<Key>;
+  getRecentMultiSelectedElementIds: () => string[];
+  restoreRecentMultiSelectionForDrag: (draggedElementId: string | null | undefined) => void;
   toggleExpanded: (nodeKey: string) => void;
 
   // Inline rename state
@@ -42,7 +45,9 @@ export function NavigatorNodeRow({
   title,
   hasChildren,
   isExpanded,
-  handleSelectionChange,
+  selectedKeys,
+  getRecentMultiSelectedElementIds,
+  restoreRecentMultiSelectionForDrag,
   toggleExpanded,
   isEditing,
   editingValue,
@@ -56,7 +61,12 @@ export function NavigatorNodeRow({
   openCreateView,
   onSelect
 }: Props) {
-  const { draggable, onDragStart, onDragEnd } = useNavigatorRowDnd(node);
+  const { draggable, onDragStart, onDragEnd } = useNavigatorRowDnd(
+    node,
+    selectedKeys,
+    getRecentMultiSelectedElementIds,
+    restoreRecentMultiSelectionForDrag
+  );
 
   const focusTreeRow = (current: HTMLElement) => {
     const row = current.closest('[role="row"]') as HTMLElement | null;
@@ -70,9 +80,8 @@ export function NavigatorNodeRow({
     if (target?.closest('.navTreeActions')) return;
     if (target?.closest('input')) return;
 
-    // Some environments (notably tests) can be sensitive to focus/selection propagation.
-    // Selecting + focusing the Tree row here keeps keyboard actions (e.g., Delete) reliable.
-    handleSelectionChange(new Set([node.key]));
+    // Keep focus behavior reliable for keyboard actions without forcing selection semantics.
+    // Selection is handled by React Aria's Tree (with selectionBehavior="replace").
     focusTreeRow(e.currentTarget);
   };
 

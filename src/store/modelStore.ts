@@ -415,7 +415,49 @@ export class ModelStore {
     return created.id;
   };
 
-  updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.viewOps.updateView(viewId, patch);
+  
+  /**
+   * Add multiple elements (typically selected in the model navigator) to an existing view.
+   * By default, triggers auto layout afterwards to make the diagram reasonable.
+   */
+  addElementsToViewFromNavigator = async (
+    viewId: string,
+    elementIds: string[],
+    options: { autoLayout?: boolean; preset?: AutoLayoutOptions['preset'] } = {}
+  ): Promise<void> => {
+    const model = this.state.model;
+    if (!model) throw new Error('No model loaded');
+    const view = model.views[viewId];
+    if (!view) throw new Error(`View not found: ${viewId}`);
+
+    const kind = view.kind as ModelKind;
+
+    const filtered = (elementIds ?? []).filter((id) => {
+      const t = String(model.elements[id]?.type ?? '');
+      if (!t) return false;
+      if (kind === 'archimate') return !t.includes('.');
+      if (kind === 'uml') return t.startsWith('uml.');
+      if (kind === 'bpmn') return t.startsWith('bpmn.');
+      return true;
+    });
+
+    if (!filtered.length) return;
+
+    this.updateModel((m) => {
+      layoutMutations.addElementsToView(m, viewId, filtered);
+    });
+
+    // Ensure any newly-visible relationships/connectors are recomputed.
+    this.ensureViewConnections(viewId);
+
+    const doLayout = options.autoLayout ?? true;
+    if (doLayout) {
+      const preset = options.preset ?? this.defaultAutoLayoutPresetForKind(kind);
+      await this.autoLayoutView(viewId, { preset }, filtered);
+    }
+  };
+
+updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.viewOps.updateView(viewId, patch);
 
   ensureViewConnections = (viewId: string): void => this.viewOps.ensureViewConnections(viewId);
 

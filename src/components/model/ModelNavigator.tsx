@@ -120,6 +120,7 @@ export function ModelNavigator({ selection, onSelect }: Props) {
           openCreateFolder={openCreateFolder}
           openCreateElement={openCreateElement}
           openCreateView={openCreateView}
+          onSelect={onSelect}
           onMoveElementToFolder={(elementId, targetFolderId) => {
             // Action is on the store instance (not part of the Zustand state snapshot).
             modelStore.moveElementToFolder(elementId, targetFolderId);

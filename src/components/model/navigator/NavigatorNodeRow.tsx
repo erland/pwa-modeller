@@ -5,6 +5,7 @@ import type { NavNode } from './types';
 import { NavigatorNodeActionsMenu } from './NavigatorNodeActionsMenu';
 import { useNavigatorRowDnd } from './useNavigatorRowDnd';
 import type { ModelKind } from '../../../domain';
+import type { Selection } from '../selection';
 
 type Props = {
   node: NavNode;
@@ -31,6 +32,7 @@ type Props = {
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
   openCreateView: (opts?: { targetFolderId?: string; ownerElementId?: string; initialKind?: ModelKind }) => void;
+  onSelect: (selection: Selection) => void;
 };
 
 export function NavigatorNodeRow({
@@ -51,7 +53,8 @@ export function NavigatorNodeRow({
   clearEditing,
   openCreateFolder,
   openCreateElement,
-  openCreateView
+  openCreateView,
+  onSelect
 }: Props) {
   const { draggable, onDragStart, onDragEnd } = useNavigatorRowDnd(node);
 
@@ -166,6 +169,7 @@ export function NavigatorNodeRow({
         openCreateFolder={openCreateFolder}
         openCreateElement={openCreateElement}
         openCreateView={openCreateView}
+        onSelect={onSelect}
       />
     </div>
   );

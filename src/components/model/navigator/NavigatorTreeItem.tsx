@@ -6,6 +6,7 @@ import type { NavNode } from './types';
 import { iconForNode } from './iconForNode';
 import { NavigatorNodeRow } from './NavigatorNodeRow';
 import type { ModelKind } from '../../../domain';
+import type { Selection } from '../selection';
 
 type Props = {
   node: NavNode;
@@ -30,6 +31,9 @@ type Props = {
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
   openCreateView: (opts?: { targetFolderId?: string; ownerElementId?: string; initialKind?: ModelKind }) => void;
+
+  // Bubble selection changes (used by create actions that should auto-select the created item).
+  onSelect: (selection: Selection) => void;
 };
 
 export function NavigatorTreeItem({
@@ -47,7 +51,8 @@ export function NavigatorTreeItem({
   clearEditing,
   openCreateFolder,
   openCreateElement,
-  openCreateView
+  openCreateView,
+  onSelect
 }: Props) {
   const isEditing = editingKey === node.key;
   const icon = iconForNode(node);
@@ -78,6 +83,7 @@ export function NavigatorTreeItem({
           openCreateFolder={openCreateFolder}
           openCreateElement={openCreateElement}
           openCreateView={openCreateView}
+          onSelect={onSelect}
         />
       </TreeItemContent>
 
@@ -100,6 +106,7 @@ export function NavigatorTreeItem({
               openCreateFolder={openCreateFolder}
               openCreateElement={openCreateElement}
               openCreateView={openCreateView}
+              onSelect={onSelect}
             />
           ))
         : null}

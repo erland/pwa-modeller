@@ -1,6 +1,7 @@
 import type {
   Element,
   Folder,
+  ModelKind,
   Model,
   ModelMetadata,
   Relationship,
@@ -15,19 +16,22 @@ import type {
   ViewConnectionAnchorSide,
 } from '../domain';
 import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode, LayoutOutput } from '../domain/layout/types';
-import { createEmptyModel } from '../domain';
+import { createEmptyModel, createView, VIEWPOINTS } from '../domain';
 import {
   connectorMutations,
   elementMutations,
   modelMutations,
   bpmnMutations,
   relationshipMutations,
+  viewMutations,
+  layoutMutations,
 } from './mutations';
 import type { TaggedValueInput } from './mutations';
 import { createViewOps } from './ops/viewOps';
 import { createLayoutOps } from './ops/layoutOps';
 import { createFolderOps } from './ops/folderOps';
 import { createElementOps } from './ops/elementOps';
+
 
 export type ModelStoreState = {
   model: Model | null;
@@ -303,6 +307,113 @@ export class ModelStore {
   // -------------------------
 
   addView = (view: View, folderId?: string): void => this.viewOps.addView(view, folderId);
+
+  private collectElementIdsInFolder = (model: Model, folderId: string): string[] => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const stack = [folderId];
+    while (stack.length) {
+      const fid = stack.pop()!;
+      if (seen.has(fid)) continue;
+      seen.add(fid);
+      const f = model.folders[fid];
+      if (!f) continue;
+      for (const id of f.elementIds ?? []) out.push(id);
+      for (const childId of f.folderIds ?? []) stack.push(childId);
+    }
+    return out;
+  };
+
+  private inferKindFromElementIds = (model: Model, elementIds: string[]): ModelKind => {
+    // Heuristic:
+    // - If all element types are qualified and share a prefix, pick that notation.
+    // - Otherwise fall back to ArchiMate.
+    const types = elementIds
+      .map((id) => model.elements[id]?.type)
+      .filter(Boolean)
+      .map((t) => String(t));
+    if (types.length === 0) return 'archimate';
+    const qualified = types.filter((t) => t.includes('.'));
+    if (qualified.length !== types.length) return 'archimate';
+    const allUml = qualified.every((t) => t.startsWith('uml.'));
+    if (allUml) return 'uml';
+    const allBpmn = qualified.every((t) => t.startsWith('bpmn.'));
+    if (allBpmn) return 'bpmn';
+    return 'archimate';
+  };
+
+  private defaultViewpointForKind = (kind: ModelKind): string => {
+    if (kind === 'uml') return VIEWPOINTS.find((v) => v.id === 'uml-class')?.id ?? 'uml-class';
+    if (kind === 'bpmn') return VIEWPOINTS.find((v) => v.id === 'bpmn-process')?.id ?? 'bpmn-process';
+    return VIEWPOINTS.find((v) => v.id === 'layered')?.id ?? 'layered';
+  };
+
+  private defaultAutoLayoutPresetForKind = (kind: ModelKind): AutoLayoutOptions['preset'] => {
+    if (kind === 'archimate') return 'flow_bands';
+    // BPMN/UML tend to look best with a simple layered flow.
+    return 'flow';
+  };
+
+  /**
+   * Create a new view containing all elements within a folder (including subfolders),
+   * then run auto layout to produce a reasonable initial diagram.
+   */
+  createViewFromFolderElements = async (
+    folderId: string,
+    options: {
+      name?: string;
+      kind?: ModelKind;
+      viewpointId?: string;
+      /** Where to place the created view. Defaults to the "Views" root folder when invoked from an elements folder. */
+      targetFolderId?: string;
+      autoLayout?: boolean;
+      autoLayoutPreset?: AutoLayoutOptions['preset'];
+    } = {}
+  ): Promise<string> => {
+    const model = this.state.model;
+    if (!model) throw new Error('No model loaded');
+    const folder = model.folders[folderId];
+    if (!folder) throw new Error(`Folder not found: ${folderId}`);
+
+    const allElementIds = this.collectElementIdsInFolder(model, folderId);
+    const kind = options.kind ?? this.inferKindFromElementIds(model, allElementIds);
+
+    // Only include elements that match the view kind.
+    const elementIds = allElementIds.filter((id) => {
+      const t = String(model.elements[id]?.type ?? '');
+      if (!t) return false;
+      if (kind === 'archimate') return !t.includes('.');
+      if (kind === 'uml') return t.startsWith('uml.');
+      if (kind === 'bpmn') return t.startsWith('bpmn.');
+      return true;
+    });
+
+    const baseName = (options.name ?? folder.name ?? 'Folder').trim() || 'Folder';
+    const name = options.name?.trim() ? options.name.trim() : `View: ${baseName}`;
+    const viewpointId = options.viewpointId ?? this.defaultViewpointForKind(kind);
+
+    // Default placement: if invoked from a non-view folder (e.g. Elements), place the view under the "Views" root.
+    const viewsRootId = Object.values(model.folders).find((f) => f.kind === 'views')?.id;
+    const targetFolderId =
+      options.targetFolderId ??
+      (folder.kind === 'views' || folder.kind === 'custom' || folder.kind === 'root' ? folderId : (viewsRootId ?? folderId));
+
+    const created = createView({ name, kind, viewpointId });
+
+    this.updateModel((m) => {
+      viewMutations.addView(m, created, targetFolderId);
+      // Place all elements as nodes (fast bulk add) so auto layout has something to work with.
+      layoutMutations.addElementsToView(m, created.id, elementIds);
+    });
+
+    const doLayout = options.autoLayout ?? true;
+    if (doLayout) {
+      const preset = options.autoLayoutPreset ?? this.defaultAutoLayoutPresetForKind(kind);
+      await this.autoLayoutView(created.id, { preset });
+    }
+
+    return created.id;
+  };
 
   updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.viewOps.updateView(viewId, patch);
 

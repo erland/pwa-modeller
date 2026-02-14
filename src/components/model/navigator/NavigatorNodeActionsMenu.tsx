@@ -2,15 +2,18 @@ import { Button, Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-compone
 
 import type { NavNode } from './types';
 import type { ModelKind } from '../../../domain';
+import { modelStore } from '../../../store';
+import type { Selection } from '../selection';
 
 type Props = {
   node: NavNode;
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
   openCreateView: (opts?: { targetFolderId?: string; ownerElementId?: string; initialKind?: ModelKind }) => void;
+  onSelect: (selection: Selection) => void;
 };
 
-export function NavigatorNodeActionsMenu({ node, openCreateFolder, openCreateElement, openCreateView }: Props) {
+export function NavigatorNodeActionsMenu({ node, openCreateFolder, openCreateElement, openCreateView, onSelect }: Props) {
   // Single "Create…" button (Explorer/Finder-like) with a menu for all create actions relevant to this node.
   const canShowCreateMenu =
     (Boolean(node.canCreateFolder && node.folderId)
@@ -43,6 +46,13 @@ export function NavigatorNodeActionsMenu({ node, openCreateFolder, openCreateEle
                   // Create a view owned by the element. The dialog lets the user pick kind (default ArchiMate).
                   openCreateView({ ownerElementId: node.elementId });
                 }
+              } else if (k === 'viewFromFolderElements' && node.folderId) {
+                // Fire-and-forget: create the view, then select it in the workspace.
+                const folderId = node.folderId;
+                void (async () => {
+                  const viewId = await modelStore.createViewFromFolderElements(folderId);
+                  onSelect({ kind: 'view', viewId });
+                })();
               }
             }}
           >
@@ -54,6 +64,10 @@ export function NavigatorNodeActionsMenu({ node, openCreateFolder, openCreateEle
             ) : null}
             {(node.canCreateView && node.folderId) || (node.canCreateCenteredView && node.elementId) ? (
               <MenuItem className="navMenuItem" id="view">View…</MenuItem>
+            ) : null}
+
+            {node.canCreateView && node.folderId ? (
+              <MenuItem className="navMenuItem" id="viewFromFolderElements">View from folder elements</MenuItem>
             ) : null}
             {node.canCreateElement && node.folderId ? (
               <MenuItem className="navMenuItem" id="umlElement">UML Element…</MenuItem>

@@ -4,6 +4,7 @@
 export { updateViewNodeLayout } from './layout/updateViewNodeLayout';
 export {
   addElementToView,
+  addElementsToView,
   addElementToViewAt,
   addConnectorToViewAt,
   removeElementFromView,

@@ -6,6 +6,7 @@ import { Tree } from 'react-aria-components';
 import type { NavNode } from './types';
 import { NavigatorTreeItem } from './NavigatorTreeItem';
 import type { ModelKind } from '../../../domain';
+import type { Selection } from '../selection';
 import { useNavigatorTreeDnd } from './useNavigatorTreeDnd';
 import { collectExpandableKeysInSubtree, expandSingleChildChainFromKey, findNodeByKey } from './navUtils';
 
@@ -31,6 +32,9 @@ type Props = {
   openCreateFolder: (parentFolderId: string) => void;
   openCreateElement: (targetFolderId?: string, kind?: ModelKind) => void;
   openCreateView: (opts?: { targetFolderId?: string; ownerElementId?: string; initialKind?: ModelKind }) => void;
+
+  /** Bubble selection changes up to the workspace (used by some create actions). */
+  onSelect: (selection: Selection) => void;
 
   /** Optional handler: move an element to a folder when dropped on a folder in the tree. */
   onMoveElementToFolder?: (elementId: string, targetFolderId: string) => void;
@@ -62,6 +66,7 @@ export function ModelNavigatorTree({
   openCreateFolder,
   openCreateElement,
   openCreateView,
+  onSelect,
   onMoveElementToFolder,
   onMoveViewToFolder,
   onMoveViewToElement,
@@ -192,6 +197,7 @@ export function ModelNavigatorTree({
             openCreateFolder={openCreateFolder}
             openCreateElement={openCreateElement}
             openCreateView={openCreateView}
+            onSelect={onSelect}
           />
         ))}
       </Tree>

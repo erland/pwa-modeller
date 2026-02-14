@@ -46,6 +46,75 @@ export function addElementToView(model: Model, viewId: string, elementId: string
   return elementId;
 }
 
+/**
+ * Adds multiple elements to a view efficiently (idempotent).
+ *
+ * This avoids calling syncViewConnections() once per element (which can be expensive
+ * for large folders). After all nodes are added, connections are synced exactly once.
+ */
+export function addElementsToView(model: Model, viewId: string, elementIds: string[]): string[] {
+  const view = model.views[viewId];
+  if (!view) throw new Error(`View not found: ${viewId}`);
+
+  const viewWithLayout = ensureViewLayout(view);
+  const layout = viewWithLayout.layout;
+
+  const existing = new Set(layout.nodes.map((n) => n.elementId).filter(Boolean) as string[]);
+  const isBpmn = viewWithLayout.kind === 'bpmn';
+  const isUml = viewWithLayout.kind === 'uml';
+
+  const nextNodes = layout.nodes.slice();
+
+  // Continue the simple default placement grid for any new nodes.
+  const cols = 4;
+  let i = nextNodes.length;
+
+  const maxZ0 = nextNodes.reduce((m, n, idx) => Math.max(m, typeof n.zIndex === 'number' ? n.zIndex : idx), -1);
+  const minZ0 = nextNodes.reduce((m, n, idx) => Math.min(m, typeof n.zIndex === 'number' ? n.zIndex : idx), 0);
+  let maxZ = maxZ0;
+  const minZ = minZ0;
+
+  const added: string[] = [];
+
+  for (const elementId of elementIds) {
+    if (!elementId || existing.has(elementId)) continue;
+    const element = model.elements[elementId];
+    if (!element) continue;
+
+    const nx = 24 + (i % cols) * 160;
+    const ny = 24 + Math.floor(i / cols) * 110;
+    i++;
+
+    const t = String(element.type);
+    const bpmnSize = isBpmn ? defaultBpmnNodeSize(t) : null;
+    const umlSize = isUml ? defaultUmlNodeSize(t) : null;
+
+    const nodeW = isBpmn && bpmnSize ? bpmnSize.width : isUml && umlSize ? umlSize.width : 140;
+    const nodeH = isBpmn && bpmnSize ? bpmnSize.height : isUml && umlSize ? umlSize.height : 70;
+
+    const isPool = isBpmn && t === 'bpmn.pool';
+    const isLane = isBpmn && t === 'bpmn.lane';
+    const z = isPool ? minZ - 2 : isLane ? minZ - 1 : maxZ + 1;
+    if (!isPool && !isLane) maxZ = Math.max(maxZ, z);
+
+    const attrs = viewWithLayout.kind === 'uml' ? defaultUmlNodePresentationAttrs(t) : undefined;
+    const node: ViewNodeLayout = { elementId, x: nx, y: ny, width: nodeW, height: nodeH, zIndex: z, attrs };
+    nextNodes.push(node);
+    existing.add(elementId);
+    added.push(elementId);
+  }
+
+  if (added.length === 0) return [];
+
+  model.views[viewId] = {
+    ...viewWithLayout,
+    layout: { nodes: nextNodes, relationships: layout.relationships }
+  };
+  syncViewConnections(model, viewId);
+
+  return added;
+}
+
 
 /**
  * Adds an element to a view at a specific position (idempotent).

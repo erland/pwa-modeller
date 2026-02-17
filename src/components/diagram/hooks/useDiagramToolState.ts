@@ -54,6 +54,34 @@ export function useDiagramToolState({ model, activeViewId, activeView, clientToM
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+
+// Shortcut: Cmd+A / Ctrl+A selects all element nodes in the active view.
+useEffect(() => {
+  function isTextLikeTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    if (!el) return false;
+    const tag = (el.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return el.isContentEditable;
+  }
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (isTextLikeTarget(e.target)) return;
+    if (!activeViewId || !activeView || !activeView.layout) return;
+    const key = (e.key || '').toLowerCase();
+    if (!(e.metaKey || e.ctrlKey) || key !== 'a') return;
+
+    // Prevent browser "select all" and instead select all diagram nodes.
+    e.preventDefault();
+    const ids = activeView.layout.nodes.map((n) => n.elementId).filter((id): id is string => typeof id === 'string');
+    onSelect({ kind: 'viewNodes', viewId: activeViewId, elementIds: ids });
+  }
+
+  window.addEventListener('keydown', onKeyDown);
+  return () => window.removeEventListener('keydown', onKeyDown);
+}, [activeViewId, activeView, onSelect]);
+
+
   const beginGroupBoxDraft = useCallback(
     (start: Point) => {
       if (!activeViewId) return;

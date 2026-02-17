@@ -223,6 +223,22 @@ export function DiagramToolbar({
 
             <button
               type="button"
+              onClick={() => {
+                if (!activeViewId || !activeView || !activeView.layout) return;
+                const ids = activeView.layout.nodes
+                  .map((n) => n.elementId)
+                  .filter((id): id is string => typeof id === 'string');
+                onSelect({ kind: 'viewNodes', viewId: activeViewId, elementIds: ids });
+              }}
+              className="shellButton"
+              disabled={!hasActiveView || !activeView?.layout || nodesCount === 0}
+              title="Select all elements in the current view"
+            >
+              Select All
+            </button>
+
+            <button
+              type="button"
               onClick={onFitToTextSelection}
               className="shellButton"
               disabled={!hasActiveView || selectedNodeCount < 1 || !activeView}
@@ -230,7 +246,6 @@ export function DiagramToolbar({
             >
               Auto Resize
             </button>
-
             <button
               type="button"
               onClick={() => setAlignDialogOpen(true)}

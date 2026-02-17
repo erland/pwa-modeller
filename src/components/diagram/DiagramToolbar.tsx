@@ -225,10 +225,10 @@ export function DiagramToolbar({
               type="button"
               onClick={onFitToTextSelection}
               className="shellButton"
-              disabled={!hasActiveView || selectedNodeCount < 1 || activeView?.kind !== 'archimate'}
-              title="Resize selected nodes so their text fits"
+              disabled={!hasActiveView || selectedNodeCount < 1 || !activeView}
+              title="Auto resize selected nodes so their text fits"
             >
-              Fit Text
+              Auto Resize
             </button>
 
             <button

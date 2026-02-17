@@ -4,6 +4,8 @@ import { syncViewConnections } from './layout/syncViewConnections';
 
 export type FitToTextUpdate = { elementId: string; width: number; height: number };
 
+export type FitToTextRectUpdate = { elementId: string; x: number; y: number; width: number; height: number };
+
 /**
  * Apply already-computed sizes to element nodes in a view.
  *
@@ -33,6 +35,44 @@ export function applyViewElementSizes(model: Model, viewId: string, updates: Fit
     if (prevW === next.width && prevH === next.height) return n;
     changed = true;
     return { ...n, width: next.width, height: next.height };
+  });
+
+  if (!changed) return;
+  model.views[viewId] = { ...view, layout: { ...layout, nodes: nextNodes } };
+  syncViewConnections(model, viewId);
+}
+
+/**
+ * Apply already-computed rectangles (position + size) to element nodes in a view.
+ *
+ * Used by Auto Resize when container nodes need to tighten to the bounds of their descendants.
+ */
+export function applyViewElementRects(model: Model, viewId: string, updates: FitToTextRectUpdate[]): void {
+  if (updates.length === 0) return;
+
+  const view = getView(model, viewId);
+  const layout = view.layout;
+  if (!layout) return;
+
+  const map = new Map<string, { x: number; y: number; width: number; height: number }>();
+  for (const u of updates) {
+    if (!u.elementId) continue;
+    map.set(u.elementId, { x: u.x, y: u.y, width: u.width, height: u.height });
+  }
+  if (map.size === 0) return;
+
+  let changed = false;
+  const nextNodes = layout.nodes.map((n) => {
+    if (!n.elementId) return n;
+    const next = map.get(n.elementId);
+    if (!next) return n;
+    const prevX = n.x ?? 0;
+    const prevY = n.y ?? 0;
+    const prevW = n.width ?? 120;
+    const prevH = n.height ?? 60;
+    if (prevX === next.x && prevY === next.y && prevW === next.width && prevH === next.height) return n;
+    changed = true;
+    return { ...n, x: next.x, y: next.y, width: next.width, height: next.height };
   });
 
   if (!changed) return;

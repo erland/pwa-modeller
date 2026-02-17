@@ -284,7 +284,8 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
   );
 
   const onFitToTextSelection = useCallback(() => {
-    if (!activeViewId || !activeView || activeView.kind !== 'archimate') return;
+    if (!activeViewId || !activeView) return;
+    if (activeView.kind !== 'archimate' && activeView.kind !== 'uml' && activeView.kind !== 'bpmn') return;
 
     let ids: string[] = [];
     if (selection.kind === 'viewNode' && selection.viewId === activeViewId) {

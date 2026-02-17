@@ -44,14 +44,18 @@ export function fitArchiMateBoxToText(
   const metaText = typeLabelForElement(el);
   const tagText = nodeLayout.styleTag || '';
 
-  const titleW = measureTextWidthPx(titleText, titleFont);
-  const metaW = measureTextWidthPx(metaText, metaFont);
+  // NOTE: Canvas text measurement can under-estimate slightly vs DOM rendering
+  // (font fallback differences, sub-pixel rounding). Be conservative so we
+  // avoid unintended wrapping which can then clip the meta line.
+  const safetyMul = 1.12;
+  const titleW = measureTextWidthPx(titleText, titleFont) * safetyMul;
+  const metaW = measureTextWidthPx(metaText, metaFont) * safetyMul;
 
   const headerContentW = symbolSize + headerGap + titleW;
 
   // Tag has horizontal padding (8px left+right) and a pill background.
   const tagPaddingX = 16;
-  const tagW = tagText ? measureTextWidthPx(tagText, tagFont) + tagPaddingX : 0;
+  const tagW = tagText ? measureTextWidthPx(tagText, tagFont) * safetyMul + tagPaddingX : 0;
 
   const contentW = Math.max(headerContentW, metaW, tagW);
   const minWidth = options.minWidth ?? 120;
@@ -60,7 +64,14 @@ export function fitArchiMateBoxToText(
   // Height approximation (line heights are not explicitly set)
   const titleLineH = 16; // ~13px with bold + default line-height
   const metaLineH = 15; // ~12px
-  const headerH = Math.max(symbolSize, titleLineH);
+
+  // IMPORTANT: The title can wrap (it is rendered in a normal <div> without nowrap).
+  // If we size the box narrowly based on the widest token, the title may wrap into
+  // multiple lines, which increases the required height. This is the common cause of
+  // the meta line being clipped below the node.
+  const availableTitleW = Math.max(40, width - outerPadding * 2 - symbolSize - headerGap);
+  const titleLines = estimateWrappedLineCount(titleText, availableTitleW, titleFont);
+  const headerH = Math.max(symbolSize, titleLineH * titleLines);
 
   let contentH = headerH + headerBottomMargin + metaLineH;
 
@@ -75,4 +86,30 @@ export function fitArchiMateBoxToText(
   const height = clampMin(Math.ceil(contentH + outerPadding * 2), minHeight);
 
   return { width, height };
+}
+
+function estimateWrappedLineCount(text: string, maxWidth: number, font: string): number {
+  const t = (text ?? '').trim();
+  if (!t) return 1;
+  // Single token (no whitespace) cannot wrap.
+  if (!/\s/.test(t)) return 1;
+
+  const words = t.split(/\s+/g).filter(Boolean);
+  if (words.length <= 1) return 1;
+
+  const spaceW = measureTextWidthPx(' ', font);
+  let lines = 1;
+  let curW = 0;
+  for (const w of words) {
+    const wW = measureTextWidthPx(w, font);
+    const nextW = curW === 0 ? wW : curW + spaceW + wW;
+    if (nextW <= maxWidth) {
+      curW = nextW;
+      continue;
+    }
+    // Start a new line.
+    lines += 1;
+    curW = wW;
+  }
+  return Math.max(1, lines);
 }

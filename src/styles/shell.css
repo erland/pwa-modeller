@@ -33,6 +33,21 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.10);
   background: var(--diagram-canvas-bg);
   padding: 12px;
+  /* Make the diagram area fill the available main panel height so the
+     inner diagram viewport becomes the scroll container (trackpad pan). */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Workspace needs to be a flex column so the canvas can grow/shrink
+   within the shell main panel without forcing page scroll. */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 
@@ -392,6 +407,8 @@ body {
 }
 
 .shellMain {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border-1);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
@@ -546,6 +563,14 @@ body {
   border-radius: 12px;
   padding: 12px;
   background: var(--diagram-canvas-bg);
+  /*
+    Make the canvas a flex column so the viewport can take the remaining height
+    instead of expanding with the (potentially large) surface. This enables
+    vertical trackpad panning inside the viewport.
+  */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .diagramCanvasHeader {
@@ -574,8 +599,21 @@ body {
   border-radius: 12px;
   border: 1px dashed var(--border-2);
   background: var(--surface-1);
+  /*
+    In the model workspace we want the viewport to be the scroll container.
+    Avoid forcing a large minimum height here, otherwise the viewport can grow
+    taller than the available panel height and vertical trackpad panning won't
+    work while the pointer is inside the view.
+  */
+  min-height: 0;
+  overscroll-behavior: auto;
+  flex: 1;
+  max-height: 100%;
+}
+
+/* Keep a comfortable minimum height for embedded/portal viewers. */
+.portalReadOnlyDiagram .diagramViewport {
   min-height: 420px;
-  overscroll-behavior: contain;
 }
 
 .diagramViewport.isDropTarget {

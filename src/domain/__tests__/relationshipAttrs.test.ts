@@ -62,7 +62,6 @@ describe('domain relationshipAttrs helpers', () => {
       sourceMultiplicity: '1..*',
       targetMultiplicity: '2',
       sourceNavigable: true,
-      stereotype: '<<x>>',
       vendorFoo: 123,
     });
 

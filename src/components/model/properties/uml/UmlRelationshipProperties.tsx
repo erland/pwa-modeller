@@ -1,12 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import type { Element, Model, RelationshipType } from '../../../../domain';
 import { getRelationshipTypesForKind, kindFromTypeId, STRONGEST_RELATIONSHIP_VALIDATION_MODE } from '../../../../domain';
 import { canCreateUmlRelationship } from '../../../../notations/uml/rules';
+import { readStereotypeDisplayText, readStereotypes, writeStereotypes } from '../../../../domain/umlStereotypes';
 
 import type { Selection } from '../../selection';
 import type { ModelActions } from '../actions';
 import { CommonRelationshipProperties } from '../common/CommonRelationshipProperties';
+import { StereotypePickerDialog } from './StereotypePickerDialog';
 
 function asTrimmedOrUndef(v: string): string | undefined {
   const s = v.trim();
@@ -83,7 +85,9 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
 
   const attrsObj: Record<string, unknown> =
     rel.attrs && typeof rel.attrs === 'object' ? (rel.attrs as Record<string, unknown>) : {};
-  const umlStereotype = typeof attrsObj.stereotype === 'string' ? (attrsObj.stereotype as string) : undefined;
+  const umlStereotypeDisplay = readStereotypeDisplayText(attrsObj) || undefined;
+  const selectedStereotypes = readStereotypes(attrsObj);
+  const [stereotypeDialogOpen, setStereotypeDialogOpen] = useState(false);
   const umlSourceRole = typeof attrsObj.sourceRole === 'string' ? (attrsObj.sourceRole as string) : undefined;
   const umlTargetRole = typeof attrsObj.targetRole === 'string' ? (attrsObj.targetRole as string) : undefined;
   const umlSourceMultiplicity =
@@ -99,6 +103,19 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
   const updateAttrs = (patch: Record<string, unknown>): void => {
     actions.updateRelationship(rel.id, { attrs: pruneAttrs({ ...attrsObj, ...patch }) });
   };
+
+  const availableStereotypes = useMemo(() => {
+    const out: string[] = [];
+    for (const e of Object.values(model.elements)) {
+      if (!e?.attrs) continue;
+      out.push(...readStereotypes(e.attrs));
+    }
+    for (const r of Object.values(model.relationships)) {
+      if (!r?.attrs) continue;
+      out.push(...readStereotypes(r.attrs));
+    }
+    return Array.from(new Set(out));
+  }, [model]);
 
   const typeExtra = relationshipRuleWarning ? (
     <div className="panelHint" style={{ color: '#ffb3b3', opacity: 0.95 }}>
@@ -129,18 +146,35 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
       <div className="propertiesRow">
         <div className="propertiesKey">Stereotype</div>
         <div className="propertiesValue" style={{ fontWeight: 400 }}>
-          <input
-            className="textInput"
-            aria-label="UML relationship stereotype"
-            placeholder="(optional)"
-            value={umlStereotype ?? ''}
-            onChange={(e) => updateAttrs({ stereotype: asTrimmedOrUndef(e.target.value) })}
-          />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              className="textInput"
+              aria-label="UML relationship stereotypes"
+              placeholder="(optional)"
+              value={umlStereotypeDisplay ?? ''}
+              readOnly
+            />
+            <button type="button" className="textButton" onClick={() => setStereotypeDialogOpen(true)}>
+              Edit
+            </button>
+          </div>
           <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-            Shown as «stereotype» (rendering support can be added later).
+            Shown as «stereotype». Display uses short names.
           </div>
         </div>
       </div>
+
+      <StereotypePickerDialog
+        title="Edit stereotypes"
+        isOpen={stereotypeDialogOpen}
+        onClose={() => setStereotypeDialogOpen(false)}
+        availableStereotypes={availableStereotypes}
+        value={selectedStereotypes}
+        onConfirm={(list) => {
+          const next = writeStereotypes(attrsObj, list);
+          updateAttrs({ stereotypes: (next as any).stereotypes });
+        }}
+      />
 
       {rel.type === 'uml.association' || rel.type === 'uml.aggregation' || rel.type === 'uml.composition' ? (
         <>

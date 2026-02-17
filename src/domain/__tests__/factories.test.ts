@@ -87,7 +87,6 @@ describe('domain factories', () => {
       targetMultiplicity: undefined,
       sourceNavigable: undefined,
       targetNavigable: undefined,
-      stereotype: undefined,
     });
   });
 
@@ -179,6 +178,6 @@ describe('domain factories', () => {
     expect((model as any).externalIds).toEqual([]);
     expect((model as any).taggedValues).toEqual([]);
 
-    expect(model.schemaVersion).toBe(12);
+    expect(model.schemaVersion).toBe(14);
   });
 });

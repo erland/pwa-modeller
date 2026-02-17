@@ -25,6 +25,8 @@ import {
   metaClassFromXmiType,
 } from './parseElements.common';
 
+import { readStereotypes, writeStereotypes } from '../../../domain/umlStereotypes';
+
 function isClassifierCandidate(el: Element): { metaclass: string; xmiType?: string } | null {
   // NOTE: For UML classifier elements we require a real xmi:id.
   // Without xmi:id we cannot create stable references and we risk creating synthetic unnamed classes
@@ -114,8 +116,8 @@ function normalizeClassifierToIR(args: {
 
   const attrs: Record<string, unknown> | undefined = (() => {
     const base: Record<string, unknown> = actionKindAttrs ? { ...actionKindAttrs } : {};
-    if (stereotype) base.stereotype = stereotype;
-    return Object.keys(base).length ? base : undefined;
+    const next = stereotype ? writeStereotypes(base, [stereotype]) : base;
+    return Object.keys(next).length ? next : undefined;
   })();
 
   return {
@@ -261,15 +263,9 @@ export function parseEaXmiClassifiersToElements(doc: Document, report: ImportRep
       const rawAttrs = (typeof target.attrs === 'object' && target.attrs && !Array.isArray(target.attrs))
         ? (target.attrs as Record<string, unknown>)
         : {};
-      const existing = typeof rawAttrs.stereotype === 'string' ? rawAttrs.stereotype : '';
-      const nextStereo = Array.from(app.stereotypes.values()).join(', ');
-
-      const merged = existing
-        ? `${existing}, ${nextStereo}`
-        : nextStereo;
-
-      const nextAttrs: Record<string, unknown> = { ...rawAttrs, stereotype: merged };
-      target.attrs = nextAttrs;
+      const existingList = readStereotypes(rawAttrs);
+      const nextList = Array.from(app.stereotypes.values());
+      target.attrs = writeStereotypes(rawAttrs, [...existingList, ...nextList]);
 
       if (app.tags.length) {
         const existingTags = Array.isArray(target.taggedValues) ? target.taggedValues : [];

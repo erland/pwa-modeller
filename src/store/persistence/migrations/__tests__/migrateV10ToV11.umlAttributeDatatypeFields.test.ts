@@ -17,7 +17,7 @@ describe('migrations v10 -> v11 (UML attribute datatype field rename)', () => {
     model.elements[cls.id] = cls;
 
     const migrated: any = migrateModel(model);
-    expect(migrated.schemaVersion).toBe(12);
+    expect(migrated.schemaVersion).toBe(14);
 
     const next = migrated.elements[cls.id];
     expect(next.attrs).toBeDefined();

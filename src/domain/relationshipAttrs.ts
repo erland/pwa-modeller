@@ -1,4 +1,5 @@
 import type { AccessType, RelationshipType } from './types';
+import { readStereotypes, writeStereotypes } from './umlStereotypes';
 
 const ACCESS_TYPES: ReadonlySet<AccessType> = new Set(['Access', 'Read', 'Write', 'ReadWrite']);
 
@@ -26,7 +27,6 @@ type UmlEndMetadataAttrs = {
   targetMultiplicity?: string;
   sourceNavigable?: boolean;
   targetNavigable?: boolean;
-  stereotype?: string;
 };
 
 function normalizeUmlEndMetadataAttrs(attrs: unknown): UmlEndMetadataAttrs {
@@ -39,7 +39,6 @@ function normalizeUmlEndMetadataAttrs(attrs: unknown): UmlEndMetadataAttrs {
     targetMultiplicity: coerceTrimmedString(a.targetMultiplicity),
     sourceNavigable: typeof a.sourceNavigable === 'boolean' ? a.sourceNavigable : undefined,
     targetNavigable: typeof a.targetNavigable === 'boolean' ? a.targetNavigable : undefined,
-    stereotype: coerceTrimmedString(a.stereotype),
   };
 }
 
@@ -79,6 +78,7 @@ export function sanitizeRelationshipAttrs(relationshipType: RelationshipType, at
 
     const next: Record<string, unknown> = { ...original };
 
+
     // Apply normalized values (and drop empty/invalid ones).
     if (normalized.sourceRole !== undefined) next.sourceRole = normalized.sourceRole;
     else delete next.sourceRole;
@@ -98,10 +98,11 @@ export function sanitizeRelationshipAttrs(relationshipType: RelationshipType, at
     if (typeof normalized.targetNavigable === 'boolean') next.targetNavigable = normalized.targetNavigable;
     else delete next.targetNavigable;
 
-    if (normalized.stereotype !== undefined) next.stereotype = normalized.stereotype;
-    else delete next.stereotype;
+    // Canonical UML stereotypes storage is attrs.stereotypes (string[]).
+    const stereoList = readStereotypes(next);
+    const nextWithStereo = writeStereotypes(next, stereoList);
 
-    return Object.keys(next).length ? next : undefined;
+    return Object.keys(nextWithStereo).length ? nextWithStereo : undefined;
   }
 
   // ArchiMate normalization

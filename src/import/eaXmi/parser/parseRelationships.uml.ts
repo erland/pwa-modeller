@@ -18,6 +18,8 @@ import {
   resolveRefIds,
 } from './parseRelationships.common';
 
+import { writeStereotypes } from '../../../domain/umlStereotypes';
+
 /**
  * Step 7: Parse relationships (generalization/realization/dependency/include/extend).
  */
@@ -130,9 +132,13 @@ export function parseEaXmiRelationships(doc: Document, report: ImportReport): Pa
         const taggedValues = [...(stereotype ? [{ key: 'stereotype', value: stereotype }] : [])];
 
         // Step 5 (UML Activity properties): capture guard text for ControlFlow/ObjectFlow when present.
-        const guardText =
-          metaclass === 'ControlFlow' || metaclass === 'ObjectFlow' ? extractUmlGuardText(el) : undefined;
-        const relAttrs = guardText ? ({ guard: guardText } as Record<string, unknown>) : undefined;
+        const guardText = metaclass === 'ControlFlow' || metaclass === 'ObjectFlow' ? extractUmlGuardText(el) : undefined;
+
+        // Store UML stereotype in attrs (canonical stereotypes[], keep legacy stereotype string in sync).
+        const baseAttrs: Record<string, unknown> = guardText ? ({ guard: guardText } as Record<string, unknown>) : {};
+        const relAttrs = stereotype
+          ? writeStereotypes(baseAttrs, [stereotype])
+          : (Object.keys(baseAttrs).length ? baseAttrs : undefined);
 
         relationships.push({
           id,

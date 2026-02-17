@@ -5,6 +5,7 @@ import type { Selection } from '../../components/model/selection';
 import { formatElementTypeLabel, formatRelationshipTypeLabel } from '../../components/ui/typeLabels';
 import { readUmlClassifierMembers, type UmlAttribute, type UmlOperation } from '../../domain/uml/members';
 import { isUmlClassifierTypeId } from '../../domain/uml/typeGroups';
+import { readStereotypeDisplayText } from '../../domain/umlStereotypes';
 // We intentionally show *all* tagged values in the inspector (no curation).
 
 type PortalIndexesLike = {
@@ -271,7 +272,7 @@ export function PortalInspectorPanel(props: {
 
     // UML end metadata (if present)
     if (typeof rel.type === 'string' && rel.type.startsWith('uml.')) {
-      const stereotype = toTrimmedString(attrs.stereotype);
+      const stereotype = toTrimmedString(readStereotypeDisplayText(attrs));
       if (stereotype) fields.push({ label: 'Stereotype', value: stereotype });
 
       const sr = toTrimmedString(attrs.sourceRole);

@@ -81,7 +81,6 @@ function defaultUmlRelationshipAttrs(type: string): unknown | undefined {
         targetMultiplicity: undefined,
         sourceNavigable: undefined,
         targetNavigable: undefined,
-        stereotype: undefined,
       };
     default:
       return undefined;
@@ -330,6 +329,8 @@ export function createEmptyModel(metadata: ModelMetadata, id?: string): Model {
     // v10 normalizes BPMN attrs for non-activity containers and global defs.
     // v11 renames UML attribute datatype fields (type/typeName/typeRef -> dataTypeName/dataTypeRef).
     // v12 introduces Element.parentElementId (nested elements / containment).
-    schemaVersion: 12
+    // v13 introduces attrs.stereotypes (canonical list) for UML stereotypes.
+    // v14 removes legacy attrs.stereotype (string) after migration.
+    schemaVersion: 14
   };
 }

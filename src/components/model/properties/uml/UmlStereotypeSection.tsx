@@ -1,15 +1,15 @@
 import type { Element } from '../../../../domain';
+import { useMemo, useState } from 'react';
+
+import { readStereotypeDisplayText, readStereotypes, writeStereotypes } from '../../../../domain/umlStereotypes';
+import { useModelStore } from '../../../../store/useModelStore';
 
 import type { ModelActions } from '../actions';
 import { PropertyRow } from '../editors/PropertyRow';
+import { StereotypePickerDialog } from './StereotypePickerDialog';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-function asTrimmedOrUndef(v: string): string | undefined {
-  const s = v.trim();
-  return s.length ? s : undefined;
 }
 
 function defaultPlaceholder(type: string): string {
@@ -38,13 +38,32 @@ export function UmlStereotypeSection({ element: el, actions }: Props) {
 
   const raw = el.attrs;
   const base: Record<string, unknown> = isRecord(raw) ? { ...raw } : {};
-  const stereo = typeof base.stereotype === 'string' ? base.stereotype : '';
+  const stereoDisplay = readStereotypeDisplayText(base);
+  const selected = readStereotypes(base);
+  const [isOpen, setIsOpen] = useState(false);
 
-  const commit = (nextValue: string) => {
-    const v = asTrimmedOrUndef(nextValue);
-    const next: Record<string, unknown> = { ...base };
-    if (v) next.stereotype = v;
-    else delete next.stereotype;
+  const availableStereotypes = useModelStore(
+    useMemo(
+      () => (s) => {
+        const m = s.model;
+        if (!m) return [];
+        const out: string[] = [];
+        for (const e of Object.values(m.elements)) {
+          if (!e?.attrs) continue;
+          out.push(...readStereotypes(e.attrs));
+        }
+        for (const r of Object.values(m.relationships)) {
+          if (!r?.attrs) continue;
+          out.push(...readStereotypes(r.attrs));
+        }
+        return Array.from(new Set(out));
+      },
+      []
+    )
+  );
+
+  const commitList = (list: string[]) => {
+    const next = writeStereotypes(base, list);
 
     // If the attrs object becomes empty, store it as undefined.
     const hasKeys = Object.keys(next).length > 0;
@@ -56,18 +75,32 @@ export function UmlStereotypeSection({ element: el, actions }: Props) {
       <p className="panelHint">UML</p>
       <div className="propertiesGrid">
         <PropertyRow label="Stereotype">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <input
-              className="textInput"
-              aria-label="UML element stereotype"
-              placeholder={defaultPlaceholder(el.type)}
-              value={stereo}
-              onChange={(e) => commit(e.target.value)}
-            />
-            <div style={{ fontSize: 12, opacity: 0.75 }}>Shown as «stereotype». Leave blank for default.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                className="textInput"
+                aria-label="UML element stereotypes"
+                placeholder={defaultPlaceholder(el.type)}
+                value={stereoDisplay}
+                readOnly
+              />
+              <button type="button" className="textButton" onClick={() => setIsOpen(true)}>
+                Edit
+              </button>
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.75 }}>Shown as «stereotype». Display uses short names.</div>
           </div>
         </PropertyRow>
       </div>
+
+      <StereotypePickerDialog
+        title="Edit stereotypes"
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        availableStereotypes={availableStereotypes}
+        value={selected}
+        onConfirm={(next) => commitList(next)}
+      />
     </>
   );
 }

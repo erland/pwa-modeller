@@ -1,4 +1,5 @@
 import type { Folder, Model } from '../../../domain';
+import { parseStereotypeCsv } from '../../../domain/umlStereotypes';
 import { isRecord, uniquePush } from '../utils';
 
 function getSchemaVersion(model: Model): number {
@@ -452,6 +453,99 @@ function migrateV11ToV12(model: Model): Model {
   return model;
 }
 
+/**
+ * v12 -> v13 migration:
+ * - Introduce attrs.stereotypes (string[]) as canonical storage for stereotypes.
+ * - Populate attrs.stereotypes from legacy attrs.stereotype when missing.
+ */
+function migrateV12ToV13(model: Model): Model {
+  // Elements
+  for (const eid of Object.keys(model.elements)) {
+    const el: any = (model.elements as any)[eid];
+    if (!el || typeof el !== 'object') continue;
+
+    const attrs = el.attrs;
+    if (!isRecord(attrs)) continue;
+
+    const hasList = Array.isArray((attrs as any).stereotypes);
+    const legacy = (attrs as any).stereotype;
+
+    if (!hasList && typeof legacy === 'string') {
+      const list = parseStereotypeCsv(legacy);
+      if (list.length) (attrs as any).stereotypes = list;
+      else delete (attrs as any).stereotypes;
+    }
+
+    // Remove legacy field if present
+    delete (attrs as any).stereotype;
+  }
+
+  // Relationships
+  for (const rid of Object.keys(model.relationships)) {
+    const rel: any = (model.relationships as any)[rid];
+    if (!rel || typeof rel !== 'object') continue;
+
+    const attrs = rel.attrs;
+    if (!isRecord(attrs)) continue;
+
+    const hasList = Array.isArray((attrs as any).stereotypes);
+    const legacy = (attrs as any).stereotype;
+
+    if (!hasList && typeof legacy === 'string') {
+      const list = parseStereotypeCsv(legacy);
+      if (list.length) (attrs as any).stereotypes = list;
+      else delete (attrs as any).stereotypes;
+    }
+
+    delete (attrs as any).stereotype;
+  }
+
+  model.schemaVersion = 13;
+  return model;
+}
+
+/**
+ * v13 -> v14 migration:
+ * - Remove legacy attrs.stereotype fields (string) after stereotypes have been migrated.
+ * - Normalize attrs.stereotypes (trim, de-dup) for elements and relationships.
+ */
+function migrateV13ToV14(model: Model): Model {
+  const normalizeList = (raw: unknown): string[] | undefined => {
+    if (!Array.isArray(raw)) return undefined;
+    const list = raw
+      .filter((x): x is string => typeof x === 'string')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const normalized = parseStereotypeCsv(list.join(','));
+    return normalized.length ? normalized : undefined;
+  };
+
+  for (const eid of Object.keys(model.elements)) {
+    const el: any = (model.elements as any)[eid];
+    if (!el || typeof el !== 'object') continue;
+    const attrs = el.attrs;
+    if (!isRecord(attrs)) continue;
+    delete (attrs as any).stereotype;
+    const next = normalizeList((attrs as any).stereotypes);
+    if (next) (attrs as any).stereotypes = next;
+    else delete (attrs as any).stereotypes;
+  }
+
+  for (const rid of Object.keys(model.relationships)) {
+    const rel: any = (model.relationships as any)[rid];
+    if (!rel || typeof rel !== 'object') continue;
+    const attrs = rel.attrs;
+    if (!isRecord(attrs)) continue;
+    delete (attrs as any).stereotype;
+    const next = normalizeList((attrs as any).stereotypes);
+    if (next) (attrs as any).stereotypes = next;
+    else delete (attrs as any).stereotypes;
+  }
+
+  model.schemaVersion = 14;
+  return model;
+}
+
 
 export type MigrationResult = {
   model: Model;
@@ -524,6 +618,18 @@ export function runMigrations(model: Model): MigrationResult {
   if (v < 12) {
     model = migrateV11ToV12(model);
     notes.push('migrate v11 -> v12');
+    v = getSchemaVersion(model);
+  }
+
+  if (v < 13) {
+    model = migrateV12ToV13(model);
+    notes.push('migrate v12 -> v13');
+    v = getSchemaVersion(model);
+  }
+
+  if (v < 14) {
+    model = migrateV13ToV14(model);
+    notes.push('migrate v13 -> v14');
     v = getSchemaVersion(model);
   }
 

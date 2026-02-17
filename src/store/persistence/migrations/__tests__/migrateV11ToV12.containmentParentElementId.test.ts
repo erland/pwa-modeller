@@ -21,7 +21,7 @@ describe('migrations v11 -> v12 (containment parentElementId)', () => {
     model.elements[child3.id] = child3;
 
     const migrated: any = migrateModel(model);
-    expect(migrated.schemaVersion).toBe(12);
+    expect(migrated.schemaVersion).toBe(14);
     expect(migrated.elements[child1.id].parentElementId).toBe(parent.id);
     expect('parentElementId' in migrated.elements[child2.id]).toBe(false);
     expect('parentElementId' in migrated.elements[child3.id]).toBe(false);

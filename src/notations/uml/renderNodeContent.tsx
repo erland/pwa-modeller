@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { Element, ViewNodeLayout, UmlAttribute, UmlOperation, UmlVisibility } from '../../domain';
 import { readUmlClassifierMembers } from '../../domain';
+import { readStereotypeDisplayText } from '../../domain/umlStereotypes';
 import { readUmlNodeAttrs } from './nodeAttrs';
 
 function readShapeHint(node: ViewNodeLayout): { umlShape?: string; umlOrientation?: 'horizontal' | 'vertical' } {
@@ -16,11 +17,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function asString(v: unknown): string | undefined {
-  if (typeof v !== 'string') return undefined;
-  const s = v.trim();
-  return s.length ? s : undefined;
-}
 
 function visibilitySymbol(v?: UmlVisibility): string {
   switch (v) {
@@ -124,7 +120,7 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
   const name = element.name || "(unnamed)";
 
   // Stereotype is semantic (element-level).
-  const elementStereo = isRecord(element.attrs) ? asString(element.attrs['stereotype']) : undefined;
+  const elementStereo = readStereotypeDisplayText(element.attrs) || undefined;
 
   const attrLines = splitLines(attrs.attributesText);
   const opLines = splitLines(attrs.operationsText);

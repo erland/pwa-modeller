@@ -185,8 +185,12 @@ export function extractDocumentation(el: Element, eaExtDocsById?: Map<string, st
       if (t) return t;
     }
     if (ln === 'ownedcomment' || ln === 'comment') {
-      const body = childText(ch, 'body')?.trim();
-      if (body) return body;
+      // EA-style: <ownedComment><body>…</body></ownedComment>
+      const bodyChild = childText(ch, 'body')?.trim();
+      if (bodyChild) return bodyChild;
+      // UML2/XMI-style: <ownedComment body="…"/>
+      const bodyAttr = attrAny(ch, ['body'])?.trim();
+      if (bodyAttr) return bodyAttr;
     }
   }
 
@@ -199,8 +203,10 @@ export function extractDocumentation(el: Element, eaExtDocsById?: Map<string, st
   if (anyOwnedComment && anyOwnedComment.length > 0) {
     const first = anyOwnedComment.item(0);
     if (first) {
-      const body = childText(first, 'body')?.trim();
-      if (body) return body;
+      const bodyChild = childText(first, 'body')?.trim();
+      if (bodyChild) return bodyChild;
+      const bodyAttr = attrAny(first, ['body'])?.trim();
+      if (bodyAttr) return bodyAttr;
     }
   }
 

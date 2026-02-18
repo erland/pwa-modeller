@@ -47,8 +47,10 @@ function extractDocumentation(el: Element): string | undefined {
       if (t) return t;
     }
     if (ln === 'ownedcomment' || ln === 'comment') {
-      const body = childText(ch, 'body')?.trim();
-      if (body) return body;
+      const bodyChild = childText(ch, 'body')?.trim();
+      if (bodyChild) return bodyChild;
+      const bodyAttr = attrAny(ch, ['body'])?.trim();
+      if (bodyAttr) return bodyAttr;
     }
   }
 

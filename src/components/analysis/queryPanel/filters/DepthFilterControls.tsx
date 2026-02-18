@@ -1,4 +1,4 @@
-import type { AnalysisMode } from '../../AnalysisQueryPanel';
+import type { AnalysisMode } from '../types';
 
 type Props = {
   mode: AnalysisMode;

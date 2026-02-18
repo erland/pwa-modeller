@@ -1,6 +1,6 @@
 import type { Model } from '../../../domain';
 
-import type { AnalysisMode } from '../AnalysisQueryPanel';
+import type { AnalysisMode } from './types';
 
 import { ElementPickerRow } from './ElementPickerRow';
 

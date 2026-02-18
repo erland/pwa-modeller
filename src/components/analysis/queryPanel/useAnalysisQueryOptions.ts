@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'react';
 import type { ElementType, Model, ModelKind, RelationshipType } from '../../../domain';
 import { getAnalysisAdapter } from '../../../analysis/adapters/registry';
 
-import type { AnalysisMode } from '../AnalysisQueryPanel';
+import type { AnalysisMode } from './types';
 
 import {
   collectFacetValues,

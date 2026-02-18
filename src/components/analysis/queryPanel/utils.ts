@@ -9,7 +9,7 @@ import type {
 import { getElementTypeLabel } from '../../../domain';
 import { getAnalysisAdapter } from '../../../analysis/adapters/registry';
 
-import type { AnalysisMode } from '../AnalysisQueryPanel';
+import type { AnalysisMode } from './types';
 
 // We keep filter option lists dynamic (derived from the loaded model) so that
 // users working with a tailored meta-model don't see irrelevant options.

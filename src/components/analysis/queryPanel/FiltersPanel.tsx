@@ -1,6 +1,6 @@
 import type { AnalysisDirection, ElementType, RelationshipType } from '../../../domain';
 
-import type { AnalysisMode } from '../AnalysisQueryPanel';
+import type { AnalysisMode } from './types';
 import type { PathsBetweenQueryMode } from '../../../store';
 
 import { DepthFilterControls } from './filters/DepthFilterControls';

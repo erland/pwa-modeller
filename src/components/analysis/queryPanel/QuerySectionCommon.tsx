@@ -11,7 +11,7 @@ import { AnalysisSection } from '../layout/AnalysisSection';
 import { FiltersPanel } from './FiltersPanel';
 import { QueryToolbar } from './QueryToolbar';
 
-import type { AnalysisMode } from '../AnalysisQueryPanel';
+import type { AnalysisMode } from './types';
 
 export type QuerySectionCommonProps = {
   modelName: string;

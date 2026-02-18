@@ -74,13 +74,31 @@ function pushMissingOrWrongRef(
  * Reference integrity checks for BPMN elements/relationships.
  */
 export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
+  return [
+    ...checkUnresolvedRefs(model),
+    ...checkPoolProcessRefs(model),
+    ...checkLaneFlowNodeRefs(model),
+    ...checkBoundaryEvents(model),
+    ...checkDataReferences(model),
+    ...checkEventDefinitionRefs(model),
+    ...checkMessageFlowRefs(model),
+  ];
+}
+
+// ------------------------------
+// Rule parts (exported for unit testing)
+// ------------------------------
+
+export function checkUnresolvedRefs(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   // Surface importer/apply diagnostics (unresolved external ids that couldn't be rewritten).
   for (const el of Object.values(model.elements)) {
     if (!el.type.startsWith('bpmn.')) continue;
     if (!isRecord(el.attrs)) continue;
-    const ur = isRecord(el.attrs) && isRecord(el.attrs['unresolvedRefs']) ? (el.attrs['unresolvedRefs'] as Record<string, unknown>) : undefined;
+    const ur = isRecord(el.attrs) && isRecord(el.attrs['unresolvedRefs'])
+      ? (el.attrs['unresolvedRefs'] as Record<string, unknown>)
+      : undefined;
     if (!isRecord(ur) || !Object.keys(ur).length) continue;
     issues.push(
       makeIssue(
@@ -91,10 +109,13 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
       )
     );
   }
+
   for (const rel of Object.values(model.relationships)) {
     if (!rel.type.startsWith('bpmn.')) continue;
     if (!isRecord(rel.attrs)) continue;
-    const ur = isRecord(rel.attrs) && isRecord(rel.attrs['unresolvedRefs']) ? (rel.attrs['unresolvedRefs'] as Record<string, unknown>) : undefined;
+    const ur = isRecord(rel.attrs) && isRecord(rel.attrs['unresolvedRefs'])
+      ? (rel.attrs['unresolvedRefs'] as Record<string, unknown>)
+      : undefined;
     if (!isRecord(ur) || !Object.keys(ur).length) continue;
     issues.push(
       makeIssue(
@@ -106,7 +127,13 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
     );
   }
 
-  // --- Participants / Pools -> processRef
+  return issues;
+}
+
+export function checkPoolProcessRefs(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  // Participants / Pools -> processRef
   for (const el of Object.values(model.elements)) {
     if (el.type !== 'bpmn.pool') continue;
     const processRefRaw = getStringAttr(el.attrs, 'processRef');
@@ -129,11 +156,17 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
     );
   }
 
-  // --- Lanes -> flowNodeRefs
+  return issues;
+}
+
+export function checkLaneFlowNodeRefs(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  // Lanes -> flowNodeRefs
   const laneMembership: Record<string, string[]> = {};
   for (const el of Object.values(model.elements)) {
     if (el.type !== 'bpmn.lane') continue;
-        const flowNodeRefsRaw = isRecord(el.attrs) ? el.attrs['flowNodeRefs'] : undefined;
+    const flowNodeRefsRaw = isRecord(el.attrs) ? el.attrs['flowNodeRefs'] : undefined;
     const flowNodeRefs = Array.isArray(flowNodeRefsRaw) ? flowNodeRefsRaw : [];
     const ids = flowNodeRefs.filter((v) => typeof v === 'string') as string[];
 
@@ -177,7 +210,13 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
     );
   }
 
-  // --- Boundary events -> attachedToRef should point to an activity
+  return issues;
+}
+
+export function checkBoundaryEvents(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  // Boundary events -> attachedToRef should point to an activity
   for (const el of Object.values(model.elements)) {
     if (el.type !== 'bpmn.boundaryEvent') continue;
     const attachedToRef = getStringAttr(el.attrs, 'attachedToRef');
@@ -229,7 +268,12 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
     }
   }
 
-  // --- Data references
+  return issues;
+}
+
+export function checkDataReferences(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
   for (const el of Object.values(model.elements)) {
     if (el.type === 'bpmn.dataObjectReference') {
       const ref = getStringAttr(el.attrs, 'dataObjectRef');
@@ -268,7 +312,12 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
     }
   }
 
-  // --- EventDefinitions -> global element refs
+  return issues;
+}
+
+export function checkEventDefinitionRefs(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
   for (const el of Object.values(model.elements)) {
     if (!el.type.startsWith('bpmn.')) continue;
     const ed = getEventDefinition(el.attrs);
@@ -349,7 +398,13 @@ export function ruleRefsIntegrity(model: Model): ValidationIssue[] {
     }
   }
 
-  // --- Relationships: messageFlow.messageRef should point to a bpmn.message
+  return issues;
+}
+
+export function checkMessageFlowRefs(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  // Relationships: messageFlow.messageRef should point to a bpmn.message
   for (const rel of Object.values(model.relationships)) {
     if (rel.type !== 'bpmn.messageFlow') continue;
     const ref = getStringAttr(rel.attrs, 'messageRef');

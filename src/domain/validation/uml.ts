@@ -10,11 +10,22 @@ import { makeIssue } from './issues';
 import type { ValidationIssue } from './types';
 
 export function validateUmlBasics(model: Model): ValidationIssue[] {
+  return [
+    ...checkUmlUnknownTypes(model),
+    ...checkUmlRelationshipEndpoints(model),
+    ...checkUmlViewNodeKindMismatches(model),
+    ...checkUmlActivityFlowEndpoints(model),
+    ...checkUmlGeneralizationCycles(model),
+  ];
+}
+
+// ------------------------------
+// Rule parts (exported for unit testing)
+// ------------------------------
+
+export function checkUmlUnknownTypes(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
-  // ------------------------------
-  // Unknown UML element/relationship types
-  // ------------------------------
   const allowedElements = new Set(UML_ELEMENT_TYPES);
   const allowedRelationships = new Set(UML_RELATIONSHIP_TYPES);
 
@@ -48,11 +59,12 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
     }
   }
 
+  return issues;
+}
 
+export function checkUmlRelationshipEndpoints(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
 
-  // ------------------------------
-  // Relationship endpoint sanity (selected UML relationships)
-  // ------------------------------
   const UML_DEPLOYMENT_TARGET_TYPES = UML_DEPLOYMENT_TARGET_TYPE_IDS_SET;
   const isClassLike = (t: string) => t === 'uml.class' || t === 'uml.associationClass';
 
@@ -120,9 +132,12 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
     }
   }
 
-  // ------------------------------
-  // View node kind mismatches (e.g. ArchiMate element placed in a UML view)
-  // ------------------------------
+  return issues;
+}
+
+export function checkUmlViewNodeKindMismatches(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
   for (const view of Object.values(model.views)) {
     if (view.kind !== 'uml') continue;
     const nodes = view.layout?.nodes ?? [];
@@ -144,9 +159,12 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
     }
   }
 
-  // ------------------------------
-  // Activity flows endpoint sanity
-  // ------------------------------
+  return issues;
+}
+
+export function checkUmlActivityFlowEndpoints(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
   for (const rel of Object.values(model.relationships)) {
     if (rel.type !== 'uml.controlFlow' && rel.type !== 'uml.objectFlow') continue;
     if (!rel.sourceElementId || !rel.targetElementId) continue;
@@ -168,9 +186,12 @@ export function validateUmlBasics(model: Model): ValidationIssue[] {
     }
   }
 
-  // ------------------------------
-  // Generalization cycle detection (classifier graph)
-  // ------------------------------
+  return issues;
+}
+
+export function checkUmlGeneralizationCycles(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
   // Build adjacency: subclass -> superclass via uml.generalization
   const adj = new Map<string, Array<{ to: string; relId: string }>>();
   const umlGeneralizables = new Set<string>();

@@ -33,6 +33,7 @@ export type DiagramToolbarProps = {
   canExportImage: boolean;
   onExportImage: () => void;
   onOpenInSandbox?: () => void;
+  onAddRelatedToView?: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
   onAlignSelection: (mode: AlignMode) => void;
   onDistributeSelection: (mode: DistributeMode) => void;
@@ -62,6 +63,7 @@ export function DiagramToolbar({
   canExportImage,
   onExportImage,
   onOpenInSandbox,
+  onAddRelatedToView,
   onAutoLayout,
   onAlignSelection,
   onDistributeSelection,
@@ -74,6 +76,9 @@ export function DiagramToolbar({
   onSelect,
 }: DiagramToolbarProps) {
   const hasActiveView = Boolean(activeViewId && activeView);
+
+  const canAddRelatedToView =
+    hasActiveView && (selection.kind === 'viewNode' || selection.kind === 'viewNodes') && typeof onAddRelatedToView === 'function';
 
   const [alignDialogOpen, setAlignDialogOpen] = useState(false);
 
@@ -274,6 +279,16 @@ export function DiagramToolbar({
               title="Open this diagram in the Analysis Sandbox"
             >
               Open in Sandbox
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onAddRelatedToView?.()}
+              className="shellButton"
+              disabled={!canAddRelatedToView}
+              title="Add elements related to the current selection"
+            >
+              Add related…
             </button>
 
             <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>

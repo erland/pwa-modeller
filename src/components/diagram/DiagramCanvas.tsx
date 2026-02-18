@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AlignMode, AutoLayoutOptions, DistributeMode, Model, SameSizeMode, View } from '../../domain';
 import { createConnector } from '../../domain';
@@ -22,6 +22,9 @@ import { useDiagramElementDrop } from './hooks/useDiagramElementDrop';
 import { useDiagramConnections } from './hooks/useDiagramConnections';
 import { useDiagramMarqueeSelection } from './hooks/useDiagramMarqueeSelection';
 import { getNotation } from '../../notations';
+import { SandboxInsertDialog } from '../analysis/modes/SandboxInsertDialog';
+import type { SandboxAddRelatedDirection } from '../analysis/workspace/controller/sandboxTypes';
+import { collectAllRelationshipTypes } from '../analysis/workspace/controller/sandboxStateUtils';
 
 type Props = {
   selection: Selection;
@@ -46,6 +49,57 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
   const views = useMemo(() => (model ? sortViews(model.views) : []), [model]);
   const { activeViewId } = useActiveViewId(model, views, selection);
   const activeView = model && activeViewId ? model.views[activeViewId] : null;
+
+// --- Add related (model workspace) ---
+const allRelationshipTypes = useMemo(() => (model ? collectAllRelationshipTypes(model) : []), [model]);
+
+const [addRelatedDialogOpen, setAddRelatedDialogOpen] = useState(false);
+const [addRelatedAnchors, setAddRelatedAnchors] = useState<string[]>([]);
+
+const [addRelatedDepth, setAddRelatedDepth] = useState<number>(() => {
+  const v = localStorage.getItem('diagram.addRelated.depth');
+  const n = v ? Number(v) : 1;
+  return Number.isFinite(n) && n >= 1 ? Math.min(6, Math.max(1, Math.round(n))) : 1;
+});
+
+const [addRelatedDirection, setAddRelatedDirection] = useState<SandboxAddRelatedDirection>(() => {
+  const v = localStorage.getItem('diagram.addRelated.direction');
+  return v === 'incoming' || v === 'outgoing' || v === 'both' ? (v as SandboxAddRelatedDirection) : 'both';
+});
+
+const [addRelatedEnabledTypes, setAddRelatedEnabledTypes] = useState<string[]>(() => {
+  const v = localStorage.getItem('diagram.addRelated.enabledTypes');
+  try {
+    const parsed = v ? (JSON.parse(v) as unknown) : null;
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+});
+
+useEffect(() => {
+  localStorage.setItem('diagram.addRelated.depth', String(addRelatedDepth));
+}, [addRelatedDepth]);
+
+useEffect(() => {
+  localStorage.setItem('diagram.addRelated.direction', addRelatedDirection);
+}, [addRelatedDirection]);
+
+useEffect(() => {
+  localStorage.setItem('diagram.addRelated.enabledTypes', JSON.stringify(addRelatedEnabledTypes));
+}, [addRelatedEnabledTypes]);
+
+const openAddRelatedDialog = useCallback(() => {
+  if (!activeViewId) return;
+  if (selection.kind === 'viewNode') {
+    setAddRelatedAnchors([selection.elementId]);
+    setAddRelatedDialogOpen(true);
+  } else if (selection.kind === 'viewNodes') {
+    setAddRelatedAnchors(selection.elementIds);
+    setAddRelatedDialogOpen(true);
+  }
+}, [activeViewId, selection]);
+
 
   useEffect(() => {
     if (typeof onActiveViewIdChange !== 'function') return;
@@ -316,6 +370,7 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
   }
 
   return (
+    <>
     <DiagramCanvasView
       model={model}
       views={views}
@@ -354,6 +409,7 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
       clientToModelPoint={viewport.clientToModelPoint}
       getElementBgVar={getElementBgVar}
       onOpenInSandbox={onOpenInSandbox}
+      onAddRelatedToView={openAddRelatedDialog}
       canExportImage={canExportImage}
       onExportImage={handleExportImage}
       onAutoLayout={onAutoLayout}
@@ -364,5 +420,60 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
       onAddAndJunction={onAddAndJunction}
       onAddOrJunction={onAddOrJunction}
     />
+
+
+    <SandboxInsertDialog
+      kind="related"
+      isOpen={addRelatedDialogOpen}
+      model={model}
+      maxNodes={5000}
+      anchorElementIds={addRelatedAnchors}
+      existingElementIds={nodes
+        .map((n) => n.elementId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)}
+      allRelationshipTypes={allRelationshipTypes}
+      initialEnabledRelationshipTypes={addRelatedEnabledTypes.length > 0 ? addRelatedEnabledTypes : allRelationshipTypes}
+      initialOptions={{ depth: addRelatedDepth, direction: addRelatedDirection }}
+      onCancel={() => setAddRelatedDialogOpen(false)}
+      onConfirm={({ enabledRelationshipTypes, options, selectedElementIds }) => {
+        setAddRelatedDialogOpen(false);
+        setAddRelatedDepth(options.depth);
+        setAddRelatedDirection(options.direction);
+        setAddRelatedEnabledTypes(enabledRelationshipTypes);
+
+        if (!activeViewId) return;
+        if (selectedElementIds.length === 0) return;
+
+        // Add selected elements to the current view via public store API.
+        for (const eid of selectedElementIds) {
+          modelStore.addElementToView(activeViewId, eid);
+        }
+
+        // If the view uses explicit relationship visibility, ensure relationships between
+        // visible nodes are included so connections appear.
+        const m = modelStore.getState().model;
+        const v = m?.views?.[activeViewId];
+        if (m && v?.relationshipVisibility?.mode === 'explicit') {
+          const nodeSet = new Set(
+            (v.layout?.nodes ?? [])
+              .map((nn) => nn.elementId)
+              .filter((id): id is string => typeof id === 'string' && id.length > 0)
+          );
+          for (const r of Object.values(m.relationships)) {
+            const src = (r as any).sourceId ?? (r as any).sourceElementId;
+            const tgt = (r as any).targetId ?? (r as any).targetElementId;
+            if (!src || !tgt) continue;
+            if (nodeSet.has(String(src)) && nodeSet.has(String(tgt))) {
+              modelStore.includeRelationshipInView(activeViewId, r.id);
+            }
+          }
+        }
+
+        void modelStore.autoLayoutView(activeViewId);
+      }}
+    />
+
+
+    </>
   );
 }

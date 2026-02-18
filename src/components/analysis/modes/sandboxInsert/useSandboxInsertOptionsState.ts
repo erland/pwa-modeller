@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Model } from '../../../../domain';
 import type {
@@ -77,9 +77,24 @@ export function useSandboxInsertOptionsState(args: {
 
   const enabledElementTypesSet = useMemo(() => new Set(enabledElementTypes), [enabledElementTypes]);
 
-  // Reset options when the dialog opens.
+  const prevIsOpenRef = useRef(false);
+
+  function arraysEqual(a: string[], b: string[]): boolean {
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  // Reset options only on the transition closed -> open.
+  // IMPORTANT: do not depend on the full `args` object here; it is often reconstructed
+  // on each render by callers, which would otherwise cause an infinite update loop.
   useEffect(() => {
-    if (!isOpen) return;
+    const wasOpen = prevIsOpenRef.current;
+    prevIsOpenRef.current = isOpen;
+    if (!isOpen || wasOpen) return;
 
     setEnabledTypes(
       computeInitialEnabledRelationshipTypes({
@@ -107,13 +122,14 @@ export function useSandboxInsertOptionsState(args: {
     }
 
     setOpenNonce((n) => n + 1);
-  }, [allElementTypesForModel, args, initialEnabledRelationshipTypes, isOpen, relationshipTypesForDialog]);
+  }, [allElementTypesForModel, initialEnabledRelationshipTypes, isOpen, relationshipTypesForDialog, args.kind, args.initialOptions]);
 
   // Keep enabled relationship types valid when compatible types change.
   useEffect(() => {
-    setEnabledTypes((prev) =>
-      keepEnabledRelationshipTypesValid({ isOpen, enabledTypes: prev, relationshipTypesForDialog }),
-    );
+    setEnabledTypes((prev) => {
+      const next = keepEnabledRelationshipTypesValid({ isOpen, enabledTypes: prev, relationshipTypesForDialog });
+      return arraysEqual(prev, next) ? prev : next;
+    });
   }, [isOpen, relationshipTypesForDialog]);
 
   return {

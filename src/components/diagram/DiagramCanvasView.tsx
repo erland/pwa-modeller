@@ -86,6 +86,7 @@ export type DiagramCanvasViewProps = {
   canExportImage: boolean;
   onExportImage: () => void;
   onOpenInSandbox?: () => void;
+  onAddRelatedToView?: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
   onAlignSelection: (mode: AlignMode) => void;
   onDistributeSelection: (mode: DistributeMode) => void;
@@ -135,6 +136,7 @@ export function DiagramCanvasView({
   canExportImage,
   onExportImage,
   onOpenInSandbox,
+  onAddRelatedToView,
   onAutoLayout,
   onAlignSelection,
   onDistributeSelection,
@@ -163,6 +165,7 @@ export function DiagramCanvasView({
         canExportImage={canExportImage}
         onExportImage={onExportImage}
         onOpenInSandbox={onOpenInSandbox}
+        onAddRelatedToView={onAddRelatedToView}
         onAutoLayout={onAutoLayout}
         onAlignSelection={onAlignSelection}
         onDistributeSelection={onDistributeSelection}

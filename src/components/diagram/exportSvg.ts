@@ -1,6 +1,7 @@
-import type { Model, ViewNodeLayout, ArchimateLayer, ElementType } from '../../domain';
+import type { Model, ViewNodeLayout, ArchimateLayer, ElementType, View } from '../../domain';
 import { ELEMENT_TYPES_BY_LAYER, getElementTypeLabel } from '../../domain';
 import { renderSvgMarkerDefs } from '../../diagram/relationships/markers';
+import type { Viewport } from './exportSvg.helpers';
 import {
   applyLaneOffsetsForExport,
   buildNodeIndex,
@@ -31,60 +32,60 @@ const LAYER_FILL: Record<ArchimateLayer, string> = {
   ImplementationMigration: '#ffd0e0',
 };
 
-// Relationship routing + styling helpers live in exportSvg.helpers.ts.
+type PreparedSvgExport = {
+  model: Model;
+  view: View;
+  padding: number;
+  viewport: Viewport;
+  nodes: ViewNodeLayout[];
+  linesSvg: string;
+};
 
-
-
-export function createViewSvg(model: Model, viewId: string): string {
+function getViewOrThrow(model: Model, viewId: string): View {
   const view = model.views[viewId];
   if (!view) throw new Error(`View not found: ${viewId}`);
+  return view;
+}
 
-  const padding = 20;
-  const orderedNodes = getOrderedNodes(view.layout?.nodes ?? []);
-  const viewport = computeViewport(orderedNodes, padding);
+function isContainerType(typeId: string): boolean {
+  return typeId === 'bpmn.pool' || typeId === 'bpmn.lane';
+}
 
-  const nodes = translateNodes(orderedNodes, viewport);
-  const nodeByKey = buildNodeIndex(nodes);
-  const { relItems, obstaclesById } = computeRelationshipItems({ model, view, nodes, nodeByKey, viewport });
-  const lanePointsById = applyLaneOffsetsForExport({ view, relItems, obstaclesById });
-  const linesSvg = renderLinesSvg(relItems, lanePointsById);
+function isObjectType(t: unknown): t is 'Note' | 'Label' | 'GroupBox' | 'Divider' {
+  return t === 'Note' || t === 'Label' || t === 'GroupBox' || t === 'Divider';
+}
 
-  const { width, height } = viewport;
+function objectText(t: string, obj: { name?: string; text?: string }): string {
+  if (t === 'GroupBox') return obj.name?.trim() || 'Group';
+  if (t === 'Divider') return '';
+  const raw = obj.text?.trim();
+  if (raw) return raw;
+  return t === 'Label' ? 'Label' : 'Note';
+}
 
-  const isContainerType = (typeId: string): boolean => typeId === 'bpmn.pool' || typeId === 'bpmn.lane';
-  const isObjectType = (t: unknown): t is 'Note' | 'Label' | 'GroupBox' | 'Divider' =>
-    t === 'Note' || t === 'Label' || t === 'GroupBox' || t === 'Divider';
+function svgTextAnchor(align: unknown): 'start' | 'middle' | 'end' {
+  if (align === 'center') return 'middle';
+  if (align === 'right') return 'end';
+  return 'start';
+}
 
-  const objectText = (t: string, obj: { name?: string; text?: string }): string => {
-    if (t === 'GroupBox') return obj.name?.trim() || 'Group';
-    if (t === 'Divider') return '';
-    const raw = obj.text?.trim();
-    if (raw) return raw;
-    return t === 'Label' ? 'Label' : 'Note';
-  };
+function renderMultilineText(
+  x: number,
+  y: number,
+  text: string,
+  opts: { fontSize: number; fontWeight?: number; fill: string; anchor: 'start' | 'middle' | 'end' }
+): string {
+  const lines = text.split(/\r?\n/);
+  const lh = Math.round(opts.fontSize * 1.25);
+  return `<text x="${x}" y="${y}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="${opts.fontSize}"${
+    opts.fontWeight ? ` font-weight="${opts.fontWeight}"` : ''
+  } fill="${opts.fill}" text-anchor="${opts.anchor}">${lines
+    .map((ln, i) => `<tspan x="${x}" dy="${i === 0 ? 0 : lh}">${escapeXml(ln)}</tspan>`)
+    .join('')}</text>`;
+}
 
-  const svgTextAnchor = (align: unknown): 'start' | 'middle' | 'end' => {
-    if (align === 'center') return 'middle';
-    if (align === 'right') return 'end';
-    return 'start';
-  };
-
-  const renderMultilineText = (
-    x: number,
-    y: number,
-    text: string,
-    opts: { fontSize: number; fontWeight?: number; fill: string; anchor: 'start' | 'middle' | 'end' }
-  ): string => {
-    const lines = text.split(/\r?\n/);
-    const lh = Math.round(opts.fontSize * 1.25);
-    return `<text x="${x}" y="${y}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="${opts.fontSize}"${
-      opts.fontWeight ? ` font-weight="${opts.fontWeight}"` : ''
-    } fill="${opts.fill}" text-anchor="${opts.anchor}">${lines
-      .map((ln, i) => `<tspan x="${x}" dy="${i === 0 ? 0 : lh}">${escapeXml(ln)}</tspan>`)
-      .join('')}</text>`;
-  };
-
-  const renderNodeSvg = (n: ViewNodeLayout): string => {
+function makeRenderNodeSvg(model: Model, view: View): (n: ViewNodeLayout) => string {
+  return (n: ViewNodeLayout): string => {
     const x = n.x;
     const y = n.y;
     const { w, h } = nodeSize(n);
@@ -116,7 +117,9 @@ export function createViewSvg(model: Model, viewId: string): string {
       const isNote = obj.type === 'Note';
 
       const stroke = (obj.style?.stroke as string | undefined) ?? (n.highlighted ? '#f59e0b' : 'rgba(0,0,0,0.18)');
-      const fill = (obj.style?.fill as string | undefined) ?? (isNote ? 'rgba(255, 255, 200, 0.92)' : isGroup || isLabel || isDivider ? 'transparent' : 'rgba(255,255,255,0.92)');
+      const fill =
+        (obj.style?.fill as string | undefined) ??
+        (isNote ? 'rgba(255, 255, 200, 0.92)' : isGroup || isLabel || isDivider ? 'transparent' : 'rgba(255,255,255,0.92)');
       const dash = isGroup || isLabel ? ' stroke-dasharray="6 6"' : '';
       const strokeWidth = isGroup ? 2 : isDivider ? 0 : 1;
       const rx = isDivider ? 0 : 12;
@@ -154,14 +157,7 @@ export function createViewSvg(model: Model, viewId: string): string {
         </g>`;
       }
 
-      if (isNote) {
-        return `<g>
-          ${rect}
-          ${renderMultilineText(tx, y + padY, text, { fontSize: 13, fill: 'rgba(0,0,0,0.88)', anchor: textAlign })}
-        </g>`;
-      }
-
-      // Default fallback.
+      // Notes and default fallback.
       return `<g>
         ${rect}
         ${renderMultilineText(tx, y + padY, text, { fontSize: 13, fill: 'rgba(0,0,0,0.88)', anchor: textAlign })}
@@ -200,6 +196,25 @@ export function createViewSvg(model: Model, viewId: string): string {
       </g>
     `;
   };
+}
+
+function prepareSvgExport(model: Model, viewId: string, padding: number): PreparedSvgExport {
+  const view = getViewOrThrow(model, viewId);
+
+  const orderedNodes = getOrderedNodes(view.layout?.nodes ?? []);
+  const viewport = computeViewport(orderedNodes, padding);
+
+  const nodes = translateNodes(orderedNodes, viewport);
+  const nodeByKey = buildNodeIndex(nodes);
+  const { relItems, obstaclesById } = computeRelationshipItems({ model, view, nodes, nodeByKey, viewport });
+  const lanePointsById = applyLaneOffsetsForExport({ view, relItems, obstaclesById });
+  const linesSvg = renderLinesSvg(relItems, lanePointsById);
+
+  return { model, view, padding, viewport, nodes, linesSvg };
+}
+
+function partitionNodesForSvg(model: Model, view: View, nodes: ViewNodeLayout[]): { containersSvg: string; nodesSvg: string } {
+  const renderNodeSvg = makeRenderNodeSvg(model, view);
 
   // If we have container nodes (e.g. BPMN pools/lanes), render them *behind* relationships
   // so edges remain visible when drawn inside containers.
@@ -231,12 +246,19 @@ export function createViewSvg(model: Model, viewId: string): string {
   const containersSvg = [...containerNodes, ...groupBoxNodes].map(renderNodeSvg).join('');
   const nodesSvg = [...foregroundNodes, ...foregroundObjectNodes].map(renderNodeSvg).join('');
 
+  return { containersSvg, nodesSvg };
+}
+
+function renderSvgDocument(prep: PreparedSvgExport, parts: { containersSvg: string; nodesSvg: string }): string {
+  const { view, padding, viewport, linesSvg } = prep;
+  const { width, height } = viewport;
+
   // Export uses a neutral light background so diagrams remain readable when
   // embedded in documents regardless of the app's current theme.
   const backgroundFill = '#ffffff';
 
   const title = escapeXml(view.name);
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
     ${renderSvgMarkerDefs({ stroke: 'rgba(0,0,0,0.55)' })}
@@ -244,11 +266,16 @@ export function createViewSvg(model: Model, viewId: string): string {
   <rect x="0" y="0" width="${width}" height="${height}" fill="${backgroundFill}" />
   <text x="${padding}" y="${padding}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="14" font-weight="700" fill="#0f172a">${title}</text>
   <g transform="translate(0, 12)">
-    ${containersSvg}
+    ${parts.containersSvg}
     ${linesSvg}
-    ${nodesSvg}
+    ${parts.nodesSvg}
   </g>
 </svg>`;
+}
 
-  return svg;
+// Relationship routing + styling helpers live in exportSvg.helpers.ts.
+export function createViewSvg(model: Model, viewId: string): string {
+  const prep = prepareSvgExport(model, viewId, 20);
+  const parts = partitionNodesForSvg(prep.model, prep.view, prep.nodes);
+  return renderSvgDocument(prep, parts);
 }

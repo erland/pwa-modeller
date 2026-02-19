@@ -249,6 +249,8 @@ export function DiagramCanvasView({
                   notation={notation}
                   viewId={activeViewId ?? undefined}
                   gridSize={activeView?.formatting?.gridSize}
+                  zoom={zoom}
+                  showMultiplicities={activeView?.formatting?.showMultiplicities ?? true}
                   nodes={nodes}
                   connectionRenderItems={connectionRenderItems}
                   surfaceWidthModel={surfaceWidthModel}

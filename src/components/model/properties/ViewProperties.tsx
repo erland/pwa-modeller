@@ -173,6 +173,16 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
                 }}
               />
             </div>
+            {view.kind === 'uml' ? (
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={view.formatting?.showMultiplicities ?? true}
+                  onChange={(e) => actions.updateViewFormatting(view.id, { showMultiplicities: e.target.checked })}
+                />
+                <span>Show multiplicities</span>
+              </label>
+            ) : null}
           </div>
         </div>
 

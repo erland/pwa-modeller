@@ -182,7 +182,7 @@ export function createView(input: CreateViewInput): View {
   requireNonBlank(input.name, 'View.name');
   requireNonBlank(input.viewpointId, 'View.viewpointId');
 
-  const formatting = input.formatting ?? { snapToGrid: true, gridSize: 20, layerStyleTags: {} };
+  const formatting = input.formatting ?? { snapToGrid: true, gridSize: 20, layerStyleTags: {}, showMultiplicities: true };
 
   return {
     id: input.id ?? createId('view'),

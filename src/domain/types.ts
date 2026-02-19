@@ -412,6 +412,9 @@ export interface ViewFormatting {
   snapToGrid?: boolean;
   /** Grid size in pixels for snapping. */
   gridSize?: number;
+
+  /** Show UML multiplicity end labels in this view. Defaults to true. */
+  showMultiplicities?: boolean;
 }
 
 export interface ViewLayout {

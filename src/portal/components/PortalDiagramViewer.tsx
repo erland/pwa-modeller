@@ -133,6 +133,8 @@ export function PortalDiagramViewer({ model, view, viewId, initialSelection, sel
                 notation={notation}
                 viewId={viewId}
                 gridSize={view?.formatting?.gridSize}
+                zoom={viewport.zoom}
+                showMultiplicities={view?.formatting?.showMultiplicities ?? true}
                 nodes={nodes}
                 connectionRenderItems={connectionRenderItems}
                 surfaceWidthModel={surfaceWidthModel}

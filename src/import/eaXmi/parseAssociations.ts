@@ -167,10 +167,26 @@ function parseEnd(endEl: Element, index: Map<string, Element>, navigableOwnedEnd
         : 'none';
 
   const isNavAttr = attrAny(endEl, ['isNavigable', 'isnavigable']);
+
+  // UML2 XMI (non-EA) often omits explicit `isNavigable` and `navigableOwnedEnd`.
+  // In those exports, navigability is implied by ownership: an end that is an
+  // ownedAttribute on a classifier is navigable from that classifier.
+  const inferNavigableFromOwnership = (): boolean => {
+    const ln = localName(endEl);
+    if (ln !== 'ownedattribute') return false;
+    const p = endEl.parentElement;
+    if (!p) return false;
+    const pt = (getXmiType(p) ?? '').toLowerCase();
+    if (pt === 'uml:class' || pt === 'uml:interface' || pt === 'uml:associationclass') return true;
+    // Some XMI variants omit xmi:type on classifier elements but keep local name.
+    const pln = localName(p);
+    return pln === 'packagedelement' || pln === 'ownedmember' || pln === 'class' || pln === 'interface';
+  };
+
   const navigable =
     typeof isNavAttr === 'string'
       ? isNavAttr.trim().toLowerCase() === 'true'
-      : navigableOwnedEnds.has(endId);
+      : navigableOwnedEnds.has(endId) || inferNavigableFromOwnership();
 
   const classifierId = resolveClassifierIdFromEnd(endEl, index);
 

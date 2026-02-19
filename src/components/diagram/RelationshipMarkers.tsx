@@ -4,6 +4,12 @@ function markerStrokeVar(selected: boolean): string {
   return selected ? 'var(--diagram-rel-stroke-selected)' : 'var(--diagram-rel-stroke)';
 }
 
+function markerOrient(kind: string): string {
+  // Ensure arrowheads at the start of an edge point *into* the start point.
+  // This matches UML navigability semantics when using markerStart.
+  return kind.startsWith('arrow') || kind.startsWith('triangle') ? 'auto-start-reverse' : 'auto';
+}
+
 export function RelationshipMarkers() {
   return (
     <defs>
@@ -38,7 +44,7 @@ export function RelationshipMarkers() {
               refY={def.refY}
               markerWidth={def.markerWidth}
               markerHeight={def.markerHeight}
-              orient="auto"
+              orient={markerOrient(def.kind)}
             >
               <path d={def.pathD} {...pathBaseProps} />
             </marker>
@@ -49,7 +55,7 @@ export function RelationshipMarkers() {
               refY={def.refY}
               markerWidth={def.markerWidth}
               markerHeight={def.markerHeight}
-              orient="auto"
+              orient={markerOrient(def.kind)}
             >
               <path d={def.pathD} {...pathSelProps} />
             </marker>

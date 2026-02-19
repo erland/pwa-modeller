@@ -96,7 +96,6 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
     typeof attrsObj.targetMultiplicity === 'string' ? (attrsObj.targetMultiplicity as string) : undefined;
   const umlSourceNavigable = typeof attrsObj.sourceNavigable === 'boolean' ? (attrsObj.sourceNavigable as boolean) : false;
   const umlTargetNavigable = typeof attrsObj.targetNavigable === 'boolean' ? (attrsObj.targetNavigable as boolean) : false;
-  const isDirected = typeof attrsObj.isDirected === 'boolean' ? (attrsObj.isDirected as boolean) : false;
 
   const umlGuard = typeof attrsObj.guard === 'string' ? (attrsObj.guard as string) : undefined;
 
@@ -179,21 +178,6 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
       {rel.type === 'uml.association' || rel.type === 'uml.aggregation' || rel.type === 'uml.composition' ? (
         <>
           <div className="propertiesRow">
-            <div className="propertiesKey">Directed</div>
-            <div className="propertiesValue" style={{ fontWeight: 400 }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, opacity: 0.85 }}>
-                <input
-                  type="checkbox"
-                  aria-label="UML association directed"
-                  checked={!!isDirected}
-                  onChange={(e) => updateAttrs({ isDirected: e.target.checked ? true : undefined })}
-                />
-                Show arrow direction
-              </label>
-            </div>
-          </div>
-
-          <div className="propertiesRow">
             <div className="propertiesKey">Navigability</div>
             <div className="propertiesValue" style={{ fontWeight: 400 }}>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -218,7 +202,7 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
                 </label>
               </div>
               <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
-                Stored for import fidelity (rendering support can be added later).
+                Arrowheads are derived from these flags (arrow points to the navigable end).
               </div>
             </div>
           </div>

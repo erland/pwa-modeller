@@ -132,7 +132,15 @@ export function renderSvgMarkerDefs(args: {
     const path = def.isFilled
       ? `<path d="${def.pathD}" fill="${s}" />`
       : `<path d="${def.pathD}" fill="none" stroke="${s}" stroke-width="${def.strokeWidth ?? 1.6}" stroke-linejoin="${def.strokeLinejoin ?? 'round'}" />`;
-    return `<marker id="${id}" viewBox="${def.viewBox}" refX="${def.refX}" refY="${def.refY}" markerWidth="${def.markerWidth}" markerHeight="${def.markerHeight}" orient="auto">${path}</marker>`;
+
+    // SVG markers at the start of a path are oriented using the path's initial tangent.
+    // For arrow/triangle markers we want the start marker to point *into* the start point
+    // (i.e., reversed), while keeping the end marker pointing along the path.
+    // `auto-start-reverse` does exactly that when the same marker is used for both ends.
+    const orient =
+      def.kind.startsWith('arrow') || def.kind.startsWith('triangle') ? 'auto-start-reverse' : 'auto';
+
+    return `<marker id="${id}" viewBox="${def.viewBox}" refX="${def.refX}" refY="${def.refY}" markerWidth="${def.markerWidth}" markerHeight="${def.markerHeight}" orient="${orient}">${path}</marker>`;
   };
 
   const parts: string[] = [];

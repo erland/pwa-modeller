@@ -20,12 +20,19 @@ import { UmlAssociationClassLinkSection } from '../../components/model/propertie
 type UmlRelAttrs = {
   /** Optional navigability for associations (v1: boolean directed). */
   isDirected?: boolean;
+  /** Optional end navigability (preferred). */
+  sourceNavigable?: boolean;
+  targetNavigable?: boolean;
 };
 
 function normalizeUmlRelAttrs(attrs: unknown): UmlRelAttrs {
   if (!attrs || typeof attrs !== 'object') return {};
   const a = attrs as Record<string, unknown>;
-  return { isDirected: typeof a.isDirected === 'boolean' ? a.isDirected : undefined };
+  return {
+    isDirected: typeof a.isDirected === 'boolean' ? a.isDirected : undefined,
+    sourceNavigable: typeof a.sourceNavigable === 'boolean' ? a.sourceNavigable : undefined,
+    targetNavigable: typeof a.targetNavigable === 'boolean' ? a.targetNavigable : undefined,
+  };
 }
 
 function umlRelationshipStyle(type: string): RelationshipStyle {
@@ -92,7 +99,12 @@ export const umlNotation: Notation = {
 
     if (rel.type === 'uml.association') {
       const a = normalizeUmlRelAttrs(rel.attrs);
-      // Optional directed association (navigability v1).
+      // Navigability: prefer explicit end flags if present.
+      // If exactly one end is navigable, show an open arrow at that end.
+      if (a.sourceNavigable === true && a.targetNavigable !== true) return { markerStart: 'arrowOpen' };
+      if (a.targetNavigable === true && a.sourceNavigable !== true) return { markerEnd: 'arrowOpen' };
+
+      // Legacy v1: a single boolean that meant "directed" (assume source -> target).
       return a.isDirected ? { markerEnd: 'arrowOpen' } : {};
     }
 

@@ -15,6 +15,36 @@ export function buildNavigatorTreeData(args: {
 }): NavNode[] {
   const { model, rootFolderId, searchTerm } = args;
 
+  // Folder nodes often represent UML Packages in imported models (organizational containment).
+  // If a UML Package element is also present with the same external id as a folder, we hide the element to avoid
+  // duplicate entries (folder + package) in the navigator.
+  const folderExternalIds = new Set<string>();
+  for (const f of Object.values(model.folders)) {
+    for (const ex of f.externalIds ?? []) {
+      if (ex && typeof ex.id === 'string') folderExternalIds.add(ex.id);
+    }
+  }
+
+  const isHiddenNavigatorElement = (el: Model['elements'][string] | undefined): boolean => {
+    if (!el) return false;
+    if (el.type !== 'uml.package') return false;
+
+    // 1) Hide synthetic packages materialized from folders (import helper objects).
+    const meta = (el as any).meta;
+    if (meta && typeof meta === 'object') {
+      if ((meta as any).derivedFromFolder === true && (meta as any).syntheticPackage === true) return true;
+    }
+
+    // 2) Hide any UML Package element that has the same external id as a folder.
+    // This prevents duplicate "folder + package" entries in the navigator when imports choose to represent packages
+    // as folders for containment but also include semantic package elements for relationships.
+    for (const ex of el.externalIds ?? []) {
+      if (ex && typeof ex.id === 'string' && folderExternalIds.has(ex.id)) return true;
+    }
+
+    return false;
+  };
+
   // Precompute views that are owned by elements so we can render them nested under elements in the tree.
   // Views can be owned by elements via ownerRef.
   const ownedViewsByElementId = new Map<string, { id: string; name: string; viewpointId: string }[]>();
@@ -42,9 +72,11 @@ export function buildNavigatorTreeData(args: {
     // Containment is independent of folders, but for the navigator tree we only nest
     // elements that are *also* listed in this folder. If an element points to a parent
     // element in a different folder, we treat it as a top-level element in this folder.
-    const elementIdsInFolder = new Set(folder.elementIds);
+    // Filter out synthetic (hidden) elements early so they don't participate in containment nesting.
+    const visibleElementIds = folder.elementIds.filter((id) => !isHiddenNavigatorElement(model.elements[id]));
+    const elementIdsInFolder = new Set(visibleElementIds);
     const childElementIdsByParentId = new Map<string | null, string[]>();
-    for (const elId of folder.elementIds) {
+    for (const elId of visibleElementIds) {
       const el = model.elements[elId];
       if (!el) continue;
       const maybeParentId = el.parentElementId ?? null;
@@ -128,7 +160,7 @@ export function buildNavigatorTreeData(args: {
       kind: 'folder',
       label: folder.name,
       tooltip:
-        `${folder.name} — ${folder.elementIds.length} element(s), ${folder.viewIds.length} view(s), ${childFolders.length} folder(s)`,
+        `${folder.name} — ${visibleElementIds.length} element(s), ${folder.viewIds.length} view(s), ${childFolders.length} folder(s)`,
       children,
       folderId,
       canCreateFolder: true,
@@ -153,6 +185,7 @@ export function buildNavigatorTreeData(args: {
   const match = (text: string | undefined | null) => (text ?? '').toLowerCase().includes(searchTerm);
 
   const elements = Object.values(model.elements)
+    .filter((el) => !isHiddenNavigatorElement(el))
     .filter((el) => match(el.name) || match(el.type))
     .sort(sortByName)
     .slice(0, 30)

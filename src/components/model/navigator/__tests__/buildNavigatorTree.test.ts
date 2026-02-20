@@ -98,4 +98,33 @@ describe('buildNavigatorTreeData', () => {
     // Sibling remains top-level.
     expect(nodes.some((n) => n.kind === 'element' && n.elementId === sibling.id)).toBe(true);
   });
+
+  test('hides uml.package elements that duplicate a folder (same externalId)', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const rootId = Object.values(model.folders).find((f) => f.kind === 'root')!.id;
+
+    // Create a folder representing a package
+    const fPkg = createFolder('annotations', 'folder', rootId, 'fPkg');
+    (fPkg as any).externalIds = [{ system: 'ea-xmi-uml', id: '_Package:com.example.annotations' }];
+    model.folders[fPkg.id] = fPkg;
+    model.folders[rootId].folderIds.push(fPkg.id);
+
+    // Create a UML package element with the same external id (should be hidden)
+    const ePkg: any = {
+      id: 'ePkg',
+      kind: 'uml',
+      name: 'annotations',
+      type: 'uml.package',
+      externalIds: [{ system: 'xmi', id: '_Package:com.example.annotations' }]
+    };
+    model.elements[ePkg.id] = ePkg;
+    model.folders[rootId].elementIds.push(ePkg.id);
+
+    const nodes = buildNavigatorTreeData({ model, rootFolderId: rootId, searchTerm: '' });
+
+    // Should contain the folder, but not the duplicate element.
+    expect(nodes.some((n) => n.kind === 'folder' && n.label === 'annotations')).toBe(true);
+    expect(nodes.some((n) => n.kind === 'element' && n.label === 'annotations')).toBe(false);
+  });
+
 });

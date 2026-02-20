@@ -53,6 +53,8 @@ export function normalizeMetaClassFromLocalName(ln: string): string | undefined 
       return 'ControlFlow';
     case 'objectflow':
       return 'ObjectFlow';
+    case 'packageimport':
+      return 'PackageImport';
     default:
       return undefined;
   }

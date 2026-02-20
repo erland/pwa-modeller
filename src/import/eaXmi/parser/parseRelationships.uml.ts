@@ -1,7 +1,7 @@
 import type { ImportReport } from '../../importReport';
 import type { IRRelationship } from '../../framework/ir';
 
-import { attr, localName } from '../../framework/xml';
+import { attr, attrAny, localName } from '../../framework/xml';
 import { inferUmlQualifiedRelationshipTypeFromEaClassifier } from '../mapping';
 import { getXmiId, getXmiIdRef, getXmiType } from '../xmi';
 import {
@@ -19,6 +19,27 @@ import {
 } from './parseRelationships.common';
 
 import { writeStereotypes } from '../../../domain/umlStereotypes';
+
+function findOwningPackageId(el: Element): string | undefined {
+  let p: Element | null = el.parentElement;
+  while (p) {
+    // EA and other exporters sometimes use xmi:type, while others use xsi:type (as in UML2 default serialization).
+    const effectiveType = (getXmiType(p) ?? attrAny(p, ['xsi:type']) ?? '').trim();
+    const tLower = effectiveType.toLowerCase();
+    if (tLower.startsWith('uml:')) {
+      const mc = metaClassFromXmiType(effectiveType);
+      if (mc && mc.toLowerCase() === 'package') {
+        return getXmiId(p) ?? undefined;
+      }
+      // treat uml:Model as a package-like namespace for imports
+      if (mc && mc.toLowerCase() === 'model') {
+        return getXmiId(p) ?? undefined;
+      }
+    }
+    p = p.parentElement;
+  }
+  return undefined;
+}
 
 /**
  * Step 7: Parse relationships (generalization/realization/dependency/include/extend).
@@ -52,7 +73,8 @@ export function parseEaXmiRelationships(doc: Document, report: ImportReport): Pa
       metaclass !== 'Include' &&
       metaclass !== 'Extend' &&
       metaclass !== 'ControlFlow' &&
-      metaclass !== 'ObjectFlow'
+      metaclass !== 'ObjectFlow' &&
+      metaclass !== 'PackageImport'
     ) {
       continue;
     }
@@ -69,6 +91,33 @@ export function parseEaXmiRelationships(doc: Document, report: ImportReport): Pa
       else if (stLower === 'deployment') qualifiedType = 'uml.deployment';
     }
     if (!qualifiedType) continue;
+
+    // UML PackageImport is represented as <packageImport importedPackage="…"/> owned by the importing package.
+    if (metaclass === 'PackageImport') {
+      const sourceId = findOwningPackageId(el);
+      const targetId = (attr(el, 'importedPackage') ?? '').trim();
+      if (!sourceId || !targetId) continue;
+
+      const id = getXmiId(el) ?? `pkgImport_synth_${++synthCounter}`;
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+
+      const triple = `${qualifiedType}|${sourceId}|${targetId}`;
+      if (seenTriples.has(triple)) continue;
+      seenTriples.add(triple);
+
+      relationships.push({
+        id,
+        type: qualifiedType,
+        sourceId,
+        targetId,
+        meta: {
+          metaclass: 'PackageImport',
+          ...(xmiType ? { xmiType } : {}),
+        },
+      });
+      continue;
+    }
 
     let { sources, targets } = parseEndpointsForMetaclass(el, metaclass);
 

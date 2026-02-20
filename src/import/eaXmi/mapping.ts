@@ -66,6 +66,7 @@ export const EA_XMI_UML_ELEMENT_TYPE_MAP: Readonly<Record<string, QualifiedEleme
  * - EA can represent `include`/`extend` either as dedicated relationships or as `Dependency` with stereotypes.
  */
 export const EA_XMI_UML_REL_TYPE_MAP: Readonly<Record<string, QualifiedRelationshipType>> = {
+  PackageImport: 'uml.dependency',
   Association: 'uml.association',
   Dependency: 'uml.dependency',
   Generalization: 'uml.generalization',

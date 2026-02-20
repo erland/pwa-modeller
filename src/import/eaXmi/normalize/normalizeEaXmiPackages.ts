@@ -73,12 +73,32 @@ export function normalizeEaXmiPackages(
   opts?: NormalizeEaXmiOptions
 ): NormalizeEaXmiPackagesResult {
   const aliases = asAliases(ir);
-  if (!aliases) {
-    // Keep behavior unchanged if the importer didn't attach alias data.
-    return { elements: ir.elements ?? [], relationships: ir.relationships ?? [] };
-  }
 
-  const referencedPackages = collectReferencedPackageXmiIdsFromViews(ir.views, aliases, folderIds);
+  // Packages are usually represented as folders in imported IR.
+  // However, UML packages are valid relationship endpoints (e.g. package dependencies).
+  // If packages only exist as folders, generic normalizeImportIR will drop such relationships
+  // because folder ids are not part of elementIds.
+  //
+  // EA exports sometimes reference packages using EA repository ids (EAID_*) which must be
+  // rewritten to XMI ids (EAPK_*). For non-EA UML XMI, we still want to materialize package
+  // elements when they are referenced by relationships or view nodes.
+
+  const referencedPackages = new Set<string>();
+
+  // Collect view references:
+  // - EA: diagram objects can embed refRaw payloads which may contain EAID_* tokens.
+  // - Generic: view nodes may directly reference elementId that is actually a folder id.
+  if (aliases) {
+    for (const id of collectReferencedPackageXmiIdsFromViews(ir.views, aliases, folderIds)) {
+      referencedPackages.add(id);
+    }
+  }
+  for (const v of ir.views ?? []) {
+    for (const n of v.nodes ?? []) {
+      const eid = typeof n?.elementId === 'string' ? n.elementId.trim() : '';
+      if (eid && folderIds.has(eid)) referencedPackages.add(eid);
+    }
+  }
 
   // Rewrite relationship endpoints that reference packages via EAID_… -> EAPK_…
   let rewritten = 0;
@@ -86,8 +106,12 @@ export function normalizeEaXmiPackages(
     let sourceId = r.sourceId;
     let targetId = r.targetId;
 
-    const mappedS = sourceId ? aliases.eaidToXmiId[sourceId] : undefined;
-    const mappedT = targetId ? aliases.eaidToXmiId[targetId] : undefined;
+    // Always collect package references even if we can't rewrite (non-EA UML XMI).
+    if (typeof sourceId === 'string' && folderIds.has(sourceId)) referencedPackages.add(sourceId);
+    if (typeof targetId === 'string' && folderIds.has(targetId)) referencedPackages.add(targetId);
+
+    const mappedS = aliases && sourceId ? aliases.eaidToXmiId[sourceId] : undefined;
+    const mappedT = aliases && targetId ? aliases.eaidToXmiId[targetId] : undefined;
 
     if (mappedS && folderIds.has(mappedS)) {
       sourceId = mappedS;
@@ -123,15 +147,15 @@ export function normalizeEaXmiPackages(
     const folder = folderById.get(pkgXmiId);
     if (!folder) {
       if (opts?.report) {
-        addWarning(opts.report, 'EA XMI: Found a diagram/relationship reference to a package, but the package folder was not imported.', {
-          code: 'ea-xmi:package-folder-missing',
+        addWarning(opts.report, `${aliases ? 'EA XMI' : 'UML XMI'}: Found a diagram/relationship reference to a package, but the package folder was not imported.`, {
+          code: `${aliases ? 'ea-xmi' : 'uml-xmi'}:package-folder-missing`,
           context: { xmiId: pkgXmiId }
         });
       }
       continue;
     }
 
-    const eaid = aliases.xmiIdToEaid[pkgXmiId];
+    const eaid = aliases ? aliases.xmiIdToEaid[pkgXmiId] : undefined;
     const externalIds = mergeExternalIds(
       [{ system: 'xmi', id: pkgXmiId, kind: 'xmi-id' }],
       eaid ? [{ system: 'sparx-ea', id: eaid, kind: 'package-eaid' }] : undefined,
@@ -147,7 +171,9 @@ export function normalizeEaXmiPackages(
       meta: {
         metaclass: 'Package',
         xmiType: 'uml:Package',
-        derivedFromFolder: true
+        // Mark as synthetic so the navigator can hide it (avoids duplicate folder+element entries).
+        derivedFromFolder: true,
+        syntheticPackage: true
       }
     };
 
@@ -156,8 +182,8 @@ export function normalizeEaXmiPackages(
   }
 
   if (created > 0 && opts?.report) {
-    addInfo(opts.report, 'EA XMI: Materialized UML packages as elements because they were referenced as diagram nodes or relationship endpoints.', {
-      code: 'ea-xmi:package-elements-created',
+    addInfo(opts.report, `${aliases ? 'EA XMI' : 'UML XMI'}: Materialized UML packages as elements because they were referenced as diagram nodes or relationship endpoints.`, {
+      code: `${aliases ? 'ea-xmi' : 'uml-xmi'}:package-elements-created`,
       context: { count: created }
     });
   }

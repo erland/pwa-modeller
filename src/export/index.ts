@@ -16,3 +16,5 @@ export * from './xlsx/generateXlsxV1';
 
 export * from './report/reportStore';
 export * from './image/downloadPngFromSvgText';
+
+export * from './viewDiagramExport';

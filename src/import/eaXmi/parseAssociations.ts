@@ -10,12 +10,45 @@ const STEREOTYPE_ATTRS = ['stereotype', 'stereotypes', 'xmi:stereotype'] as cons
 
 type UmlAssociationEndMeta = {
   endId: string;
-  classifierId?: string;
+  /** The classifier referenced by this association end's `type` (i.e., the opposite classifier). */
+  typeClassifierId?: string;
+
+  /** The classifier that owns this end when it appears as an `ownedAttribute` on a classifier (UML2 style). */
+  ownerClassifierId?: string;
   role?: string;
   multiplicity?: string;
   navigable?: boolean;
   aggregation?: 'none' | 'shared' | 'composite';
 };
+
+function resolveOwningClassifierIdForEnd(endEl: Element, index: Map<string, Element>): string | undefined {
+  // In UML2 XMI, ends can be represented as <ownedAttribute> under the owning classifier.
+  // If so, use the owning classifier as the endpoint.
+  const ln = localName(endEl);
+  if (ln !== 'ownedattribute') return undefined;
+
+  const p = endEl.parentElement;
+  if (!p) return undefined;
+
+  const pid = getXmiId(p) ?? getXmiIdRef(p);
+  if (!pid) return undefined;
+
+  // Validate that the parent is a classifier-ish element.
+  const pt = (getXmiType(p) ?? '').toLowerCase();
+  if (pt === 'uml:class' || pt === 'uml:interface' || pt === 'uml:associationclass' || pt === 'uml:datatype') {
+    return pid;
+  }
+
+  // Some variants omit xmi:type but keep local names like packagedElement/class/interface.
+  const pln = localName(p);
+  if (pln === 'packagedelement' || pln === 'ownedmember' || pln === 'class' || pln === 'interface' || pln === 'datatype') {
+    // Be defensive: if we can resolve the parent id in the index, accept it.
+    if (resolveById(index, pid)) return pid;
+    return pid;
+  }
+
+  return undefined;
+}
 
 function getEaGuid(el: Element): string | undefined {
   const v = attrAny(el, [...EA_GUID_ATTRS]);
@@ -188,9 +221,18 @@ function parseEnd(endEl: Element, index: Map<string, Element>, navigableOwnedEnd
       ? isNavAttr.trim().toLowerCase() === 'true'
       : navigableOwnedEnds.has(endId) || inferNavigableFromOwnership();
 
-  const classifierId = resolveClassifierIdFromEnd(endEl, index);
+  const typeClassifierId = resolveClassifierIdFromEnd(endEl, index);
+  const ownerClassifierId = resolveOwningClassifierIdForEnd(endEl, index);
 
-  return { endId, classifierId, role, multiplicity, navigable, aggregation };
+  return {
+    endId,
+    typeClassifierId,
+    ownerClassifierId,
+    role,
+    multiplicity,
+    navigable,
+    aggregation,
+  };
 }
 
 export type ParseEaXmiAssociationsResult = {
@@ -203,6 +245,34 @@ export type ParseEaXmiAssociationsResult = {
 export function parseEaXmiAssociations(doc: Document, report: ImportReport): ParseEaXmiAssociationsResult {
   const relationships: IRRelationship[] = [];
   const index = buildXmiIdIndex(doc);
+
+  // Two-pass index of UML Property elements so that memberEnd references can be
+  // resolved even when the referenced Property is not directly reachable via
+  // the generic XMI id index (some tool exports use indirect forms).
+  //
+  // We intentionally index both association-owned ends (<ownedEnd>) and
+  // classifier-owned ends (<ownedAttribute>), plus any explicit uml:Property.
+  const propertyById = new Map<string, Element>();
+  {
+    const allEls = doc.getElementsByTagName('*');
+    for (let i = 0; i < allEls.length; i++) {
+      const e = allEls.item(i);
+      if (!e) continue;
+      const id = getXmiId(e) ?? getXmiIdRef(e);
+      if (!id) continue;
+      const xmiType = (getXmiType(e) ?? '').toLowerCase();
+      const ln = localName(e);
+      const looksLikeProperty = xmiType === 'uml:property' || ln === 'ownedattribute' || ln === 'ownedend';
+      if (!looksLikeProperty) continue;
+      if (!propertyById.has(id)) propertyById.set(id, e);
+    }
+  }
+
+  const resolveEndElement = (endId: string): Element | undefined => {
+    const byXmi = resolveById(index, endId);
+    if (byXmi) return byXmi;
+    return propertyById.get(endId);
+  };
   const seenIds = new Set<string>();
   let synthCounter = 0;
 
@@ -245,7 +315,7 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
     const ends: Element[] = [];
     const memberEndAttr = attrAny(el, ['memberEnd', 'memberend']);
     for (const endId of parseIdRefList(memberEndAttr)) {
-      const endEl = resolveById(index, endId);
+      const endEl = resolveEndElement(endId);
       if (endEl) ends.push(endEl);
     }
 
@@ -257,7 +327,7 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
       const frag = resolveHrefId(href);
       const endId = idref ?? frag;
       if (!endId) continue;
-      const endEl = resolveById(index, endId);
+      const endEl = resolveEndElement(endId);
       if (endEl) ends.push(endEl);
     }
 
@@ -300,21 +370,28 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
       report.warnings.push('EA XMI: Skipped Association because end metadata could not be parsed.');
       continue;
     }
-    if (!endA.classifierId || !endB.classifierId) {
+    // We must be able to resolve the *typed* classifiers of both ends to draw a relationship.
+    // Note: In UML2-style exports, ends may be owned by participating classifiers (ownedAttribute)
+    // but the association still connects the two *types* (e.g., Customer.address connects
+    // Customer <-> Address, not Customer <-> Customer).
+    if (!endA.typeClassifierId || !endB.typeClassifierId) {
       report.warnings.push(
-        `EA XMI: Skipped Association because classifier endpoints could not be resolved (endA=${endA.classifierId ?? '∅'}, endB=${endB.classifierId ?? '∅'}).`
+        `EA XMI: Skipped Association because end types could not be resolved (endA=${endA.typeClassifierId ?? '∅'}, endB=${endB.typeClassifierId ?? '∅'}).`
       );
       continue;
     }
 
-    let id = getXmiId(el) ?? getXmiIdRef(el);
+    let assocBaseId = getXmiId(el) ?? getXmiIdRef(el);
+    let id = assocBaseId;
     if (!id) {
       synthCounter++;
       id = `eaAssoc_synth_${synthCounter}`;
     }
     // Avoid potential element-id collisions for AssociationClass by namespacing the relationship id.
     if (isAssociationClass) {
-      id = `${id}__association`;
+      // Relationship id must not collide with the AssociationClass element id.
+      const baseId = assocBaseId ?? id;
+      id = `${baseId}__association`;
     }
     if (seenIds.has(id)) {
       report.warnings.push(`EA XMI: Duplicate association id "${id}" encountered; skipping.`);
@@ -332,7 +409,98 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
     const hasShared = endA.aggregation === 'shared' || endB.aggregation === 'shared';
     const type = hasComposite ? 'uml.composition' : hasShared ? 'uml.aggregation' : 'uml.association';
 
-    const externalIds = [
+    // We can only create a relationship if both ends resolve to typed classifiers.
+    // (In UML2 XMI, ends are often ownedAttributes on classes but their @type points to the opposite classifier.)
+    if (!endA.typeClassifierId || !endB.typeClassifierId) {
+      continue;
+    }
+
+    // Our IR has directed relationships for rendering. For UML associations we derive
+    // a stable direction:
+    // - composition/aggregation: source = whole/aggregator, target = part
+    // - plain association: source = declaring classifier (ownedAttribute) when present, else stable by end order
+    let sourceId: string;
+    let targetId: string;
+    let srcMeta: UmlAssociationEndMeta;
+    let tgtMeta: UmlAssociationEndMeta;
+
+    if (hasComposite || hasShared) {
+      const aggKind: UmlAssociationEndMeta['aggregation'] = hasComposite ? 'composite' : 'shared';
+      const wholeEnd = endA.aggregation === aggKind ? endA : endB;
+      const otherEnd = wholeEnd === endA ? endB : endA;
+
+      // Composition/Aggregation needs special handling because UML XMI has (at least) two common encodings:
+      //  1) Ends are classifier-owned attributes (UML2 style):
+      //       Customer owns Property "orders" typed Order, and that Property has aggregation="composite".
+      //     Here, the WHOLE is the *owning classifier* (Customer) and the PART is the *type* (Order).
+      //  2) Ends are association-owned <ownedEnd/> elements (common in EA exports and fixtures):
+      //       The composite/shared mark is placed on the WHOLE end.
+      //     Here, we keep legacy behaviour: WHOLE is the *type of the aggregated end*.
+      //
+      // Due to the guard above, both ends have typeClassifierId.
+      const wholeClassifierId: string = wholeEnd.ownerClassifierId ? wholeEnd.ownerClassifierId : wholeEnd.typeClassifierId!;
+      const partClassifierId: string = wholeEnd.ownerClassifierId ? wholeEnd.typeClassifierId! : otherEnd.typeClassifierId!;
+
+      // Sanity: avoid emitting broken relationships if something is missing.
+      if (!wholeClassifierId || !partClassifierId) {
+        continue;
+      }
+
+      sourceId = wholeClassifierId;
+      targetId = partClassifierId;
+
+      // Side metadata (role/multiplicity/navigability) should follow the chosen oriented ends.
+      // For both encodings we treat the aggregated end as the source-side metadata carrier.
+      srcMeta = wholeEnd;
+      tgtMeta = otherEnd;
+    } else {
+      // Plain association: prefer direction from a declaring classifier (ownedAttribute) to the referenced type.
+      if (endA.ownerClassifierId) {
+        sourceId = endA.ownerClassifierId;
+        targetId = endA.typeClassifierId;
+        srcMeta = endA;
+        tgtMeta = endB.ownerClassifierId === targetId ? endB : endB;
+      } else if (endB.ownerClassifierId) {
+        sourceId = endB.ownerClassifierId;
+        targetId = endB.typeClassifierId;
+        srcMeta = endB;
+        tgtMeta = endA.ownerClassifierId === targetId ? endA : endA;
+      } else {
+        sourceId = endA.typeClassifierId;
+        targetId = endB.typeClassifierId;
+        srcMeta = endA;
+        tgtMeta = endB;
+      }
+
+      // Guard against accidental self-loops when ownership inference is present but the end type is the same.
+      if (sourceId === targetId) {
+        sourceId = endA.typeClassifierId;
+        targetId = endB.typeClassifierId;
+        srcMeta = endA;
+        tgtMeta = endB;
+      }
+    }
+
+
+    
+    // Normalize which association-end metadata is attached to source/target for display.
+    // The diagram labels should be anchored by the *end type* (classifier at that end), not by edge orientation.
+    //
+    // SELF-ASSOCIATIONS:
+    // When sourceId === targetId, both ends typically have the same typeClassifierId and type-based matching becomes ambiguous.
+    // In that case, pick a deterministic tie-break so we keep BOTH end labels (one on source, one on target).
+    let srcLabelEnd: UmlAssociationEndMeta;
+    let tgtLabelEnd: UmlAssociationEndMeta;
+    if (sourceId === targetId) {
+      const ends = [endA, endB].slice().sort((a, b) => a.endId.localeCompare(b.endId));
+      srcLabelEnd = ends[0];
+      tgtLabelEnd = ends[1];
+    } else {
+      srcLabelEnd = (endA.typeClassifierId === sourceId ? endA : (endB.typeClassifierId === sourceId ? endB : srcMeta));
+      tgtLabelEnd = (endA.typeClassifierId === targetId ? endA : (endB.typeClassifierId === targetId ? endB : tgtMeta));
+    }
+
+const externalIds = [
       ...(getXmiId(el) ? [{ system: 'xmi', id: getXmiId(el)!, kind: 'xmi-id' }] : []),
       ...(eaGuid ? [{ system: 'sparx-ea', id: eaGuid, kind: 'relationship-guid' }] : []),
     ];
@@ -341,8 +509,9 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
     relationships.push({
       id,
       type,
-      sourceId: endA.classifierId,
-      targetId: endB.classifierId,
+      sourceId,
+      targetId,
+      ...(isAssociationClass && assocBaseId ? { attrs: { associationClassElementId: assocBaseId } } : {}),
       name,
       documentation: docText,
       ...(externalIds.length ? { externalIds } : {}),
@@ -351,12 +520,12 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
         ...(xmiType ? { xmiType } : {}),
         metaclass: isAssociationClass ? 'AssociationClass' : 'Association',
         umlAttrs: {
-          ...(endA.role ? { sourceRole: endA.role } : {}),
-          ...(endB.role ? { targetRole: endB.role } : {}),
-          ...(endA.multiplicity ? { sourceMultiplicity: endA.multiplicity } : {}),
-          ...(endB.multiplicity ? { targetMultiplicity: endB.multiplicity } : {}),
-          ...(typeof endA.navigable === 'boolean' ? { sourceNavigable: endA.navigable } : {}),
-          ...(typeof endB.navigable === 'boolean' ? { targetNavigable: endB.navigable } : {}),
+          ...(srcLabelEnd.role ? { sourceRole: srcLabelEnd.role } : {}),
+          ...(tgtLabelEnd.role ? { targetRole: tgtLabelEnd.role } : {}),
+          ...(srcLabelEnd.multiplicity ? { sourceMultiplicity: srcLabelEnd.multiplicity } : {}),
+          ...(tgtLabelEnd.multiplicity ? { targetMultiplicity: tgtLabelEnd.multiplicity } : {}),
+          ...(typeof srcLabelEnd.navigable === 'boolean' ? { sourceNavigable: srcLabelEnd.navigable } : {}),
+          ...(typeof tgtLabelEnd.navigable === 'boolean' ? { targetNavigable: tgtLabelEnd.navigable } : {}),
           ...(stereotype ? { stereotype } : {}),
         }
       }

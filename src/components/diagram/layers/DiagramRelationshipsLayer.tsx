@@ -664,7 +664,17 @@ export function DiagramRelationshipsLayer({
 
 
         const sPreferredSign = preferredMultiplicitySideByConnEnd.get(`${conn.id}|source`) ?? 1;
-        const tPreferredSign = preferredMultiplicitySideByConnEnd.get(`${conn.id}|target`) ?? 1;
+        const tPreferredSign0 = preferredMultiplicitySideByConnEnd.get(`${conn.id}|target`) ?? 1;
+
+        // Self-associations (A -> A): both end-labels may end up extremely close.
+        // We handle this by (a) increasing crowd count (done by existing grouping logic) and
+        // (b) applying a small deterministic post-offset if the two labels overlap.
+        const isSelfAssoc =
+          (item.source.elementId && item.target.elementId && item.source.elementId === item.target.elementId) ||
+          (item.source.connectorId && item.target.connectorId && item.source.connectorId === item.target.connectorId) ||
+          (item.source.objectId && item.target.objectId && item.source.objectId === item.target.objectId);
+
+        const tPreferredSign = isSelfAssoc && sPreferredSign === tPreferredSign0 ? ((tPreferredSign0 === 1 ? -1 : 1) as 1 | -1) : tPreferredSign0;
 
         const sPos =
           showEndLabels && sm
@@ -681,7 +691,7 @@ export function DiagramRelationshipsLayer({
                 crowdCount: endLabelCrowdCountByConnEnd.get(`${conn.id}|source`) ?? 1,
               })
             : null;
-        const tPos =
+        let tPos =
           showEndLabels && tm
             ? placeMultiplicityLabel({
                 points,
@@ -696,6 +706,22 @@ export function DiagramRelationshipsLayer({
                 crowdCount: endLabelCrowdCountByConnEnd.get(`${conn.id}|target`) ?? 1,
               })
             : null;
+
+        // If this is a self-association and both ends have labels, ensure they don't overlap visually.
+        // We do a simple post-adjustment based on the attachment side for the target end.
+        if (isSelfAssoc && sPos && tPos) {
+          const dx = Math.abs(sPos.x - tPos.x);
+          const dy = Math.abs(sPos.y - tPos.y);
+          if (dx < 6 && dy < 6) {
+            const side = tSide ?? 'R';
+            const bump = 14;
+            if (side === 'L' || side === 'R') {
+              tPos = { ...tPos, y: tPos.y + bump };
+            } else {
+              tPos = { ...tPos, x: tPos.x + bump };
+            }
+          }
+        }
 
 
         return (

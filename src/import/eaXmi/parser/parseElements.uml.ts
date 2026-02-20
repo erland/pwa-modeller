@@ -116,7 +116,9 @@ function normalizeClassifierToIR(args: {
 
   const attrs: Record<string, unknown> | undefined = (() => {
     const base: Record<string, unknown> = actionKindAttrs ? { ...actionKindAttrs } : {};
-    const next = stereotype ? writeStereotypes(base, [stereotype]) : base;
+    const next0 = stereotype ? writeStereotypes(base, [stereotype]) : base;
+    // AssociationClass: link the box to its underlying association line (relationship id).
+    const next = qualifiedType === 'uml.associationClass' ? { ...next0, associationRelationshipId: `${id}__association` } : next0;
     return Object.keys(next).length ? next : undefined;
   })();
 

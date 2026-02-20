@@ -17,7 +17,8 @@ import { useDiagramRelationshipCreation } from './hooks/useDiagramRelationshipCr
 import type { DiagramNodeDragState } from './DiagramNode';
 
 import { useDiagramNodes } from './hooks/useDiagramNodes';
-import { useDiagramExportImage } from './hooks/useDiagramExportImage';
+import { useDiagramExportDialog } from './hooks/useDiagramExportDialog';
+import { DiagramExportDialog } from './dialogs/DiagramExportDialog';
 import { useDiagramElementDrop } from './hooks/useDiagramElementDrop';
 import { useDiagramConnections } from './hooks/useDiagramConnections';
 import { useDiagramMarqueeSelection } from './hooks/useDiagramMarqueeSelection';
@@ -150,7 +151,7 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
     onSelect,
   });
 
-  const { canExportImage, handleExportImage } = useDiagramExportImage({ model, activeViewId, activeView });
+  const { isOpen: exportDialogOpen, canOpenExportDialog, openExportDialog, closeExportDialog } = useDiagramExportDialog(activeViewId);
 
   const drop = useDiagramElementDrop({
     model,
@@ -369,8 +370,8 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
       getElementBgVar={getElementBgVar}
       onOpenInSandbox={onOpenInSandbox}
       onAddRelatedToView={addRelated.openAddRelatedDialog}
-      canExportImage={canExportImage}
-      onExportImage={handleExportImage}
+      canExport={canOpenExportDialog}
+      onOpenExportDialog={openExportDialog}
       onAutoLayout={onAutoLayout}
       onAlignSelection={onAlignSelection}
       onDistributeSelection={onDistributeSelection}
@@ -381,7 +382,8 @@ export function DiagramCanvas({ selection, onSelect, onActiveViewIdChange }: Pro
     />
 
 
-    {addRelated.dialogProps ? <SandboxInsertDialog {...addRelated.dialogProps} /> : null}
+          <DiagramExportDialog isOpen={exportDialogOpen} onClose={closeExportDialog} model={model} activeViewId={activeViewId} />
+{addRelated.dialogProps ? <SandboxInsertDialog {...addRelated.dialogProps} /> : null}
 
 
     </>

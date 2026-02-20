@@ -83,8 +83,8 @@ export type DiagramCanvasViewProps = {
   clientToModelPoint: (clientX: number, clientY: number) => Point | null;
   getElementBgVar: (t: string) => string;
 
-  canExportImage: boolean;
-  onExportImage: () => void;
+  canExport: boolean;
+  onOpenExportDialog: () => void;
   onOpenInSandbox?: () => void;
   onAddRelatedToView?: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
@@ -133,8 +133,8 @@ export function DiagramCanvasView({
   onBeginNodeDrag,
   clientToModelPoint,
   getElementBgVar,
-  canExportImage,
-  onExportImage,
+  canExport,
+  onOpenExportDialog,
   onOpenInSandbox,
   onAddRelatedToView,
   onAutoLayout,
@@ -162,8 +162,8 @@ export function DiagramCanvasView({
         zoomOut={zoomOut}
         zoomReset={zoomReset}
         fitToView={fitToView}
-        canExportImage={canExportImage}
-        onExportImage={onExportImage}
+        canExport={canExport}
+        onOpenExportDialog={onOpenExportDialog}
         onOpenInSandbox={onOpenInSandbox}
         onAddRelatedToView={onAddRelatedToView}
         onAutoLayout={onAutoLayout}

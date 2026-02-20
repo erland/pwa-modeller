@@ -65,12 +65,17 @@ describe('Step 11 – Reporting and Export', () => {
     const diagramCanvas = await screen.findByLabelText('Diagram canvas');
     expect(within(diagramCanvas).getByText('Main View', { selector: 'span' })).toBeInTheDocument();
 
-    const exportBtn = screen.getByRole('button', { name: /export as image/i });
+    const exportBtn = screen.getByRole('button', { name: /export\.{3}/i });
     expect(exportBtn).toBeEnabled();
     await user.click(exportBtn);
+
+    // Select SVG in the export dialog and download
+    await user.click(screen.getByText('SVG'));
+    await user.click(screen.getByRole('button', { name: /download/i }));
+
     expect(spy).toHaveBeenCalled();
     expect(spy.mock.calls[0][0]).toMatch(/\.svg$/i);
-    expect(spy.mock.calls[0][2]).toBe('image/svg+xml');
+    expect(String(spy.mock.calls[0][2])).toMatch(/^image\/svg\+xml(\b|;)/);
 
     spy.mockRestore();
   });

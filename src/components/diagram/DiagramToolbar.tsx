@@ -30,8 +30,8 @@ export type DiagramToolbarProps = {
   zoomReset: () => void;
   fitToView: () => void;
 
-  canExportImage: boolean;
-  onExportImage: () => void;
+  canExport: boolean;
+  onOpenExportDialog: () => void;
   onOpenInSandbox?: () => void;
   onAddRelatedToView?: () => void;
   onAutoLayout: (overrides?: Partial<AutoLayoutOptions>) => void;
@@ -60,8 +60,8 @@ export function DiagramToolbar({
   zoomOut,
   zoomReset,
   fitToView,
-  canExportImage,
-  onExportImage,
+  canExport,
+  onOpenExportDialog,
   onOpenInSandbox,
   onAddRelatedToView,
   onAutoLayout,
@@ -291,8 +291,8 @@ export function DiagramToolbar({
               Add related…
             </button>
 
-            <button type="button" onClick={onExportImage} className="shellButton" disabled={!canExportImage}>
-              Export as Image
+            <button type="button" onClick={onOpenExportDialog} className="shellButton" disabled={!canExport}>
+              Export...
             </button>
           </div>
         </div>

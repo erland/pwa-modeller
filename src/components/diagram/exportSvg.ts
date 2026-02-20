@@ -1,6 +1,10 @@
 import type { Model, ViewNodeLayout, ArchimateLayer, ElementType, View } from '../../domain';
-import { ELEMENT_TYPES_BY_LAYER, getElementTypeLabel } from '../../domain';
+import { ELEMENT_TYPES_BY_LAYER, getElementTypeLabel, readUmlClassifierMembers } from '../../domain';
 import { renderSvgMarkerDefs } from '../../diagram/relationships/markers';
+import { readUmlNodeAttrs } from '../../notations/uml/nodeAttrs';
+import { formatUmlClassifierMemberLines, readUmlElementStereotype } from '../../notations/uml/formatClassifierText';
+import { UML_CLASSIFIER_METRICS, measureUmlClassifierBoxHeights } from '../../notations/uml/measureClassifierText';
+import { isUmlClassifierType } from '../../notations/uml/nodeTypes';
 import type { Viewport } from './exportSvg.helpers';
 import {
   applyLaneOffsetsForExport,
@@ -82,6 +86,177 @@ function renderMultilineText(
   } fill="${opts.fill}" text-anchor="${opts.anchor}">${lines
     .map((ln, i) => `<tspan x="${x}" dy="${i === 0 ? 0 : lh}">${escapeXml(ln)}</tspan>`)
     .join('')}</text>`;
+}
+
+function splitLines(text?: string): string[] {
+  if (!text) return [];
+  const normalized = text.replace(/\r\n/g, '\n');
+  const trimmedEnd = normalized.replace(/\n+$/, '');
+  return trimmedEnd.length ? trimmedEnd.split('\n') : [];
+}
+
+function defaultUmlClassifierStereotype(type: string): string | undefined {
+  // Keep in sync with notations/uml/renderNodeContent.tsx (defaultStereo logic).
+  switch (type) {
+    case 'uml.interface':
+      return 'interface';
+    case 'uml.associationClass':
+      return 'AssociationClass';
+    case 'uml.datatype':
+      return 'datatype';
+    case 'uml.primitiveType':
+      return 'primitive';
+    case 'uml.enum':
+      return 'enumeration';
+    case 'uml.package':
+      return 'package';
+    case 'uml.component':
+      return 'component';
+    case 'uml.artifact':
+      return 'artifact';
+    case 'uml.node':
+      return 'node';
+    case 'uml.device':
+      return 'device';
+    case 'uml.executionEnvironment':
+      return 'execution environment';
+    case 'uml.subject':
+      return 'subject';
+    default:
+      return undefined;
+  }
+}
+
+function safeIdFragment(v: string): string {
+  return v.replace(/[^a-zA-Z0-9_\-:.]/g, '_');
+}
+
+function renderUmlClassifierNodeSvg(args: {
+  model: Model;
+  view: View;
+  node: ViewNodeLayout;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}): string {
+  const { model, view, node, x, y, w, h } = args;
+  const el = node.elementId ? model.elements[node.elementId] : null;
+  if (!el) return '';
+
+  const name = el.name || '(unnamed)';
+  const type = el.type;
+
+  const attrs = readUmlNodeAttrs(node);
+  const collapsed = attrs.collapsed ?? false;
+  const viewAllowsAttributes = view.formatting?.umlUseNodeAttributes ?? true;
+  const viewAllowsOperations = view.formatting?.umlUseNodeOperations ?? true;
+  const showAttributes = viewAllowsAttributes ? (attrs.showAttributes ?? true) : false;
+  const showOperations = viewAllowsOperations ? (attrs.showOperations ?? true) : false;
+
+  const elementStereo = readUmlElementStereotype(el);
+  const defaultStereo = elementStereo ?? defaultUmlClassifierStereotype(type);
+
+  const legacyAttrLines = splitLines(attrs.attributesText);
+  const legacyOpLines = splitLines(attrs.operationsText);
+  const members = readUmlClassifierMembers(el);
+  const useLegacyText =
+    type === 'uml.datatype' &&
+    members.attributes.length === 0 &&
+    members.operations.length === 0 &&
+    (legacyAttrLines.length > 0 || legacyOpLines.length > 0);
+
+  const { attributes: attributeLines, operations: operationLines } = formatUmlClassifierMemberLines({
+    element: el,
+    legacyAttributesLines: legacyAttrLines,
+    legacyOperationsLines: legacyOpLines,
+    useLegacyText,
+  });
+
+  const hasStereo = Boolean(defaultStereo && defaultStereo.trim().length);
+  const heights = measureUmlClassifierBoxHeights({
+    hasStereotype: hasStereo,
+    collapsed,
+    showAttributes,
+    showOperations,
+    attributeLines: attributeLines.length,
+    operationLines: operationLines.length,
+  });
+
+  const m = UML_CLASSIFIER_METRICS;
+
+  const highlight = node.highlighted;
+  const stroke = highlight ? '#f59e0b' : '#475569';
+  const strokeWidth = 2;
+
+  const clipId = `uml_clip_${safeIdFragment(node.elementId ?? 'node')}`;
+
+  const headerX = x + w / 2;
+  const headerTop = y + m.headerPadY;
+
+  const stereoText = hasStereo ? `«${defaultStereo}»` : '';
+  const stereoY = headerTop + 11;
+  const nameY = headerTop + (hasStereo ? m.stereotypeLineH + m.stereotypeGap : 0) + 13;
+
+  const headerSvg = `
+    ${hasStereo ? `<text x="${headerX}" y="${stereoY}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="11" fill="#0f172a" opacity="0.85" text-anchor="middle">${escapeXml(stereoText)}</text>` : ''}
+    <text x="${headerX}" y="${nameY}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="13" font-weight="800"${type === 'uml.interface' ? ' font-style="italic"' : ''} fill="#0f172a" text-anchor="middle">${escapeXml(name)}</text>
+  `;
+
+  let yCursor = y + heights.headerH;
+
+  function renderSection(lines: string[], sectionH: number): { svg: string; nextY: number } {
+    if (sectionH <= 0) return { svg: '', nextY: yCursor };
+    const borderY = yCursor;
+    const textX = x + m.padX;
+    const textY = yCursor + m.sectionPadY + 12;
+    const clipRectY = yCursor + m.sectionBorderH;
+    const clipRectH = Math.max(0, sectionH - m.sectionBorderH);
+
+    const textLines = lines.length ? lines : [' '];
+    const tspans = textLines
+      .map((ln, i) => `<tspan x="${textX}" dy="${i === 0 ? 0 : m.sectionLineH}">${escapeXml(ln)}</tspan>`)
+      .join('');
+
+    const secClipId = `${clipId}_sec_${Math.round(borderY)}`;
+
+    const sectionSvg = `
+      <line x1="${x}" y1="${borderY}" x2="${x + w}" y2="${borderY}" stroke="rgba(0,0,0,0.18)" stroke-width="1" />
+      <clipPath id="${secClipId}"><rect x="${x}" y="${clipRectY}" width="${w}" height="${clipRectH}" /></clipPath>
+      <g clip-path="url(#${secClipId})">
+        <text x="${textX}" y="${textY}" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="12" fill="#0f172a" opacity="0.9">${tspans}</text>
+      </g>
+    `;
+
+    return { svg: sectionSvg, nextY: yCursor + sectionH };
+  }
+
+  let sectionsSvg = '';
+  if (!collapsed) {
+    if (showAttributes) {
+      const r = renderSection(attributeLines, heights.attributesH);
+      sectionsSvg += r.svg;
+      yCursor = r.nextY;
+    }
+    if (showOperations) {
+      const r = renderSection(operationLines, heights.operationsH);
+      sectionsSvg += r.svg;
+      yCursor = r.nextY;
+    }
+  }
+
+  return `
+    <g>
+      <defs>
+        <clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${w}" height="${h}" /></clipPath>
+      </defs>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#ffffff" stroke="${stroke}" stroke-width="${strokeWidth}" />
+      <g clip-path="url(#${clipId})">
+        ${headerSvg}
+        ${sectionsSvg}
+      </g>
+    </g>
+  `;
 }
 
 function makeRenderNodeSvg(model: Model, view: View): (n: ViewNodeLayout) => string {
@@ -166,6 +341,11 @@ function makeRenderNodeSvg(model: Model, view: View): (n: ViewNodeLayout) => str
 
     const el = n.elementId ? model.elements[n.elementId] : null;
     if (!el) return '';
+
+    // UML: render classifier nodes with compartments (attributes/operations) using shared helpers.
+    if (view.kind === 'uml' && isUmlClassifierType(el.type)) {
+      return renderUmlClassifierNodeSvg({ model, view, node: n, x, y, w, h });
+    }
 
     const name = el.name || '(unnamed)';
     const type = el.type;

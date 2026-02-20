@@ -39,4 +39,32 @@ describe('exportSvg UML', () => {
     expect(svg).toContain('id="triangleOpen"');
     expect(svg).toContain('url(#triangleOpen)');
   });
+
+  it('exports UML classifier nodes with attributes and operations', () => {
+    const model = createEmptyModel({ name: 'M' });
+    const a = createElement({
+      name: 'User',
+      type: 'uml.class',
+      attrs: {
+        attributes: [{ name: 'id', visibility: 'private', dataTypeName: 'String' }],
+        operations: [{ name: 'getId', visibility: 'public', returnType: 'String', params: [] }],
+      },
+    });
+    model.elements[a.id] = a;
+
+    const v = createView({ name: 'UML', kind: 'uml', viewpointId: 'uml-class' });
+    v.layout = {
+      nodes: [{ elementId: a.id, x: 20, y: 20, width: 220, height: 140 }],
+      relationships: [],
+    };
+    model.views[v.id] = v;
+
+    const svg = createViewSvg(model, v.id);
+    // Attribute line
+    expect(svg).toContain('- id: String');
+    // Operation line
+    expect(svg).toContain('+ getId(): String');
+    // Compartment border line (section separator)
+    expect(svg).toContain('stroke="rgba(0,0,0,0.18)"');
+  });
 });

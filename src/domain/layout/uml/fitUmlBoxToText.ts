@@ -3,6 +3,7 @@ import { readUmlClassifierMembers } from '../../uml/members';
 import { readStereotypeDisplayText } from '../../umlStereotypes';
 import { readUmlNodeAttrs } from '../../../notations/uml/nodeAttrs';
 import { measureTextWidthPx } from '../measureText';
+import { UML_CLASSIFIER_METRICS, measureUmlClassifierBoxHeights } from '../../../notations/uml/measureClassifierText';
 
 function splitLines(text?: string): string[] {
   if (!text) return [];
@@ -131,8 +132,7 @@ export function fitUmlBoxToText(
   const stereo = readStereotypeDisplayText(el.attrs) || '';
 
   // Render constants from notations/uml/renderNodeContent.tsx
-  const padX = 8;
-  const headerPadY = 6;
+  const { padX, minWidth } = UML_CLASSIFIER_METRICS;
 
   const stereoFont = '11px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
   const nameFont = '800 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
@@ -183,38 +183,17 @@ export function fitUmlBoxToText(
   for (const line of opLines) contentW = Math.max(contentW, measureTextWidthPx(line, sectionFont));
 
   // Box width = content + padding (both sides)
-  const minWidth = 120;
   const width = clampMin(Math.ceil(contentW + padX * 2 + 2), minWidth);
 
   // Height: header + optional sections
-  const stereoLineH = stereo ? 13 : 0;
-  const stereoGap = stereo ? 2 : 0;
-  const nameLineH = 16;
-  const headerH = headerPadY * 2 + stereoLineH + stereoGap + nameLineH;
+  const h = measureUmlClassifierBoxHeights({
+    hasStereotype: Boolean(stereo),
+    collapsed,
+    showAttributes,
+    showOperations,
+    attributeLines: attrLines.length,
+    operationLines: opLines.length,
+  });
 
-  let sectionsH = 0;
-  const sectionPadY = 6;
-  // Renderer uses fontSize: 12 and lineHeight: 1.25 (~15px). Add a safety margin
-  // to avoid clipping due to rounding or when long lines wrap.
-  const sectionLineH = 17;
-  const sectionBorderH = 1;
-  const sectionExtraSlack = 6; // per compartment
-
-  if (!collapsed) {
-    if (showAttributes) {
-      const lines = attrLines.length ? attrLines : [' '];
-      sectionsH += sectionBorderH + sectionPadY * 2 + sectionLineH * Math.max(1, lines.length) + sectionExtraSlack;
-    }
-    if (showOperations) {
-      const lines = opLines.length ? opLines : [' '];
-      sectionsH += sectionBorderH + sectionPadY * 2 + sectionLineH * Math.max(1, lines.length) + sectionExtraSlack;
-    }
-  }
-
-  const minHeight = 60;
-  // A small global slack helps avoid "half visible" last lines due to rounding.
-  const globalSlack = 10;
-  const height = clampMin(Math.ceil(headerH + sectionsH + globalSlack), minHeight);
-
-  return { width, height };
+  return { width, height: h.totalH };
 }

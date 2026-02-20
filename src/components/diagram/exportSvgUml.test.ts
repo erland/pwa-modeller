@@ -60,6 +60,8 @@ describe('exportSvg UML', () => {
     model.views[v.id] = v;
 
     const svg = createViewSvg(model, v.id);
+    // Ensure export stays conversion-friendly (no embedded HTML).
+    expect(svg).not.toContain('<foreignObject');
     // Attribute line
     expect(svg).toContain('- id: String');
     // Operation line

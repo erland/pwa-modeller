@@ -1,4 +1,4 @@
-import type { Element, ViewNodeLayout } from '../../types';
+import type { Element, ViewFormatting, ViewNodeLayout } from '../../types';
 import { readUmlClassifierMembers } from '../../uml/members';
 import { readStereotypeDisplayText } from '../../umlStereotypes';
 import { readUmlNodeAttrs } from '../../../notations/uml/nodeAttrs';
@@ -94,7 +94,11 @@ function formatOperation(o: UmlOperationLike): string {
  * Includes: name, stereotype line, and (when enabled) attributes/operations.
  * For class/interface/datatype, members are semantic and read from the element.
  */
-export function fitUmlBoxToText(el: Element, node: ViewNodeLayout): { width: number; height: number } | null {
+export function fitUmlBoxToText(
+  el: Element,
+  node: ViewNodeLayout,
+  viewFormatting?: ViewFormatting
+): { width: number; height: number } | null {
   const t = String(el.type);
 
   const isBoxLike =
@@ -117,8 +121,11 @@ export function fitUmlBoxToText(el: Element, node: ViewNodeLayout): { width: num
 
   const attrs = readUmlNodeAttrs(node);
   const collapsed = attrs.collapsed ?? false;
-  const showAttributes = attrs.showAttributes ?? true;
-  const showOperations = attrs.showOperations ?? true;
+  const viewAllowsAttributes = viewFormatting?.umlUseNodeAttributes ?? true;
+  const viewAllowsOperations = viewFormatting?.umlUseNodeOperations ?? true;
+
+  const showAttributes = viewAllowsAttributes ? (attrs.showAttributes ?? true) : false;
+  const showOperations = viewAllowsOperations ? (attrs.showOperations ?? true) : false;
 
   const name = el.name || '(unnamed)';
   const stereo = readStereotypeDisplayText(el.attrs) || '';

@@ -100,6 +100,7 @@ export function DiagramNodesLayer({
               element={el}
               notation={notation}
               activeViewId={activeView.id}
+              viewFormatting={activeView.formatting}
               isSelected={isSelected}
               linkDrag={linkDrag}
               bgVar={bgVar}

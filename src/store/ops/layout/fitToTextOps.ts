@@ -167,7 +167,7 @@ export const createFitToTextOps = (deps: Pick<LayoutOpsDeps, 'updateModel'>): Fi
             view.kind === 'archimate'
               ? fitArchiMateBoxToText(el, curNode)
               : view.kind === 'uml'
-                ? fitUmlBoxToText(el, curNode)
+                ? fitUmlBoxToText(el, curNode, view.formatting)
                 : fitBpmnBoxToText(el, curNode);
 
           if (!sized) continue;

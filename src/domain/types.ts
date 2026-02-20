@@ -415,6 +415,18 @@ export interface ViewFormatting {
 
   /** Show UML multiplicity end labels in this view. Defaults to true. */
   showMultiplicities?: boolean;
+
+  /**
+   * UML: when true (default), classifier nodes decide whether to show operations using per-node attrs.
+   * When false, operations are hidden for ALL classifier nodes in this view (view-level override).
+   */
+  umlUseNodeOperations?: boolean;
+
+  /**
+   * UML: when true (default), classifier nodes decide whether to show attributes using per-node attrs.
+   * When false, attributes are hidden for ALL classifier nodes in this view (view-level override).
+   */
+  umlUseNodeAttributes?: boolean;
 }
 
 export interface ViewLayout {

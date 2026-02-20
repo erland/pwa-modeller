@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import type { Element, ViewNodeLayout } from '../../domain';
+import type { Element, ViewFormatting, ViewNodeLayout } from '../../domain';
 import type { Notation } from '../../notations';
 import type { Point } from './geometry';
 import type { ConnectableRef } from './connectable';
@@ -48,6 +48,7 @@ type Props = {
   node: ViewNodeLayout;
   element: Element;
   activeViewId: string;
+  viewFormatting?: ViewFormatting;
   notation: Notation;
   isSelected: boolean;
   linkDrag: DiagramLinkDrag | null;
@@ -68,6 +69,7 @@ export function DiagramNode({
   node: n,
   element: el,
   activeViewId,
+  viewFormatting,
   notation,
   isSelected,
   linkDrag,
@@ -174,7 +176,7 @@ export function DiagramNode({
         }
       >
         {notation.renderNodeContent ? (
-          notation.renderNodeContent({ element: el, node: n })
+          notation.renderNodeContent({ element: el, node: n, viewFormatting })
         ) : (
           <>
             <div className="diagramNodeHeader">

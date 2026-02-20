@@ -173,18 +173,42 @@ export function ViewProperties({ model, viewId, viewFolders, actions, onSelect }
                 }}
               />
             </div>
-            {view.kind === 'uml' ? (
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+          </div>
+        </div>
+
+        {view.kind === 'uml' ? (
+          <div className="propertiesRow">
+            <div className="propertiesKey">Visibility</div>
+            <div className="propertiesValue">
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input
                   type="checkbox"
                   checked={view.formatting?.showMultiplicities ?? true}
                   onChange={(e) => actions.updateViewFormatting(view.id, { showMultiplicities: e.target.checked })}
                 />
-                <span>Show multiplicities</span>
+                <span>Multiplicities</span>
               </label>
-            ) : null}
+
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={view.formatting?.umlUseNodeOperations ?? true}
+                  onChange={(e) => actions.updateViewFormatting(view.id, { umlUseNodeOperations: e.target.checked })}
+                />
+                <span>Operations: Use per-node settings</span>
+              </label>
+
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={view.formatting?.umlUseNodeAttributes ?? true}
+                  onChange={(e) => actions.updateViewFormatting(view.id, { umlUseNodeAttributes: e.target.checked })}
+                />
+                <span>Attributes: Use per-node settings</span>
+              </label>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {view.kind === 'archimate' ? (
           <div className="propertiesRow">

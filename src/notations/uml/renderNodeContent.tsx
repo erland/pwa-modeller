@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { Element, ViewNodeLayout, UmlAttribute, UmlOperation, UmlVisibility } from '../../domain';
+import type { Element, ViewFormatting, ViewNodeLayout, UmlAttribute, UmlOperation, UmlVisibility } from '../../domain';
 import { readUmlClassifierMembers } from '../../domain';
 import { readStereotypeDisplayText } from '../../domain/umlStereotypes';
 import { readUmlNodeAttrs } from './nodeAttrs';
@@ -111,8 +111,9 @@ function Header({ stereotype, name, italic }: { stereotype?: string; name: strin
   );
 }
 
-export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLayout }): React.ReactNode {
+export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLayout; viewFormatting?: ViewFormatting }): React.ReactNode {
   const { element, node } = args;
+  const viewFormatting = args.viewFormatting;
   const attrs = readUmlNodeAttrs(node);
   const shapeHint = readShapeHint(node);
 
@@ -159,8 +160,11 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
 
   // Presentation flags are view-local; default to "show" to keep old diagrams usable.
   const collapsed = attrs.collapsed ?? false;
-  const showAttributes = attrs.showAttributes ?? true;
-  const showOperations = attrs.showOperations ?? true;
+  const viewAllowsAttributes = viewFormatting?.umlUseNodeAttributes ?? true;
+  const viewAllowsOperations = viewFormatting?.umlUseNodeOperations ?? true;
+
+  const showAttributes = viewAllowsAttributes ? (attrs.showAttributes ?? true) : false;
+  const showOperations = viewAllowsOperations ? (attrs.showOperations ?? true) : false;
 
   // Default stereotype hints if not explicitly set on the element.
   const defaultStereo =

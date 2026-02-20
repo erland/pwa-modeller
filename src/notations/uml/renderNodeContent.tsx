@@ -1,8 +1,8 @@
 import * as React from 'react';
-import type { Element, ViewFormatting, ViewNodeLayout, UmlAttribute, UmlOperation, UmlVisibility } from '../../domain';
+import type { Element, ViewFormatting, ViewNodeLayout } from '../../domain';
 import { readUmlClassifierMembers } from '../../domain';
-import { readStereotypeDisplayText } from '../../domain/umlStereotypes';
 import { readUmlNodeAttrs } from './nodeAttrs';
+import { formatUmlClassifierMemberLines, readUmlElementStereotype } from './formatClassifierText';
 
 function readShapeHint(node: ViewNodeLayout): { umlShape?: string; umlOrientation?: 'horizontal' | 'vertical' } {
   const raw = (node as unknown as { attrs?: unknown }).attrs;
@@ -18,61 +18,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 
-function visibilitySymbol(v?: UmlVisibility): string {
-  switch (v) {
-    case 'public':
-      return '+';
-    case 'private':
-      return '-';
-    case 'protected':
-      return '#';
-    case 'package':
-      return '~';
-    default:
-      return '';
-  }
-}
-
-function isClearlyWrongDatatype(typeName: string | undefined, metaclass: string | undefined): boolean {
-  const t = (typeName ?? '').trim();
-  if (!t) return false;
-  // EA can leak metaclass tokens like "uml:Property" into datatype fields; never display those.
-  if (t.startsWith('uml:') || t.startsWith('xmi:')) return true;
-  if (metaclass && t === metaclass) return true;
-  return false;
-}
-
-function displayDataTypeName(a: UmlAttribute): string {
-  const raw = (a.dataTypeName ?? '').trim();
-  if (!raw) return '';
-  if (isClearlyWrongDatatype(raw, a.metaclass)) return '';
-  return raw;
-}
-
-function formatAttribute(a: UmlAttribute): string {
-  const sym = visibilitySymbol(a.visibility);
-  const head = sym ? `${sym} ${a.name}` : a.name;
-
-  const type = displayDataTypeName(a);
-  const typePart = type ? `: ${type}` : '';
-
-  const m = a.multiplicity;
-  const lower = m?.lower?.trim() ?? '';
-  const upper = m?.upper?.trim() ?? '';
-  const multPart = lower || upper ? ` [${lower}..${upper}]` : '';
-
-  return `${head}${typePart}${multPart}`;
-}
-
-function formatOperation(o: UmlOperation): string {
-  const sym = visibilitySymbol(o.visibility);
-  const head = sym ? `${sym} ${o.name}` : o.name;
-  const params = (o.params ?? [])
-    .map((p) => (p.type ? `${p.name}: ${p.type}` : p.name))
-    .filter((s) => s.trim().length);
-  const sig = `${head}(${params.join(', ')})`;
-  return o.returnType ? `${sig}: ${o.returnType}` : sig;
-}
+// UML member formatting (attributes/operations) has been extracted to
+// formatClassifierText.ts so SVG export and the live view can share logic.
 
 function splitLines(text?: string): string[] {
   if (!text) return [];
@@ -121,7 +68,7 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
   const name = element.name || "(unnamed)";
 
   // Stereotype is semantic (element-level).
-  const elementStereo = readStereotypeDisplayText(element.attrs) || undefined;
+  const elementStereo = readUmlElementStereotype(element);
 
   const attrLines = splitLines(attrs.attributesText);
   const opLines = splitLines(attrs.operationsText);
@@ -482,8 +429,12 @@ export function renderUmlNodeContent(args: { element: Element; node: ViewNodeLay
       members.operations.length === 0 &&
       (attrLines.length > 0 || opLines.length > 0);
 
-    const attributeLines = useLegacyText ? attrLines : members.attributes.map(formatAttribute);
-    const operationLines = useLegacyText ? opLines : members.operations.map(formatOperation);
+    const { attributes: attributeLines, operations: operationLines } = formatUmlClassifierMemberLines({
+      element,
+      legacyAttributesLines: attrLines,
+      legacyOperationsLines: opLines,
+      useLegacyText,
+    });
 
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

@@ -3,6 +3,9 @@
 const DND_ELEMENT_MIME = 'application/x-pwa-modeller-element-id';
 // Drag payload for dragging multiple elements from the tree into a view.
 const DND_ELEMENTS_MIME = 'application/x-pwa-modeller-element-ids';
+// Drag payload for dragging a folder from the navigator.
+// NOTE: must match the MIME used by the navigator drag source.
+const DND_FOLDER_MIME = 'application/x-pwa-modeller-folder-id';
 
 export function dataTransferHasElement(dt: DataTransfer | null): boolean {
   if (!dt) return false;
@@ -21,6 +24,42 @@ export function dataTransferHasElement(dt: DataTransfer | null): boolean {
   }
 
   return false;
+}
+
+export function dataTransferHasFolder(dt: DataTransfer | null): boolean {
+  if (!dt) return false;
+  const types = Array.from(dt.types ?? []);
+  if (types.includes(DND_FOLDER_MIME)) return true;
+
+  if (types.includes('text/plain')) {
+    const s = String(dt.getData('text/plain') || '');
+    if (s.startsWith('pwa-modeller:')) {
+      return s.startsWith('pwa-modeller:folder:');
+    }
+  }
+
+  return false;
+}
+
+export function readDraggedFolderId(dt: DataTransfer | null): string | null {
+  if (!dt) return null;
+
+  const typed = dt.getData(DND_FOLDER_MIME);
+  if (typed) return String(typed);
+
+  const raw = dt.getData('text/plain') || dt.getData('text/pwa-modeller-legacy-id');
+  if (!raw) return null;
+
+  const s = String(raw);
+  if (s.startsWith('pwa-modeller:')) {
+    const parts = s.split(':');
+    if (parts.length >= 3 && parts[1] === 'folder') {
+      return parts.slice(2).join(':');
+    }
+    return null;
+  }
+
+  return null;
 }
 
 export function readDraggedElementId(dt: DataTransfer | null): string | null {

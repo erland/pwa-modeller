@@ -1,10 +1,11 @@
 import type * as React from 'react';
 import { useCallback, useState } from 'react';
 import type { Model } from '../../../domain';
+import { createElement } from '../../../domain';
 import { modelStore } from '../../../store';
 import { getNotation } from '../../../notations';
 import type { Selection } from '../../model/selection';
-import { dataTransferHasElement, readDraggedElementIds } from '../dragDrop';
+import { dataTransferHasElement, dataTransferHasFolder, readDraggedElementIds, readDraggedFolderId } from '../dragDrop';
 
 type Args = {
   model: Model | null;
@@ -17,15 +18,29 @@ type Args = {
 export function useDiagramElementDrop({ model, activeViewId, zoom, viewportRef, onSelect }: Args) {
   const [isDragOver, setIsDragOver] = useState(false);
 
+  const isUmlActiveView = useCallback((): boolean => {
+    if (!model || !activeViewId) return false;
+    const v = model.views[activeViewId];
+    return (v?.kind ?? 'archimate') === 'uml';
+  }, [activeViewId, model]);
+
   const handleViewportDragOver = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       if (!activeViewId) return;
-      if (!dataTransferHasElement(e.dataTransfer)) return;
+
+      const allowElements = dataTransferHasElement(e.dataTransfer);
+      const allowFolderAsPackage = isUmlActiveView() && dataTransferHasFolder(e.dataTransfer);
+      if (!allowElements && !allowFolderAsPackage) return;
+
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
+      // IMPORTANT: folders are currently dragged with effectAllowed=move from the navigator.
+      // Some browsers (notably Safari) will show "not allowed" unless dropEffect is compatible.
+      // For folder->package materialization we are semantically copying, but we use 'move' here
+      // to remain compatible with the source effectAllowed and still enable dropping.
+      e.dataTransfer.dropEffect = allowFolderAsPackage && !allowElements ? 'move' : 'copy';
       setIsDragOver(true);
     },
-    [activeViewId]
+    [activeViewId, isUmlActiveView]
   );
 
   const handleViewportDragLeave = useCallback(() => {
@@ -36,15 +51,57 @@ export function useDiagramElementDrop({ model, activeViewId, zoom, viewportRef, 
     (e: React.DragEvent<HTMLDivElement>) => {
       setIsDragOver(false);
       if (!model || !activeViewId) return;
-      const elementIds = readDraggedElementIds(e.dataTransfer);
-      if (!elementIds.length) return;
+
+      // Ensure the browser accepts the drop (some require preventDefault on drop as well).
+      // Payload is still validated below.
+      e.preventDefault();
+
+      // Special case: for UML views, allow dragging a folder to materialize (or reuse) a uml.package element.
+      const folderId = isUmlActiveView() ? readDraggedFolderId(e.dataTransfer) : null;
+
+      let elementIds: string[] = [];
+      let folderDropCreatedPackage: { id: string; type: string } | null = null;
+      if (folderId) {
+        const folder = model.folders[folderId];
+        if (!folder) return;
+
+        const folderExtIds = (folder.externalIds ?? []).map((r) => r.id).filter(Boolean);
+
+        // Find an existing package element mapped to the folder by external id.
+        const existingPkgId = Object.values(model.elements).find((el) => {
+          if (el.type !== 'uml.package') return false;
+          const elExt = (el.externalIds ?? []).map((r) => r.id);
+          return folderExtIds.some((x) => elExt.includes(x));
+        })?.id;
+
+        const pkgId = existingPkgId ?? (() => {
+          const el = createElement({
+            name: folder.name,
+            type: 'uml.package',
+            kind: 'uml',
+            externalIds: folder.externalIds ? folder.externalIds.map((r) => ({ ...r })) : undefined,
+          });
+          modelStore.addElement(el, folderId);
+          folderDropCreatedPackage = { id: el.id, type: el.type };
+          return el.id;
+        })();
+
+        elementIds = [pkgId];
+      } else {
+        elementIds = readDraggedElementIds(e.dataTransfer);
+        if (!elementIds.length) return;
+      }
+
       const view = model.views[activeViewId];
       if (view) {
         const notation = getNotation(view.kind ?? 'archimate');
         // Filter by existence + notation rules.
         const allowed = elementIds
-          .filter((id) => Boolean(model.elements[id]))
-          .filter((id) => notation.canCreateNode({ nodeType: model.elements[id]!.type }));
+          .filter((id) => Boolean(model.elements[id]) || id === folderDropCreatedPackage?.id)
+          .filter((id) => {
+            const t = model.elements[id]?.type ?? (id === folderDropCreatedPackage?.id ? folderDropCreatedPackage.type : undefined);
+            return t ? notation.canCreateNode({ nodeType: t }) : false;
+          });
 
         if (!allowed.length) return;
 
@@ -78,7 +135,7 @@ export function useDiagramElementDrop({ model, activeViewId, zoom, viewportRef, 
 
       // If no view (shouldn't happen), do nothing.
     },
-    [activeViewId, model, onSelect, viewportRef, zoom]
+    [activeViewId, isUmlActiveView, model, onSelect, viewportRef, zoom]
   );
 
   return {

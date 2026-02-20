@@ -77,7 +77,9 @@ export function useNavigatorRowDnd(
         : node.kind === 'view' && node.viewId
           ? { mime: DND_VIEW_MIME, id: node.viewId, effectAllowed: 'move' as const }
           : node.kind === 'folder' && node.folderId && node.canRename
-            ? { mime: DND_FOLDER_MIME, id: node.folderId, effectAllowed: 'move' as const }
+            // Folders are move-only within the navigator, but we also allow "copy" semantics
+            // when a folder is dragged into a UML view to materialize a package element.
+            ? { mime: DND_FOLDER_MIME, id: node.folderId, effectAllowed: 'copyMove' as const }
             : null;
 
     if (!payload) return;

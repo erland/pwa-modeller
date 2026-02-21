@@ -39,7 +39,7 @@ function renderNode(slide: Slide, node: PptxNodeIR): void {
   const content = toPptxRuns(node.textRuns, node.text);
 
   slide.addText(content as any, {
-    altText: `EA_IR_NODE:${node.id}`,
+    altText: node.id ? `EA_NODE:${node.id}` : undefined,
     shape,
     x: node.x,
     y: node.y,
@@ -92,16 +92,22 @@ function renderEdgeAsLine(slide: Slide, edge: PptxEdgeIR, nodeById: Map<string, 
   const w = Math.max(0.01, Math.abs(x2 - x1));
   const h = Math.max(0.01, Math.abs(y2 - y1));
 
+  const head = edge.pptxHeadEnd ?? 'none';
+  const tail = edge.pptxTailEnd ?? 'none';
+  const pattern = edge.linePattern ?? (edge.dashed ? 'dashed' : 'solid');
+  const altText = `EA_EDGEID:${edge.id}|${edge.fromId ?? ''}->${edge.toId ?? ''}|${edge.relType ?? ''}|h=${head}|t=${tail}|p=${pattern}`;
+
   slide.addShape('line' as any, {
     x,
     y,
     w,
     h,
-    altText: `EA_IR_EDGE:${edge.id}|${edge.fromId}->${edge.toId}`,
+    altText,
     line: {
       color: normalizeHex(edge.stroke) ?? '333333',
       width: typeof edge.strokeWidth === 'number' ? edge.strokeWidth : 1,
       dash: edge.dashed ? 'dash' : 'solid',
+      endArrowType: tail !== 'none' ? 'arrow' : undefined,
     },
   });
 

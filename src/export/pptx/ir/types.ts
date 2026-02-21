@@ -67,6 +67,17 @@ export type PptxEdgeIR = {
   strokeWidth?: number;
   dashed?: boolean;
 
+  /**
+   * Optional semantic/type information (useful for post-processing and styling).
+   * Kept optional so producers can stay lightweight.
+   */
+  relType?: string;
+  linePattern?: 'solid' | 'dashed' | 'dotted';
+  markerStart?: string;
+  markerEnd?: string;
+  pptxHeadEnd?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+  pptxTailEnd?: 'none' | 'arrow' | 'triangle' | 'diamond' | 'oval';
+
   /** Optional label */
   label?: string;
 

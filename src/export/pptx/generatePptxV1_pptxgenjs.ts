@@ -1,38 +1,24 @@
-import type { ExportArtifact, ExportBundle, ImageRef } from '../contracts/ExportBundle';
+import type { ExportBundle } from '../contracts/ExportBundle';
 import type { PptxOptions } from '../contracts/ExportOptions';
 
-import { svgTextToPngBytes } from './svgToPngBytes';
-import PptxGenJS from 'pptxgenjs';
-import { postProcessPptxWithJsZip } from './postProcessPptxWithJsZip';
 import { PptxPostProcessMeta } from './pptxPostProcessMeta';
 import { sandboxSvgToPptxDiagramIR } from './adapters/fromSandboxSvg';
 import { renderPptxDiagramIR } from './writer';
+import { artifactToPngDataUrl, pickImageArtifacts } from './internal/imageArtifacts';
+import {
+  addEmptyExportSlide,
+  addFooter,
+  addFullBleedImage,
+  createPptxDocument,
+  getPptxPageSize,
+  type PptxStageEnv,
+} from './internal/pptxDoc';
+import { writePptxBlob } from './internal/pptxWrite';
 
-function isImageArtifact(a: ExportArtifact): a is { type: 'image'; name: string; data: ImageRef } {
-  return a.type === 'image';
-}
-
-function pickImageArtifacts(bundle: ExportBundle): Array<{ type: 'image'; name: string; data: ImageRef }> {
-  return bundle.artifacts.filter(isImageArtifact);
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  // Avoid call-stack issues for large arrays.
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
-}
-
+// Public re-export (keeps existing import paths stable).
+export { getPptxPageSize } from './internal/pptxDoc';
 
 // (Sandbox SVG parsing + mapping moved to ./adapters/fromSandboxSvg.ts)
-
-function layoutToPptxGen(layout: PptxOptions['layout']): string {
-  return layout === 'standard' ? 'LAYOUT_4X3' : 'LAYOUT_WIDE';
-}
 
 /**
  * PPTX generation v1 (image-based slides) using PptxGenJS.
@@ -41,56 +27,7 @@ function layoutToPptxGen(layout: PptxOptions['layout']): string {
  * builds rejected as invalid. PptxGenJS produces PowerPoint-compatible output.
  */
 
-type PptxStageEnv = {
-  pptx: PptxGenJS;
-  pageW: number;
-  pageH: number;
-  includeFooter: boolean;
-  footerText: string;
-};
-
-export function getPptxPageSize(layout: PptxOptions['layout']): { pageW: number; pageH: number } {
-  // PptxGenJS uses inches for coordinates.
-  // Standard (4:3) is 10" × 7.5". Wide is 13.33" × 7.5".
-  const pageW = layout === 'standard' ? 10 : 13.333;
-  const pageH = 7.5;
-  return { pageW, pageH };
-}
-
-function createPptxDocument(bundle: ExportBundle, options: PptxOptions): PptxGenJS {
-  const pptx = new PptxGenJS();
-  pptx.layout = layoutToPptxGen(options.layout);
-  pptx.author = 'EA Modeller PWA';
-  pptx.company = 'EA Modeller PWA';
-  pptx.subject = bundle.title;
-  pptx.title = bundle.title;
-  return pptx;
-}
-
-function addEmptyExportSlide(pptx: PptxGenJS): void {
-  // Always produce a valid PPTX even if there are no images.
-  const slide = pptx.addSlide();
-  slide.addText('No image artifacts available for export.', {
-    x: 0.5,
-    y: 0.5,
-    w: 9,
-    h: 1,
-    fontSize: 18,
-    color: '333333',
-  });
-}
-
-async function artifactToPngDataUrl(art: { type: 'image'; name: string; data: ImageRef }): Promise<string | undefined> {
-  // Ensure we always embed PNG data (even if the artifact is SVG markup).
-  if (art.data.kind === 'png') {
-    return art.data.data.startsWith('data:') ? art.data.data : `data:image/png;base64,${art.data.data}`;
-  }
-  if (art.data.kind === 'svg') {
-    const pngBytes = await svgTextToPngBytes(art.data.data, { scale: 2, background: '#ffffff' });
-    return `data:image/png;base64,${bytesToBase64(pngBytes)}`;
-  }
-  return undefined;
-}
+// Shared PPTX document setup + writing lives in ./internal/*.
 
 type SandboxRenderResult = { handled: boolean; meta?: PptxPostProcessMeta };
 
@@ -107,89 +44,7 @@ function tryRenderSandboxSvgAsShapes(
   return { handled: true, meta: res.meta };
 }
 
-function addFullBleedImage(slide: import('pptxgenjs').Slide, pngDataUrl: string, env: { pageW: number; pageH: number }): void {
-  slide.addImage({
-    data: pngDataUrl,
-    x: 0,
-    y: 0,
-    w: env.pageW,
-    h: env.pageH,
-  });
-}
-
-function addFooter(slide: import('pptxgenjs').Slide, env: PptxStageEnv): void {
-  if (!env.includeFooter) return;
-  slide.addText(env.footerText, {
-    x: 0.3,
-    y: env.pageH - 0.35,
-    w: env.pageW - 0.6,
-    h: 0.3,
-    fontSize: 10,
-    color: '555555',
-  });
-}
-
-function decodeBase64ToUint8Array(base64: string): Uint8Array {
-  // Browser
-  if (typeof atob === 'function') {
-    const bin = atob(base64);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  }
-  // Node/test
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const B: any = (globalThis as any).Buffer;
-  if (B?.from) {
-    return new Uint8Array(B.from(base64, 'base64'));
-  }
-  throw new Error('Base64 decode not supported on this platform');
-}
-
-// PptxGenJS has multiple output modes depending on platform/bundler.
-// Some browser builds throw for 'nodebuffer' ("nodebuffer is not supported by this platform").
-async function writePptxBytes(pptx: PptxGenJS): Promise<Uint8Array | ArrayBuffer> {
-  try {
-    // Works in Node and in some browser bundles.
-    return await pptx.write('nodebuffer');
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn('[PPTX] pptx.write("nodebuffer") failed; trying browser fallbacks.', e);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const anyPptx: any = pptx as any;
-
-  try {
-    // Common browser mode.
-    const ab = await anyPptx.write('arraybuffer');
-    // Some versions return ArrayBuffer, some return Uint8Array.
-    return ab instanceof Uint8Array ? ab : (ab as ArrayBuffer);
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn('[PPTX] pptx.write("arraybuffer") failed; trying base64 fallback.', e);
-  }
-
-  const b64 = await anyPptx.write('base64');
-  if (typeof b64 !== 'string') {
-    throw new Error('PPTX write failed: unsupported output type');
-  }
-  // Some implementations include data URL prefix.
-  const clean = b64.startsWith('data:') ? b64.slice(b64.indexOf(',') + 1) : b64;
-  return decodeBase64ToUint8Array(clean);
-}
-
-async function writePptxBlob(pptx: PptxGenJS, meta: PptxPostProcessMeta | undefined): Promise<Blob> {
-  const raw = await writePptxBytes(pptx);
-  const processed = await postProcessPptxWithJsZip(raw, meta);
-  const safeProcessed = processed instanceof Uint8Array ? processed : new Uint8Array(processed);
-  // Ensure we pass an ArrayBuffer (not SharedArrayBuffer) to Blob for TS/dom compatibility.
-  const ab = new ArrayBuffer(safeProcessed.byteLength);
-  new Uint8Array(ab).set(safeProcessed);
-  return new Blob([ab], {
-    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  });
-}
+// Note: writing bytes + JSZip post-processing moved to ./internal/pptxWrite.ts
 
 export async function generatePptxBlobV1(bundle: ExportBundle, options: PptxOptions): Promise<Blob> {
   const pptx = createPptxDocument(bundle, options);

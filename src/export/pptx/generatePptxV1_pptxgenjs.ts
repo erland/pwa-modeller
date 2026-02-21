@@ -582,7 +582,10 @@ async function writePptxBlob(pptx: PptxGenJS, meta: PptxPostProcessMeta | undefi
   const raw = await writePptxBytes(pptx);
   const processed = await postProcessPptxWithJsZip(raw, meta);
   const safeProcessed = processed instanceof Uint8Array ? processed : new Uint8Array(processed);
-  return new Blob([safeProcessed], {
+  // Ensure we pass an ArrayBuffer (not SharedArrayBuffer) to Blob for TS/dom compatibility.
+  const ab = new ArrayBuffer(safeProcessed.byteLength);
+  new Uint8Array(ab).set(safeProcessed);
+  return new Blob([ab], {
     type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   });
 }

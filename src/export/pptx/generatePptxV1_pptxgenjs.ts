@@ -49,7 +49,7 @@ type PptxStageEnv = {
   footerText: string;
 };
 
-function getPptxPageSize(layout: PptxOptions['layout']): { pageW: number; pageH: number } {
+export function getPptxPageSize(layout: PptxOptions['layout']): { pageW: number; pageH: number } {
   // PptxGenJS uses inches for coordinates.
   // Standard (4:3) is 10" × 7.5". Wide is 13.33" × 7.5".
   const pageW = layout === 'standard' ? 10 : 13.333;
@@ -232,6 +232,34 @@ export async function generatePptxBlobV1(bundle: ExportBundle, options: PptxOpti
     addFullBleedImage(slide, pngDataUrl, { pageW, pageH });
     addFooter(slide, env);
   }
+
+  return writePptxBlob(pptx, meta);
+}
+
+
+
+/**
+ * Generate a PPTX from a pre-built diagram IR. Used by model workspace export (editable shapes/connectors).
+ *
+ * This reuses the same document metadata, footer handling and post-processing pipeline as generatePptxBlobV1.
+ */
+export async function generatePptxBlobFromDiagramIR(
+  title: string,
+  diagram: import('./ir/types').PptxDiagramIR,
+  options: PptxOptions,
+  meta?: PptxPostProcessMeta,
+): Promise<Blob> {
+  const bundle: ExportBundle = { title, artifacts: [] };
+  const pptx = createPptxDocument(bundle, options);
+  const { pageW, pageH } = getPptxPageSize(options.layout);
+
+  const footerText = (options.footerText ?? '').trim();
+  const includeFooter = footerText.length > 0;
+  const env: PptxStageEnv = { pptx, pageW, pageH, includeFooter, footerText };
+
+  const slide = pptx.addSlide();
+  renderPptxDiagramIR(slide, diagram, { pageW, pageH });
+  addFooter(slide, env);
 
   return writePptxBlob(pptx, meta);
 }

@@ -21,6 +21,7 @@ const defaultPptxOptions: PptxOptions = {
   includeTitleSlide: false,
   includeNotes: false,
   footerText: undefined,
+  diagramMode: 'image',
 };
 
 export function DiagramExportDialog({ isOpen, onClose, model, activeViewId }: Props) {
@@ -187,6 +188,15 @@ export function DiagramExportDialog({ isOpen, onClose, model, activeViewId }: Pr
                   onChange={(e) => setPptxOptions((p) => ({ ...p, includeNotes: e.target.checked }))}
                 />
                 Notes
+              </label>
+
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', gridColumn: '1 / span 2' }}>
+                <input
+                  type="checkbox"
+                  checked={(pptxOptions.diagramMode ?? 'image') === 'shapes'}
+                  onChange={(e) => setPptxOptions((p) => ({ ...p, diagramMode: e.target.checked ? 'shapes' : 'image' }))}
+                />
+                Editable shapes/connectors (experimental)
               </label>
 
               <label style={{ display: 'flex', gap: 6, alignItems: 'center', gridColumn: '1 / span 2' }}>

@@ -6,6 +6,8 @@ export type PptxOptions = {
   includeTitleSlide: boolean;
   includeNotes: boolean;
   footerText?: string;
+  /** How to render diagrams: as a rasterized image (default) or editable shapes/connectors. */
+  diagramMode?: 'image' | 'shapes';
 };
 
 export type XlsxOptions = {

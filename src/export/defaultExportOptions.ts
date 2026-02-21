@@ -10,6 +10,7 @@ export function deriveDefaultExportOptions(kind: AnalysisViewKind): ExportOption
       includeTitleSlide: true,
       includeNotes: false,
       footerText: kind ? `EA Modeller — ${kind}` : 'EA Modeller',
+      diagramMode: 'image',
     },
     xlsx: {
       includeRawData: true,

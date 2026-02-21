@@ -5,6 +5,7 @@ import { createViewSvg } from '../components/diagram/exportSvg';
 import { downloadTextFile, downloadBlobFile, sanitizeFileNameWithExtension } from '../store/download';
 import { downloadPngFromSvgText } from './image/downloadPngFromSvgText';
 import { generatePptxBlobV1 } from './pptx/generatePptxV1_pptxgenjs';
+import { generatePptxBlobFromModelView } from './pptx/generatePptxFromModelView';
 
 export type ViewExportNameOptions = {
   /** Optional override for base file name (without extension). */
@@ -89,6 +90,9 @@ export async function downloadViewPptx(
   const fileName = sanitizeFileNameWithExtension(baseName, 'pptx');
 
   const bundle = buildViewExportBundle(model, viewId, { title: nameOpts.title || baseName });
-  const blob = await generatePptxBlobV1(bundle, pptxOptions);
+  const mode = (pptxOptions?.diagramMode ?? 'image') as 'image' | 'shapes';
+  const blob = mode === 'shapes'
+    ? await generatePptxBlobFromModelView(model, viewId, pptxOptions)
+    : await generatePptxBlobV1(bundle, pptxOptions);
   downloadBlobFile(fileName, blob);
 }

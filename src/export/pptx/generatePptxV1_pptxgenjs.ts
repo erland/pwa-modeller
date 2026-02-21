@@ -36,6 +36,11 @@ function tryRenderSandboxSvgAsShapes(
   svgText: string,
   env: { pageW: number; pageH: number }
 ): SandboxRenderResult {
+  // Guard: only attempt sandbox-as-shapes when the SVG clearly originates from the Analysis Sandbox.
+  // Model-workspace SVG exports are also SVG, but should remain image-based unless explicitly routed
+  // through the model adapter → IR path.
+  if (!svgText.includes('analysisSandboxNode')) return { handled: false };
+
   // Render Sandbox nodes/edges as shapes so the diagram remains editable in PowerPoint.
   // Step 3: Route through the PPTX diagram IR + writer.
   const res = sandboxSvgToPptxDiagramIR(svgText, env);

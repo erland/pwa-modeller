@@ -94,8 +94,10 @@ export function modelViewToPptxDiagramIR(
     if (n.elementId) endpointToNodeId.set(`element:${n.elementId}`, nodeId);
     if (n.connectorId) endpointToNodeId.set(`connector:${n.connectorId}`, nodeId);
 
+    // IMPORTANT: Post-process uses `nodes[].elementId` as the primary key for connector attachment.
+    // Use the *view-stable node id* here so `edges[].fromNodeId/toNodeId` can reference it consistently.
     metaNodes.push({
-      elementId: n.elementId ?? n.connectorId ?? nodeId,
+      elementId: nodeId,
       name: label,
       typeLabel: element?.type ?? connector?.type,
       rectIn: { x, y, w, h },

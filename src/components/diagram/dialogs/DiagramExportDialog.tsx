@@ -34,7 +34,12 @@ export function DiagramExportDialog({ isOpen, onClose, model, activeViewId }: Pr
   const [pngBackground, setPngBackground] = useState<'white' | 'transparent'>('white');
 
   // PPTX opts
-  const [pptxOptions, setPptxOptions] = useState<PptxOptions>(defaultPptxOptions);
+  // For model workspace diagrams, default PPTX export to editable shapes/connectors.
+  // (Users can still switch back to image-based export.)
+  const [pptxOptions, setPptxOptions] = useState<PptxOptions>(() => ({
+    ...defaultPptxOptions,
+    diagramMode: 'shapes',
+  }));
 
   const [isWorking, setIsWorking] = useState(false);
   const [status, setStatus] = useState<string | null>(null);

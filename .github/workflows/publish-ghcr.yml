@@ -1,0 +1,53 @@
+name: Publish Docker image (GHCR)
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: meta
+        shell: bash
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            echo "tags=$IMAGE:$TAG_NAME,$IMAGE:latest" >> "$GITHUB_OUTPUT"
+          else
+            SHORT_SHA="${GITHUB_SHA::7}"
+            echo "tags=$IMAGE:snapshot,$IMAGE:sha-$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}

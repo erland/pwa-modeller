@@ -109,6 +109,36 @@ npm run build
 npm run preview
 ```
 
+---
+
+## Run with Docker (GHCR)
+
+If you just want to run the app without installing Node locally, you can use the prebuilt Docker image published to GitHub Container Registry (GHCR).
+
+### Snapshot (latest from main)
+```bash
+docker pull ghcr.io/erland/pwa-modeller:snapshot
+docker run --rm -p 8085:80 ghcr.io/erland/pwa-modeller:snapshot
+```
+
+Open: http://localhost:8085/pwa-modeller/ (root / redirects there too)
+
+### Release tags
+When you push a git tag like `v1.2.3`, the workflow publishes:
+- `ghcr.io/erland/pwa-modeller:v1.2.3`
+- `ghcr.io/erland/pwa-modeller:latest`
+
+Run a specific release:
+```bash
+docker run --rm -p 8085:80 ghcr.io/erland/pwa-modeller:v1.2.3
+```
+
+### Build the image locally
+```bash
+docker build -t pwa-modeller:local .
+docker run --rm -p 8085:80 pwa-modeller:local
+```
+
 ### Tests
 ```bash
 npm test

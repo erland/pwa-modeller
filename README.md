@@ -179,3 +179,8 @@ This repo is configured to deploy the built app to GitHub Pages via GitHub Actio
 
 A formal license file has not been added yet (contact repository owner to get a license).
 
+
+
+## License
+
+MIT (see `LICENSE`). Third‑party notices: `THIRD_PARTY_NOTICES.md`.

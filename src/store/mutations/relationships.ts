@@ -10,14 +10,27 @@ import {
 import type { TaggedValueInput } from './helpers';
 import { deleteRelationshipInModel, findFolderContainingElement, findFolderIdByKind, getFolder } from './helpers';
 
-export function addRelationship(model: Model, relationship: Relationship): void {
+/**
+ * Add a relationship and place it in a folder.
+ *
+ * If folderId is provided, we will place the relationship there (falling back to root if missing).
+ * If folderId is omitted, we try to place the relationship in the same folder as the source element.
+ */
+export function addRelationship(model: Model, relationship: Relationship, folderId?: string): void {
   model.relationships[relationship.id] = relationship;
 
-  // Place the relationship in the same folder as the source element (fallback to root).
-  const sourceId = relationship.sourceElementId;
-  const targetFolderId = sourceId
-    ? findFolderContainingElement(model, sourceId) ?? findFolderIdByKind(model, 'root')
-    : findFolderIdByKind(model, 'root');
+  const rootId = findFolderIdByKind(model, 'root');
+
+  // Place the relationship in the same folder as the source element (fallback to root),
+  // unless an explicit folderId was provided.
+  const targetFolderId = folderId
+    ? model.folders[folderId]
+      ? folderId
+      : rootId
+    : (() => {
+        const sourceId = relationship.sourceElementId;
+        return sourceId ? findFolderContainingElement(model, sourceId) ?? rootId : rootId;
+      })();
 
   const folder = getFolder(model, targetFolderId);
   const relIds = folder.relationshipIds;

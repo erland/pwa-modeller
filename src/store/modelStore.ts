@@ -266,8 +266,8 @@ export class ModelStore {
   // Relationships
   // -------------------------
 
-  addRelationship = (relationship: Relationship): void => {
-    this.updateModel((model) => relationshipMutations.addRelationship(model, relationship));
+  addRelationship = (relationship: Relationship, folderId?: string): void => {
+    this.updateModel((model) => relationshipMutations.addRelationship(model, relationship, folderId));
   };
 
   updateRelationship = (relationshipId: string, patch: Partial<Omit<Relationship, 'id'>>): void => {

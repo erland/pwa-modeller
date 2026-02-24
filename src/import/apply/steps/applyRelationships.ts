@@ -8,6 +8,22 @@ import { pushWarning, resolveRelationshipType, toExternalIds, toTaggedValues } f
 export function applyRelationships(ctx: ApplyImportContext): void {
   const { ir, sourceSystem, report, unknownTypePolicy, mappings } = ctx;
 
+  // Import-only optimization:
+  // Relationship placement defaults to "same folder as source element".
+  // The store-level default implementation scans folders linearly per relationship,
+  // which becomes extremely expensive for large imports (e.g., dependency/call graphs).
+  // Build a lookup once so we can place relationships in O(1) during this import stage.
+  const elementFolderById = new Map<string, string>();
+  const currentModel = modelStore.getState().model;
+  if (currentModel) {
+    for (const folder of Object.values(currentModel.folders)) {
+      for (const eid of folder.elementIds ?? []) {
+        // First hit wins (folder memberships should be unique; this is defensive).
+        if (!elementFolderById.has(eid)) elementFolderById.set(eid, folder.id);
+      }
+    }
+  }
+
   const isStringId = (x: unknown): x is string => typeof x === 'string' && x.trim().length > 0;
 
   const isRecord = (v: unknown): v is Record<string, unknown> => {
@@ -148,7 +164,8 @@ export function applyRelationships(ctx: ApplyImportContext): void {
     };
 
     try {
-      modelStore.addRelationship(domainRel);
+      const folderId = elementFolderById.get(src) ?? ctx.rootFolderId;
+      modelStore.addRelationship(domainRel, folderId);
     } catch (e) {
       pushWarning(report, `Failed to add relationship "${rel.id}": ${(e as Error).message}`);
     }

@@ -8,7 +8,8 @@ import {
   downloadTextFile,
   sanitizeFileName,
   sanitizeFileNameWithExtension,
-  modelStore
+  modelStore,
+  runWithImportPersistencePaused
 } from '../../../../store';
 import {
   applyImportIR,
@@ -127,9 +128,11 @@ export function useModelFileActions({ model, fileName, isDirty, navigate }: UseM
         views: result.ir.views?.length ?? 0
       };
 
-      const applied = applyImportIR(result.ir, result.report, {
-        sourceSystem: result.format || result.report?.source || result.importerId
-      });
+      const applied = runWithImportPersistencePaused(() =>
+        applyImportIR(result.ir, result.report, {
+          sourceSystem: result.format || result.report?.source || result.importerId
+        })
+      );
 
       setLastImport({
         fileName: file.name || 'import',

@@ -1,6 +1,18 @@
 import { modelStore } from './modelStore';
 import { loadPersistedStoreState, persistStoreState } from './storePersistence';
 
+let __persistencePaused = false;
+let __schedulePersist: (() => void) | null = null;
+
+export function setStorePersistencePaused(paused: boolean): void {
+  __persistencePaused = paused;
+}
+
+export function flushStorePersistence(): void {
+  __schedulePersist?.();
+}
+
+
 function isTestEnv(): boolean {
   // Jest sets NODE_ENV=test. Guard to avoid leaking localStorage between tests.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,6 +45,10 @@ export function initStorePersistence(): void {
 
   let pending = false;
   const persistNow = () => {
+    if (__persistencePaused) {
+      pending = false;
+      return;
+    }
     pending = false;
     const s = modelStore.getState();
     persistStoreState({
@@ -43,10 +59,13 @@ export function initStorePersistence(): void {
   };
 
   const schedulePersist = () => {
+    if (__persistencePaused) return;
     if (pending) return;
     pending = true;
     scheduleIdle(persistNow);
   };
+
+  __schedulePersist = schedulePersist;
 
   // Persist on any store change (debounced).
   modelStore.subscribe(schedulePersist);

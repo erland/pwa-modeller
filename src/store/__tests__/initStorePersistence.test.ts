@@ -23,7 +23,7 @@ describe('initStorePersistence', () => {
   });
 
   test('hydrates restored state (if present) and schedules a startup persist', async () => {
-    const subscribers: Array<() => void> = [];
+    const subscribers: Array<(e: any) => void> = [];
     const mockState: StoreState = { activeDatasetId: 'local:default', model: null, fileName: null, isDirty: false };
 
     jest.doMock('../modelStore', () => {
@@ -35,7 +35,7 @@ describe('initStorePersistence', () => {
             mockState.isDirty = s.isDirty;
           }),
           getState: jest.fn(() => ({ ...mockState })),
-          subscribe: jest.fn((fn: () => void) => {
+          subscribeFlush: jest.fn((fn: (e: any) => void) => {
             subscribers.push(fn);
             return () => {
               /* no-op */
@@ -65,7 +65,7 @@ describe('initStorePersistence', () => {
 
     const { modelStore } = await import('../modelStore');
     expect(modelStore.hydrate).toHaveBeenCalledWith({ ...restored, activeDatasetId: 'local:default' });
-    expect(modelStore.subscribe).toHaveBeenCalledTimes(1);
+    expect(modelStore.subscribeFlush).toHaveBeenCalledTimes(1);
 
     // Startup persistence is scheduled via setTimeout(250) in JSDOM.
     expect(persistState).not.toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('initStorePersistence', () => {
   });
 
   test('debounces multiple store changes into a single persistence write', async () => {
-    const subscribers: Array<() => void> = [];
+    const subscribers: Array<(e: any) => void> = [];
     const mockState: StoreState = { activeDatasetId: 'local:default', model: { id: 'm2' }, fileName: 'x.json', isDirty: false };
 
     jest.doMock('../modelStore', () => {
@@ -83,7 +83,7 @@ describe('initStorePersistence', () => {
         modelStore: {
           hydrate: jest.fn(),
           getState: jest.fn(() => ({ ...mockState })),
-          subscribe: jest.fn((fn: () => void) => {
+          subscribeFlush: jest.fn((fn: (e: any) => void) => {
             subscribers.push(fn);
             return () => {
               /* no-op */
@@ -110,9 +110,9 @@ describe('initStorePersistence', () => {
 
     // Trigger store changes rapidly while the idle persist is pending.
     expect(subscribers.length).toBe(1);
-    subscribers[0]?.();
-    subscribers[0]?.();
-    subscribers[0]?.();
+    subscribers[0]?.({ datasetId: 'local:default', persisted: { model: mockState.model, fileName: 'x.json', isDirty: false }, changeSet: { modelMetadataChanged: false, elementUpserts: [], elementDeletes: [], relationshipUpserts: [], relationshipDeletes: [], connectorUpserts: [], connectorDeletes: [], viewUpserts: [], viewDeletes: [], folderUpserts: [], folderDeletes: [] }, timestamp: Date.now() });
+    subscribers[0]?.({ datasetId: 'local:default', persisted: { model: mockState.model, fileName: 'x.json', isDirty: false }, changeSet: { modelMetadataChanged: false, elementUpserts: [], elementDeletes: [], relationshipUpserts: [], relationshipDeletes: [], connectorUpserts: [], connectorDeletes: [], viewUpserts: [], viewDeletes: [], folderUpserts: [], folderDeletes: [] }, timestamp: Date.now() });
+    subscribers[0]?.({ datasetId: 'local:default', persisted: { model: mockState.model, fileName: 'x.json', isDirty: false }, changeSet: { modelMetadataChanged: false, elementUpserts: [], elementDeletes: [], relationshipUpserts: [], relationshipDeletes: [], connectorUpserts: [], connectorDeletes: [], viewUpserts: [], viewDeletes: [], folderUpserts: [], folderDeletes: [] }, timestamp: Date.now() });
 
     jest.advanceTimersByTime(260);
 

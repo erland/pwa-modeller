@@ -2,6 +2,9 @@ import { modelStore } from './modelStore';
 import { getDefaultDatasetBackend } from './getDefaultDatasetBackend';
 import { ensureDatasetRegistryMigrated } from './datasetRegistry';
 import { openActiveDatasetOnStartup } from './datasetLifecycle';
+import type { DatasetId } from './datasetTypes';
+import type { PersistedSlice, StoreFlushEvent } from './storeFlushEvent';
+import { emptyChangeSet } from './changeSet';
 
 let __persistencePaused = false;
 let __schedulePersist: (() => void) | null = null;
@@ -52,19 +55,24 @@ export async function initStorePersistenceAsync(): Promise<void> {
 
   await openActiveDatasetOnStartup(backend);
 
+  // We debounce persistence using a per-dataset pending map so rapid flushes coalesce.
   let pending = false;
+  const pendingByDataset = new Map<DatasetId, PersistedSlice>();
+
   const persistNow = () => {
     if (__persistencePaused) {
       pending = false;
+      pendingByDataset.clear();
       return;
     }
     pending = false;
-    const s = modelStore.getState();
-    void backend.persistState(s.activeDatasetId, {
-      model: s.model,
-      fileName: s.fileName,
-      isDirty: s.isDirty
-    });
+
+    const entries = Array.from(pendingByDataset.entries());
+    pendingByDataset.clear();
+
+    for (const [datasetId, slice] of entries) {
+      void backend.persistState(datasetId, slice);
+    }
   };
 
   const schedulePersist = () => {
@@ -74,11 +82,24 @@ export async function initStorePersistenceAsync(): Promise<void> {
     scheduleIdle(persistNow);
   };
 
+  const schedulePersistFromFlush = (evt: StoreFlushEvent) => {
+    pendingByDataset.set(evt.datasetId, evt.persisted);
+    schedulePersist();
+  };
   __schedulePersist = schedulePersist;
 
-  // Persist on any store change (debounced).
-  modelStore.subscribe(schedulePersist);
+  // Persist on store flush events (one per transaction end), debounced.
+  modelStore.subscribeFlush(schedulePersistFromFlush);
 
-  // Persist at least once on startup too.
-  schedulePersist();
+  // Persist at least once on startup too (captures current state).
+  schedulePersistFromFlush({
+    datasetId: modelStore.getState().activeDatasetId,
+    persisted: {
+      model: modelStore.getState().model,
+      fileName: modelStore.getState().fileName,
+      isDirty: modelStore.getState().isDirty
+    },
+    changeSet: emptyChangeSet(),
+    timestamp: Date.now()
+  });
 }

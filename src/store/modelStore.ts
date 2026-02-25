@@ -33,7 +33,9 @@ import { createFolderOps } from './ops/folderOps';
 import { createElementOps } from './ops/elementOps';
 
 import type { ChangeSet } from './changeSet';
+import { emptyChangeSet } from './changeSet';
 import { ChangeSetRecorder } from './changeSetRecorder';
+import type { StoreFlushEvent } from './storeFlushEvent';
 
 import type { DatasetId } from './datasetTypes';
 import { DEFAULT_LOCAL_DATASET_ID } from './datasetTypes';
@@ -60,6 +62,7 @@ export class ModelStore {
   };
 
   private listeners = new Set<Listener>();
+  private flushListeners = new Set<(e: StoreFlushEvent) => void>();
 
   // -------------------------
   // Change capture
@@ -89,13 +92,34 @@ export class ModelStore {
     return () => this.listeners.delete(listener);
   };
 
+  subscribeFlush = (listener: (e: StoreFlushEvent) => void): (() => void) => {
+    this.flushListeners.add(listener);
+    return () => this.flushListeners.delete(listener);
+  };
+
   getState = (): ModelStoreState => {
     return this.state;
   };
 
   private notifyListeners = (): void => {
     // Flush the accumulated changeset once per subscriber notification.
-    this.lastNotifiedChangeSet = this.changeSetRecorder.flush();
+    const flushed = this.changeSetRecorder.flush();
+    this.lastNotifiedChangeSet = flushed;
+
+    const evt: StoreFlushEvent = {
+      datasetId: this.state.activeDatasetId,
+      persisted: {
+        model: this.state.model,
+        fileName: this.state.fileName,
+        isDirty: this.state.isDirty
+      },
+      // Flush events always carry a ChangeSet object; if no changes were
+      // recorded, emit an empty ChangeSet to keep the contract stable.
+      changeSet: flushed ?? emptyChangeSet(),
+      timestamp: Date.now()
+    };
+
+    for (const fl of this.flushListeners) fl(evt);
     for (const l of this.listeners) l();
   };
 

@@ -35,6 +35,8 @@ describe('initStorePersistence', () => {
             mockState.isDirty = s.isDirty;
           }),
           getState: jest.fn(() => ({ ...mockState })),
+          setPersistenceOk: jest.fn(),
+          setPersistenceError: jest.fn(),
           subscribeFlush: jest.fn((fn: (e: any) => void) => {
             subscribers.push(fn);
             return () => {
@@ -84,6 +86,8 @@ describe('initStorePersistence', () => {
         modelStore: {
           hydrate: jest.fn(),
           getState: jest.fn(() => ({ ...mockState })),
+          setPersistenceOk: jest.fn(),
+          setPersistenceError: jest.fn(),
           subscribeFlush: jest.fn((fn: (e: any) => void) => {
             subscribers.push(fn);
             return () => {

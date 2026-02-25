@@ -37,20 +37,11 @@ function scheduleIdle(fn: () => void): void {
 }
 
 function setPersistenceError(message: string): void {
-  // Some unit tests mock modelStore without these helpers. Treat status updates as best-effort.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ms: any = modelStore as any;
-  if (typeof ms.setPersistenceError === 'function') {
-    ms.setPersistenceError(message);
-  }
+  modelStore.setPersistenceError(message);
 }
 
 function setPersistenceOk(): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ms: any = modelStore as any;
-  if (typeof ms.setPersistenceOk === 'function') {
-    ms.setPersistenceOk();
-  }
+  modelStore.setPersistenceOk();
 }
 
 /**

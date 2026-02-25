@@ -14,14 +14,15 @@ export type { LayoutOpsDeps } from './layout/layoutOpsTypes';
  * into the API consumed by the ModelStore.
  */
 export const createLayoutOps = (deps: LayoutOpsDeps) => {
-  const crud = createLayoutCrudOps({ updateModel: deps.updateModel });
-  const arrange = createLayoutArrangeOps({ updateModel: deps.updateModel });
-  const fit = createFitToTextOps({ updateModel: deps.updateModel });
+  const crud = createLayoutCrudOps({ updateModel: deps.updateModel, recordTouched: deps.recordTouched });
+  const arrange = createLayoutArrangeOps({ updateModel: deps.updateModel, recordTouched: deps.recordTouched });
+  const fit = createFitToTextOps({ updateModel: deps.updateModel, recordTouched: deps.recordTouched });
   const auto = createAutoLayoutOps({
     getModel: deps.getModel,
     getModelOrThrow: deps.getModelOrThrow,
     updateModel: deps.updateModel,
     autoLayoutCacheByView: deps.autoLayoutCacheByView,
+    recordTouched: deps.recordTouched,
   });
 
   // Keep the public surface exactly as before.

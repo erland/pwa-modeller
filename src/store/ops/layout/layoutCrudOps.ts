@@ -26,8 +26,8 @@ export type LayoutCrudOps = {
  *
  * This module intentionally contains no layout algorithms — it is a thin wrapper over mutations.
  */
-export const createLayoutCrudOps = (deps: Pick<LayoutOpsDeps, 'updateModel'>): LayoutCrudOps => {
-  const { updateModel } = deps;
+export const createLayoutCrudOps = (deps: Pick<LayoutOpsDeps, 'updateModel' | 'recordTouched'>): LayoutCrudOps => {
+  const { updateModel, recordTouched } = deps;
 
   const addElementToViewAt = (viewId: string, elementId: string, x: number, y: number): string => {
     let result = elementId;
@@ -47,10 +47,12 @@ export const createLayoutCrudOps = (deps: Pick<LayoutOpsDeps, 'updateModel'>): L
 
   const removeElementFromView = (viewId: string, elementId: string): void => {
     updateModel((model) => layoutMutations.removeElementFromView(model, viewId, elementId));
+    recordTouched({ viewUpserts: [viewId], elementUpserts: [elementId] });
   };
 
   const updateViewNodePosition = (viewId: string, elementId: string, x: number, y: number): void => {
     updateModel((model) => layoutMutations.updateViewNodePosition(model, viewId, elementId, x, y));
+    recordTouched({ viewUpserts: [viewId], elementUpserts: [elementId] });
   };
 
   const updateViewNodePositionAny = (viewId: string, ref: AnyNodeRef, x: number, y: number): void => {

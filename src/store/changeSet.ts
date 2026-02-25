@@ -38,3 +38,17 @@ export const emptyChangeSet = (): ChangeSet => ({
   folderUpserts: [],
   folderDeletes: [],
 });
+
+export type TouchedIds = Partial<{
+  modelMetadataChanged: boolean;
+  elementUpserts: string[];
+  elementDeletes: string[];
+  relationshipUpserts: string[];
+  relationshipDeletes: string[];
+  connectorUpserts: string[];
+  connectorDeletes: string[];
+  viewUpserts: string[];
+  viewDeletes: string[];
+  folderUpserts: string[];
+  folderDeletes: string[];
+}>;

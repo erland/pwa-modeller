@@ -106,8 +106,8 @@ export type FitToTextOps = {
   fitViewElementsToText: (viewId: string, elementIds: string[]) => void;
 };
 
-export const createFitToTextOps = (deps: Pick<LayoutOpsDeps, 'updateModel'>): FitToTextOps => {
-  const { updateModel } = deps;
+export const createFitToTextOps = (deps: Pick<LayoutOpsDeps, 'updateModel' | 'recordTouched'>): FitToTextOps => {
+  const { updateModel, recordTouched } = deps;
 
   const fitViewElementsToText = (viewId: string, elementIds: string[]): void => {
     if (elementIds.length === 0) return;
@@ -218,6 +218,9 @@ export const createFitToTextOps = (deps: Pick<LayoutOpsDeps, 'updateModel'>): Fi
       if (updates.length === 0) return;
       fitToTextMutations.applyViewElementRects(model, viewId, updates);
     });
+
+    // Explicit touch reporting: fit-to-text changes view geometry.
+    recordTouched({ viewUpserts: [viewId] });
   };
 
   return { fitViewElementsToText };

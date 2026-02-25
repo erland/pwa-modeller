@@ -1,4 +1,4 @@
-import type { ChangeSet } from './changeSet';
+import type { ChangeSet, TouchedIds } from './changeSet';
 import { emptyChangeSet } from './changeSet';
 
 type Mutable = {
@@ -57,6 +57,39 @@ export class ChangeSetRecorder {
       c.folderUpserts.size > 0 ||
       c.folderDeletes.size > 0
     );
+  };
+
+
+  recordTouched = (touched: TouchedIds): void => {
+    const c = this.current;
+    if (touched.modelMetadataChanged) c.modelMetadataChanged = true;
+
+    const addMany = (set: Set<string>, values?: string[]) => {
+      if (!values) return;
+      for (const v of values) set.add(v);
+    };
+    const delMany = (delSet: Set<string>, upSet: Set<string>, values?: string[]) => {
+      if (!values) return;
+      for (const v of values) {
+        delSet.add(v);
+        upSet.delete(v);
+      }
+    };
+
+    addMany(c.elementUpserts, touched.elementUpserts);
+    delMany(c.elementDeletes, c.elementUpserts, touched.elementDeletes);
+
+    addMany(c.relationshipUpserts, touched.relationshipUpserts);
+    delMany(c.relationshipDeletes, c.relationshipUpserts, touched.relationshipDeletes);
+
+    addMany(c.connectorUpserts, touched.connectorUpserts);
+    delMany(c.connectorDeletes, c.connectorUpserts, touched.connectorDeletes);
+
+    addMany(c.viewUpserts, touched.viewUpserts);
+    delMany(c.viewDeletes, c.viewUpserts, touched.viewDeletes);
+
+    addMany(c.folderUpserts, touched.folderUpserts);
+    delMany(c.folderDeletes, c.folderUpserts, touched.folderDeletes);
   };
 
   flush = (): ChangeSet | null => {

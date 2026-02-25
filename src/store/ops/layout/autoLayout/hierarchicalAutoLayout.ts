@@ -9,7 +9,7 @@ import { readCurrentNodeGeometryById, readLockedNodePositions, shouldSkipCommit 
 type PreparedHierarchical = { input: LayoutInput; sizes: Record<string, { width: number; height: number }> };
 
 export async function runHierarchicalAutoLayout(args: {
-  deps: Pick<LayoutOpsDeps, 'getModel' | 'updateModel' | 'autoLayoutCacheByView'>;
+  deps: Pick<LayoutOpsDeps, 'getModel' | 'updateModel' | 'autoLayoutCacheByView' | 'recordTouched'>;
   viewId: string;
   viewKind: string;
   prepared: PreparedHierarchical;
@@ -17,7 +17,7 @@ export async function runHierarchicalAutoLayout(args: {
   selectionNodeIds: string[];
 }): Promise<void> {
   const { deps, viewId, viewKind, prepared, options, selectionNodeIds } = args;
-  const { getModel, updateModel, autoLayoutCacheByView } = deps;
+  const { getModel, updateModel, autoLayoutCacheByView, recordTouched } = deps;
 
   const { elkLayoutHierarchical } = await import('../../../../domain/layout/elk/elkLayoutHierarchical');
 
@@ -95,4 +95,7 @@ export async function runHierarchicalAutoLayout(args: {
   updateModel((model: Model) => {
     autoLayoutMutations.autoLayoutViewGeometry(model, viewId, geometryById, edgeRoutes);
   });
+
+  // Explicit touch reporting: auto-layout modifies view geometry.
+  recordTouched({ viewUpserts: [viewId] });
 }

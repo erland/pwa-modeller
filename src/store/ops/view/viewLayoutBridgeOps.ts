@@ -3,7 +3,7 @@ import { layoutMutations } from '../../mutations';
 import type { ViewOpsDeps } from './viewOpsTypes';
 
 export const createViewLayoutBridgeOps = (deps: ViewOpsDeps) => {
-  const { updateModel } = deps;
+  const { updateModel, recordTouched } = deps;
 
   const updateViewNodeLayout = (
     viewId: string,
@@ -11,6 +11,7 @@ export const createViewLayoutBridgeOps = (deps: ViewOpsDeps) => {
     patch: Partial<Omit<ViewNodeLayout, 'elementId'>>
   ): void => {
     updateModel((model) => layoutMutations.updateViewNodeLayout(model, viewId, elementId, patch));
+    recordTouched({ viewUpserts: [viewId] });
   };
 
   const addElementToView = (viewId: string, elementId: string): string => {
@@ -18,6 +19,7 @@ export const createViewLayoutBridgeOps = (deps: ViewOpsDeps) => {
     updateModel((model) => {
       result = layoutMutations.addElementToView(model, viewId, elementId);
     });
+    recordTouched({ viewUpserts: [viewId] });
     return result;
   };
 

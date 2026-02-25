@@ -9,8 +9,10 @@ export type AutoLayoutOps = {
   autoLayoutView: (viewId: string, options?: AutoLayoutOptions, selectionNodeIds?: string[]) => Promise<void>;
 };
 
-export const createAutoLayoutOps = (deps: Pick<LayoutOpsDeps, 'getModel' | 'getModelOrThrow' | 'updateModel' | 'autoLayoutCacheByView'>): AutoLayoutOps => {
-  const { getModel, getModelOrThrow, updateModel, autoLayoutCacheByView } = deps;
+export const createAutoLayoutOps = (
+  deps: Pick<LayoutOpsDeps, 'getModel' | 'getModelOrThrow' | 'updateModel' | 'autoLayoutCacheByView' | 'recordTouched'>
+): AutoLayoutOps => {
+  const { getModel, getModelOrThrow, updateModel, autoLayoutCacheByView, recordTouched } = deps;
 
   const autoLayoutView = async (
     viewId: string,
@@ -40,7 +42,7 @@ export const createAutoLayoutOps = (deps: Pick<LayoutOpsDeps, 'getModel' | 'getM
           );
 
       await runHierarchicalAutoLayout({
-        deps: { getModel, updateModel, autoLayoutCacheByView },
+        deps: { getModel, updateModel, autoLayoutCacheByView, recordTouched },
         viewId,
         viewKind: view.kind,
         prepared,
@@ -51,7 +53,7 @@ export const createAutoLayoutOps = (deps: Pick<LayoutOpsDeps, 'getModel' | 'getM
     }
 
     await runFlatAutoLayout({
-      deps: { getModel, updateModel, autoLayoutCacheByView },
+      deps: { getModel, updateModel, autoLayoutCacheByView, recordTouched },
       viewId,
       viewKind: view.kind,
       extracted,

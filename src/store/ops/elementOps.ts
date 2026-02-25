@@ -1,8 +1,10 @@
 import type { Model } from '../../domain';
+import type { TouchedIds } from '../changeSet';
 import { elementMutations } from '../mutations';
 
 export type ElementOpsDeps = {
   updateModel: (mutator: (model: Model) => void, markDirty?: boolean) => void;
+  recordTouched: (touched: TouchedIds) => void;
 };
 
 /**
@@ -11,10 +13,11 @@ export type ElementOpsDeps = {
  * These wrap mutations and ensure a stable, intention-revealing API surface.
  */
 export const createElementOps = (deps: ElementOpsDeps) => {
-  const { updateModel } = deps;
+  const { updateModel, recordTouched } = deps;
 
   const moveElementToParent = (childId: string, parentId: string | null): void => {
     updateModel((model) => elementMutations.setElementParent(model, childId, parentId));
+    recordTouched({ elementUpserts: [childId] });
   };
 
   const detachElementToRoot = (childId: string): void => {

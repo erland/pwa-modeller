@@ -32,7 +32,7 @@ import { createLayoutOps } from './ops/layoutOps';
 import { createFolderOps } from './ops/folderOps';
 import { createElementOps } from './ops/elementOps';
 
-import type { ChangeSet } from './changeSet';
+import type { ChangeSet, TouchedIds } from './changeSet';
 import { emptyChangeSet } from './changeSet';
 import { ChangeSetRecorder } from './changeSetRecorder';
 import type { StoreFlushEvent } from './storeFlushEvent';
@@ -68,6 +68,10 @@ export class ModelStore {
   // Change capture
   // -------------------------
   private changeSetRecorder = new ChangeSetRecorder();
+  private recordTouched = (touched: TouchedIds): void => {
+    this.changeSetRecorder.recordTouched(touched);
+  };
+
   private lastNotifiedChangeSet: ChangeSet | null = null;
 
   // -------------------------
@@ -206,38 +210,10 @@ export class ModelStore {
     this.setState({ model: nextModel, isDirty: markDirty ? true : this.state.isDirty });
   };
 
-  private recordFromOpCall = (opName: string, args: unknown[]): void => {
-    const name = opName.toLowerCase();
-    const first = args[0];
-    const firstId = typeof first === 'string' ? first : null;
-    if (!firstId) return;
-
-    // Heuristics: broad + safe. The goal is useful hints for future commit/sync.
-    if (name.includes('element')) this.changeSetRecorder.upsertElement(firstId);
-    if (name.includes('relationship')) this.changeSetRecorder.upsertRelationship(firstId);
-    if (name.includes('connector')) this.changeSetRecorder.upsertConnector(firstId);
-    if (name.includes('view')) this.changeSetRecorder.upsertView(firstId);
-    if (name.includes('folder')) this.changeSetRecorder.upsertFolder(firstId);
-  };
-
-  private wrapOpsWithChangeCapture = <T extends Record<string, any>>(ops: T): T => {
-    return new Proxy(ops, {
-      get: (target, prop) => {
-        const value = (target as any)[prop];
-        if (typeof prop !== 'string' || typeof value !== 'function') return value;
-        return (...args: any[]) => {
-          this.recordFromOpCall(prop, args);
-          return value(...args);
-        };
-      },
-    }) as T;
-  };
-
   // Operation modules (SoC split): keep ModelStore API stable, delegate implementation.
-  private viewOps = this.wrapOpsWithChangeCapture(createViewOps({ updateModel: this.updateModel }));
+  private viewOps = createViewOps({ updateModel: this.updateModel, recordTouched: this.recordTouched });
 
-  private layoutOps = this.wrapOpsWithChangeCapture(
-    createLayoutOps({
+  private layoutOps = createLayoutOps({
       getModel: () => this.state.model,
       getModelOrThrow: () => {
         const m = this.state.model;
@@ -246,20 +222,12 @@ export class ModelStore {
       },
       updateModel: this.updateModel,
       autoLayoutCacheByView: this.autoLayoutCacheByView,
-    })
-  );
+      recordTouched: this.recordTouched,
+    });
 
-  private folderOpsRaw = createFolderOps({ updateModel: this.updateModel });
-  private folderOps = this.wrapOpsWithChangeCapture({
-    ...this.folderOpsRaw,
-    createFolder: (parentId: string, name: string) => {
-      const created = this.folderOpsRaw.createFolder(parentId, name);
-      this.changeSetRecorder.upsertFolder(created);
-      return created;
-    },
-  });
+  private folderOps = createFolderOps({ updateModel: this.updateModel, recordTouched: this.recordTouched });
 
-  private elementOps = this.wrapOpsWithChangeCapture(createElementOps({ updateModel: this.updateModel }));
+  private elementOps = createElementOps({ updateModel: this.updateModel, recordTouched: this.recordTouched });
 
   /** Replace the current model. */
   loadModel = (model: Model, fileName: string | null = null): void => {

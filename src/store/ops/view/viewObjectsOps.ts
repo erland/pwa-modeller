@@ -3,7 +3,7 @@ import { viewObjectMutations } from '../../mutations';
 import type { ViewOpsDeps } from './viewOpsTypes';
 
 export const createViewObjectsOps = (deps: ViewOpsDeps) => {
-  const { updateModel } = deps;
+  const { updateModel, recordTouched } = deps;
 
   const addViewObject = (viewId: string, obj: ViewObject, node?: ViewNodeLayout): void => {
     updateModel((model) => viewObjectMutations.addViewObject(model, viewId, obj, node));
@@ -14,15 +14,18 @@ export const createViewObjectsOps = (deps: ViewOpsDeps) => {
     updateModel((model) => {
       created = viewObjectMutations.createViewObjectInViewAt(model, viewId, type, x, y);
     });
+    recordTouched({ viewUpserts: [viewId] });
     return created;
   };
 
   const updateViewObject = (viewId: string, objectId: string, patch: Partial<Omit<ViewObject, 'id'>>): void => {
     updateModel((model) => viewObjectMutations.updateViewObject(model, viewId, objectId, patch));
+    recordTouched({ viewUpserts: [viewId] });
   };
 
   const deleteViewObject = (viewId: string, objectId: string): void => {
     updateModel((model) => viewObjectMutations.deleteViewObject(model, viewId, objectId));
+    recordTouched({ viewUpserts: [viewId] });
   };
 
   return {

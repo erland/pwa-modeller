@@ -6,7 +6,7 @@ import {
 import type { ViewOpsDeps } from './viewOpsTypes';
 
 export const createViewRelationshipVisibilityOps = (deps: ViewOpsDeps) => {
-  const { updateModel } = deps;
+  const { updateModel, recordTouched } = deps;
 
   const includeRelationshipInView = (viewId: string, relationshipId: string): void => {
     updateModel((model) => {
@@ -28,7 +28,8 @@ export const createViewRelationshipVisibilityOps = (deps: ViewOpsDeps) => {
         ...view,
         relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
       };
-    });
+    })
+    recordTouched({ viewUpserts: [viewId], relationshipUpserts: [relationshipId] });;
   };
 
   const hideRelationshipInView = (viewId: string, relationshipId: string): void => {
@@ -57,7 +58,8 @@ export const createViewRelationshipVisibilityOps = (deps: ViewOpsDeps) => {
 
       // Re-materialize connections so the hidden relationship disappears from the diagram.
       model.views[viewId] = { ...nextView, connections: materializeViewConnectionsForView(model, nextView) };
-    });
+    })
+    recordTouched({ viewUpserts: [viewId], relationshipUpserts: [relationshipId] });;
   };
 
   const showRelationshipInView = (viewId: string, relationshipId: string): void => {
@@ -81,7 +83,8 @@ export const createViewRelationshipVisibilityOps = (deps: ViewOpsDeps) => {
       };
 
       model.views[viewId] = { ...nextView, connections: materializeViewConnectionsForView(model, nextView) };
-    });
+    })
+    recordTouched({ viewUpserts: [viewId], relationshipUpserts: [relationshipId] });;
   };
 
   return {

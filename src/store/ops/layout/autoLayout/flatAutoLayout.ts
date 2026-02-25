@@ -7,7 +7,7 @@ import type { LayoutOpsDeps } from '../layoutOpsTypes';
 import { readCurrentNodeGeometryById, readLockedNodePositions, shouldSkipCommit } from './autoLayoutCommon';
 
 export async function runFlatAutoLayout(args: {
-  deps: Pick<LayoutOpsDeps, 'getModel' | 'updateModel' | 'autoLayoutCacheByView'>;
+  deps: Pick<LayoutOpsDeps, 'getModel' | 'updateModel' | 'autoLayoutCacheByView' | 'recordTouched'>;
   viewId: string;
   viewKind: string;
   extracted: LayoutInput;
@@ -15,7 +15,7 @@ export async function runFlatAutoLayout(args: {
   selectionNodeIds: string[];
 }): Promise<void> {
   const { deps, viewId, viewKind, extracted, options, selectionNodeIds } = args;
-  const { getModel, updateModel, autoLayoutCacheByView } = deps;
+  const { getModel, updateModel, autoLayoutCacheByView, recordTouched } = deps;
 
   // Lazy-load ELK so it doesn't get pulled into the main bundle until the user runs auto-layout.
   const { elkLayout } = await import('../../../../domain/layout/elk/elkLayout');
@@ -84,4 +84,5 @@ export async function runFlatAutoLayout(args: {
   updateModel((model: Model) => {
     autoLayoutMutations.autoLayoutView(model, viewId, positions, edgeRoutes);
   });
+  recordTouched({ viewUpserts: [viewId] });
 }

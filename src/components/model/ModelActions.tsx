@@ -13,6 +13,8 @@ import {
   useModelActionHandlers
 } from './actions';
 
+import { LocalDatasetsDialog } from './datasets/LocalDatasetsDialog';
+
 type ModelActionsProps = {
   onEditModelProps: () => void;
   activeViewId: string | null;
@@ -30,6 +32,7 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
         modelLoaded: !!model,
         isDirty,
         onNew: ctrl.doNewModel,
+        onDatasets: ctrl.doLocalDatasets,
         onLoad: ctrl.doLoad,
         onProperties: ctrl.doProperties,
         onSave: ctrl.doSave,
@@ -44,6 +47,7 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
       model,
       isDirty,
       ctrl.doNewModel,
+      ctrl.doLocalDatasets,
       ctrl.doLoad,
       ctrl.doProperties,
       ctrl.doSave,
@@ -98,6 +102,11 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
         isOpen={ctrl.overflowOpen}
         onClose={() => ctrl.setOverflowOpen(false)}
         actions={actions}
+      />
+
+      <LocalDatasetsDialog
+        isOpen={ctrl.localDatasetsOpen}
+        onClose={() => ctrl.setLocalDatasetsOpen(false)}
       />
 
       <NewModelDialog

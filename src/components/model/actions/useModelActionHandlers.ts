@@ -1,4 +1,5 @@
 import type { NavigateFunction } from 'react-router-dom';
+import { useState } from 'react';
 
 import type { Model } from '../../../domain';
 import type { DatasetId } from '../../../store';
@@ -34,6 +35,8 @@ export function useModelActionHandlers({ model, fileName, isDirty, activeDataset
   const view = useModelViewActions({ navigate });
   const publish = useModelPublishActions({ model, fileName, activeViewId });
 
+  const [localDatasetsOpen, setLocalDatasetsOpen] = useState(false);
+
   return {
     // refs / inputs
     loadInputRef: file.loadInputRef,
@@ -45,6 +48,9 @@ export function useModelActionHandlers({ model, fileName, isDirty, activeDataset
     // dialogs / menu
     overflowOpen: file.overflowOpen,
     setOverflowOpen: file.setOverflowOpen,
+
+    localDatasetsOpen,
+    setLocalDatasetsOpen,
 
     newDialogOpen: file.newDialogOpen,
     setNewDialogOpen: file.setNewDialogOpen,
@@ -68,6 +74,11 @@ export function useModelActionHandlers({ model, fileName, isDirty, activeDataset
 
     // commands
     doNewModel: file.doNewModel,
+    doLocalDatasets: () => {
+      setLocalDatasetsOpen(true);
+      // Close the actions menu if it was open.
+      file.setOverflowOpen(false);
+    },
     doLoad: file.doLoad,
     doSave: file.doSave,
     doSaveAs: file.doSaveAs,

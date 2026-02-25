@@ -40,12 +40,8 @@ function assertBackendMatchesRegistry(datasetId: DatasetId, backend: DatasetBack
   const registry = ensureDatasetRegistryMigrated();
   const entry = registry.entries.find(e => e.datasetId === datasetId);
   const storageKind = entry?.storageKind ?? 'local';
-  // Runtime guard: tolerate missing backend.kind (e.g. older mocks/tests) by treating it as 'local'.
-  // The DatasetBackend interface still requires `kind`, but this keeps the guard from breaking
-  // older call-sites while remote mode is being introduced.
-  const backendKind = (backend as any).kind ?? 'local';
-  if (storageKind !== backendKind) {
-    throw new Error(`Dataset backend kind mismatch for ${datasetId}: registry=${storageKind}, backend=${backendKind}`);
+  if (storageKind !== backend.kind) {
+    throw new Error(`Dataset backend kind mismatch for ${datasetId}: registry=${storageKind}, backend=${backend.kind}`);
   }
 }
 

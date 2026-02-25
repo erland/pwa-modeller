@@ -1,26 +1,11 @@
 import type { DatasetBackend, PersistedStoreSlice } from '../datasetBackend';
+import { createMockBackend } from './helpers/mockBackend';
 import { modelStore } from '../modelStore';
 import { DEFAULT_LOCAL_DATASET_ID } from '../datasetTypes';
 import type { DatasetId } from '../datasetTypes';
 import { createDataset, deleteDataset, openDataset, renameDataset } from '../datasetLifecycle';
 import { loadDatasetRegistry } from '../datasetRegistry';
 import { createEmptyModel } from '../../domain';
-
-class MemoryBackend implements DatasetBackend {
-  private map = new Map<string, PersistedStoreSlice>();
-
-  async loadPersistedState(datasetId: DatasetId): Promise<PersistedStoreSlice | null> {
-    return this.map.get(datasetId as unknown as string) ?? null;
-  }
-
-  async persistState(datasetId: DatasetId, state: PersistedStoreSlice): Promise<void> {
-    this.map.set(datasetId as unknown as string, state);
-  }
-
-  async clearPersistedState(datasetId: DatasetId): Promise<void> {
-    this.map.delete(datasetId as unknown as string);
-  }
-}
 
 describe('datasetLifecycle', () => {
   beforeEach(() => {
@@ -30,7 +15,7 @@ describe('datasetLifecycle', () => {
   });
 
   test('create + open switches between datasets without overwriting', async () => {
-    const backend = new MemoryBackend();
+    const { backend } = createMockBackend('local');
 
     // Seed default dataset
     const m1 = createEmptyModel({ name: 'A' });
@@ -57,7 +42,7 @@ describe('datasetLifecycle', () => {
   });
 
   test('rename updates registry and fileName for active dataset', async () => {
-    const backend = new MemoryBackend();
+    const { backend } = createMockBackend('local');
     const id = await createDataset({ name: 'Old' }, backend);
     await renameDataset(id, 'New');
 
@@ -67,7 +52,7 @@ describe('datasetLifecycle', () => {
   });
 
   test('delete removes from registry and opens fallback active dataset', async () => {
-    const backend = new MemoryBackend();
+    const { backend } = createMockBackend('local');
 
     // Seed default
     await backend.persistState(DEFAULT_LOCAL_DATASET_ID, { model: createEmptyModel({ name: 'Default' }), fileName: 'd.json', isDirty: false });

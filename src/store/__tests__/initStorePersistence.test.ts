@@ -51,6 +51,7 @@ describe('initStorePersistence', () => {
     jest.doMock('../getDefaultDatasetBackend', () => {
       return {
         getDefaultDatasetBackend: jest.fn(() => ({
+          kind: 'local',
           loadPersistedState: jest.fn(async () => restored),
           persistState,
           clearPersistedState: jest.fn()
@@ -97,6 +98,7 @@ describe('initStorePersistence', () => {
     jest.doMock('../getDefaultDatasetBackend', () => {
       return {
         getDefaultDatasetBackend: jest.fn(() => ({
+          kind: 'local',
           loadPersistedState: jest.fn(async () => null),
           persistState,
           clearPersistedState: jest.fn()

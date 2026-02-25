@@ -20,9 +20,9 @@ type ModelActionsProps = {
 
 export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsProps) {
   const navigate = useNavigate();
-  const { model, fileName, isDirty } = useModelStore((s) => s);
+  const { model, fileName, isDirty, activeDatasetId } = useModelStore((s) => s);
 
-  const ctrl = useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps, activeViewId });
+  const ctrl = useModelActionHandlers({ model, fileName, isDirty, activeDatasetId, navigate, onEditModelProps, activeViewId });
 
   const actions = useMemo(
     () =>
@@ -34,6 +34,8 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
         onProperties: ctrl.doProperties,
         onSave: ctrl.doSave,
         onSaveAs: ctrl.doSaveAs,
+        onExportBackup: ctrl.doExportDatasetBackup,
+        onImportBackup: ctrl.doImportDatasetBackup,
         onModel: ctrl.doProperties,
         onAbout: ctrl.doAbout,
         onPublish: ctrl.doPublish
@@ -46,6 +48,8 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
       ctrl.doProperties,
       ctrl.doSave,
       ctrl.doSaveAs,
+      ctrl.doExportDatasetBackup,
+      ctrl.doImportDatasetBackup,
       ctrl.doAbout,
       ctrl.doPublish
     ]
@@ -72,6 +76,20 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
           // Allow choosing the same file again.
           e.currentTarget.value = '';
           void ctrl.onLoadFileChosen(f);
+        }}
+      />
+
+      <input
+        ref={ctrl.importBackupInputRef}
+        data-testid="import-backup-input"
+        type="file"
+        accept=".json,application/json"
+        style={{ position: 'fixed', left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}
+        onChange={(e) => {
+          const f = e.currentTarget.files?.[0] ?? null;
+          // Allow choosing the same file again.
+          e.currentTarget.value = '';
+          void ctrl.onImportBackupFileChosen(f);
         }}
       />
 

@@ -11,18 +11,52 @@ type DatasetRecord = {
   updatedAt: string;
 };
 
+export type IndexedDbErrorCode =
+  | 'unavailable'
+  | 'open_failed'
+  | 'transaction_failed'
+  | 'request_failed'
+  | 'quota_exceeded';
+
+export class IndexedDbError extends Error {
+  readonly code: IndexedDbErrorCode;
+  readonly cause?: unknown;
+
+  constructor(code: IndexedDbErrorCode, message: string, cause?: unknown) {
+    super(message);
+    this.name = 'IndexedDbError';
+    this.code = code;
+    this.cause = cause;
+  }
+}
+
+function isQuotaExceeded(err: unknown): boolean {
+  // DOMException name varies by browser, but QuotaExceededError is common.
+  const e = err as { name?: string; message?: string } | null;
+  const name = e?.name ?? '';
+  const msg = (e?.message ?? '').toLowerCase();
+  return name === 'QuotaExceededError' || msg.includes('quota');
+}
+
+function wrapIdbError(code: IndexedDbErrorCode, message: string, cause?: unknown): IndexedDbError {
+  if (code !== 'quota_exceeded' && isQuotaExceeded(cause)) {
+    return new IndexedDbError('quota_exceeded', 'IndexedDB quota exceeded', cause);
+  }
+  return new IndexedDbError(code, message, cause);
+}
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const g: any = typeof globalThis !== 'undefined' ? globalThis : undefined;
     const indexedDb: IDBFactory | undefined = g?.indexedDB;
     if (!indexedDb) {
-      reject(new Error('IndexedDB is not available in this environment'));
+      reject(wrapIdbError('unavailable', 'IndexedDB is not available in this environment'));
       return;
     }
 
     const req = indexedDb.open(DB_NAME, DB_VERSION);
-    req.onerror = () => reject(req.error ?? new Error('Failed to open IndexedDB'));
+    req.onerror = () => reject(wrapIdbError('open_failed', 'Failed to open IndexedDB', req.error));
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -40,9 +74,9 @@ function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => I
         const tx = db.transaction(STORE_NAME, mode);
         const store = tx.objectStore(STORE_NAME);
         const req = fn(store);
-        req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+        req.onerror = () => reject(wrapIdbError('request_failed', 'IndexedDB request failed', req.error));
         req.onsuccess = () => resolve(req.result);
-        tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'));
+        tx.onabort = () => reject(wrapIdbError('transaction_failed', 'IndexedDB transaction aborted', tx.error));
       })
   );
 }

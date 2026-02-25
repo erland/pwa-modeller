@@ -2,12 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 
 import type { Model, ModelMetadata } from '../../../../domain';
+import type { DatasetId } from '../../../../store';
 import {
   deserializeModel,
   serializeModel,
   downloadTextFile,
   sanitizeFileName,
   sanitizeFileNameWithExtension,
+  createDataset,
+  createDatasetBackupJson,
+  defaultBackupFileName,
+  parseDatasetBackupJson,
   modelStore,
   runWithImportPersistencePaused
 } from '../../../../store';
@@ -37,6 +42,7 @@ export type UseModelFileActionsArgs = {
   model: Model | null;
   fileName: string | null;
   isDirty: boolean;
+  activeDatasetId: DatasetId;
   navigate: NavigateFunction;
 };
 
@@ -44,8 +50,9 @@ export type UseModelFileActionsArgs = {
  * File-oriented actions: new/load/save/import and related dialogs/state.
  * This module intentionally owns the side-effects (file IO, downloads, store writes).
  */
-export function useModelFileActions({ model, fileName, isDirty, navigate }: UseModelFileActionsArgs) {
+export function useModelFileActions({ model, fileName, isDirty, activeDatasetId, navigate }: UseModelFileActionsArgs) {
   const loadInputRef = useRef<HTMLInputElement | null>(null);
+  const importBackupInputRef = useRef<HTMLInputElement | null>(null);
 
   const [overflowOpen, setOverflowOpen] = useState(false);
 
@@ -83,6 +90,13 @@ export function useModelFileActions({ model, fileName, isDirty, navigate }: UseM
     const el = loadInputRef.current;
     if (!el) return;
     // Allow choosing the same file again.
+    el.value = '';
+    el.click();
+  }, []);
+
+  const triggerImportBackupFilePicker = useCallback(() => {
+    const el = importBackupInputRef.current;
+    if (!el) return;
     el.value = '';
     el.click();
   }, []);
@@ -167,6 +181,44 @@ export function useModelFileActions({ model, fileName, isDirty, navigate }: UseM
     },
     [confirmReplaceIfDirty, onImportFileChosen, tryOpenNativeModel]
   );
+
+  const doExportDatasetBackup = useCallback(() => {
+    if (!model) return;
+    // Dataset backups use the canonical DatasetSnapshot envelope.
+    const snapshot = { v: 1, datasetId: activeDatasetId, model, fileName, isDirty };
+    const json = createDatasetBackupJson({
+      datasetId: activeDatasetId,
+      name: model.metadata?.name ?? null,
+      snapshot
+    });
+    const outName = defaultBackupFileName(model.metadata?.name ?? null);
+    downloadTextFile(outName, json);
+  }, [activeDatasetId, fileName, isDirty, model]);
+
+  const onImportBackupFileChosen = useCallback(
+    async (file: File | null) => {
+      if (!file) return;
+      // Importing a backup creates a NEW dataset so it cannot overwrite existing ones.
+      try {
+        const json = await readFileAsText(file);
+        const backup = parseDatasetBackupJson(json);
+        const nameFromBackup = backup.name ?? 'Imported backup';
+        await createDataset({
+          name: nameFromBackup,
+          fromSnapshot: backup.snapshot
+        });
+        navigate('/');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        window.alert(`Failed to import dataset backup: ${msg}`);
+      }
+    },
+    [navigate]
+  );
+
+  const doImportDatasetBackup = useCallback(() => {
+    triggerImportBackupFilePicker();
+  }, [triggerImportBackupFilePicker]);
 
   const triggerDownload = useCallback(
     (name: string) => {
@@ -293,7 +345,9 @@ export function useModelFileActions({ model, fileName, isDirty, navigate }: UseM
   return {
     // refs / inputs
     loadInputRef,
+    importBackupInputRef,
     onLoadFileChosen,
+    onImportBackupFileChosen,
     triggerLoadFilePicker,
 
     // dialogs / menu
@@ -325,6 +379,8 @@ export function useModelFileActions({ model, fileName, isDirty, navigate }: UseM
     doLoad,
     doSave,
     doSaveAs,
+    doExportDatasetBackup,
+    doImportDatasetBackup,
     triggerDownload,
     saveAsDefault,
     downloadImportReport,

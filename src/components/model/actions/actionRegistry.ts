@@ -4,6 +4,8 @@ export type ModelActionId =
   | 'properties'
   | 'save'
   | 'saveAs'
+  | 'exportBackup'
+  | 'importBackup'
   | 'model'
   | 'about'
   | 'publish';
@@ -24,6 +26,8 @@ type BuildRegistryArgs = {
   onProperties: () => void;
   onSave: () => void;
   onSaveAs: () => void;
+  onExportBackup: () => void;
+  onImportBackup: () => void;
   onModel: () => void;
   onAbout: () => void;
   onPublish: () => void;
@@ -66,6 +70,19 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       label: 'Download As',
       run: args.onSaveAs,
       disabled: !modelLoaded
+    },
+    {
+      id: 'exportBackup',
+      label: 'Export dataset backup…',
+      run: args.onExportBackup,
+      disabled: !modelLoaded,
+      title: !modelLoaded ? 'No model loaded' : 'Export a local backup bundle for this dataset'
+    },
+    {
+      id: 'importBackup',
+      label: 'Import dataset backup…',
+      run: args.onImportBackup,
+      title: 'Import a previously exported dataset backup (creates a new local dataset)'
     },
     // NOTE: kept for backward compatibility with existing UI that had both "Properties" and "Model".
     {

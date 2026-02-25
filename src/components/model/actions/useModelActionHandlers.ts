@@ -1,6 +1,7 @@
 import type { NavigateFunction } from 'react-router-dom';
 
 import type { Model } from '../../../domain';
+import type { DatasetId } from '../../../store';
 
 import { useModelFileActions, type LastImportInfo } from './model/useModelFileActions';
 import { useModelPublishActions } from './model/useModelPublishActions';
@@ -14,6 +15,7 @@ export type UseModelActionHandlersArgs = {
   model: Model | null;
   fileName: string | null;
   isDirty: boolean;
+  activeDatasetId: DatasetId;
   navigate: NavigateFunction;
   onEditModelProps: () => void;
   activeViewId: string | null;
@@ -25,8 +27,8 @@ export type UseModelActionHandlersArgs = {
  * The return shape intentionally matches the pre-refactor API so consuming components
  * do not need to change.
  */
-export function useModelActionHandlers({ model, fileName, isDirty, navigate, onEditModelProps, activeViewId }: UseModelActionHandlersArgs) {
-  const file = useModelFileActions({ model, fileName, isDirty, navigate });
+export function useModelActionHandlers({ model, fileName, isDirty, activeDatasetId, navigate, onEditModelProps, activeViewId }: UseModelActionHandlersArgs) {
+  const file = useModelFileActions({ model, fileName, isDirty, activeDatasetId, navigate });
   const elem = useModelElementActions({ onEditModelProps });
   const rel = useModelRelationshipActions();
   const view = useModelViewActions({ navigate });
@@ -35,7 +37,9 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
   return {
     // refs / inputs
     loadInputRef: file.loadInputRef,
+    importBackupInputRef: file.importBackupInputRef,
     onLoadFileChosen: file.onLoadFileChosen,
+    onImportBackupFileChosen: file.onImportBackupFileChosen,
     triggerLoadFilePicker: file.triggerLoadFilePicker,
 
     // dialogs / menu
@@ -67,6 +71,8 @@ export function useModelActionHandlers({ model, fileName, isDirty, navigate, onE
     doLoad: file.doLoad,
     doSave: file.doSave,
     doSaveAs: file.doSaveAs,
+    doExportDatasetBackup: file.doExportDatasetBackup,
+    doImportDatasetBackup: file.doImportDatasetBackup,
     doProperties: elem.doProperties,
     doAbout: view.doAbout,
     doPublish: publish.openPublish,

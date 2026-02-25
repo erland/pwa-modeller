@@ -45,7 +45,7 @@ describe('initStorePersistence', () => {
       };
     });
 
-    const persistState = jest.fn();
+    const persistState = jest.fn(async () => undefined);
     const restored: PersistedState = { model: { id: 'm1' }, fileName: 'restored.json', isDirty: true };
 
     jest.doMock('../getDefaultDatasetBackend', () => {
@@ -93,7 +93,7 @@ describe('initStorePersistence', () => {
       };
     });
 
-    const persistState = jest.fn();
+    const persistState = jest.fn(async () => undefined);
     jest.doMock('../getDefaultDatasetBackend', () => {
       return {
         getDefaultDatasetBackend: jest.fn(() => ({

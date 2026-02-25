@@ -114,6 +114,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const shellBodyRef = useRef<HTMLDivElement | null>(null);
   const [isResizing, setIsResizing] = useState<null | 'left' | 'right'>(null);
   const [isNavigatorDragging, setIsNavigatorDragging] = useState(false);
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
   const { isDirty, model } = useModelStore((s) => ({
     isDirty: s.isDirty,
     model: s.model
@@ -207,6 +208,24 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
     };
   }, []);
 
+  // Persistence robustness: show a non-blocking chip when dataset persistence fails.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onErr: EventListener = (ev) => {
+      const ce = ev as CustomEvent<{ message?: string }>;
+      setPersistenceError(ce.detail?.message ?? 'Persistence error');
+    };
+    const onOk: EventListener = () => setPersistenceError(null);
+
+    window.addEventListener('pwa-modeller:persistence-error', onErr);
+    window.addEventListener('pwa-modeller:persistence-ok', onOk);
+    return () => {
+      window.removeEventListener('pwa-modeller:persistence-error', onErr);
+      window.removeEventListener('pwa-modeller:persistence-ok', onOk);
+    };
+  }, []);
+
 
   // On medium screens, prefer hiding the properties panel by default.
   useEffect(() => {
@@ -252,6 +271,11 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
               >
                 Overlay{overlayCount ? ` ${overlayCount}` : ''}{overlayExportDirty ? ' *' : ''}
               </button>
+            ) : null}
+            {persistenceError ? (
+              <span className="shellStatusChip isDirty" title={persistenceError}>
+                Storage error
+              </span>
             ) : null}
             {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
             {model && isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}

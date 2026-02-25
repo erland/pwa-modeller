@@ -36,6 +36,16 @@ function scheduleIdle(fn: () => void): void {
   }
 }
 
+function emitPersistenceError(message: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('pwa-modeller:persistence-error', { detail: { message } }));
+}
+
+function emitPersistenceOk(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('pwa-modeller:persistence-ok'));
+}
+
 /**
  * Restores the last in-memory model from localStorage on refresh, and
  * continuously persists changes.
@@ -71,7 +81,13 @@ export async function initStorePersistenceAsync(): Promise<void> {
     pendingByDataset.clear();
 
     for (const [datasetId, slice] of entries) {
-      void backend.persistState(datasetId, slice);
+      void backend
+        .persistState(datasetId, slice)
+        .then(() => emitPersistenceOk())
+        .catch((e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          emitPersistenceError(msg);
+        });
     }
   };
 

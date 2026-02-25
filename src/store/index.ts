@@ -15,3 +15,4 @@ export * from './analysis';
 export * from './overlay';
 
 export * from './datasetLifecycle';
+export * from './datasetBackup';

@@ -35,6 +35,8 @@ export const createLayoutCrudOps = (deps: Pick<LayoutOpsDeps, 'updateModel' | 'r
     updateModel((model) => {
       result = layoutMutations.addElementToViewAt(model, viewId, elementId, x, y);
     });
+    // Layout changes are view-scoped, but adding a node also implies the element was touched.
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.elementUpserts(result)));
     return result;
   };
 
@@ -43,6 +45,8 @@ export const createLayoutCrudOps = (deps: Pick<LayoutOpsDeps, 'updateModel' | 'r
     updateModel((model) => {
       result = layoutMutations.addConnectorToViewAt(model, viewId, connectorId, x, y);
     });
+    // Adding a connector affects the view layout.
+    recordTouched(touch.viewUpserts(viewId));
     return result;
   };
 

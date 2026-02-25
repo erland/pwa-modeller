@@ -123,11 +123,25 @@ export class ModelStore {
     }
   };
 
+  /** Internal helper to run async ops within a transaction boundary. */
+  private runInTransactionAsync = async <T>(fn: () => Promise<T>): Promise<T> => {
+    this.beginTransaction();
+    try {
+      return await fn();
+    } finally {
+      this.endTransaction();
+    }
+  };
+
   private updateModel = (mutator: (model: Model) => void, markDirty = true): void => this.core.updateModel(mutator, markDirty);
 
-  moveElementToParent = (childId: string, parentId: string | null): void => this.ops.elementOps.moveElementToParent(childId, parentId);
+  moveElementToParent = (childId: string, parentId: string | null): void => {
+    this.runInTransaction(() => this.ops.elementOps.moveElementToParent(childId, parentId));
+  };
 
-  detachElementToRoot = (childId: string): void => this.ops.elementOps.detachElementToRoot(childId);
+  detachElementToRoot = (childId: string): void => {
+    this.runInTransaction(() => this.ops.elementOps.detachElementToRoot(childId));
+  };
 
 
   /** Replace the current model. */
@@ -199,7 +213,9 @@ export class ModelStore {
   // Views
   // -------------------------
 
-  addView = (view: View, folderId?: string): void => this.ops.viewOps.addView(view, folderId);
+  addView = (view: View, folderId?: string): void => {
+    this.runInTransaction(() => this.ops.viewOps.addView(view, folderId));
+  };
 
   private collectElementIdsInFolder = (model: Model, folderId: string): string[] => {
     const seen = new Set<string>();
@@ -350,15 +366,21 @@ export class ModelStore {
     }
   };
 
-updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.ops.viewOps.updateView(viewId, patch);
+  updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => {
+    this.runInTransaction(() => this.ops.viewOps.updateView(viewId, patch));
+  };
 
-  ensureViewConnections = (viewId: string): void => this.ops.viewOps.ensureViewConnections(viewId);
+  ensureViewConnections = (viewId: string): void => {
+    this.runInTransaction(() => this.ops.viewOps.ensureViewConnections(viewId));
+  };
 
   /**
    * If the target view uses explicit relationship visibility, include the given relationship id.
    * This is used to keep "explicit" views usable when creating relationships interactively.
    */
-  includeRelationshipInView = (viewId: string, relationshipId: string): void => this.ops.viewOps.includeRelationshipInView(viewId, relationshipId);
+  includeRelationshipInView = (viewId: string, relationshipId: string): void => {
+    this.runInTransaction(() => this.ops.viewOps.includeRelationshipInView(viewId, relationshipId));
+  };
 
   /**
    * Hide a specific relationship in a view.
@@ -367,7 +389,9 @@ updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.op
    * converted to explicit mode using the view's *current* visible relationships
    * as the starting allow-list.
    */
-  hideRelationshipInView = (viewId: string, relationshipId: string): void => this.ops.viewOps.hideRelationshipInView(viewId, relationshipId);
+  hideRelationshipInView = (viewId: string, relationshipId: string): void => {
+    this.runInTransaction(() => this.ops.viewOps.hideRelationshipInView(viewId, relationshipId));
+  };
 
   /**
    * Show (include) a specific relationship in a view that uses explicit visibility.
@@ -376,58 +400,87 @@ updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.op
    * converted to explicit mode using the view's *current* visible relationships
    * as the starting allow-list.
    */
-  showRelationshipInView = (viewId: string, relationshipId: string): void => this.ops.viewOps.showRelationshipInView(viewId, relationshipId);
+  showRelationshipInView = (viewId: string, relationshipId: string): void => {
+    this.runInTransaction(() => this.ops.viewOps.showRelationshipInView(viewId, relationshipId));
+  };
 
-  setViewConnectionRoute = (viewId: string, connectionId: string, kind: ViewConnectionRouteKind): void => this.ops.viewOps.setViewConnectionRoute(viewId, connectionId, kind);
+  setViewConnectionRoute = (viewId: string, connectionId: string, kind: ViewConnectionRouteKind): void => {
+    this.runInTransaction(() => this.ops.viewOps.setViewConnectionRoute(viewId, connectionId, kind));
+  };
 
   setViewConnectionEndpointAnchors = (
     viewId: string,
     connectionId: string,
     patch: { sourceAnchor?: ViewConnectionAnchorSide; targetAnchor?: ViewConnectionAnchorSide }
-  ): void => this.ops.viewOps.setViewConnectionEndpointAnchors(viewId, connectionId, patch);
+  ): void => {
+    this.runInTransaction(() => this.ops.viewOps.setViewConnectionEndpointAnchors(viewId, connectionId, patch));
+  };
 
-  upsertViewTaggedValue = (viewId: string, entry: TaggedValueInput): void => this.ops.viewOps.upsertViewTaggedValue(viewId, entry);
+  upsertViewTaggedValue = (viewId: string, entry: TaggedValueInput): void => {
+    this.runInTransaction(() => this.ops.viewOps.upsertViewTaggedValue(viewId, entry));
+  };
 
-  removeViewTaggedValue = (viewId: string, taggedValueId: string): void => this.ops.viewOps.removeViewTaggedValue(viewId, taggedValueId);
+  removeViewTaggedValue = (viewId: string, taggedValueId: string): void => {
+    this.runInTransaction(() => this.ops.viewOps.removeViewTaggedValue(viewId, taggedValueId));
+  };
 
-  updateViewFormatting = (viewId: string, patch: Partial<ViewFormatting>): void => this.ops.viewOps.updateViewFormatting(viewId, patch);
+  updateViewFormatting = (viewId: string, patch: Partial<ViewFormatting>): void => {
+    this.runInTransaction(() => this.ops.viewOps.updateViewFormatting(viewId, patch));
+  };
 
   /** Clone a view (including its layout) into the same folder as the original. Returns the new view id. */
-  cloneView = (viewId: string): string | null => this.ops.viewOps.cloneView(viewId);
+  cloneView = (viewId: string): string | null => this.runInTransaction(() => this.ops.viewOps.cloneView(viewId));
 
-  deleteView = (viewId: string): void => this.ops.viewOps.deleteView(viewId);
+  deleteView = (viewId: string): void => {
+    this.runInTransaction(() => this.ops.viewOps.deleteView(viewId));
+  };
 
   // -------------------------
   // View-only (diagram) objects
   // -------------------------
 
   /** Add a view-local object to a view (and optionally a layout node). This does not touch the model element graph. */
-  addViewObject = (viewId: string, obj: ViewObject, node?: ViewNodeLayout): void => this.ops.viewOps.addViewObject(viewId, obj, node);
+  addViewObject = (viewId: string, obj: ViewObject, node?: ViewNodeLayout): void => {
+    this.runInTransaction(() => this.ops.viewOps.addViewObject(viewId, obj, node));
+  };
 
   /** Create a new view-local object and place it into the view at the given cursor position. Returns the object id. */
-  createViewObjectInViewAt = (viewId: string, type: ViewObjectType, x: number, y: number): string => this.ops.viewOps.createViewObjectInViewAt(viewId, type, x, y);
+  createViewObjectInViewAt = (viewId: string, type: ViewObjectType, x: number, y: number): string =>
+    this.runInTransaction(() => this.ops.viewOps.createViewObjectInViewAt(viewId, type, x, y));
 
-  updateViewObject = (viewId: string, objectId: string, patch: Partial<Omit<ViewObject, 'id'>>): void => this.ops.viewOps.updateViewObject(viewId, objectId, patch);
+  updateViewObject = (viewId: string, objectId: string, patch: Partial<Omit<ViewObject, 'id'>>): void => {
+    this.runInTransaction(() => this.ops.viewOps.updateViewObject(viewId, objectId, patch));
+  };
 
-  deleteViewObject = (viewId: string, objectId: string): void => this.ops.viewOps.deleteViewObject(viewId, objectId);
+  deleteViewObject = (viewId: string, objectId: string): void => {
+    this.runInTransaction(() => this.ops.viewOps.deleteViewObject(viewId, objectId));
+  };
 
   // -------------------------
   // Diagram layout (per view)
   // -------------------------
 
-  updateViewNodeLayout = (viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void => this.ops.viewOps.updateViewNodeLayout(viewId, elementId, patch);
+  updateViewNodeLayout = (viewId: string, elementId: string, patch: Partial<Omit<ViewNodeLayout, 'elementId'>>): void => {
+    this.runInTransaction(() => this.ops.viewOps.updateViewNodeLayout(viewId, elementId, patch));
+  };
 
   /** Adds an element to a view's layout as a positioned node (idempotent). */
-  addElementToView = (viewId: string, elementId: string): string => this.ops.viewOps.addElementToView(viewId, elementId);
+  addElementToView = (viewId: string, elementId: string): string => this.runInTransaction(() => this.ops.viewOps.addElementToView(viewId, elementId));
 
-  addElementToViewAt = (viewId: string, elementId: string, x: number, y: number): string => this.ops.layoutOps.addElementToViewAt(viewId, elementId, x, y);
+  addElementToViewAt = (viewId: string, elementId: string, x: number, y: number): string =>
+    this.runInTransaction(() => this.ops.layoutOps.addElementToViewAt(viewId, elementId, x, y));
 
   /** Adds a connector (junction) to a view at a specific position (idempotent). */
-  addConnectorToViewAt = (viewId: string, connectorId: string, x: number, y: number): string => this.ops.layoutOps.addConnectorToViewAt(viewId, connectorId, x, y);
+  addConnectorToViewAt = (viewId: string, connectorId: string, x: number, y: number): string =>
+    this.runInTransaction(() => this.ops.layoutOps.addConnectorToViewAt(viewId, connectorId, x, y));
 
-  removeElementFromView = (viewId: string, elementId: string): void => this.ops.layoutOps.removeElementFromView(viewId, elementId);
+  removeElementFromView = (viewId: string, elementId: string): void => {
+    this.runInTransaction(() => this.ops.layoutOps.removeElementFromView(viewId, elementId));
+  };
 
-  updateViewNodePosition = (viewId: string, elementId: string, x: number, y: number): void => this.ops.layoutOps.updateViewNodePosition(viewId, elementId, x, y);
+  updateViewNodePosition = (viewId: string, elementId: string, x: number, y: number): void => {
+    this.runInTransaction(() => this.ops.layoutOps.updateViewNodePosition(viewId, elementId, x, y));
+  };
 
   /** Updates position of an element-node, connector-node, or view-object node in a view. */
   updateViewNodePositionAny = (
@@ -435,7 +488,9 @@ updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.op
     ref: { elementId?: string; connectorId?: string; objectId?: string },
     x: number,
     y: number
-  ): void => this.ops.layoutOps.updateViewNodePositionAny(viewId, ref, x, y);
+  ): void => {
+    this.runInTransaction(() => this.ops.layoutOps.updateViewNodePositionAny(viewId, ref, x, y));
+  };
 
   /**
    * Batch position update for multiple nodes (element/connector/object) in a view.
@@ -445,63 +500,92 @@ updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => this.op
   updateViewNodePositionsAny = (
     viewId: string,
     updates: Array<{ ref: { elementId?: string; connectorId?: string; objectId?: string }; x: number; y: number }>
-  ): void => this.ops.layoutOps.updateViewNodePositionsAny(viewId, updates);
+  ): void => {
+    this.runInTransaction(() => this.ops.layoutOps.updateViewNodePositionsAny(viewId, updates));
+  };
 
   /** Updates layout properties on an element-node, connector-node, or view-object node in a view. */
   updateViewNodeLayoutAny = (
     viewId: string,
     ref: { elementId?: string; connectorId?: string; objectId?: string },
     patch: Partial<Omit<ViewNodeLayout, 'elementId' | 'connectorId' | 'objectId'>>
-  ): void => this.ops.layoutOps.updateViewNodeLayoutAny(viewId, ref, patch);
+  ): void => {
+    this.runInTransaction(() => this.ops.layoutOps.updateViewNodeLayoutAny(viewId, ref, patch));
+  };
 
   /** Align element nodes in a view based on the current selection. */
-  alignViewElements = (viewId: string, elementIds: string[], mode: AlignMode): void => this.ops.layoutOps.alignViewElements(viewId, elementIds, mode);
+  alignViewElements = (viewId: string, elementIds: string[], mode: AlignMode): void => {
+    this.runInTransaction(() => this.ops.layoutOps.alignViewElements(viewId, elementIds, mode));
+  };
 
   /** Distribute selected element nodes evenly within a view. */
-  distributeViewElements = (viewId: string, elementIds: string[], mode: DistributeMode): void => this.ops.layoutOps.distributeViewElements(viewId, elementIds, mode);
+  distributeViewElements = (viewId: string, elementIds: string[], mode: DistributeMode): void => {
+    this.runInTransaction(() => this.ops.layoutOps.distributeViewElements(viewId, elementIds, mode));
+  };
 
   /** Make selected element nodes the same size within a view. */
-  sameSizeViewElements = (viewId: string, elementIds: string[], mode: SameSizeMode): void => this.ops.layoutOps.sameSizeViewElements(viewId, elementIds, mode);
+  sameSizeViewElements = (viewId: string, elementIds: string[], mode: SameSizeMode): void => {
+    this.runInTransaction(() => this.ops.layoutOps.sameSizeViewElements(viewId, elementIds, mode));
+  };
 
   /**
    * Resize selected ArchiMate element boxes so their visible text fits.
    *
    * Only applies to element-backed nodes in the given view.
    */
-  fitViewElementsToText = (viewId: string, elementIds: string[]): void => this.ops.layoutOps.fitViewElementsToText(viewId, elementIds);
+  fitViewElementsToText = (viewId: string, elementIds: string[]): void => {
+    this.runInTransaction(() => this.ops.layoutOps.fitViewElementsToText(viewId, elementIds));
+  };
 
-  autoLayoutView = (viewId: string, options: AutoLayoutOptions = {}, selectionNodeIds?: string[]): Promise<void> => this.ops.layoutOps.autoLayoutView(viewId, options, selectionNodeIds);
+  autoLayoutView = (viewId: string, options: AutoLayoutOptions = {}, selectionNodeIds?: string[]): Promise<void> =>
+    this.runInTransactionAsync(() => this.ops.layoutOps.autoLayoutView(viewId, options, selectionNodeIds));
 
 
   // -------------------------
   // Folders
   // -------------------------
 
-  createFolder = (parentId: string, name: string): string => this.ops.folderOps.createFolder(parentId, name);
+  createFolder = (parentId: string, name: string): string => this.runInTransaction(() => this.ops.folderOps.createFolder(parentId, name));
 
-  moveElementToFolder = (elementId: string, targetFolderId: string): void => this.ops.folderOps.moveElementToFolder(elementId, targetFolderId);
+  moveElementToFolder = (elementId: string, targetFolderId: string): void => {
+    this.runInTransaction(() => this.ops.folderOps.moveElementToFolder(elementId, targetFolderId));
+  };
 
-  moveViewToFolder = (viewId: string, targetFolderId: string): void => this.ops.folderOps.moveViewToFolder(viewId, targetFolderId);
+  moveViewToFolder = (viewId: string, targetFolderId: string): void => {
+    this.runInTransaction(() => this.ops.folderOps.moveViewToFolder(viewId, targetFolderId));
+  };
 
-  moveViewToElement = (viewId: string, elementId: string): void => this.ops.folderOps.moveViewToElement(viewId, elementId);
+  moveViewToElement = (viewId: string, elementId: string): void => {
+    this.runInTransaction(() => this.ops.folderOps.moveViewToElement(viewId, elementId));
+  };
 
-  moveFolderToFolder = (folderId: string, targetFolderId: string): void => this.ops.folderOps.moveFolderToFolder(folderId, targetFolderId);
+  moveFolderToFolder = (folderId: string, targetFolderId: string): void => {
+    this.runInTransaction(() => this.ops.folderOps.moveFolderToFolder(folderId, targetFolderId));
+  };
 
   // -------------------------
   // Folder extensions (taggedValues/externalIds)
   // -------------------------
 
-  updateFolder = (folderId: string, patch: Partial<Omit<Folder, 'id'>>): void => this.ops.folderOps.updateFolder(folderId, patch);
+  updateFolder = (folderId: string, patch: Partial<Omit<Folder, 'id'>>): void => {
+    this.runInTransaction(() => this.ops.folderOps.updateFolder(folderId, patch));
+  };
 
-  renameFolder = (folderId: string, name: string): void => this.ops.folderOps.renameFolder(folderId, name);
+  renameFolder = (folderId: string, name: string): void => {
+    this.runInTransaction(() => this.ops.folderOps.renameFolder(folderId, name));
+  };
 
   deleteFolder = (
     folderId: string,
     options?: { mode?: 'move'; targetFolderId?: string } | { mode: 'deleteContents' }
-  ): void => this.ops.folderOps.deleteFolder(folderId, options);
+  ): void => {
+    this.runInTransaction(() => this.ops.folderOps.deleteFolder(folderId, options));
+  };
 
   /** Ensure a model has the root folder structure (used by future migrations). */
-  ensureRootFolders = (): void => this.ops.folderOps.ensureRootFolders();
+  ensureRootFolders = (): void => {
+    this.runInTransaction(() => this.ops.folderOps.ensureRootFolders());
+  };
 }
 
 /** Factory used by tests and to create isolated store instances. */

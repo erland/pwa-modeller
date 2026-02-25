@@ -9,6 +9,8 @@ export type DatasetRegistryEntry = {
   name: string;
   createdAt: number;
   updatedAt: number;
+  /** Updated when the dataset is opened (best-effort; local-only). */
+  lastOpenedAt?: number;
 };
 
 export type DatasetRegistry = {
@@ -39,7 +41,10 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function isRegistryEntry(v: unknown): v is DatasetRegistryEntry {
   if (!isRecord(v)) return false;
-  return typeof v['datasetId'] === 'string' && typeof v['name'] === 'string' && typeof v['createdAt'] === 'number' && typeof v['updatedAt'] === 'number';
+  if (!(typeof v['datasetId'] === 'string' && typeof v['name'] === 'string' && typeof v['createdAt'] === 'number' && typeof v['updatedAt'] === 'number')) return false;
+  const lo = v['lastOpenedAt'];
+  if (typeof lo === 'undefined') return true;
+  return typeof lo === 'number';
 }
 
 function isRegistry(v: unknown): v is DatasetRegistry {
@@ -106,11 +111,104 @@ export function ensureDatasetRegistryMigrated(): DatasetRegistry {
         datasetId: DEFAULT_LOCAL_DATASET_ID,
         name,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        lastOpenedAt: now
       }
     ]
   };
 
   persistDatasetRegistry(registry);
   return registry;
+}
+
+
+export function listRegistryDatasets(registry?: DatasetRegistry | null): DatasetRegistryEntry[] {
+  const r = registry ?? loadDatasetRegistry();
+  if (!r) return [];
+  // Deterministic order: most recently opened/updated first, then by name.
+  return [...r.entries].sort((a, b) => {
+    const ao = a.lastOpenedAt ?? 0;
+    const bo = b.lastOpenedAt ?? 0;
+    if (bo !== ao) return bo - ao;
+    if (b.updatedAt !== a.updatedAt) return b.updatedAt - a.updatedAt;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export function upsertDatasetEntry(entry: DatasetRegistryEntry): DatasetRegistry {
+  const existing = loadDatasetRegistry();
+  const now = Date.now();
+
+  const base: DatasetRegistry = existing ?? {
+    v: 1,
+    activeDatasetId: entry.datasetId,
+    entries: []
+  };
+
+  const entries = base.entries.filter(e => e.datasetId !== entry.datasetId);
+  entries.push({ ...entry, updatedAt: entry.updatedAt ?? now });
+
+  const next: DatasetRegistry = {
+    ...base,
+    entries
+  };
+  persistDatasetRegistry(next);
+  return next;
+}
+
+export function setActiveDataset(datasetId: DatasetId): DatasetRegistry {
+  const existing = ensureDatasetRegistryMigrated();
+  const now = Date.now();
+
+  const entries = existing.entries.map(e => {
+    if (e.datasetId !== datasetId) return e;
+    return { ...e, updatedAt: now, lastOpenedAt: now };
+  });
+
+  // If datasetId isn't present, add a minimal entry.
+  if (!entries.some(e => e.datasetId === datasetId)) {
+    entries.push({
+      datasetId,
+      name: 'Local model',
+      createdAt: now,
+      updatedAt: now,
+      lastOpenedAt: now
+    });
+  }
+
+  const next: DatasetRegistry = {
+    ...existing,
+    activeDatasetId: datasetId,
+    entries
+  };
+  persistDatasetRegistry(next);
+  return next;
+}
+
+export function renameDatasetInRegistry(datasetId: DatasetId, name: string): DatasetRegistry {
+  const existing = ensureDatasetRegistryMigrated();
+  const now = Date.now();
+  const entries = existing.entries.map(e => (e.datasetId === datasetId ? { ...e, name, updatedAt: now } : e));
+  const next: DatasetRegistry = { ...existing, entries };
+  persistDatasetRegistry(next);
+  return next;
+}
+
+export function removeDatasetEntry(datasetId: DatasetId): DatasetRegistry {
+  const existing = ensureDatasetRegistryMigrated();
+  const entries = existing.entries.filter(e => e.datasetId !== datasetId);
+  const nextActive = existing.activeDatasetId === datasetId ? (entries[0]?.datasetId ?? DEFAULT_LOCAL_DATASET_ID) : existing.activeDatasetId;
+
+  const next: DatasetRegistry = {
+    ...existing,
+    activeDatasetId: nextActive,
+    entries
+  };
+  // Ensure we always have at least the default entry.
+  if (next.entries.length === 0) {
+    const now = Date.now();
+    next.entries.push({ datasetId: DEFAULT_LOCAL_DATASET_ID, name: 'Local model', createdAt: now, updatedAt: now, lastOpenedAt: now });
+  }
+  persistDatasetRegistry(next);
+  return next;
 }

@@ -58,10 +58,6 @@ describe('initStorePersistence', () => {
       };
     });
 
-    jest.doMock('../datasetRegistry', () => {
-      return { ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'local:default', entries: [] })) };
-    });
-
     // Import after mocks are set up.
     const { initStorePersistenceAsync: init } = await import('../initStorePersistence');
 
@@ -106,10 +102,6 @@ describe('initStorePersistence', () => {
           clearPersistedState: jest.fn()
         }))
       };
-    });
-
-    jest.doMock('../datasetRegistry', () => {
-      return { ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'local:default', entries: [] })) };
     });
 
     const { initStorePersistenceAsync: init } = await import('../initStorePersistence');

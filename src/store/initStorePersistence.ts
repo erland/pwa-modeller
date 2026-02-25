@@ -1,6 +1,7 @@
 import { modelStore } from './modelStore';
 import { getDefaultDatasetBackend } from './getDefaultDatasetBackend';
 import { ensureDatasetRegistryMigrated } from './datasetRegistry';
+import { openActiveDatasetOnStartup } from './datasetLifecycle';
 
 let __persistencePaused = false;
 let __schedulePersist: (() => void) | null = null;
@@ -45,14 +46,11 @@ export async function initStorePersistenceAsync(): Promise<void> {
   if (isTestEnv()) return;
 
   // Step 3: ensure we have a dataset registry (one-time migration from legacy single-model storage).
-  const registry = ensureDatasetRegistryMigrated();
+  ensureDatasetRegistryMigrated();
 
   const backend = getDefaultDatasetBackend();
 
-  const restored = await backend.loadPersistedState(registry.activeDatasetId);
-  if (restored) {
-    modelStore.hydrate({ ...restored, activeDatasetId: registry.activeDatasetId });
-  }
+  await openActiveDatasetOnStartup(backend);
 
   let pending = false;
   const persistNow = () => {

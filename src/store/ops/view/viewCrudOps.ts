@@ -2,23 +2,24 @@ import type { View, ViewFormatting } from '../../../domain';
 import type { TaggedValueInput } from '../../mutations';
 import { viewMutations } from '../../mutations';
 import type { ViewOpsDeps } from './viewOpsTypes';
+import { touch } from '../../touch';
 
 export const createViewCrudOps = (deps: ViewOpsDeps) => {
   const { updateModel, recordTouched } = deps;
 
   const addView = (view: View, folderId?: string): void => {
     updateModel((model) => viewMutations.addView(model, view, folderId));
-    recordTouched({ viewUpserts: [view.id], folderUpserts: folderId ? [folderId] : undefined });
+    recordTouched(touch.combine(touch.viewUpserts(view.id), folderId ? touch.folderUpserts(folderId) : {}));
   };
 
   const updateView = (viewId: string, patch: Partial<Omit<View, 'id'>>): void => {
     updateModel((model) => viewMutations.updateView(model, viewId, patch));
-    recordTouched({ viewUpserts: [viewId] });
+    recordTouched(touch.viewUpserts(viewId));
   };
 
   const upsertViewTaggedValue = (viewId: string, entry: TaggedValueInput): void => {
     updateModel((model) => viewMutations.upsertViewTaggedValue(model, viewId, entry));
-    recordTouched({ viewUpserts: [viewId] });
+    recordTouched(touch.viewUpserts(viewId));
   };
 
   const removeViewTaggedValue = (viewId: string, taggedValueId: string): void => {
@@ -27,7 +28,7 @@ export const createViewCrudOps = (deps: ViewOpsDeps) => {
 
   const updateViewFormatting = (viewId: string, patch: Partial<ViewFormatting>): void => {
     updateModel((model) => viewMutations.updateViewFormatting(model, viewId, patch));
-    recordTouched({ viewUpserts: [viewId] });
+    recordTouched(touch.viewUpserts(viewId));
   };
 
   const cloneView = (viewId: string): string | null => {
@@ -40,7 +41,7 @@ export const createViewCrudOps = (deps: ViewOpsDeps) => {
 
   const deleteView = (viewId: string): void => {
     updateModel((model) => viewMutations.deleteView(model, viewId));
-    recordTouched({ viewDeletes: [viewId] });
+    recordTouched(touch.viewDeletes(viewId));
   };
 
   return {

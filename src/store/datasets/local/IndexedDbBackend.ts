@@ -16,6 +16,8 @@ import { deleteDatasetSlice, getDatasetSlice, putDatasetSlice } from './indexedD
  *   into IndexedDB. The legacy key is then cleared.
  */
 export class IndexedDbBackend implements DatasetBackend {
+  readonly kind = 'local' as const;
+
   private legacy = new LocalStorageDatasetBackend();
 
   async loadPersistedState(datasetId: DatasetId): Promise<PersistedStoreSlice | null> {

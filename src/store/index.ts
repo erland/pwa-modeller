@@ -16,3 +16,4 @@ export * from './overlay';
 
 export * from './datasetLifecycle';
 export * from './datasetBackup';
+export * from './touch';

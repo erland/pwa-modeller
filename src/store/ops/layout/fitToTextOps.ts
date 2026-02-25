@@ -3,6 +3,7 @@ import { readStereotypes } from '../../../domain/umlStereotypes';
 import { fitToTextMutations } from '../../mutations';
 import type { LayoutOpsDeps } from './layoutOpsTypes';
 import type { Element, Model, ViewNodeLayout } from '../../../domain/types';
+import { touch } from '../../touch';
 
 /**
  * Ensure a parent container node never shrinks below the area needed for its nested nodes.
@@ -220,7 +221,7 @@ export const createFitToTextOps = (deps: Pick<LayoutOpsDeps, 'updateModel' | 're
     });
 
     // Explicit touch reporting: fit-to-text changes view geometry.
-    recordTouched({ viewUpserts: [viewId] });
+    recordTouched(touch.viewUpserts(viewId));
   };
 
   return { fitViewElementsToText };

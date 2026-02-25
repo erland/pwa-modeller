@@ -1,4 +1,4 @@
-import type { DatasetId } from './datasetTypes';
+import type { DatasetId, DatasetStorageKind } from './datasetTypes';
 import { DEFAULT_LOCAL_DATASET_ID } from './datasetTypes';
 import { loadPersistedStoreState, STORAGE_KEY as LEGACY_STORE_STORAGE_KEY } from './storePersistence';
 
@@ -14,6 +14,8 @@ export const DATASET_REGISTRY_STORAGE_KEY = 'pwa-modeller:datasetRegistry:v1';
 
 export type DatasetRegistryEntry = {
   datasetId: DatasetId;
+  /** Storage kind for the dataset reference. Defaults to 'local'. */
+  storageKind?: DatasetStorageKind;
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -50,10 +52,15 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 function isRegistryEntry(v: unknown): v is DatasetRegistryEntry {
   if (!isRecord(v)) return false;
   if (!(typeof v['datasetId'] === 'string' && typeof v['name'] === 'string' && typeof v['createdAt'] === 'number' && typeof v['updatedAt'] === 'number')) return false;
+
+  const sk = v['storageKind'];
+  if (typeof sk !== 'undefined' && sk !== 'local' && sk !== 'remote') return false;
+
   const lo = v['lastOpenedAt'];
   if (typeof lo === 'undefined') return true;
   return typeof lo === 'number';
 }
+
 
 function isRegistry(v: unknown): v is DatasetRegistry {
   if (!isRecord(v)) return false;
@@ -117,6 +124,7 @@ export function ensureDatasetRegistryMigrated(): DatasetRegistry {
     entries: [
       {
         datasetId: DEFAULT_LOCAL_DATASET_ID,
+        storageKind: 'local',
         name,
         createdAt: now,
         updatedAt: now,
@@ -154,7 +162,7 @@ export function upsertDatasetEntry(entry: DatasetRegistryEntry): DatasetRegistry
   };
 
   const entries = base.entries.filter(e => e.datasetId !== entry.datasetId);
-  entries.push({ ...entry, updatedAt: entry.updatedAt ?? now });
+  entries.push({ ...entry, storageKind: entry.storageKind ?? 'local', updatedAt: entry.updatedAt ?? now });
 
   const next: DatasetRegistry = {
     ...base,
@@ -177,6 +185,7 @@ export function setActiveDataset(datasetId: DatasetId): DatasetRegistry {
   if (!entries.some(e => e.datasetId === datasetId)) {
     entries.push({
       datasetId,
+      storageKind: 'local',
       name: 'Local model',
       createdAt: now,
       updatedAt: now,
@@ -215,7 +224,7 @@ export function removeDatasetEntry(datasetId: DatasetId): DatasetRegistry {
   // Ensure we always have at least the default entry.
   if (next.entries.length === 0) {
     const now = Date.now();
-    next.entries.push({ datasetId: DEFAULT_LOCAL_DATASET_ID, name: 'Local model', createdAt: now, updatedAt: now, lastOpenedAt: now });
+    next.entries.push({ datasetId: DEFAULT_LOCAL_DATASET_ID, storageKind: 'local', name: 'Local model', createdAt: now, updatedAt: now, lastOpenedAt: now });
   }
   persistDatasetRegistry(next);
   return next;

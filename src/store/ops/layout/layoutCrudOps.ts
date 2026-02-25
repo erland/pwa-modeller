@@ -1,6 +1,7 @@
 import type { ViewNodeLayout } from '../../../domain';
 import { layoutMutations } from '../../mutations';
 import type { LayoutOpsDeps } from './layoutOpsTypes';
+import { touch } from '../../touch';
 
 type AnyNodeRef = { elementId?: string; connectorId?: string; objectId?: string };
 
@@ -47,12 +48,12 @@ export const createLayoutCrudOps = (deps: Pick<LayoutOpsDeps, 'updateModel' | 'r
 
   const removeElementFromView = (viewId: string, elementId: string): void => {
     updateModel((model) => layoutMutations.removeElementFromView(model, viewId, elementId));
-    recordTouched({ viewUpserts: [viewId], elementUpserts: [elementId] });
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.elementUpserts(elementId)));
   };
 
   const updateViewNodePosition = (viewId: string, elementId: string, x: number, y: number): void => {
     updateModel((model) => layoutMutations.updateViewNodePosition(model, viewId, elementId, x, y));
-    recordTouched({ viewUpserts: [viewId], elementUpserts: [elementId] });
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.elementUpserts(elementId)));
   };
 
   const updateViewNodePositionAny = (viewId: string, ref: AnyNodeRef, x: number, y: number): void => {

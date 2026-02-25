@@ -36,14 +36,21 @@ function scheduleIdle(fn: () => void): void {
   }
 }
 
-function emitPersistenceError(message: string): void {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('pwa-modeller:persistence-error', { detail: { message } }));
+function setPersistenceError(message: string): void {
+  // Some unit tests mock modelStore without these helpers. Treat status updates as best-effort.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ms: any = modelStore as any;
+  if (typeof ms.setPersistenceError === 'function') {
+    ms.setPersistenceError(message);
+  }
 }
 
-function emitPersistenceOk(): void {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('pwa-modeller:persistence-ok'));
+function setPersistenceOk(): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ms: any = modelStore as any;
+  if (typeof ms.setPersistenceOk === 'function') {
+    ms.setPersistenceOk();
+  }
 }
 
 /**
@@ -83,10 +90,10 @@ export async function initStorePersistenceAsync(): Promise<void> {
     for (const [datasetId, slice] of entries) {
       void backend
         .persistState(datasetId, slice)
-        .then(() => emitPersistenceOk())
+        .then(() => setPersistenceOk())
         .catch((e) => {
           const msg = e instanceof Error ? e.message : String(e);
-          emitPersistenceError(msg);
+          setPersistenceError(msg);
         });
     }
   };

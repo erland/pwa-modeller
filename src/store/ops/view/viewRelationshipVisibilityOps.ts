@@ -4,6 +4,7 @@ import {
   materializeViewConnectionsForView,
 } from '../../../domain';
 import type { ViewOpsDeps } from './viewOpsTypes';
+import { touch } from '../../touch';
 
 export const createViewRelationshipVisibilityOps = (deps: ViewOpsDeps) => {
   const { updateModel, recordTouched } = deps;
@@ -29,7 +30,7 @@ export const createViewRelationshipVisibilityOps = (deps: ViewOpsDeps) => {
         relationshipVisibility: { mode: 'explicit', relationshipIds: nextIds },
       };
     })
-    recordTouched({ viewUpserts: [viewId], relationshipUpserts: [relationshipId] });;
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.relationshipUpserts(relationshipId)));;
   };
 
   const hideRelationshipInView = (viewId: string, relationshipId: string): void => {
@@ -59,7 +60,7 @@ export const createViewRelationshipVisibilityOps = (deps: ViewOpsDeps) => {
       // Re-materialize connections so the hidden relationship disappears from the diagram.
       model.views[viewId] = { ...nextView, connections: materializeViewConnectionsForView(model, nextView) };
     })
-    recordTouched({ viewUpserts: [viewId], relationshipUpserts: [relationshipId] });;
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.relationshipUpserts(relationshipId)));;
   };
 
   const showRelationshipInView = (viewId: string, relationshipId: string): void => {
@@ -84,7 +85,7 @@ export const createViewRelationshipVisibilityOps = (deps: ViewOpsDeps) => {
 
       model.views[viewId] = { ...nextView, connections: materializeViewConnectionsForView(model, nextView) };
     })
-    recordTouched({ viewUpserts: [viewId], relationshipUpserts: [relationshipId] });;
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.relationshipUpserts(relationshipId)));;
   };
 
   return {

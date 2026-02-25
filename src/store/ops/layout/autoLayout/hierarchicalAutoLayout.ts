@@ -5,6 +5,7 @@ import type { Model } from '../../../../domain';
 import { autoLayoutMutations } from '../../../mutations';
 import type { LayoutOpsDeps } from '../layoutOpsTypes';
 import { readCurrentNodeGeometryById, readLockedNodePositions, shouldSkipCommit } from './autoLayoutCommon';
+import { touch } from '../../../touch';
 
 type PreparedHierarchical = { input: LayoutInput; sizes: Record<string, { width: number; height: number }> };
 
@@ -97,5 +98,5 @@ export async function runHierarchicalAutoLayout(args: {
   });
 
   // Explicit touch reporting: auto-layout modifies view geometry.
-  recordTouched({ viewUpserts: [viewId] });
+  recordTouched(touch.viewUpserts(viewId));
 }

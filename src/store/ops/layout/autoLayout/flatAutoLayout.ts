@@ -5,6 +5,7 @@ import type { Model } from '../../../../domain';
 import { autoLayoutMutations } from '../../../mutations';
 import type { LayoutOpsDeps } from '../layoutOpsTypes';
 import { readCurrentNodeGeometryById, readLockedNodePositions, shouldSkipCommit } from './autoLayoutCommon';
+import { touch } from '../../../touch';
 
 export async function runFlatAutoLayout(args: {
   deps: Pick<LayoutOpsDeps, 'getModel' | 'updateModel' | 'autoLayoutCacheByView' | 'recordTouched'>;
@@ -84,5 +85,5 @@ export async function runFlatAutoLayout(args: {
   updateModel((model: Model) => {
     autoLayoutMutations.autoLayoutView(model, viewId, positions, edgeRoutes);
   });
-  recordTouched({ viewUpserts: [viewId] });
+  recordTouched(touch.viewUpserts(viewId));
 }

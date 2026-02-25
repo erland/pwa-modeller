@@ -1,6 +1,7 @@
 import type { AlignMode, DistributeMode, SameSizeMode } from '../../../domain/layout/types';
 import { alignMutations, arrangeMutations } from '../../mutations';
 import type { LayoutOpsDeps } from './layoutOpsTypes';
+import { touch } from '../../touch';
 
 export type LayoutArrangeOps = {
   alignViewElements: (viewId: string, elementIds: string[], mode: AlignMode) => void;
@@ -13,17 +14,17 @@ export const createLayoutArrangeOps = (deps: Pick<LayoutOpsDeps, 'updateModel' |
 
   const alignViewElements = (viewId: string, elementIds: string[], mode: AlignMode): void => {
     updateModel((model) => alignMutations.alignViewElements(model, viewId, elementIds, mode));
-    recordTouched({ viewUpserts: [viewId], elementUpserts: elementIds });
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.elementUpserts(...elementIds)));
   };
 
   const distributeViewElements = (viewId: string, elementIds: string[], mode: DistributeMode): void => {
     updateModel((model) => arrangeMutations.distributeViewElements(model, viewId, elementIds, mode));
-    recordTouched({ viewUpserts: [viewId], elementUpserts: elementIds });
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.elementUpserts(...elementIds)));
   };
 
   const sameSizeViewElements = (viewId: string, elementIds: string[], mode: SameSizeMode): void => {
     updateModel((model) => arrangeMutations.sameSizeViewElements(model, viewId, elementIds, mode));
-    recordTouched({ viewUpserts: [viewId], elementUpserts: elementIds });
+    recordTouched(touch.combine(touch.viewUpserts(viewId), touch.elementUpserts(...elementIds)));
   };
 
   return { alignViewElements, distributeViewElements, sameSizeViewElements };

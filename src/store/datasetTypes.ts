@@ -12,6 +12,8 @@ export type Branded<T, B extends string> = T & { readonly __brand: B };
 
 /** A stable identifier for a dataset (local or remote). */
 export type DatasetId = Branded<string, 'DatasetId'>;
+export type DatasetStorageKind = 'local' | 'remote';
+
 
 /**
  * Identifies a dataset and (future) branch/revision context.

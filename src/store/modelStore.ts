@@ -1,12 +1,7 @@
 import type {
-  Element,
   Folder,
   ModelKind,
   Model,
-  ModelMetadata,
-  Relationship,
-  RelationshipConnector,
-  TaggedValue,
   View,
   ViewFormatting,
   ViewNodeLayout,
@@ -16,52 +11,36 @@ import type {
   ViewConnectionAnchorSide,
 } from '../domain';
 import type { AlignMode, AutoLayoutOptions, DistributeMode, SameSizeMode, LayoutOutput } from '../domain/layout/types';
-import { createEmptyModel, createView, VIEWPOINTS } from '../domain';
-import {
-  connectorMutations,
-  elementMutations,
-  modelMutations,
-  bpmnMutations,
-  relationshipMutations,
-  viewMutations,
-  layoutMutations,
-} from './mutations';
-import type { TaggedValueInput } from './mutations';
+import { createView, VIEWPOINTS } from '../domain';
+import { viewMutations, layoutMutations } from './mutations';
 import { createViewOps } from './ops/viewOps';
 import { createLayoutOps } from './ops/layoutOps';
 import { createFolderOps } from './ops/folderOps';
 import { createElementOps } from './ops/elementOps';
+import type { TaggedValueInput } from './mutations/helpers';
 
 import type { ChangeSet, TouchedIds } from './changeSet';
 import { emptyChangeSet } from './changeSet';
 import { ChangeSetRecorder } from './changeSetRecorder';
 import type { StoreFlushEvent } from './storeFlushEvent';
 
-import type { DatasetId } from './datasetTypes';
 import { DEFAULT_LOCAL_DATASET_ID } from './datasetTypes';
+import type { ModelStoreState, StoreListener } from './modelStoreTypes';
+import { createModelStoreEntityApi } from './modelStoreEntityApi';
 
-
-export type ModelStoreState = {
-  /** Identifies which dataset the current in-memory model belongs to. */
-  activeDatasetId: DatasetId;
-  model: Model | null;
-  /** The last chosen file name (used as default for downloads). */
-  fileName: string | null;
-  /** Tracks if there are unsaved changes since last load/save. */
-  isDirty: boolean;
-};
-
-type Listener = () => void;
+// Re-export for backwards compatibility (many imports use `./modelStore`).
+export type { ModelStoreState } from './modelStoreTypes';
 
 export class ModelStore {
   private state: ModelStoreState = {
     activeDatasetId: DEFAULT_LOCAL_DATASET_ID,
     model: null,
     fileName: null,
-    isDirty: false
+    isDirty: false,
+    persistenceStatus: { status: 'ok', message: null, lastOkAt: 0, lastErrorAt: null }
   };
 
-  private listeners = new Set<Listener>();
+  private listeners = new Set<StoreListener>();
   private flushListeners = new Set<(e: StoreFlushEvent) => void>();
 
   // -------------------------
@@ -91,7 +70,7 @@ export class ModelStore {
    * or point at another object, causing runtime errors like:
    *   `TypeError: this.updateModel is not a function`
    */
-  subscribe = (listener: Listener): (() => void) => {
+  subscribe = (listener: StoreListener): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
@@ -103,6 +82,40 @@ export class ModelStore {
 
   getState = (): ModelStoreState => {
     return this.state;
+  };
+
+  // -------------------------
+  // Persistence status (user-scoped runtime)
+  // -------------------------
+  setPersistenceOk = (now: number = Date.now()): void => {
+    const cur = this.state.persistenceStatus;
+    if (cur.status === 'ok' && cur.message === null) {
+      // Already ok; just refresh timestamp if it changed.
+      if (cur.lastOkAt === now) return;
+    }
+    this.setState({
+      ...this.state,
+      persistenceStatus: {
+        status: 'ok',
+        message: null,
+        lastOkAt: now,
+        lastErrorAt: cur.status === 'error' ? cur.lastErrorAt : cur.lastErrorAt
+      }
+    });
+  };
+
+  setPersistenceError = (message: string, now: number = Date.now()): void => {
+    const cur = this.state.persistenceStatus;
+    if (cur.status === 'error' && cur.message === message) return;
+    this.setState({
+      ...this.state,
+      persistenceStatus: {
+        status: 'error',
+        message,
+        lastOkAt: cur.status === 'ok' ? cur.lastOkAt : cur.lastOkAt,
+        lastErrorAt: now
+      }
+    });
   };
 
   private notifyListeners = (): void => {
@@ -210,6 +223,15 @@ export class ModelStore {
     this.setState({ model: nextModel, isDirty: markDirty ? true : this.state.isDirty });
   };
 
+  // -------------------------
+  // Entity-level API (extracted module)
+  // -------------------------
+  private entityApi = createModelStoreEntityApi({
+    setState: this.setState,
+    updateModel: this.updateModel,
+    changeSetRecorder: this.changeSetRecorder,
+  });
+
   // Operation modules (SoC split): keep ModelStore API stable, delegate implementation.
   private viewOps = createViewOps({ updateModel: this.updateModel, recordTouched: this.recordTouched });
 
@@ -228,6 +250,10 @@ export class ModelStore {
   private folderOps = createFolderOps({ updateModel: this.updateModel, recordTouched: this.recordTouched });
 
   private elementOps = createElementOps({ updateModel: this.updateModel, recordTouched: this.recordTouched });
+  moveElementToParent = (childId: string, parentId: string | null): void => this.elementOps.moveElementToParent(childId, parentId);
+
+  detachElementToRoot = (childId: string): void => this.elementOps.detachElementToRoot(childId);
+
 
   /** Replace the current model. */
   loadModel = (model: Model, fileName: string | null = null): void => {
@@ -257,187 +283,42 @@ export class ModelStore {
     this.setState({ model: null, fileName: null, isDirty: false });
   };
 
-  newModel = (metadata: ModelMetadata): void => {
-    const model = createEmptyModel(metadata);
-    this.setState({ model, fileName: null, isDirty: false });
-  };
-
-  /** Backwards-compatible alias used by tests/earlier steps. */
-  createEmptyModel = (metadata: ModelMetadata): void => {
-    this.newModel(metadata);
-  };
-
-  setFileName = (fileName: string | null): void => {
-    this.setState({ fileName });
-  };
-
-  markSaved = (): void => {
-    this.setState({ isDirty: false });
-  };
-
-  updateModelMetadata = (patch: Partial<ModelMetadata>): void => {
-    this.changeSetRecorder.markModelMetadataChanged();
-    this.updateModel((model) => modelMutations.updateModelMetadata(model, patch));
-  };
-
-  updateModelTaggedValues = (taggedValues: TaggedValue[] | undefined): void => {
-    this.changeSetRecorder.markModelMetadataChanged();
-    this.updateModel((model) => modelMutations.updateModelTaggedValues(model, taggedValues));
-  };
-
   // -------------------------
-  // Elements
+  // Model / metadata / entities (delegated)
   // -------------------------
 
-  addElement = (element: Element, folderId?: string): void => {
-    this.changeSetRecorder.upsertElement(element.id);
-    this.updateModel((model) => elementMutations.addElement(model, element, folderId));
-  };
+  newModel = this.entityApi.newModel;
+  createEmptyModel = this.entityApi.createEmptyModel;
+  setFileName = this.entityApi.setFileName;
+  markSaved = this.entityApi.markSaved;
+  updateModelMetadata = this.entityApi.updateModelMetadata;
+  updateModelTaggedValues = this.entityApi.updateModelTaggedValues;
 
-  updateElement = (elementId: string, patch: Partial<Omit<Element, 'id'>>): void => {
-    this.changeSetRecorder.upsertElement(elementId);
-    this.updateModel((model) => elementMutations.updateElement(model, elementId, patch));
-  };
+  addElement = this.entityApi.addElement;
+  updateElement = this.entityApi.updateElement;
+  upsertElementTaggedValue = this.entityApi.upsertElementTaggedValue;
+  removeElementTaggedValue = this.entityApi.removeElementTaggedValue;
+  deleteElement = this.entityApi.deleteElement;
 
-  upsertElementTaggedValue = (elementId: string, entry: TaggedValueInput): void => {
-    this.changeSetRecorder.upsertElement(elementId);
-    this.updateModel((model) => elementMutations.upsertElementTaggedValue(model, elementId, entry));
-  };
+  setBpmnElementAttrs = this.entityApi.setBpmnElementAttrs;
+  setBpmnRelationshipAttrs = this.entityApi.setBpmnRelationshipAttrs;
+  setBpmnGatewayDefaultFlow = this.entityApi.setBpmnGatewayDefaultFlow;
+  attachBoundaryEvent = this.entityApi.attachBoundaryEvent;
+  setBpmnPoolProcessRef = this.entityApi.setBpmnPoolProcessRef;
+  setBpmnLaneFlowNodeRefs = this.entityApi.setBpmnLaneFlowNodeRefs;
+  setBpmnTextAnnotationText = this.entityApi.setBpmnTextAnnotationText;
+  setBpmnDataObjectReferenceRef = this.entityApi.setBpmnDataObjectReferenceRef;
+  setBpmnDataStoreReferenceRef = this.entityApi.setBpmnDataStoreReferenceRef;
 
-  removeElementTaggedValue = (elementId: string, taggedValueId: string): void => {
-    this.changeSetRecorder.upsertElement(elementId);
-    this.updateModel((model) => elementMutations.removeElementTaggedValue(model, elementId, taggedValueId));
-  };
+  addRelationship = this.entityApi.addRelationship;
+  updateRelationship = this.entityApi.updateRelationship;
+  upsertRelationshipTaggedValue = this.entityApi.upsertRelationshipTaggedValue;
+  removeRelationshipTaggedValue = this.entityApi.removeRelationshipTaggedValue;
+  deleteRelationship = this.entityApi.deleteRelationship;
 
-  deleteElement = (elementId: string): void => {
-    this.changeSetRecorder.deleteElement(elementId);
-    this.updateModel((model) => elementMutations.deleteElement(model, elementId));
-  };
-
-  /**
-   * Move element under another element (or null for root).
-   * This updates Element.parentElementId (semantic containment), not folder membership.
-   */
-  moveElementToParent = (childId: string, parentId: string | null): void => {
-    this.elementOps.moveElementToParent(childId, parentId);
-  };
-
-  /** Convenience alias: clears parentElementId. */
-  detachElementToRoot = (childId: string): void => {
-    this.elementOps.detachElementToRoot(childId);
-  };
-
-  // -------------------------
-  // BPMN helpers (Level 2 semantics)
-  // -------------------------
-
-  /** Merge semantic attrs into an element (preserves unknown keys). */
-  setBpmnElementAttrs = (elementId: string, patch: Record<string, unknown>): void => {
-    this.changeSetRecorder.upsertElement(elementId);
-    this.updateModel((model) => bpmnMutations.setBpmnElementAttrs(model, elementId, patch));
-  };
-
-  /** Merge semantic attrs into a relationship (preserves unknown keys). */
-  setBpmnRelationshipAttrs = (relationshipId: string, patch: Record<string, unknown>): void => {
-    this.changeSetRecorder.upsertRelationship(relationshipId);
-    this.updateModel((model) => bpmnMutations.setBpmnRelationshipAttrs(model, relationshipId, patch));
-  };
-
-  /** Set a gateway default flow (null clears); also maintains outgoing sequenceFlow isDefault flags. */
-  setBpmnGatewayDefaultFlow = (gatewayId: string, relationshipId: string | null): void => {
-    this.changeSetRecorder.upsertElement(gatewayId);
-    if (relationshipId) this.changeSetRecorder.upsertRelationship(relationshipId);
-    this.updateModel((model) => bpmnMutations.setGatewayDefaultFlow(model, gatewayId, relationshipId));
-  };
-
-  /** Attach/detach a boundary event to a host activity (null detaches). */
-  attachBoundaryEvent = (boundaryId: string, hostActivityId: string | null): void => {
-    this.changeSetRecorder.upsertElement(boundaryId);
-    if (hostActivityId) this.changeSetRecorder.upsertElement(hostActivityId);
-    this.updateModel((model) => bpmnMutations.attachBoundaryEvent(model, boundaryId, hostActivityId));
-  };
-
-  /** Pool (Participant): set/clear its process reference. */
-  setBpmnPoolProcessRef = (poolId: string, processId: string | null): void => {
-    this.changeSetRecorder.upsertElement(poolId);
-    if (processId) this.changeSetRecorder.upsertElement(processId);
-    this.updateModel((model) => bpmnMutations.setPoolProcessRef(model, poolId, processId));
-  };
-
-  /** Lane: replace its semantic membership list (flowNodeRefs). */
-  setBpmnLaneFlowNodeRefs = (laneId: string, nodeIds: string[]): void => {
-    this.changeSetRecorder.upsertElement(laneId);
-    for (const id of nodeIds) this.changeSetRecorder.upsertElement(id);
-    this.updateModel((model) => bpmnMutations.setLaneFlowNodeRefs(model, laneId, nodeIds));
-  };
-
-  /** Text annotation: set/clear its text. */
-  setBpmnTextAnnotationText = (annotationId: string, text: string): void => {
-    this.changeSetRecorder.upsertElement(annotationId);
-    this.updateModel((model) => bpmnMutations.setTextAnnotationText(model, annotationId, text));
-  };
-
-  /** DataObjectReference: set/clear its referenced global DataObject. */
-  setBpmnDataObjectReferenceRef = (refId: string, dataObjectId: string | null): void => {
-    this.changeSetRecorder.upsertElement(refId);
-    if (dataObjectId) this.changeSetRecorder.upsertElement(dataObjectId);
-    this.updateModel((model) => bpmnMutations.setDataObjectReferenceRef(model, refId, dataObjectId));
-  };
-
-  /** DataStoreReference: set/clear its referenced global DataStore. */
-  setBpmnDataStoreReferenceRef = (refId: string, dataStoreId: string | null): void => {
-    this.changeSetRecorder.upsertElement(refId);
-    if (dataStoreId) this.changeSetRecorder.upsertElement(dataStoreId);
-    this.updateModel((model) => bpmnMutations.setDataStoreReferenceRef(model, refId, dataStoreId));
-  };
-
-  // -------------------------
-  // Relationships
-  // -------------------------
-
-  addRelationship = (relationship: Relationship, folderId?: string): void => {
-    this.changeSetRecorder.upsertRelationship(relationship.id);
-    this.updateModel((model) => relationshipMutations.addRelationship(model, relationship, folderId));
-  };
-
-  updateRelationship = (relationshipId: string, patch: Partial<Omit<Relationship, 'id'>>): void => {
-    this.changeSetRecorder.upsertRelationship(relationshipId);
-    this.updateModel((model) => relationshipMutations.updateRelationship(model, relationshipId, patch));
-  };
-
-  upsertRelationshipTaggedValue = (relationshipId: string, entry: TaggedValueInput): void => {
-    this.changeSetRecorder.upsertRelationship(relationshipId);
-    this.updateModel((model) => relationshipMutations.upsertRelationshipTaggedValue(model, relationshipId, entry));
-  };
-
-  removeRelationshipTaggedValue = (relationshipId: string, taggedValueId: string): void => {
-    this.changeSetRecorder.upsertRelationship(relationshipId);
-    this.updateModel((model) => relationshipMutations.removeRelationshipTaggedValue(model, relationshipId, taggedValueId));
-  };
-
-  deleteRelationship = (relationshipId: string): void => {
-    this.changeSetRecorder.deleteRelationship(relationshipId);
-    this.updateModel((model) => relationshipMutations.deleteRelationship(model, relationshipId));
-  };
-
-  // -------------------------
-  // Relationship connectors (junctions)
-  // -------------------------
-
-  addConnector = (connector: RelationshipConnector): void => {
-    this.changeSetRecorder.upsertConnector(connector.id);
-    this.updateModel((model) => connectorMutations.addConnector(model, connector));
-  };
-
-  updateConnector = (connectorId: string, patch: Partial<Omit<RelationshipConnector, 'id'>>): void => {
-    this.changeSetRecorder.upsertConnector(connectorId);
-    this.updateModel((model) => connectorMutations.updateConnector(model, connectorId, patch));
-  };
-
-  deleteConnector = (connectorId: string): void => {
-    this.changeSetRecorder.deleteConnector(connectorId);
-    this.updateModel((model) => connectorMutations.deleteConnector(model, connectorId));
-  };
+  addConnector = this.entityApi.addConnector;
+  updateConnector = this.entityApi.updateConnector;
+  deleteConnector = this.entityApi.deleteConnector;
 
   // -------------------------
   // Views

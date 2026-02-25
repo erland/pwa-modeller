@@ -1,6 +1,7 @@
 import type { Model } from '../../domain';
 import type { TouchedIds } from '../changeSet';
 import { elementMutations } from '../mutations';
+import { touch } from '../touch';
 
 export type ElementOpsDeps = {
   updateModel: (mutator: (model: Model) => void, markDirty?: boolean) => void;
@@ -17,7 +18,7 @@ export const createElementOps = (deps: ElementOpsDeps) => {
 
   const moveElementToParent = (childId: string, parentId: string | null): void => {
     updateModel((model) => elementMutations.setElementParent(model, childId, parentId));
-    recordTouched({ elementUpserts: [childId] });
+    recordTouched(touch.elementUpserts(childId));
   };
 
   const detachElementToRoot = (childId: string): void => {

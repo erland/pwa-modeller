@@ -9,7 +9,12 @@ import type { DatasetId } from './datasetTypes';
  */
 export type PersistedStoreSlice = Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>;
 
+export type DatasetBackendKind = 'local' | 'remote';
+
 export interface DatasetBackend {
+  /** The backend kind (used to prevent mixing local/remote dataset references). */
+  readonly kind: DatasetBackendKind;
+
   /** Load the persisted store slice (if any) for the given dataset. */
   loadPersistedState(datasetId: DatasetId): Promise<PersistedStoreSlice | null>;
 

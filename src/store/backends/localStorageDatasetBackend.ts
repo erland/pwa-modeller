@@ -9,6 +9,8 @@ import { clearPersistedStoreState, loadPersistedStoreState, persistStoreState } 
  * so behavior remains unchanged while we introduce the backend seam.
  */
 export class LocalStorageDatasetBackend implements DatasetBackend {
+  readonly kind = 'local' as const;
+
   // LocalStorage is legacy single-dataset persistence.
   // We ignore datasetId for now but keep it in the contract.
   async loadPersistedState(_datasetId: DatasetId): Promise<PersistedStoreSlice | null> {

@@ -4,6 +4,7 @@ import type {
 } from '../../../domain';
 import { materializeViewConnectionsForView } from '../../../domain';
 import type { ViewOpsDeps } from './viewOpsTypes';
+import { touch } from '../../touch';
 
 export const createViewConnectionsOps = (deps: ViewOpsDeps) => {
   const { updateModel, recordTouched } = deps;
@@ -32,7 +33,7 @@ export const createViewConnectionsOps = (deps: ViewOpsDeps) => {
 
       model.views[viewId] = { ...view, connections: nextConnections };
     })
-    recordTouched({ viewUpserts: [viewId] });;
+    recordTouched(touch.viewUpserts(viewId));;
   };
 
   const setViewConnectionRoute = (viewId: string, connectionId: string, kind: ViewConnectionRouteKind): void => {
@@ -51,7 +52,7 @@ export const createViewConnectionsOps = (deps: ViewOpsDeps) => {
       nextConnections[idx] = nextConn;
       model.views[viewId] = { ...view, connections: nextConnections };
     })
-    recordTouched({ viewUpserts: [viewId] });;
+    recordTouched(touch.viewUpserts(viewId));;
   };
 
   const setViewConnectionEndpointAnchors = (
@@ -77,7 +78,7 @@ export const createViewConnectionsOps = (deps: ViewOpsDeps) => {
       nextConnections[idx] = nextConn;
       model.views[viewId] = { ...view, connections: nextConnections };
     })
-    recordTouched({ viewUpserts: [viewId] });;
+    recordTouched(touch.viewUpserts(viewId));;
   };
 
   return {

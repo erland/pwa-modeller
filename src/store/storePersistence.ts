@@ -2,7 +2,7 @@ import type { Model } from '../domain';
 import type { ModelStoreState } from './modelStore';
 import { deserializeModel } from './persistence';
 
-const STORAGE_KEY = 'pwa-modeller:storeState:v2';
+export const STORAGE_KEY = 'pwa-modeller:storeState:v2';
 
 type PersistedEnvelope = {
   v: 2;

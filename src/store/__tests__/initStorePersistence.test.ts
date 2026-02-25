@@ -2,6 +2,7 @@
 // (and do not interact with the real singleton store or browser localStorage).
 
 type PersistedState = { model: unknown; fileName: string | null; isDirty: boolean };
+type StoreState = PersistedState & { activeDatasetId: string };
 
 describe('initStorePersistence', () => {
   const originalNodeEnv = process.env.NODE_ENV;
@@ -23,12 +24,12 @@ describe('initStorePersistence', () => {
 
   test('hydrates restored state (if present) and schedules a startup persist', async () => {
     const subscribers: Array<() => void> = [];
-    const mockState: PersistedState = { model: null, fileName: null, isDirty: false };
+    const mockState: StoreState = { activeDatasetId: 'local:default', model: null, fileName: null, isDirty: false };
 
     jest.doMock('../modelStore', () => {
       return {
         modelStore: {
-          hydrate: jest.fn((s: PersistedState) => {
+          hydrate: jest.fn((s: PersistedState & { activeDatasetId?: string }) => {
             mockState.model = s.model;
             mockState.fileName = s.fileName;
             mockState.isDirty = s.isDirty;
@@ -44,35 +45,42 @@ describe('initStorePersistence', () => {
       };
     });
 
-    const persistStoreState = jest.fn();
+    const persistState = jest.fn();
     const restored: PersistedState = { model: { id: 'm1' }, fileName: 'restored.json', isDirty: true };
 
-    jest.doMock('../storePersistence', () => {
+    jest.doMock('../getDefaultDatasetBackend', () => {
       return {
-        loadPersistedStoreState: jest.fn(() => restored),
-        persistStoreState
+        getDefaultDatasetBackend: jest.fn(() => ({
+          loadPersistedState: jest.fn(async () => restored),
+          persistState,
+          clearPersistedState: jest.fn()
+        }))
       };
     });
 
-    // Import after mocks are set up.
-    const { initStorePersistence: init } = await import('../initStorePersistence');
+    jest.doMock('../datasetRegistry', () => {
+      return { ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'local:default', entries: [] })) };
+    });
 
-    init();
+    // Import after mocks are set up.
+    const { initStorePersistenceAsync: init } = await import('../initStorePersistence');
+
+    await init();
 
     const { modelStore } = await import('../modelStore');
-    expect(modelStore.hydrate).toHaveBeenCalledWith(restored);
+    expect(modelStore.hydrate).toHaveBeenCalledWith({ ...restored, activeDatasetId: 'local:default' });
     expect(modelStore.subscribe).toHaveBeenCalledTimes(1);
 
     // Startup persistence is scheduled via setTimeout(250) in JSDOM.
-    expect(persistStoreState).not.toHaveBeenCalled();
+    expect(persistState).not.toHaveBeenCalled();
     jest.advanceTimersByTime(260);
-    expect(persistStoreState).toHaveBeenCalledTimes(1);
-    expect(persistStoreState).toHaveBeenCalledWith({ model: restored.model, fileName: 'restored.json', isDirty: true });
+    expect(persistState).toHaveBeenCalledTimes(1);
+    expect(persistState).toHaveBeenCalledWith('local:default', { model: restored.model, fileName: 'restored.json', isDirty: true });
   });
 
   test('debounces multiple store changes into a single persistence write', async () => {
     const subscribers: Array<() => void> = [];
-    const mockState: PersistedState = { model: { id: 'm2' }, fileName: 'x.json', isDirty: false };
+    const mockState: StoreState = { activeDatasetId: 'local:default', model: { id: 'm2' }, fileName: 'x.json', isDirty: false };
 
     jest.doMock('../modelStore', () => {
       return {
@@ -89,17 +97,24 @@ describe('initStorePersistence', () => {
       };
     });
 
-    const persistStoreState = jest.fn();
-    jest.doMock('../storePersistence', () => {
+    const persistState = jest.fn();
+    jest.doMock('../getDefaultDatasetBackend', () => {
       return {
-        loadPersistedStoreState: jest.fn(() => null),
-        persistStoreState
+        getDefaultDatasetBackend: jest.fn(() => ({
+          loadPersistedState: jest.fn(async () => null),
+          persistState,
+          clearPersistedState: jest.fn()
+        }))
       };
     });
 
-    const { initStorePersistence: init } = await import('../initStorePersistence');
+    jest.doMock('../datasetRegistry', () => {
+      return { ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'local:default', entries: [] })) };
+    });
 
-    init();
+    const { initStorePersistenceAsync: init } = await import('../initStorePersistence');
+
+    await init();
 
     // Trigger store changes rapidly while the idle persist is pending.
     expect(subscribers.length).toBe(1);
@@ -111,7 +126,7 @@ describe('initStorePersistence', () => {
 
     // One write only: the startup write (schedulePersist called once)
     // and subsequent calls while pending are ignored.
-    expect(persistStoreState).toHaveBeenCalledTimes(1);
-    expect(persistStoreState).toHaveBeenCalledWith({ model: mockState.model, fileName: 'x.json', isDirty: false });
+    expect(persistState).toHaveBeenCalledTimes(1);
+    expect(persistState).toHaveBeenCalledWith('local:default', { model: mockState.model, fileName: 'x.json', isDirty: false });
   });
 });

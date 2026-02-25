@@ -1,8 +1,7 @@
 import { createEmptyModel } from '../../domain';
-import { clearPersistedStoreState, loadPersistedStoreState, persistStoreState } from '../storePersistence';
+import { clearPersistedStoreState, loadPersistedStoreState, persistStoreState, STORAGE_KEY } from '../storePersistence';
 
-// Keep this in sync with src/store/storePersistence.ts.
-const STORAGE_KEY = 'pwa-modeller:storeState:v2';
+
 
 describe('storePersistence', () => {
   beforeEach(() => {

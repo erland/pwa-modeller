@@ -1,5 +1,6 @@
 import { modelStore } from './modelStore';
-import { loadPersistedStoreState, persistStoreState } from './storePersistence';
+import { getDefaultDatasetBackend } from './getDefaultDatasetBackend';
+import { ensureDatasetRegistryMigrated } from './datasetRegistry';
 
 let __persistencePaused = false;
 let __schedulePersist: (() => void) | null = null;
@@ -36,11 +37,21 @@ function scheduleIdle(fn: () => void): void {
  * continuously persists changes.
  */
 export function initStorePersistence(): void {
+  // IMPORTANT: Step 4 makes persistence async (IndexedDB). Bootstrap awaits this.
+  void initStorePersistenceAsync();
+}
+
+export async function initStorePersistenceAsync(): Promise<void> {
   if (isTestEnv()) return;
 
-  const restored = loadPersistedStoreState();
+  // Step 3: ensure we have a dataset registry (one-time migration from legacy single-model storage).
+  const registry = ensureDatasetRegistryMigrated();
+
+  const backend = getDefaultDatasetBackend();
+
+  const restored = await backend.loadPersistedState(registry.activeDatasetId);
   if (restored) {
-    modelStore.hydrate(restored);
+    modelStore.hydrate({ ...restored, activeDatasetId: registry.activeDatasetId });
   }
 
   let pending = false;
@@ -51,7 +62,7 @@ export function initStorePersistence(): void {
     }
     pending = false;
     const s = modelStore.getState();
-    persistStoreState({
+    void backend.persistState(s.activeDatasetId, {
       model: s.model,
       fileName: s.fileName,
       isDirty: s.isDirty

@@ -32,8 +32,16 @@ import { createLayoutOps } from './ops/layoutOps';
 import { createFolderOps } from './ops/folderOps';
 import { createElementOps } from './ops/elementOps';
 
+import type { ChangeSet } from './changeSet';
+import { ChangeSetRecorder } from './changeSetRecorder';
+
+import type { DatasetId } from './datasetTypes';
+import { DEFAULT_LOCAL_DATASET_ID } from './datasetTypes';
+
 
 export type ModelStoreState = {
+  /** Identifies which dataset the current in-memory model belongs to. */
+  activeDatasetId: DatasetId;
   model: Model | null;
   /** The last chosen file name (used as default for downloads). */
   fileName: string | null;
@@ -45,12 +53,25 @@ type Listener = () => void;
 
 export class ModelStore {
   private state: ModelStoreState = {
+    activeDatasetId: DEFAULT_LOCAL_DATASET_ID,
     model: null,
     fileName: null,
     isDirty: false
   };
 
   private listeners = new Set<Listener>();
+
+  // -------------------------
+  // Change capture
+  // -------------------------
+  private changeSetRecorder = new ChangeSetRecorder();
+  private lastNotifiedChangeSet: ChangeSet | null = null;
+
+  // -------------------------
+  // Transactions / batching
+  // -------------------------
+  private transactionDepth = 0;
+  private hasPendingTransactionNotify = false;
 
   // Cache last expensive auto-layout computation per view for responsiveness.
   private autoLayoutCacheByView = new Map<string, { signature: string; output: LayoutOutput }>();
@@ -72,9 +93,63 @@ export class ModelStore {
     return this.state;
   };
 
+  private notifyListeners = (): void => {
+    // Flush the accumulated changeset once per subscriber notification.
+    this.lastNotifiedChangeSet = this.changeSetRecorder.flush();
+    for (const l of this.listeners) l();
+  };
+
+  /**
+   * Internal: consume the last flushed ChangeSet (captured since the previous
+   * store notification).
+   */
+  consumeLastChangeSet = (): ChangeSet | null => {
+    const cs = this.lastNotifiedChangeSet;
+    this.lastNotifiedChangeSet = null;
+    return cs;
+  };
+
   private setState = (next: Partial<ModelStoreState>): void => {
     this.state = { ...this.state, ...next };
-    for (const l of this.listeners) l();
+
+    // If we're in a transaction, defer notifications until the outermost
+    // transaction completes. This allows multiple store updates to be applied
+    // with a single subscriber notification (and therefore a single
+    // persistence flush).
+    if (this.transactionDepth > 0) {
+      this.hasPendingTransactionNotify = true;
+      return;
+    }
+
+    this.notifyListeners();
+  };
+
+  /** Begin a transaction. Subscribers are notified only when the outermost transaction ends. */
+  beginTransaction = (): void => {
+    this.transactionDepth += 1;
+  };
+
+  /** End a transaction started by beginTransaction(). */
+  endTransaction = (): void => {
+    if (this.transactionDepth <= 0) {
+      throw new Error('endTransaction() called without a matching beginTransaction()');
+    }
+
+    this.transactionDepth -= 1;
+    if (this.transactionDepth === 0 && this.hasPendingTransactionNotify) {
+      this.hasPendingTransactionNotify = false;
+      this.notifyListeners();
+    }
+  };
+
+  /** Convenience helper that ensures transactions are correctly closed. */
+  runInTransaction = <T>(fn: () => T): T => {
+    this.beginTransaction();
+    try {
+      return fn();
+    } finally {
+      this.endTransaction();
+    }
   };
 
   private updateModel = (mutator: (model: Model) => void, markDirty = true): void => {
@@ -107,23 +182,60 @@ export class ModelStore {
     this.setState({ model: nextModel, isDirty: markDirty ? true : this.state.isDirty });
   };
 
-  // Operation modules (SoC split): keep ModelStore API stable, delegate implementation.
-  private viewOps = createViewOps({ updateModel: this.updateModel });
+  private recordFromOpCall = (opName: string, args: unknown[]): void => {
+    const name = opName.toLowerCase();
+    const first = args[0];
+    const firstId = typeof first === 'string' ? first : null;
+    if (!firstId) return;
 
-  private layoutOps = createLayoutOps({
-    getModel: () => this.state.model,
-    getModelOrThrow: () => {
-      const m = this.state.model;
-      if (!m) throw new Error('No model loaded');
-      return m;
+    // Heuristics: broad + safe. The goal is useful hints for future commit/sync.
+    if (name.includes('element')) this.changeSetRecorder.upsertElement(firstId);
+    if (name.includes('relationship')) this.changeSetRecorder.upsertRelationship(firstId);
+    if (name.includes('connector')) this.changeSetRecorder.upsertConnector(firstId);
+    if (name.includes('view')) this.changeSetRecorder.upsertView(firstId);
+    if (name.includes('folder')) this.changeSetRecorder.upsertFolder(firstId);
+  };
+
+  private wrapOpsWithChangeCapture = <T extends Record<string, any>>(ops: T): T => {
+    return new Proxy(ops, {
+      get: (target, prop) => {
+        const value = (target as any)[prop];
+        if (typeof prop !== 'string' || typeof value !== 'function') return value;
+        return (...args: any[]) => {
+          this.recordFromOpCall(prop, args);
+          return value(...args);
+        };
+      },
+    }) as T;
+  };
+
+  // Operation modules (SoC split): keep ModelStore API stable, delegate implementation.
+  private viewOps = this.wrapOpsWithChangeCapture(createViewOps({ updateModel: this.updateModel }));
+
+  private layoutOps = this.wrapOpsWithChangeCapture(
+    createLayoutOps({
+      getModel: () => this.state.model,
+      getModelOrThrow: () => {
+        const m = this.state.model;
+        if (!m) throw new Error('No model loaded');
+        return m;
+      },
+      updateModel: this.updateModel,
+      autoLayoutCacheByView: this.autoLayoutCacheByView,
+    })
+  );
+
+  private folderOpsRaw = createFolderOps({ updateModel: this.updateModel });
+  private folderOps = this.wrapOpsWithChangeCapture({
+    ...this.folderOpsRaw,
+    createFolder: (parentId: string, name: string) => {
+      const created = this.folderOpsRaw.createFolder(parentId, name);
+      this.changeSetRecorder.upsertFolder(created);
+      return created;
     },
-    updateModel: this.updateModel,
-    autoLayoutCacheByView: this.autoLayoutCacheByView,
   });
 
-  private folderOps = createFolderOps({ updateModel: this.updateModel });
-
-  private elementOps = createElementOps({ updateModel: this.updateModel });
+  private elementOps = this.wrapOpsWithChangeCapture(createElementOps({ updateModel: this.updateModel }));
 
   /** Replace the current model. */
   loadModel = (model: Model, fileName: string | null = null): void => {
@@ -137,9 +249,11 @@ export class ModelStore {
    * `isDirty` flag as well.
    */
   hydrate = (
-    state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>
+    state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'> &
+      Partial<Pick<ModelStoreState, 'activeDatasetId'>>
   ): void => {
     this.setState({
+      activeDatasetId: state.activeDatasetId ?? this.state.activeDatasetId,
       model: state.model,
       fileName: state.fileName,
       isDirty: state.isDirty
@@ -147,6 +261,7 @@ export class ModelStore {
   };
 
   reset = (): void => {
+    // Keep activeDatasetId stable; reset only clears the in-memory model.
     this.setState({ model: null, fileName: null, isDirty: false });
   };
 
@@ -169,10 +284,12 @@ export class ModelStore {
   };
 
   updateModelMetadata = (patch: Partial<ModelMetadata>): void => {
+    this.changeSetRecorder.markModelMetadataChanged();
     this.updateModel((model) => modelMutations.updateModelMetadata(model, patch));
   };
 
   updateModelTaggedValues = (taggedValues: TaggedValue[] | undefined): void => {
+    this.changeSetRecorder.markModelMetadataChanged();
     this.updateModel((model) => modelMutations.updateModelTaggedValues(model, taggedValues));
   };
 
@@ -181,22 +298,27 @@ export class ModelStore {
   // -------------------------
 
   addElement = (element: Element, folderId?: string): void => {
+    this.changeSetRecorder.upsertElement(element.id);
     this.updateModel((model) => elementMutations.addElement(model, element, folderId));
   };
 
   updateElement = (elementId: string, patch: Partial<Omit<Element, 'id'>>): void => {
+    this.changeSetRecorder.upsertElement(elementId);
     this.updateModel((model) => elementMutations.updateElement(model, elementId, patch));
   };
 
   upsertElementTaggedValue = (elementId: string, entry: TaggedValueInput): void => {
+    this.changeSetRecorder.upsertElement(elementId);
     this.updateModel((model) => elementMutations.upsertElementTaggedValue(model, elementId, entry));
   };
 
   removeElementTaggedValue = (elementId: string, taggedValueId: string): void => {
+    this.changeSetRecorder.upsertElement(elementId);
     this.updateModel((model) => elementMutations.removeElementTaggedValue(model, elementId, taggedValueId));
   };
 
   deleteElement = (elementId: string): void => {
+    this.changeSetRecorder.deleteElement(elementId);
     this.updateModel((model) => elementMutations.deleteElement(model, elementId));
   };
 
@@ -219,46 +341,61 @@ export class ModelStore {
 
   /** Merge semantic attrs into an element (preserves unknown keys). */
   setBpmnElementAttrs = (elementId: string, patch: Record<string, unknown>): void => {
+    this.changeSetRecorder.upsertElement(elementId);
     this.updateModel((model) => bpmnMutations.setBpmnElementAttrs(model, elementId, patch));
   };
 
   /** Merge semantic attrs into a relationship (preserves unknown keys). */
   setBpmnRelationshipAttrs = (relationshipId: string, patch: Record<string, unknown>): void => {
+    this.changeSetRecorder.upsertRelationship(relationshipId);
     this.updateModel((model) => bpmnMutations.setBpmnRelationshipAttrs(model, relationshipId, patch));
   };
 
   /** Set a gateway default flow (null clears); also maintains outgoing sequenceFlow isDefault flags. */
   setBpmnGatewayDefaultFlow = (gatewayId: string, relationshipId: string | null): void => {
+    this.changeSetRecorder.upsertElement(gatewayId);
+    if (relationshipId) this.changeSetRecorder.upsertRelationship(relationshipId);
     this.updateModel((model) => bpmnMutations.setGatewayDefaultFlow(model, gatewayId, relationshipId));
   };
 
   /** Attach/detach a boundary event to a host activity (null detaches). */
   attachBoundaryEvent = (boundaryId: string, hostActivityId: string | null): void => {
+    this.changeSetRecorder.upsertElement(boundaryId);
+    if (hostActivityId) this.changeSetRecorder.upsertElement(hostActivityId);
     this.updateModel((model) => bpmnMutations.attachBoundaryEvent(model, boundaryId, hostActivityId));
   };
 
   /** Pool (Participant): set/clear its process reference. */
   setBpmnPoolProcessRef = (poolId: string, processId: string | null): void => {
+    this.changeSetRecorder.upsertElement(poolId);
+    if (processId) this.changeSetRecorder.upsertElement(processId);
     this.updateModel((model) => bpmnMutations.setPoolProcessRef(model, poolId, processId));
   };
 
   /** Lane: replace its semantic membership list (flowNodeRefs). */
   setBpmnLaneFlowNodeRefs = (laneId: string, nodeIds: string[]): void => {
+    this.changeSetRecorder.upsertElement(laneId);
+    for (const id of nodeIds) this.changeSetRecorder.upsertElement(id);
     this.updateModel((model) => bpmnMutations.setLaneFlowNodeRefs(model, laneId, nodeIds));
   };
 
   /** Text annotation: set/clear its text. */
   setBpmnTextAnnotationText = (annotationId: string, text: string): void => {
+    this.changeSetRecorder.upsertElement(annotationId);
     this.updateModel((model) => bpmnMutations.setTextAnnotationText(model, annotationId, text));
   };
 
   /** DataObjectReference: set/clear its referenced global DataObject. */
   setBpmnDataObjectReferenceRef = (refId: string, dataObjectId: string | null): void => {
+    this.changeSetRecorder.upsertElement(refId);
+    if (dataObjectId) this.changeSetRecorder.upsertElement(dataObjectId);
     this.updateModel((model) => bpmnMutations.setDataObjectReferenceRef(model, refId, dataObjectId));
   };
 
   /** DataStoreReference: set/clear its referenced global DataStore. */
   setBpmnDataStoreReferenceRef = (refId: string, dataStoreId: string | null): void => {
+    this.changeSetRecorder.upsertElement(refId);
+    if (dataStoreId) this.changeSetRecorder.upsertElement(dataStoreId);
     this.updateModel((model) => bpmnMutations.setDataStoreReferenceRef(model, refId, dataStoreId));
   };
 
@@ -267,22 +404,27 @@ export class ModelStore {
   // -------------------------
 
   addRelationship = (relationship: Relationship, folderId?: string): void => {
+    this.changeSetRecorder.upsertRelationship(relationship.id);
     this.updateModel((model) => relationshipMutations.addRelationship(model, relationship, folderId));
   };
 
   updateRelationship = (relationshipId: string, patch: Partial<Omit<Relationship, 'id'>>): void => {
+    this.changeSetRecorder.upsertRelationship(relationshipId);
     this.updateModel((model) => relationshipMutations.updateRelationship(model, relationshipId, patch));
   };
 
   upsertRelationshipTaggedValue = (relationshipId: string, entry: TaggedValueInput): void => {
+    this.changeSetRecorder.upsertRelationship(relationshipId);
     this.updateModel((model) => relationshipMutations.upsertRelationshipTaggedValue(model, relationshipId, entry));
   };
 
   removeRelationshipTaggedValue = (relationshipId: string, taggedValueId: string): void => {
+    this.changeSetRecorder.upsertRelationship(relationshipId);
     this.updateModel((model) => relationshipMutations.removeRelationshipTaggedValue(model, relationshipId, taggedValueId));
   };
 
   deleteRelationship = (relationshipId: string): void => {
+    this.changeSetRecorder.deleteRelationship(relationshipId);
     this.updateModel((model) => relationshipMutations.deleteRelationship(model, relationshipId));
   };
 
@@ -291,14 +433,17 @@ export class ModelStore {
   // -------------------------
 
   addConnector = (connector: RelationshipConnector): void => {
+    this.changeSetRecorder.upsertConnector(connector.id);
     this.updateModel((model) => connectorMutations.addConnector(model, connector));
   };
 
   updateConnector = (connectorId: string, patch: Partial<Omit<RelationshipConnector, 'id'>>): void => {
+    this.changeSetRecorder.upsertConnector(connectorId);
     this.updateModel((model) => connectorMutations.updateConnector(model, connectorId, patch));
   };
 
   deleteConnector = (connectorId: string): void => {
+    this.changeSetRecorder.deleteConnector(connectorId);
     this.updateModel((model) => connectorMutations.deleteConnector(model, connectorId));
   };
 

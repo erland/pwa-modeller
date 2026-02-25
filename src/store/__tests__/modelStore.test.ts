@@ -101,4 +101,75 @@ describe('ModelStore', () => {
     expect(m2.externalIds).toEqual(ext1);
     expect(m2.taggedValues).toEqual(tv1);
   });
+
+  test('transactions batch subscriber notifications', () => {
+    const store = createModelStore();
+    store.createEmptyModel({ name: 'My Model' });
+
+    let calls = 0;
+    store.subscribe(() => {
+      calls += 1;
+    });
+
+    store.runInTransaction(() => {
+      store.updateModelMetadata({ description: 'Hello' });
+      store.setFileName('test.json');
+      store.updateModelMetadata({ description: 'Hello2' });
+    });
+
+    expect(calls).toBe(1);
+    expect(store.getState().model?.metadata.description).toBe('Hello2');
+    expect(store.getState().fileName).toBe('test.json');
+  });
+
+  test('captures a ChangeSet for element updates', () => {
+    const store = createModelStore();
+    store.createEmptyModel({ name: 'My Model' });
+
+    const el = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    store.addElement(el);
+
+    const cs1 = store.consumeLastChangeSet();
+    expect(cs1).toBeTruthy();
+    expect(cs1?.elementUpserts).toContain(el.id);
+
+    store.updateElement(el.id, { name: 'A2' });
+    const cs2 = store.consumeLastChangeSet();
+    expect(cs2?.elementUpserts).toContain(el.id);
+  });
+
+  test('captures a single ChangeSet for a transaction', () => {
+    const store = createModelStore();
+    store.createEmptyModel({ name: 'My Model' });
+
+    const a = createElement({ name: 'A', layer: 'Business', type: 'BusinessActor' });
+    const b = createElement({ name: 'B', layer: 'Application', type: 'ApplicationComponent' });
+
+    store.runInTransaction(() => {
+      store.addElement(a);
+      store.addElement(b);
+      store.updateModelMetadata({ description: 'Hello' });
+    });
+
+    const cs = store.consumeLastChangeSet();
+    expect(cs).toBeTruthy();
+    expect(cs?.elementUpserts).toEqual(expect.arrayContaining([a.id, b.id]));
+    expect(cs?.modelMetadataChanged).toBe(true);
+  });
+
+  test('ChangeSet ids are flushed deterministically (sorted)', () => {
+    const store = createModelStore();
+    store.createEmptyModel({ name: 'My Model' });
+
+    const b = createElement({ id: 'b', name: 'B', layer: 'Business', type: 'BusinessActor' });
+    const a = createElement({ id: 'a', name: 'A', layer: 'Business', type: 'BusinessActor' });
+
+    store.runInTransaction(() => {
+      store.addElement(b);
+      store.addElement(a);
+    });
+
+    const cs = store.consumeLastChangeSet();
+    expect(cs?.elementUpserts).toEqual(['a', 'b']);
+  });
 });

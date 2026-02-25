@@ -4,6 +4,13 @@ import { deserializeModel } from './persistence';
 
 export const STORAGE_KEY = 'pwa-modeller:storeState:v2';
 
+/**
+ * Storage scope: DATASET-SCOPED (legacy)
+ *
+ * This localStorage key is the legacy single-dataset snapshot store.
+ * It is retained for one-time migration into the IndexedDB-backed DatasetBackend.
+ */
+
 type PersistedEnvelope = {
   v: 2;
   state: Pick<ModelStoreState, 'model' | 'fileName' | 'isDirty'>;

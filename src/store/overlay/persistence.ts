@@ -4,6 +4,14 @@ import { OVERLAY_SCHEMA_VERSION } from '../../domain/overlay';
 const STORAGE_PREFIX_V1 = 'pwa-modeller:overlayState:v1:';
 const STORAGE_PREFIX_V2 = 'pwa-modeller:overlayState:v2:';
 
+/**
+ * Storage scope: USER-SCOPED (local-only)
+ *
+ * Overlays are intentionally local-only. They are stored in localStorage and keyed by a computed
+ * model signature so different datasets (and different versions of a dataset) can have independent
+ * overlay entries, without involving dataset snapshots or any future server syncing.
+ */
+
 export type OverlayPersistedEnvelopeV1 = {
   v: 1;
   signature: string;

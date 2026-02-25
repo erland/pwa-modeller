@@ -4,6 +4,14 @@ import { loadPersistedStoreState, STORAGE_KEY as LEGACY_STORE_STORAGE_KEY } from
 
 export const DATASET_REGISTRY_STORAGE_KEY = 'pwa-modeller:datasetRegistry:v1';
 
+/**
+ * Storage scope: USER-SCOPED (local-only)
+ *
+ * The registry is a small local index of locally available datasets and the last active dataset.
+ * In a future server-backed mode, this registry may also store remote dataset references, but it
+ * remains user/device-specific and is not part of a dataset snapshot.
+ */
+
 export type DatasetRegistryEntry = {
   datasetId: DatasetId;
   name: string;

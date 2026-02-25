@@ -31,6 +31,8 @@ export type AnalysisUiStateV1 = {
 type AnyState = AnalysisUiStateV1;
 
 function key(modelId: string): string {
+  // Storage scope: USER-SCOPED (local-only)
+  // This state is not part of dataset snapshots and should not be synced by any future server.
   return `ea-modeller:analysis:ui:${modelId}`;
 }
 

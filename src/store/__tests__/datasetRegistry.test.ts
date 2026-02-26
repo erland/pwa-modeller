@@ -1,5 +1,5 @@
 import { DEFAULT_LOCAL_DATASET_ID } from '../datasetTypes';
-import { DATASET_REGISTRY_STORAGE_KEY, ensureDatasetRegistryMigrated, loadDatasetRegistry } from '../datasetRegistry';
+import { DATASET_REGISTRY_STORAGE_KEY, ensureDatasetRegistryMigrated, loadDatasetRegistry, upsertDatasetEntry } from '../datasetRegistry';
 import { persistStoreState, STORAGE_KEY } from '../storePersistence';
 import { createEmptyModel } from '../../domain';
 
@@ -35,5 +35,51 @@ describe('datasetRegistry', () => {
     const first = ensureDatasetRegistryMigrated();
     const second = ensureDatasetRegistryMigrated();
     expect(second).toEqual(first);
+  });
+
+  test('can persist and reload a remote dataset registry entry', () => {
+    ensureDatasetRegistryMigrated();
+
+    upsertDatasetEntry({
+      datasetId: 'remote:abc' as any,
+      storageKind: 'remote',
+      name: 'Remote model',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      remote: {
+        baseUrl: 'http://localhost:8081',
+        serverDatasetId: '11111111-2222-3333-4444-555555555555',
+        displayName: 'Server dataset'
+      }
+    });
+
+    const loaded = loadDatasetRegistry();
+    const e = loaded?.entries.find(x => x.datasetId === ('remote:abc' as any));
+    expect(e?.storageKind).toBe('remote');
+    expect(e?.remote?.baseUrl).toBe('http://localhost:8081');
+    expect(e?.remote?.serverDatasetId).toBe('11111111-2222-3333-4444-555555555555');
+    expect(e?.remote?.displayName).toBe('Server dataset');
+  });
+
+  test('loadDatasetRegistry returns null for invalid remote entries (missing remote ref)', () => {
+    const now = Date.now();
+    window.localStorage.setItem(
+      DATASET_REGISTRY_STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        activeDatasetId: DEFAULT_LOCAL_DATASET_ID,
+        entries: [
+          {
+            datasetId: 'remote:oops',
+            storageKind: 'remote',
+            name: 'Broken remote',
+            createdAt: now,
+            updatedAt: now
+          }
+        ]
+      })
+    );
+
+    expect(loadDatasetRegistry()).toBeNull();
   });
 });

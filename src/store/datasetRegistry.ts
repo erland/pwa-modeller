@@ -16,6 +16,19 @@ export type DatasetRegistryEntry = {
   datasetId: DatasetId;
   /** Storage kind for the dataset reference. Defaults to 'local'. */
   storageKind?: DatasetStorageKind;
+  /**
+   * Remote dataset reference (USER-SCOPED, local-only).
+   *
+   * Present when storageKind === 'remote'.
+   */
+  remote?: {
+    /** Base URL for the server, e.g. http://localhost:8081 */
+    baseUrl: string;
+    /** Server-side dataset id (UUID string). */
+    serverDatasetId: string;
+    /** Optional display name (can differ from local entry name). */
+    displayName?: string;
+  };
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -55,6 +68,17 @@ function isRegistryEntry(v: unknown): v is DatasetRegistryEntry {
 
   const sk = v['storageKind'];
   if (typeof sk !== 'undefined' && sk !== 'local' && sk !== 'remote') return false;
+
+  // Remote reference validation (best-effort, fail closed).
+  const remote = v['remote'];
+  if (sk === 'remote') {
+    if (!isRecord(remote)) return false;
+    if (typeof remote['baseUrl'] !== 'string' || typeof remote['serverDatasetId'] !== 'string') return false;
+    if (typeof remote['displayName'] !== 'undefined' && typeof remote['displayName'] !== 'string') return false;
+  } else {
+    // If explicitly local (or missing kind), remote must be absent or nullish.
+    if (typeof remote !== 'undefined' && remote !== null) return false;
+  }
 
   const lo = v['lastOpenedAt'];
   if (typeof lo === 'undefined') return true;

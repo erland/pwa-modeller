@@ -22,6 +22,8 @@ export class RemoteDatasetBackendError extends Error {
     | 'AUTH_MISSING'
     | 'AUTH_FAILED'
     | 'NOT_FOUND'
+    | 'CONFLICT'
+    | 'PRECONDITION_REQUIRED'
     | 'HTTP_ERROR'
     | 'INVALID_RESPONSE';
 
@@ -46,6 +48,14 @@ function normalizeBaseUrl(baseUrl: string): string {
   const t = baseUrl.trim();
   if (!t) return '';
   return t.endsWith('/') ? t.slice(0, -1) : t;
+}
+
+function ensureQuotedEtag(etag: string): string {
+  const t = etag.trim();
+  if (!t) return '"0"';
+  // Server contract says ETag is quoted. Be defensive in case a server omits quotes.
+  if (t.startsWith('"') && t.endsWith('"')) return t;
+  return `"${t.replaceAll('"', '')}"`;
 }
 
 function getRemoteRefForDataset(datasetId: DatasetId): RemoteDatasetRef | null {
@@ -147,9 +157,89 @@ export class RemoteDatasetBackend implements DatasetBackend {
     };
   }
 
-  async persistState(_datasetId: DatasetId, _state: PersistedStoreSlice): Promise<void> {
-    // Implemented in Step 3.
-    throw new Error('RemoteDatasetBackend.persistState not implemented (Step 3).');
+  async persistState(datasetId: DatasetId, state: PersistedStoreSlice): Promise<void> {
+    const remoteRef = getRemoteRefForDataset(datasetId);
+    if (!remoteRef) {
+      throw new RemoteDatasetBackendError(
+        `Remote dataset reference missing for datasetId '${datasetId}'.`,
+        'REMOTE_REF_MISSING'
+      );
+    }
+
+    const { remoteAccessToken } = loadRemoteDatasetSettings();
+    const token = remoteAccessToken.trim();
+    if (!token) {
+      throw new RemoteDatasetBackendError('Remote access token is missing.', 'AUTH_MISSING');
+    }
+
+    const baseUrl = normalizeBaseUrl(remoteRef.baseUrl);
+    if (!baseUrl) {
+      throw new RemoteDatasetBackendError('Remote server baseUrl is missing.', 'REMOTE_REF_MISSING');
+    }
+
+    const url = `${baseUrl}/datasets/${encodeURIComponent(remoteRef.serverDatasetId)}/snapshot`;
+
+    // Server contract requires a quoted ETag. First write must use "0".
+    const last = this.getLastSeenEtag(datasetId) ?? '"0"';
+    const ifMatch = ensureQuotedEtag(last);
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'If-Match': ifMatch
+        },
+        // Phase 1 contract: body is the modeller snapshot payload.
+        body: JSON.stringify(state.model ?? null)
+      });
+    } catch (e) {
+      throw new RemoteDatasetBackendError('Remote snapshot save request failed.', 'HTTP_ERROR', { cause: e });
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      throw new RemoteDatasetBackendError('Remote authorization failed.', 'AUTH_FAILED', { status: res.status });
+    }
+    if (res.status === 404) {
+      throw new RemoteDatasetBackendError('Remote dataset not found or no access.', 'NOT_FOUND', { status: 404 });
+    }
+    if (res.status === 428) {
+      throw new RemoteDatasetBackendError('Remote snapshot save missing If-Match precondition.', 'PRECONDITION_REQUIRED', {
+        status: 428
+      });
+    }
+
+    const etag = res.headers.get('ETag');
+
+    if (res.status === 409) {
+      // Conflict: do not overwrite. Capture server ETag (current revision) for UX.
+      if (etag) this.etagsByDatasetId.set(datasetId, etag);
+      throw new RemoteDatasetBackendError('Remote snapshot save conflict (stale revision).', 'CONFLICT', { status: 409 });
+    }
+
+    if (!res.ok) {
+      throw new RemoteDatasetBackendError(
+        `Remote snapshot save request failed (${res.status}).`,
+        'HTTP_ERROR',
+        { status: res.status }
+      );
+    }
+
+    // Success: update revision token from response.
+    if (etag) this.etagsByDatasetId.set(datasetId, etag);
+
+    // Response body is not required for Phase 1. Read+discard to surface JSON errors in dev.
+    // Some servers may return 200 with no JSON; that's fine.
+    try {
+      const ct = res.headers.get('Content-Type') ?? '';
+      if (ct.includes('application/json')) {
+        await res.json();
+      }
+    } catch {
+      // Ignore parse failures on success to keep persistence robust.
+    }
   }
 
   async clearPersistedState(_datasetId: DatasetId): Promise<void> {

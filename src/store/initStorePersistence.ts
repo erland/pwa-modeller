@@ -1,10 +1,11 @@
 import { modelStore } from './modelStore';
 import { getDefaultDatasetBackend } from './getDefaultDatasetBackend';
-import { ensureDatasetRegistryMigrated } from './datasetRegistry';
-import { openActiveDatasetOnStartup } from './datasetLifecycle';
+import { ensureDatasetRegistryMigrated, getDatasetRegistryEntry } from './datasetRegistry';
+import { openDataset } from './datasetLifecycle';
 import type { DatasetId } from './datasetTypes';
 import type { PersistedSlice, StoreFlushEvent } from './storeFlushEvent';
 import { emptyChangeSet } from './changeSet';
+import { getRemoteDatasetBackend } from './getRemoteDatasetBackend';
 
 let __persistencePaused = false;
 let __schedulePersist: (() => void) | null = null;
@@ -75,11 +76,19 @@ export async function initStorePersistenceAsync(): Promise<void> {
   if (isTestEnv()) return;
 
   // Step 3: ensure we have a dataset registry (one-time migration from legacy single-model storage).
-  ensureDatasetRegistryMigrated();
+  const registry = ensureDatasetRegistryMigrated();
 
-  const backend = getDefaultDatasetBackend();
+  // Backend routing: local datasets use IndexedDB/localStorage, remote datasets use the RemoteDatasetBackend.
+  const localBackend = getDefaultDatasetBackend();
+  const remoteBackend = getRemoteDatasetBackend();
 
-  await openActiveDatasetOnStartup(backend);
+  const backendFor = (datasetId: DatasetId) => {
+    const entry = getDatasetRegistryEntry(datasetId);
+    const kind = entry?.storageKind ?? 'local';
+    return kind === 'remote' ? remoteBackend : localBackend;
+  };
+
+  await openDataset(registry.activeDatasetId, backendFor(registry.activeDatasetId), { createIfMissing: false });
 
   // We debounce persistence using a per-dataset pending map so rapid flushes coalesce.
   let pending = false;
@@ -97,6 +106,7 @@ export async function initStorePersistenceAsync(): Promise<void> {
     pendingByDataset.clear();
 
     for (const [datasetId, slice] of entries) {
+      const backend = backendFor(datasetId);
       void backend
         .persistState(datasetId, slice)
         .then(() => setPersistenceOk())

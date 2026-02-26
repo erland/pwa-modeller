@@ -1,6 +1,7 @@
 export type ModelActionId =
   | 'new'
   | 'datasets'
+  | 'remoteDatasets'
   | 'load'
   | 'properties'
   | 'save'
@@ -24,6 +25,7 @@ type BuildRegistryArgs = {
   isDirty: boolean;
   onNew: () => void;
   onDatasets: () => void;
+  onRemoteDatasets: () => void;
   onLoad: () => void;
   onProperties: () => void;
   onSave: () => void;
@@ -52,6 +54,11 @@ export function buildModelActionRegistry(args: BuildRegistryArgs): ModelAction[]
       id: 'datasets',
       label: 'Local datasets…',
       run: args.onDatasets
+    },
+    {
+      id: 'remoteDatasets',
+      label: 'Remote datasets…',
+      run: args.onRemoteDatasets
     },
     {
       id: 'load',

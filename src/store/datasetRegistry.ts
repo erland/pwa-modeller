@@ -175,6 +175,16 @@ export function listRegistryDatasets(registry?: DatasetRegistry | null): Dataset
   });
 }
 
+/**
+ * Returns a registry entry for a dataset id, if present.
+ * This is useful for backend routing (local vs remote).
+ */
+export function getDatasetRegistryEntry(datasetId: DatasetId, registry?: DatasetRegistry | null): DatasetRegistryEntry | null {
+  const r = registry ?? loadDatasetRegistry();
+  if (!r) return null;
+  return r.entries.find(e => e.datasetId === datasetId) ?? null;
+}
+
 export function upsertDatasetEntry(entry: DatasetRegistryEntry): DatasetRegistry {
   const existing = loadDatasetRegistry();
   const now = Date.now();

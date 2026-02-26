@@ -68,6 +68,25 @@ describe('initStorePersistence', () => {
       };
     });
 
+    jest.doMock('../datasetRegistry', () => {
+      return {
+        ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'local:default', entries: [] })),
+        getDatasetRegistryEntry: jest.fn(() => null)
+      };
+    });
+
+    jest.doMock('../datasetLifecycle', () => {
+      return {
+        openDataset: jest.fn(async (datasetId: string, backend: any) => {
+          const { modelStore } = require('../modelStore');
+          const restoredState = await backend.loadPersistedState(datasetId);
+          if (restoredState) {
+            modelStore.hydrate({ ...restoredState, activeDatasetId: datasetId });
+          }
+        })
+      };
+    });
+
     // Import after mocks are set up.
     const { initStorePersistenceAsync: init } = await import('../initStorePersistence');
 
@@ -114,6 +133,19 @@ describe('initStorePersistence', () => {
           persistState,
           clearPersistedState: jest.fn()
         }))
+      };
+    });
+
+    jest.doMock('../datasetRegistry', () => {
+      return {
+        ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'local:default', entries: [] })),
+        getDatasetRegistryEntry: jest.fn(() => null)
+      };
+    });
+
+    jest.doMock('../datasetLifecycle', () => {
+      return {
+        openDataset: jest.fn(async () => undefined)
       };
     });
 
@@ -177,13 +209,14 @@ describe('initStorePersistence', () => {
 
     jest.doMock('../datasetRegistry', () => {
       return {
-        ensureDatasetRegistryMigrated: jest.fn(() => ({ version: 1, activeDatasetId: 'remote:ds1', entries: [] }))
+        ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'remote:ds1', entries: [] })),
+        getDatasetRegistryEntry: jest.fn(() => null)
       };
     });
 
     jest.doMock('../datasetLifecycle', () => {
       return {
-        openActiveDatasetOnStartup: jest.fn(async () => undefined)
+        openDataset: jest.fn(async () => undefined)
       };
     });
 

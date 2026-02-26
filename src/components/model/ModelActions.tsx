@@ -14,6 +14,7 @@ import {
 } from './actions';
 
 import { LocalDatasetsDialog } from './datasets/LocalDatasetsDialog';
+import { RemoteDatasetsDialog } from './datasets/RemoteDatasetsDialog';
 
 type ModelActionsProps = {
   onEditModelProps: () => void;
@@ -33,6 +34,7 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
         isDirty,
         onNew: ctrl.doNewModel,
         onDatasets: ctrl.doLocalDatasets,
+        onRemoteDatasets: ctrl.doRemoteDatasets,
         onLoad: ctrl.doLoad,
         onProperties: ctrl.doProperties,
         onSave: ctrl.doSave,
@@ -48,6 +50,7 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
       isDirty,
       ctrl.doNewModel,
       ctrl.doLocalDatasets,
+      ctrl.doRemoteDatasets,
       ctrl.doLoad,
       ctrl.doProperties,
       ctrl.doSave,
@@ -107,6 +110,11 @@ export function ModelActions({ onEditModelProps, activeViewId }: ModelActionsPro
       <LocalDatasetsDialog
         isOpen={ctrl.localDatasetsOpen}
         onClose={() => ctrl.setLocalDatasetsOpen(false)}
+      />
+
+      <RemoteDatasetsDialog
+        isOpen={ctrl.remoteDatasetsOpen}
+        onClose={() => ctrl.setRemoteDatasetsOpen(false)}
       />
 
       <NewModelDialog

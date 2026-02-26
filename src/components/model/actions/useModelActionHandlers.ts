@@ -36,6 +36,7 @@ export function useModelActionHandlers({ model, fileName, isDirty, activeDataset
   const publish = useModelPublishActions({ model, fileName, activeViewId });
 
   const [localDatasetsOpen, setLocalDatasetsOpen] = useState(false);
+  const [remoteDatasetsOpen, setRemoteDatasetsOpen] = useState(false);
 
   return {
     // refs / inputs
@@ -51,6 +52,9 @@ export function useModelActionHandlers({ model, fileName, isDirty, activeDataset
 
     localDatasetsOpen,
     setLocalDatasetsOpen,
+
+    remoteDatasetsOpen,
+    setRemoteDatasetsOpen,
 
     newDialogOpen: file.newDialogOpen,
     setNewDialogOpen: file.setNewDialogOpen,
@@ -77,6 +81,10 @@ export function useModelActionHandlers({ model, fileName, isDirty, activeDataset
     doLocalDatasets: () => {
       setLocalDatasetsOpen(true);
       // Close the actions menu if it was open.
+      file.setOverflowOpen(false);
+    },
+    doRemoteDatasets: () => {
+      setRemoteDatasetsOpen(true);
       file.setOverflowOpen(false);
     },
     doLoad: file.doLoad,

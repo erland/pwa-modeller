@@ -7,6 +7,13 @@ type StoreState = PersistedState & { activeDatasetId: string };
 describe('initStorePersistence', () => {
   const originalNodeEnv = process.env.NODE_ENV;
 
+
+  async function flushPromises(times: number = 1): Promise<void> {
+    for (let i = 0; i < times; i++) {
+      await Promise.resolve();
+    }
+  }
+
   beforeEach(() => {
     jest.useFakeTimers();
     // initStorePersistence has a hard guard for NODE_ENV === 'test'.
@@ -127,4 +134,81 @@ describe('initStorePersistence', () => {
     expect(persistState).toHaveBeenCalledTimes(1);
     expect(persistState).toHaveBeenCalledWith('local:default', { model: mockState.model, fileName: 'x.json', isDirty: false });
   });
+
+
+  test('sets persistence conflict on remote CONFLICT error', async () => {
+    const subscribers: Array<(e: any) => void> = [];
+    const mockState: StoreState = { activeDatasetId: 'remote:ds1', model: { x: 1 }, fileName: 'm.json', isDirty: true };
+
+    const setPersistenceConflict = jest.fn();
+    const clearPersistenceConflict = jest.fn();
+
+    jest.doMock('../modelStore', () => {
+      return {
+        modelStore: {
+          hydrate: jest.fn(),
+          getState: jest.fn(() => ({ ...mockState })),
+          setPersistenceOk: jest.fn(),
+          setPersistenceError: jest.fn(),
+          setPersistenceConflict,
+          clearPersistenceConflict,
+          subscribeFlush: jest.fn((fn: (e: any) => void) => {
+            subscribers.push(fn);
+            return () => undefined;
+          })
+        }
+      };
+    });
+
+    // Backend persist always throws a conflict error.
+    jest.doMock('../getDefaultDatasetBackend', () => {
+      const { RemoteDatasetBackendError } = jest.requireActual('../backends/remoteDatasetBackend');
+      return {
+        getDefaultDatasetBackend: jest.fn(() => ({
+          kind: 'remote',
+          loadPersistedState: jest.fn(async () => null),
+          persistState: jest.fn(async () => {
+            throw new RemoteDatasetBackendError('conflict', 'CONFLICT', { status: 409, responseEtag: '"2"' });
+          }),
+          clearPersistedState: jest.fn(async () => undefined)
+        }))
+      };
+    });
+
+    jest.doMock('../datasetRegistry', () => {
+      return {
+        ensureDatasetRegistryMigrated: jest.fn(() => ({ version: 1, activeDatasetId: 'remote:ds1', entries: [] }))
+      };
+    });
+
+    jest.doMock('../datasetLifecycle', () => {
+      return {
+        openActiveDatasetOnStartup: jest.fn(async () => undefined)
+      };
+    });
+
+    const mod = await import('../initStorePersistence');
+    await mod.initStorePersistenceAsync();
+
+    // Trigger a flush
+    subscribers[0]?.({
+      datasetId: 'remote:ds1',
+      persisted: { model: { x: 2 }, fileName: 'm.json', isDirty: true },
+      changeSet: { touched: [] },
+      timestamp: Date.now()
+    });
+
+    jest.runOnlyPendingTimers();
+    await flushPromises(3);
+    jest.runOnlyPendingTimers();
+    await flushPromises(3);
+
+    expect(setPersistenceConflict).toHaveBeenCalledWith(
+      expect.objectContaining({
+        datasetId: 'remote:ds1',
+        serverEtag: '"2"'
+      })
+    );
+  });
+
 });

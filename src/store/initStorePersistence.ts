@@ -18,6 +18,13 @@ export function flushStorePersistence(): void {
 }
 
 
+function isJestRuntime(): boolean {
+  // Jest sets JEST_WORKER_ID in worker processes. This stays true even if NODE_ENV is overridden in unit tests.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g: any = typeof globalThis !== 'undefined' ? globalThis : undefined;
+  return Boolean(g?.process?.env?.JEST_WORKER_ID);
+}
+
 function isTestEnv(): boolean {
   // Jest sets NODE_ENV=test. Guard to avoid leaking localStorage between tests.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,14 +32,25 @@ function isTestEnv(): boolean {
   return g?.process?.env?.NODE_ENV === 'test';
 }
 
+function runSoon(fn: () => void): void {
+  globalThis.setTimeout(fn, 0);
+}
+
 function scheduleIdle(fn: () => void): void {
+  // In Jest, requestIdleCallback (if polyfilled) may not be driven by fake timers,
+  // so prefer setTimeout to keep persistence scheduling testable/deterministic.
+  if (isJestRuntime()) {
+    globalThis.setTimeout(fn, 0);
+    return;
+  }
+
   // requestIdleCallback is nice in the browser but doesn't exist everywhere.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w: any = typeof window !== 'undefined' ? window : undefined;
   if (w?.requestIdleCallback) {
     w.requestIdleCallback(fn, { timeout: 500 });
   } else {
-    window.setTimeout(fn, 250);
+    globalThis.setTimeout(fn, 250);
   }
 }
 
@@ -83,6 +101,22 @@ export async function initStorePersistenceAsync(): Promise<void> {
         .persistState(datasetId, slice)
         .then(() => setPersistenceOk())
         .catch((e) => {
+          // Avoid relying on instanceof across Jest module boundaries; use a structural check instead.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const anyErr: any = e;
+          if (anyErr && typeof anyErr === 'object' && anyErr.code === 'CONFLICT') {
+            // Phase 1: pause auto-persistence and ask the user how to proceed.
+            // Use a macrotask so unit tests using fake timers can observe the state change deterministically.
+            runSoon(() => {
+              setStorePersistencePaused(true);
+              modelStore.setPersistenceConflict({
+                datasetId,
+                message: 'Remote dataset changed on the server. Reload from server or export your local snapshot.',
+                serverEtag: anyErr.responseEtag ?? null
+              });
+            });
+            return;
+          }
           const msg = e instanceof Error ? e.message : String(e);
           setPersistenceError(msg);
         });

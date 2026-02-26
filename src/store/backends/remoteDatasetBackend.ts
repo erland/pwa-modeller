@@ -28,16 +28,18 @@ export class RemoteDatasetBackendError extends Error {
     | 'INVALID_RESPONSE';
 
   public readonly status?: number;
+  public readonly responseEtag?: string | null;
 
   constructor(
     message: string,
     code: RemoteDatasetBackendError['code'],
-    opts?: { status?: number; cause?: unknown }
+    opts?: { status?: number; responseEtag?: string | null; cause?: unknown }
   ) {
     super(message);
     this.name = 'RemoteDatasetBackendError';
     this.code = code;
     this.status = opts?.status;
+    this.responseEtag = opts?.responseEtag ?? null;
     // Preserve original error where supported.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (this as any).cause = opts?.cause;
@@ -216,7 +218,7 @@ export class RemoteDatasetBackend implements DatasetBackend {
     if (res.status === 409) {
       // Conflict: do not overwrite. Capture server ETag (current revision) for UX.
       if (etag) this.etagsByDatasetId.set(datasetId, etag);
-      throw new RemoteDatasetBackendError('Remote snapshot save conflict (stale revision).', 'CONFLICT', { status: 409 });
+      throw new RemoteDatasetBackendError('Remote snapshot save conflict (stale revision).', 'CONFLICT', { status: 409, responseEtag: etag ?? null });
     }
 
     if (!res.ok) {

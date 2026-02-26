@@ -35,7 +35,8 @@ export class ModelStore {
       model: null,
       fileName: null,
       isDirty: false,
-      persistenceStatus: { status: 'ok', message: null, lastOkAt: 0, lastErrorAt: null }
+      persistenceStatus: { status: 'ok', message: null, lastOkAt: 0, lastErrorAt: null },
+      persistenceConflict: null
     },
     (state) => this.flush.onNotify(state),
   );
@@ -95,6 +96,47 @@ export class ModelStore {
         lastOkAt: cur.status === 'ok' ? cur.lastOkAt : cur.lastOkAt,
         lastErrorAt: now
       }
+    });
+  };
+
+  setPersistenceConflict = (
+    conflict: { datasetId: string; message: string; detectedAt?: number; serverEtag?: string | null },
+    now: number = Date.now(),
+  ): void => {
+    const cur = this.core.getState().persistenceConflict;
+    const detectedAt = conflict.detectedAt ?? now;
+    const next = {
+      datasetId: conflict.datasetId as any,
+      message: conflict.message,
+      detectedAt,
+      serverEtag: conflict.serverEtag ?? null
+    };
+
+    // Avoid noisy state churn for repeated flush errors.
+    if (
+      cur &&
+      cur.datasetId === next.datasetId &&
+      cur.message === next.message &&
+      cur.serverEtag === next.serverEtag
+    ) {
+      return;
+    }
+
+    this.setState({
+      ...this.core.getState(),
+      persistenceConflict: next
+    });
+
+    // Also surface in the generic status chip.
+    this.setPersistenceError(conflict.message, now);
+  };
+
+  clearPersistenceConflict = (): void => {
+    const cur = this.core.getState().persistenceConflict;
+    if (!cur) return;
+    this.setState({
+      ...this.core.getState(),
+      persistenceConflict: null
     });
   };
 

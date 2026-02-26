@@ -5,6 +5,17 @@ export type PersistenceStatus =
   | { status: 'ok'; message: null; lastOkAt: number; lastErrorAt: number | null }
   | { status: 'error'; message: string; lastOkAt: number | null; lastErrorAt: number };
 
+
+export type RemotePersistenceConflict = {
+  datasetId: DatasetId;
+  /** Human-readable message for the user. */
+  message: string;
+  /** When the conflict was detected (ms since epoch). */
+  detectedAt: number;
+  /** Latest server ETag if known (quoted). */
+  serverEtag: string | null;
+};
+
 export type ModelStoreState = {
   /** Identifies which dataset the current in-memory model belongs to. */
   activeDatasetId: DatasetId;
@@ -19,6 +30,9 @@ export type ModelStoreState = {
    * Dataset snapshots remain dataset-scoped; this status is per device/session.
    */
   persistenceStatus: PersistenceStatus;
+
+  /** Set when remote optimistic concurrency detects a conflict (Phase 1). */
+  persistenceConflict: RemotePersistenceConflict | null;
 };
 
 export type StoreListener = () => void;

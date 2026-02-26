@@ -4,7 +4,11 @@ import { NavLink, useNavigate } from 'react-router-dom';
 
 import '../../styles/shell.css';
 import { computeModelSignature } from '../../domain';
-import { loadOverlayExportMarker, useModelStore, useOverlayStore } from '../../store';
+import { RemoteDatasetConflictDialog } from './RemoteDatasetConflictDialog';
+import { downloadTextFile, sanitizeFileName, loadOverlayExportMarker, modelStore, useModelStore, useOverlayStore } from '../../store';
+import { openDataset } from '../../store/datasetLifecycle';
+import { setStorePersistencePaused } from '../../store/initStorePersistence';
+import { RemoteDatasetBackend } from '../../store/backends/remoteDatasetBackend';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
 import { useAppInit } from '../../app/init/useAppInit';
@@ -115,6 +119,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const [isResizing, setIsResizing] = useState<null | 'left' | 'right'>(null);
   const [isNavigatorDragging, setIsNavigatorDragging] = useState(false);
   const persistenceStatus = useModelStore((s) => s.persistenceStatus);
+  const persistenceConflict = useModelStore((s) => s.persistenceConflict);
   const { isDirty, model } = useModelStore((s) => ({
     isDirty: s.isDirty,
     model: s.model
@@ -216,11 +221,50 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
       setRightOpen(false);
     }
   }, [isSmall, isMedium]);
+  const onExportLocalConflictSnapshot = () => {
+    const st = modelStore.getState();
+    const file = sanitizeFileName(`conflict-${st.activeDatasetId}`);
+    const json = JSON.stringify(st.model ?? null, null, 2);
+    downloadTextFile(file, json, 'application/json');
+  };
+
+  const onKeepLocalChangesAfterConflict = () => {
+    // Keep auto-save paused for this session. User can re-enable by reloading from server later.
+    modelStore.clearPersistenceConflict();
+    modelStore.setPersistenceError('Remote conflict unresolved. Auto-save paused for this session.');
+  };
+
+  const onReloadFromServerAfterConflict = () => {
+    const st = modelStore.getState();
+    const datasetId = st.activeDatasetId;
+    // Reload the dataset from the remote server, discarding local changes.
+    const backend = new RemoteDatasetBackend();
+    setStorePersistencePaused(true);
+    void openDataset(datasetId, backend)
+      .then(() => {
+        modelStore.clearPersistenceConflict();
+        modelStore.setPersistenceOk();
+        setStorePersistencePaused(false);
+      })
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        modelStore.setPersistenceError(msg);
+      });
+  };
+
 
   const showBackdrop = (isSmall && (leftOpen || rightOpen)) || (rightOverlay && rightOpen);
 
   return (
     <div className={['shell', isResizing ? 'isResizing' : null, isNavigatorDragging ? 'isNavigatorDragging' : null].filter(Boolean).join(' ')}>
+
+      <RemoteDatasetConflictDialog
+        isOpen={!!persistenceConflict}
+        conflict={persistenceConflict}
+        onReloadFromServer={onReloadFromServerAfterConflict}
+        onExportLocalSnapshot={onExportLocalConflictSnapshot}
+        onKeepLocalChanges={onKeepLocalChangesAfterConflict}
+      />
       <header className="shellHeader" data-testid="app-header">
         <div className="shellBrand" aria-label="Application">
           <div className="shellTitle">{title}</div>

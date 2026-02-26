@@ -167,6 +167,96 @@ describe('initStorePersistence', () => {
     expect(persistState).toHaveBeenCalledWith('local:default', { model: mockState.model, fileName: 'x.json', isDirty: false });
   });
 
+  test('routes persistence writes to the remote backend when dataset storageKind is remote', async () => {
+    const subscribers: Array<(e: any) => void> = [];
+    const mockState: StoreState = { activeDatasetId: 'remote:ds1', model: { x: 1 }, fileName: 'm.json', isDirty: true };
+
+    jest.doMock('../modelStore', () => {
+      return {
+        modelStore: {
+          hydrate: jest.fn(),
+          getState: jest.fn(() => ({ ...mockState })),
+          setPersistenceOk: jest.fn(),
+          setPersistenceError: jest.fn(),
+          setPersistenceConflict: jest.fn(),
+          clearPersistenceConflict: jest.fn(),
+          subscribeFlush: jest.fn((fn: (e: any) => void) => {
+            subscribers.push(fn);
+            return () => undefined;
+          })
+        }
+      };
+    });
+
+    const localPersistState = jest.fn(async () => undefined);
+    jest.doMock('../getDefaultDatasetBackend', () => {
+      return {
+        getDefaultDatasetBackend: jest.fn(() => ({
+          kind: 'local',
+          loadPersistedState: jest.fn(async () => null),
+          persistState: localPersistState,
+          clearPersistedState: jest.fn(async () => undefined)
+        }))
+      };
+    });
+
+    const remotePersistState = jest.fn(async () => undefined);
+    jest.doMock('../getRemoteDatasetBackend', () => {
+      return {
+        getRemoteDatasetBackend: jest.fn(() => ({
+          kind: 'remote',
+          loadPersistedState: jest.fn(async () => null),
+          persistState: remotePersistState,
+          clearPersistedState: jest.fn(async () => undefined)
+        }))
+      };
+    });
+
+    jest.doMock('../datasetRegistry', () => {
+      return {
+        ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'remote:ds1', entries: [] })),
+        getDatasetRegistryEntry: jest.fn((datasetId: string) =>
+          datasetId === 'remote:ds1'
+            ? {
+                datasetId: 'remote:ds1',
+                name: 'Remote DS',
+                storageKind: 'remote',
+                remote: { baseUrl: 'https://example', serverDatasetId: 'ds1', displayName: 'Remote DS' },
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastOpenedAt: Date.now()
+              }
+            : null
+        )
+      };
+    });
+
+    jest.doMock('../datasetLifecycle', () => {
+      return {
+        openDataset: jest.fn(async () => undefined)
+      };
+    });
+
+    const { initStorePersistenceAsync: init } = await import('../initStorePersistence');
+    await init();
+
+    // Trigger a flush
+    subscribers[0]?.({
+      datasetId: 'remote:ds1',
+      persisted: { model: { x: 2 }, fileName: 'm.json', isDirty: true },
+      changeSet: { touched: [] },
+      timestamp: Date.now()
+    });
+
+    jest.runOnlyPendingTimers();
+    await flushPromises(3);
+    jest.runOnlyPendingTimers();
+    await flushPromises(3);
+
+    expect(remotePersistState).toHaveBeenCalled();
+    expect(localPersistState).not.toHaveBeenCalled();
+  });
+
 
   test('sets persistence conflict on remote CONFLICT error', async () => {
     const subscribers: Array<(e: any) => void> = [];
@@ -192,16 +282,30 @@ describe('initStorePersistence', () => {
       };
     });
 
-    // Backend persist always throws a conflict error.
+    // Local backend should NOT be used for remote datasets.
+    const localPersistState = jest.fn(async () => undefined);
     jest.doMock('../getDefaultDatasetBackend', () => {
-      const { RemoteDatasetBackendError } = jest.requireActual('../backends/remoteDatasetBackend');
       return {
         getDefaultDatasetBackend: jest.fn(() => ({
+          kind: 'local',
+          loadPersistedState: jest.fn(async () => null),
+          persistState: localPersistState,
+          clearPersistedState: jest.fn(async () => undefined)
+        }))
+      };
+    });
+
+    // Remote backend persist always throws a conflict error.
+    const remotePersistState = jest.fn(async () => {
+      const { RemoteDatasetBackendError } = jest.requireActual('../backends/remoteDatasetBackend');
+      throw new RemoteDatasetBackendError('conflict', 'CONFLICT', { status: 409, responseEtag: '"2"' });
+    });
+    jest.doMock('../getRemoteDatasetBackend', () => {
+      return {
+        getRemoteDatasetBackend: jest.fn(() => ({
           kind: 'remote',
           loadPersistedState: jest.fn(async () => null),
-          persistState: jest.fn(async () => {
-            throw new RemoteDatasetBackendError('conflict', 'CONFLICT', { status: 409, responseEtag: '"2"' });
-          }),
+          persistState: remotePersistState,
           clearPersistedState: jest.fn(async () => undefined)
         }))
       };
@@ -210,7 +314,19 @@ describe('initStorePersistence', () => {
     jest.doMock('../datasetRegistry', () => {
       return {
         ensureDatasetRegistryMigrated: jest.fn(() => ({ v: 1, activeDatasetId: 'remote:ds1', entries: [] })),
-        getDatasetRegistryEntry: jest.fn(() => null)
+        getDatasetRegistryEntry: jest.fn((datasetId: string) =>
+          datasetId === 'remote:ds1'
+            ? {
+                datasetId: 'remote:ds1',
+                name: 'Remote DS',
+                storageKind: 'remote',
+                remote: { baseUrl: 'https://example', serverDatasetId: 'ds1', displayName: 'Remote DS' },
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastOpenedAt: Date.now()
+              }
+            : null
+        )
       };
     });
 
@@ -235,6 +351,8 @@ describe('initStorePersistence', () => {
     await flushPromises(3);
     jest.runOnlyPendingTimers();
     await flushPromises(3);
+
+    expect(localPersistState).not.toHaveBeenCalled();
 
     expect(setPersistenceConflict).toHaveBeenCalledWith(
       expect.objectContaining({

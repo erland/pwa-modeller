@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+import { isAuthNavigationInProgress } from '../auth/oidcPkceAuth';
+
 /**
  * Adds:
  * - `beforeunload` confirmation when there are unsaved changes.
@@ -25,6 +27,8 @@ export function useUnsavedChangesGuard(isDirty: boolean, opts?: { markTitle?: bo
   useEffect(() => {
     function onBeforeUnload(ev: BeforeUnloadEvent) {
       if (!isDirty) return;
+      // During OIDC redirect login, we intentionally leave the page.
+      if (isAuthNavigationInProgress()) return;
       // Chrome requires returnValue to be set.
       ev.preventDefault();
       ev.returnValue = '';

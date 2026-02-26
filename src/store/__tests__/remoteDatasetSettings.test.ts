@@ -8,20 +8,30 @@ describe('remoteDatasetSettings', () => {
   test('defaults to empty strings', () => {
     const s = loadRemoteDatasetSettings();
     expect(s.remoteServerBaseUrl).toBe('');
-    expect(s.remoteAccessToken).toBe('');
+    expect(s.oidcIssuerUrl).toBe('');
+    expect(s.oidcClientId).toBe('');
+    expect(s.oidcScope).toBe('');
+    expect(s.remoteAccessToken).toBeUndefined();
   });
 
-  test('can store and reload baseUrl and token', () => {
-    saveRemoteDatasetSettings({ remoteServerBaseUrl: ' http://localhost:8081 ', remoteAccessToken: '  token123  ' });
+  test('can store and reload baseUrl and oidc config', () => {
+    saveRemoteDatasetSettings({
+      remoteServerBaseUrl: ' http://localhost:8081 ',
+      oidcIssuerUrl: ' https://kc/realms/r ',
+      oidcClientId: ' pwa-modeller ',
+      oidcScope: ' openid '
+    });
     const s = loadRemoteDatasetSettings();
     expect(s.remoteServerBaseUrl).toBe('http://localhost:8081');
-    expect(s.remoteAccessToken).toBe('token123');
+    expect(s.oidcIssuerUrl).toBe('https://kc/realms/r');
+    expect(s.oidcClientId).toBe('pwa-modeller');
+    expect(s.oidcScope).toBe('openid');
   });
 
   test('clearRemoteAccessToken removes the token', () => {
     saveRemoteDatasetSettings({ remoteAccessToken: 'token123' });
     clearRemoteAccessToken();
     const s = loadRemoteDatasetSettings();
-    expect(s.remoteAccessToken).toBe('');
+    expect(s.remoteAccessToken).toBeUndefined();
   });
 });

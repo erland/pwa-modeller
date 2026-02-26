@@ -1,4 +1,5 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 
 import { useModelStore } from './store';
 import { useUnsavedChangesGuard } from './hooks/useUnsavedChangesGuard';
@@ -14,6 +15,8 @@ import { PortalShell } from './portal/PortalShell';
 import PortalElementPage from './portal/pages/PortalElementPage';
 import PortalHomePage from './portal/pages/PortalHomePage';
 import PortalViewPage from './portal/pages/PortalViewPage';
+
+import { handleRedirectCallbackIfPresent } from './auth/oidcPkceAuth';
 
 export function AppRoutes() {
   return (
@@ -37,8 +40,26 @@ export function AppRoutes() {
 }
 
 export default function App() {
+  const [authReady, setAuthReady] = useState(false);
   const isDirty = useModelStore((s) => s.isDirty);
   useUnsavedChangesGuard(isDirty, { markTitle: true });
+
+  // Handle OIDC PKCE redirect callback (if present) before the user interacts further.
+  useEffect(() => {
+    void (async () => {
+      try {
+        await handleRedirectCallbackIfPresent();
+      } catch (e) {
+        // Keep this non-fatal; the Remote datasets dialog will surface auth problems.
+        // eslint-disable-next-line no-console
+        console.warn('OIDC callback handling failed', e);
+      } finally {
+        setAuthReady(true);
+      }
+    })();
+  }, []);
+
+  if (!authReady) return null;
 
   return (
     <HashRouter>

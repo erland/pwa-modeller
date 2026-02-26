@@ -1,5 +1,5 @@
 import type { NavigateFunction } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { Model } from '../../../domain';
 import type { DatasetId } from '../../../store';
@@ -9,6 +9,8 @@ import { useModelPublishActions } from './model/useModelPublishActions';
 import { useModelElementActions } from './model/useModelElementActions';
 import { useModelRelationshipActions } from './model/useModelRelationshipActions';
 import { useModelViewActions } from './model/useModelViewActions';
+
+import { consumeAfterLogin } from '../../../auth/oidcPkceAuth';
 
 export type { LastImportInfo } from './model/useModelFileActions';
 
@@ -37,6 +39,14 @@ export function useModelActionHandlers({ model, fileName, isDirty, activeDataset
 
   const [localDatasetsOpen, setLocalDatasetsOpen] = useState(false);
   const [remoteDatasetsOpen, setRemoteDatasetsOpen] = useState(false);
+
+  // If the user initiated PKCE login from the Remote Datasets dialog, reopen it after redirect.
+  useEffect(() => {
+    const a = consumeAfterLogin();
+    if (a === 'openRemoteDatasetsDialog') {
+      setRemoteDatasetsOpen(true);
+    }
+  }, []);
 
   return {
     // refs / inputs

@@ -2,6 +2,7 @@ import type { DatasetBackend, PersistedStoreSlice } from '../datasetBackend';
 import type { DatasetId } from '../datasetTypes';
 import { loadDatasetRegistry } from '../datasetRegistry';
 import { loadRemoteDatasetSettings } from '../remoteDatasetSettings';
+import { getAccessToken } from '../../auth/oidcPkceAuth';
 
 export type RemoteDatasetRef = {
   baseUrl: string;
@@ -115,11 +116,9 @@ export class RemoteDatasetBackend implements DatasetBackend {
       );
     }
 
-    const { remoteAccessToken } = loadRemoteDatasetSettings();
-    const token = remoteAccessToken.trim();
-    if (!token) {
-      throw new RemoteDatasetBackendError('Remote access token is missing.', 'AUTH_MISSING');
-    }
+    // Prefer PKCE session tokens. Keep legacy pasted token as fallback.
+    const token = (await getAccessToken()) ?? loadRemoteDatasetSettings().remoteAccessToken ?? '';
+    if (!token.trim()) throw new RemoteDatasetBackendError('Not signed in (no access token).', 'AUTH_MISSING');
 
     const baseUrl = normalizeBaseUrl(remoteRef.baseUrl);
     if (!baseUrl) {
@@ -180,11 +179,9 @@ export class RemoteDatasetBackend implements DatasetBackend {
       );
     }
 
-    const { remoteAccessToken } = loadRemoteDatasetSettings();
-    const token = remoteAccessToken.trim();
-    if (!token) {
-      throw new RemoteDatasetBackendError('Remote access token is missing.', 'AUTH_MISSING');
-    }
+    // Prefer PKCE session tokens. Keep legacy pasted token as fallback.
+    const token = (await getAccessToken()) ?? loadRemoteDatasetSettings().remoteAccessToken ?? '';
+    if (!token.trim()) throw new RemoteDatasetBackendError('Not signed in (no access token).', 'AUTH_MISSING');
 
     const baseUrl = normalizeBaseUrl(remoteRef.baseUrl);
     if (!baseUrl) {

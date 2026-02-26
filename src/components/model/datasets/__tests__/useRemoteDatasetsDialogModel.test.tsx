@@ -13,7 +13,9 @@ const mockGetRemoteDatasetBackend = jest.fn();
 
 const mockLoadSettings = jest.fn();
 const mockSaveSettings = jest.fn();
-const mockClearToken = jest.fn();
+const mockBeginLogin = jest.fn();
+const mockClearTokens = jest.fn();
+const mockIsLoggedIn = jest.fn();
 
 jest.mock('../../../../store/remoteDatasetApi', () => {
   return {
@@ -38,15 +40,28 @@ jest.mock('../../../../store/getRemoteDatasetBackend', () => {
 jest.mock('../../../../store/remoteDatasetSettings', () => {
   return {
     loadRemoteDatasetSettings: () => mockLoadSettings(),
-    saveRemoteDatasetSettings: (...args: any[]) => mockSaveSettings(...args),
-    clearRemoteAccessToken: () => mockClearToken()
+    saveRemoteDatasetSettings: (...args: any[]) => mockSaveSettings(...args)
+  };
+});
+
+jest.mock('../../../../auth/oidcPkceAuth', () => {
+  return {
+    beginLogin: (...args: any[]) => mockBeginLogin(...args),
+    clearTokens: () => mockClearTokens(),
+    isLoggedIn: () => mockIsLoggedIn()
   };
 });
 
 describe('useRemoteDatasetsDialogModel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockLoadSettings.mockReturnValue({ remoteServerBaseUrl: 'https://server/', remoteAccessToken: 't0' });
+    mockLoadSettings.mockReturnValue({
+      remoteServerBaseUrl: 'https://server/',
+      oidcIssuerUrl: 'https://kc/realms/r',
+      oidcClientId: 'pwa-modeller',
+      oidcScope: 'openid profile email'
+    });
+    mockIsLoggedIn.mockReturnValue(true);
     mockGetRemoteDatasetBackend.mockReturnValue({ kind: 'remote' });
   });
 
@@ -57,13 +72,13 @@ describe('useRemoteDatasetsDialogModel', () => {
     );
 
     expect(result.current.baseUrl).toBe('');
-    expect(result.current.token).toBe('');
+    expect(result.current.issuerUrl).toBe('');
 
     rerender({ isOpen: true, onClose: jest.fn() });
 
     await waitFor(() => {
       expect(result.current.baseUrl).toBe('https://server/');
-      expect(result.current.token).toBe('t0');
+      expect(result.current.issuerUrl).toBe('https://kc/realms/r');
     });
   });
 
@@ -76,9 +91,13 @@ describe('useRemoteDatasetsDialogModel', () => {
       await result.current.refresh();
     });
 
-    expect(mockListRemoteDatasets).toHaveBeenCalledWith({ baseUrl: 'https://server', token: 't0' });
+    expect(mockListRemoteDatasets).toHaveBeenCalledWith({ baseUrl: 'https://server' });
     expect(mockSaveSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ remoteServerBaseUrl: 'https://server', remoteAccessToken: 't0' })
+      expect.objectContaining({
+        remoteServerBaseUrl: 'https://server',
+        oidcIssuerUrl: 'https://kc/realms/r',
+        oidcClientId: 'pwa-modeller'
+      })
     );
 
     expect(result.current.rows).toHaveLength(1);
@@ -102,7 +121,6 @@ describe('useRemoteDatasetsDialogModel', () => {
 
     expect(mockCreateRemoteDataset).toHaveBeenCalledWith({
       baseUrl: 'https://server',
-      token: 't0',
       name: 'My dataset',
       description: 'Desc'
     });
@@ -132,7 +150,7 @@ describe('useRemoteDatasetsDialogModel', () => {
     );
     expect(mockOpenDataset).toHaveBeenCalledWith('remote:ds1', { kind: 'remote' });
     expect(mockSaveSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ remoteServerBaseUrl: 'https://server', remoteAccessToken: 't0' })
+      expect.objectContaining({ remoteServerBaseUrl: 'https://server' })
     );
     expect(onClose).toHaveBeenCalled();
   });

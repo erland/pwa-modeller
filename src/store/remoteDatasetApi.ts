@@ -1,4 +1,5 @@
 import { loadRemoteDatasetSettings } from './remoteDatasetSettings';
+import { getAccessToken } from '../auth/oidcPkceAuth';
 
 export type RemoteDatasetListItem = {
   datasetId: string;
@@ -53,6 +54,16 @@ function authHeaders(token: string | null): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+async function requireAccessToken(): Promise<string> {
+  // Prefer PKCE session tokens.
+  const t = await getAccessToken();
+  if (t) return t;
+  // Back-compat: allow legacy token saved in settings.
+  const settings = loadRemoteDatasetSettings();
+  if (settings.remoteAccessToken) return settings.remoteAccessToken;
+  throw new Error('Not signed in (no access token)');
+}
+
 /**
  * Lists datasets visible to the current user.
  * Phase 1 contract: GET {baseUrl}/datasets, token auth.
@@ -61,8 +72,8 @@ export async function listRemoteDatasets(args?: { baseUrl?: string; token?: stri
   const settings = loadRemoteDatasetSettings();
   const baseUrl = normalizeBaseUrl(args?.baseUrl ?? settings.remoteServerBaseUrl ?? '');
   if (!baseUrl) throw new Error('Remote server baseUrl is not set');
-  const token = typeof args?.token === 'undefined' ? settings.remoteAccessToken ?? null : args.token;
-  if (!token) throw new Error('Remote access token is not set');
+  const token = typeof args?.token === 'undefined' ? await requireAccessToken() : args.token;
+  if (!token) throw new Error('Not signed in (no access token)');
 
   const res = await fetch(`${baseUrl}/datasets`, {
     method: 'GET',
@@ -101,8 +112,8 @@ export async function createRemoteDataset(input: {
   const settings = loadRemoteDatasetSettings();
   const baseUrl = normalizeBaseUrl(input.baseUrl ?? settings.remoteServerBaseUrl ?? '');
   if (!baseUrl) throw new Error('Remote server baseUrl is not set');
-  const token = typeof input.token === 'undefined' ? settings.remoteAccessToken ?? null : input.token;
-  if (!token) throw new Error('Remote access token is not set');
+  const token = typeof input.token === 'undefined' ? await requireAccessToken() : input.token;
+  if (!token) throw new Error('Not signed in (no access token)');
 
   const res = await fetch(`${baseUrl}/datasets`, {
     method: 'POST',

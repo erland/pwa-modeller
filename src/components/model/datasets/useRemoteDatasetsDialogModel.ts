@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DatasetId } from '../../../store';
 import { openDataset, upsertDatasetEntry } from '../../../store';
 import { createRemoteDataset, listRemoteDatasets, type RemoteDatasetListItem } from '../../../store/remoteDatasetApi';
 import { getRemoteDatasetBackend } from '../../../store/getRemoteDatasetBackend';
 import {
-  clearRemoteAccessToken,
   loadRemoteDatasetSettings,
   saveRemoteDatasetSettings
 } from '../../../store/remoteDatasetSettings';
+import { beginLogin, clearTokens, isLoggedIn } from '../../../auth/oidcPkceAuth';
 
 export type UseRemoteDatasetsDialogModelArgs = {
   isOpen: boolean;
@@ -26,11 +26,16 @@ function asRemoteDatasetId(serverDatasetId: string): DatasetId {
 
 export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatasetsDialogModelArgs) {
   const [baseUrl, setBaseUrl] = useState('');
-  const [token, setToken] = useState('');
+  const [issuerUrl, setIssuerUrl] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [scope, setScope] = useState('openid profile email');
   const [rows, setRows] = useState<RemoteDatasetListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [loggedIn, setLoggedIn] = useState(false);
+  const didAutoRefreshRef = useRef(false);
 
   const [createName, setCreateName] = useState('');
   const [createDesc, setCreateDesc] = useState('');
@@ -40,23 +45,95 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     if (!isOpen) return;
     const s = loadRemoteDatasetSettings();
     setBaseUrl(s.remoteServerBaseUrl ?? '');
-    setToken(s.remoteAccessToken ?? '');
+    setIssuerUrl(s.oidcIssuerUrl ?? '');
+    setClientId(s.oidcClientId ?? '');
+    setScope((s.oidcScope ?? 'openid profile email').trim() || 'openid profile email');
+    setLoggedIn(isLoggedIn());
+    didAutoRefreshRef.current = false;
     setError(null);
     setRows([]);
     setCreateName('');
     setCreateDesc('');
   }, [isOpen]);
 
-  const canConnect = useMemo(() => Boolean(normalizeBaseUrl(baseUrl)) && Boolean(token.trim()), [baseUrl, token]);
+
+  // Keep auth state in sync while the dialog is open (e.g. after PKCE redirect completes).
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const sync = () => {
+      const li = isLoggedIn();
+      setLoggedIn(li);
+      if (!li) {
+        setRows([]);
+        didAutoRefreshRef.current = false;
+      }
+    };
+
+    const onAuthChanged = () => sync();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'oidc.pkce.tokens.local.v1' || e.key === 'oidc.pkce.authChangedAt.v1') sync();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') sync();
+    };
+
+    window.addEventListener('pwaModellerAuthChanged', onAuthChanged);
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Initial sync (covers the "first sign-in" timing issue).
+    sync();
+
+    return () => {
+      window.removeEventListener('pwaModellerAuthChanged', onAuthChanged);
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [isOpen]);
+
+
+
+
+  const canConnect = useMemo(() => Boolean(normalizeBaseUrl(baseUrl)) && loggedIn, [baseUrl, loggedIn]);
+  const canSignIn = useMemo(() => Boolean(issuerUrl.trim()) && Boolean(clientId.trim()), [issuerUrl, clientId]);
 
   const persistSettings = useCallback(() => {
     const normalized = normalizeBaseUrl(baseUrl);
-    saveRemoteDatasetSettings({ remoteServerBaseUrl: normalized, remoteAccessToken: token.trim() ? token.trim() : undefined });
-  }, [baseUrl, token]);
+    saveRemoteDatasetSettings({
+      remoteServerBaseUrl: normalized,
+      oidcIssuerUrl: issuerUrl.trim(),
+      oidcClientId: clientId.trim(),
+      oidcScope: scope.trim() || 'openid profile email'
+    });
+  }, [baseUrl, issuerUrl, clientId, scope]);
 
-  const doClearToken = useCallback(() => {
-    clearRemoteAccessToken();
-    setToken('');
+  const doSignIn = useCallback(async () => {
+    setError(null);
+    try {
+      persistSettings();
+      await beginLogin(
+        { issuerUrl: issuerUrl.trim(), clientId: clientId.trim(), scope: scope.trim() || undefined },
+        {
+          // Return to wherever the user initiated login from (may include #hash routes).
+          returnTo: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+          // Let the app reopen this dialog after redirect.
+          afterLogin: 'openRemoteDatasetsDialog'
+        }
+      );
+      // beginLogin redirects; this line typically won't run.
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start sign-in');
+    }
+  }, [issuerUrl, clientId, scope, persistSettings]);
+
+  const doSignOut = useCallback(() => {
+    clearTokens();
+    setLoggedIn(false);
+    setRows([]);
+    didAutoRefreshRef.current = false;
+    setCreateName('');
+    setCreateDesc('');
   }, []);
 
   const refresh = useCallback(async () => {
@@ -64,16 +141,30 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     setError(null);
     try {
       const normalized = normalizeBaseUrl(baseUrl);
-      const ds = await listRemoteDatasets({ baseUrl: normalized, token: token.trim() });
+      const ds = await listRemoteDatasets({ baseUrl: normalized });
       setRows(ds);
       // Remember last-used baseUrl/token.
       persistSettings();
+      setLoggedIn(isLoggedIn());
+    didAutoRefreshRef.current = false;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to list remote datasets');
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, token, persistSettings]);
+  }, [baseUrl, persistSettings]);
+
+
+  // Auto-refresh remote dataset list when the dialog opens and the user is signed in.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!loggedIn) return;
+    const normalized = normalizeBaseUrl(baseUrl);
+    if (!normalized) return;
+    if (didAutoRefreshRef.current) return;
+    didAutoRefreshRef.current = true;
+    void refresh();
+  }, [isOpen, loggedIn, baseUrl, refresh]);
 
   const doCreate = useCallback(async () => {
     const name = createName.trim();
@@ -82,7 +173,7 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     setError(null);
     try {
       const normalized = normalizeBaseUrl(baseUrl);
-      await createRemoteDataset({ baseUrl: normalized, token: token.trim(), name, description: createDesc.trim() || undefined });
+      await createRemoteDataset({ baseUrl: normalized, name, description: createDesc.trim() || undefined });
       setCreateName('');
       setCreateDesc('');
       await refresh();
@@ -91,7 +182,7 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, token, createName, createDesc, refresh]);
+  }, [baseUrl, createName, createDesc, refresh]);
 
   const doOpen = useCallback(
     async (serverDatasetId: string, displayName: string) => {
@@ -134,9 +225,15 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
   return {
     baseUrl,
     setBaseUrl,
-    token,
-    setToken,
+    issuerUrl,
+    setIssuerUrl,
+    clientId,
+    setClientId,
+    scope,
+    setScope,
+    loggedIn,
     canConnect,
+    canSignIn,
     rows,
     loading,
     error,
@@ -146,7 +243,8 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     createDesc,
     setCreateDesc,
     persistSettings,
-    doClearToken,
+    doSignIn,
+    doSignOut,
     refresh,
     doCreate,
     doOpen

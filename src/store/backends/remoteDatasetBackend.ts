@@ -29,17 +29,29 @@ export class RemoteDatasetBackendError extends Error {
 
   public readonly status?: number;
   public readonly responseEtag?: string | null;
+  /** Optional conflict UX support data (best-effort). */
+  public readonly serverSavedAt?: string | null;
+  /** Optional conflict UX support data (best-effort). */
+  public readonly serverSavedBy?: string | null;
 
   constructor(
     message: string,
     code: RemoteDatasetBackendError['code'],
-    opts?: { status?: number; responseEtag?: string | null; cause?: unknown }
+    opts?: {
+      status?: number;
+      responseEtag?: string | null;
+      serverSavedAt?: string | null;
+      serverSavedBy?: string | null;
+      cause?: unknown;
+    }
   ) {
     super(message);
     this.name = 'RemoteDatasetBackendError';
     this.code = code;
     this.status = opts?.status;
     this.responseEtag = opts?.responseEtag ?? null;
+    this.serverSavedAt = opts?.serverSavedAt ?? null;
+    this.serverSavedBy = opts?.serverSavedBy ?? null;
     // Preserve original error where supported.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (this as any).cause = opts?.cause;
@@ -218,7 +230,27 @@ export class RemoteDatasetBackend implements DatasetBackend {
     if (res.status === 409) {
       // Conflict: do not overwrite. Capture server ETag (current revision) for UX.
       if (etag) this.etagsByDatasetId.set(datasetId, etag);
-      throw new RemoteDatasetBackendError('Remote snapshot save conflict (stale revision).', 'CONFLICT', { status: 409, responseEtag: etag ?? null });
+
+      // Best-effort: parse conflict payload for UX support fields like savedAt/savedBy.
+      let savedAt: string | null = null;
+      let savedBy: string | null = null;
+      try {
+        const ct = res.headers.get('Content-Type') ?? '';
+        if (ct.includes('application/json')) {
+          const body = (await res.json()) as Partial<RemoteSnapshotResponse> | null;
+          savedAt = (body?.savedAt as string | undefined) ?? null;
+          savedBy = (body?.savedBy as string | undefined) ?? null;
+        }
+      } catch {
+        // Ignore parse failures on conflict.
+      }
+
+      throw new RemoteDatasetBackendError('Remote snapshot save conflict (stale revision).', 'CONFLICT', {
+        status: 409,
+        responseEtag: etag ?? null,
+        serverSavedAt: savedAt,
+        serverSavedBy: savedBy
+      });
     }
 
     if (!res.ok) {

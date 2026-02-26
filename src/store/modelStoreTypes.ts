@@ -14,6 +14,10 @@ export type RemotePersistenceConflict = {
   detectedAt: number;
   /** Latest server ETag if known (quoted). */
   serverEtag: string | null;
+  /** Best-effort conflict help: who last updated the server snapshot. */
+  serverSavedBy?: string | null;
+  /** Best-effort conflict help: when the server snapshot was last saved (ISO string). */
+  serverSavedAt?: string | null;
 };
 
 export type ModelStoreState = {

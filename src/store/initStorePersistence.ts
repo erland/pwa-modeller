@@ -122,7 +122,9 @@ export async function initStorePersistenceAsync(): Promise<void> {
               modelStore.setPersistenceConflict({
                 datasetId,
                 message: 'Remote dataset changed on the server. Reload from server or export your local snapshot.',
-                serverEtag: anyErr.responseEtag ?? null
+                serverEtag: anyErr.responseEtag ?? null,
+                serverSavedAt: anyErr.serverSavedAt ?? null,
+                serverSavedBy: anyErr.serverSavedBy ?? null
               });
             });
             return;

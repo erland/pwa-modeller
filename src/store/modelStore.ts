@@ -100,7 +100,14 @@ export class ModelStore {
   };
 
   setPersistenceConflict = (
-    conflict: { datasetId: string; message: string; detectedAt?: number; serverEtag?: string | null },
+    conflict: {
+      datasetId: string;
+      message: string;
+      detectedAt?: number;
+      serverEtag?: string | null;
+      serverSavedAt?: string | null;
+      serverSavedBy?: string | null;
+    },
     now: number = Date.now(),
   ): void => {
     const cur = this.core.getState().persistenceConflict;
@@ -109,7 +116,9 @@ export class ModelStore {
       datasetId: conflict.datasetId as any,
       message: conflict.message,
       detectedAt,
-      serverEtag: conflict.serverEtag ?? null
+      serverEtag: conflict.serverEtag ?? null,
+      serverSavedAt: conflict.serverSavedAt ?? null,
+      serverSavedBy: conflict.serverSavedBy ?? null
     };
 
     // Avoid noisy state churn for repeated flush errors.
@@ -117,7 +126,9 @@ export class ModelStore {
       cur &&
       cur.datasetId === next.datasetId &&
       cur.message === next.message &&
-      cur.serverEtag === next.serverEtag
+      cur.serverEtag === next.serverEtag &&
+      (cur.serverSavedAt ?? null) === (next.serverSavedAt ?? null) &&
+      (cur.serverSavedBy ?? null) === (next.serverSavedBy ?? null)
     ) {
       return;
     }

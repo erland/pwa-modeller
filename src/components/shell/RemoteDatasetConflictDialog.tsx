@@ -57,6 +57,24 @@ export function RemoteDatasetConflictDialog({
             Server revision token (ETag): <code>{conflict.serverEtag}</code>
           </div>
         ) : null}
+
+        {conflict?.serverSavedAt || conflict?.serverSavedBy ? (
+          <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.4 }}>
+            <div>
+              <b>Server last saved</b>
+            </div>
+            {conflict.serverSavedAt ? (
+              <div>
+                At: <code>{conflict.serverSavedAt}</code>
+              </div>
+            ) : null}
+            {conflict.serverSavedBy ? (
+              <div>
+                By: <code>{conflict.serverSavedBy}</code>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </Dialog>
   );

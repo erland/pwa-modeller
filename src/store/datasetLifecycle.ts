@@ -14,7 +14,7 @@ import {
 } from './datasetRegistry';
 import { modelStore } from './modelStore';
 import { acquireOrRefreshLease, releaseLease, RemoteDatasetApiError, type LeaseConflictResponse } from './remoteDatasetApi';
-import { getRemoteRole, setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from './remoteDatasetSession';
+import { getLeaseToken, getRemoteRole, setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from './remoteDatasetSession';
 
 /**
  * Dataset lifecycle module.
@@ -90,6 +90,7 @@ async function bestEffortReleaseLease(localDatasetId: DatasetId): Promise<void> 
   setLeaseToken(localDatasetId, null);
   setLeaseExpiresAt(localDatasetId, null);
   setLeaseConflict(localDatasetId, null);
+      modelStore.clearPersistenceLeaseConflict();
 
   try {
     await releaseLease(serverDatasetId);
@@ -109,6 +110,7 @@ async function acquireOrRefreshLeaseAndStore(localDatasetId: DatasetId, serverDa
       setLeaseToken(localDatasetId, lease.leaseToken);
       setLeaseExpiresAt(localDatasetId, lease.expiresAt);
       setLeaseConflict(localDatasetId, null);
+      modelStore.clearPersistenceLeaseConflict();
       return;
     }
 
@@ -122,6 +124,14 @@ async function acquireOrRefreshLeaseAndStore(localDatasetId: DatasetId, serverDa
       setLeaseToken(localDatasetId, null);
       setLeaseExpiresAt(localDatasetId, null);
       setLeaseConflict(localDatasetId, body ?? null);
+      modelStore.setPersistenceLeaseConflict({
+        datasetId: localDatasetId,
+        message: `Remote dataset is locked by another user${body?.holderSub ? ` (${body.holderSub})` : ''}${body?.expiresAt ? ` until ${body.expiresAt}` : ''}.`,
+        holderSub: body?.holderSub ?? null,
+        expiresAt: body?.expiresAt ?? null,
+        myRole: getRemoteRole(localDatasetId) ?? null,
+        serverEtag: e.etag ?? null
+      });
       stopLeaseRefreshTimer(localDatasetId);
       return;
     }
@@ -297,6 +307,32 @@ export type CreateDatasetInput = {
 };
 
 // Default singleton lifecycle (keeps public API unchanged)
+
+/**
+ * Phase 2: allow UI to retry acquiring a lease without re-opening the dataset.
+ * Used by Step 6 LeaseConflictDialog.
+ */
+export async function retryAcquireLeaseForDataset(datasetId: DatasetId): Promise<boolean> {
+  if (!isRemoteDataset(datasetId)) return false;
+  const serverDatasetId = getServerDatasetIdForRemote(datasetId);
+  if (!serverDatasetId) return false;
+  const role = getRemoteRole(datasetId);
+  if (!role || role === 'VIEWER') return false;
+
+  try {
+    await acquireOrRefreshLeaseAndStore(datasetId, serverDatasetId);
+    const token = getLeaseToken(datasetId);
+    if (token) {
+      startLeaseRefreshTimer(datasetId, serverDatasetId);
+      modelStore.clearPersistenceLeaseConflict();
+      return true;
+    }
+  } catch {
+    // ignore; caller will keep dialog open
+  }
+  return false;
+}
+
 const defaultLifecycle = createDatasetLifecycle({
   store: modelStore,
   getBackend: () => getDefaultDatasetBackend(),

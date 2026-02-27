@@ -36,6 +36,19 @@ export type RemotePersistenceValidationFailure = {
   }>;
 };
 
+export type RemoteLeaseConflict = {
+  datasetId: DatasetId;
+  /** Human-readable message for the user. */
+  message: string;
+  /** When the conflict was detected (ms since epoch). */
+  detectedAt: number;
+  holderSub: string | null;
+  expiresAt: string | null;
+  myRole: 'OWNER' | 'EDITOR' | 'VIEWER' | null;
+  /** Latest server ETag if known (quoted). */
+  serverEtag: string | null;
+};
+
 export type ModelStoreState = {
   /** Identifies which dataset the current in-memory model belongs to. */
   activeDatasetId: DatasetId;
@@ -56,6 +69,9 @@ export type ModelStoreState = {
 
   /** Set when the server rejects the snapshot due to validation errors (Phase 2). */
   persistenceValidationFailure: RemotePersistenceValidationFailure | null;
+
+  /** Set when the remote dataset is lease-locked by another user (Phase 2). */
+  persistenceLeaseConflict: RemoteLeaseConflict | null;
 };
 
 export type StoreListener = () => void;

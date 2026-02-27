@@ -6,15 +6,22 @@ import type { DatasetId } from './datasetTypes';
 import type { PersistedSlice, StoreFlushEvent } from './storeFlushEvent';
 import { emptyChangeSet } from './changeSet';
 import { getRemoteDatasetBackend } from './getRemoteDatasetBackend';
+import { getRemoteRole } from './remoteDatasetSession';
 
 let __persistencePaused = false;
 let __schedulePersist: (() => void) | null = null;
+let __forceNextPersist = false;
 
 export function setStorePersistencePaused(paused: boolean): void {
   __persistencePaused = paused;
 }
 
 export function flushStorePersistence(): void {
+  __schedulePersist?.();
+}
+
+export function flushStorePersistenceForce(): void {
+  __forceNextPersist = true;
   __schedulePersist?.();
 }
 
@@ -107,10 +114,15 @@ export async function initStorePersistenceAsync(): Promise<void> {
 
     for (const [datasetId, slice] of entries) {
       const backend = backendFor(datasetId);
-      void backend
-        .persistState(datasetId, slice)
+      const force = __forceNextPersist;
+      __forceNextPersist = false;
+      const backendAny: any = backend as any;
+      const persistPromise = force && typeof backendAny.persistStateWithOptions === 'function'
+        ? backendAny.persistStateWithOptions(datasetId, slice, { force: true })
+        : backend.persistState(datasetId, slice);
+      void persistPromise
         .then(() => setPersistenceOk())
-        .catch((e) => {
+        .catch((e: unknown) => {
           // Avoid relying on instanceof across Jest module boundaries; use a structural check instead.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const anyErr: any = e;
@@ -134,9 +146,12 @@ export async function initStorePersistenceAsync(): Promise<void> {
               setStorePersistencePaused(true);
               const who = anyErr.leaseHolderSub ? ` (${anyErr.leaseHolderSub})` : '';
               const until = anyErr.leaseExpiresAt ? ` until ${anyErr.leaseExpiresAt}` : '';
-              modelStore.setPersistenceConflict({
+              modelStore.setPersistenceLeaseConflict({
                 datasetId,
-                message: `Remote dataset is locked by another user${who}${until}. You can open it read-only or wait for the lease to expire.`,
+                message: `Remote dataset is locked by another user${who}${until}. You can open it read-only or retry acquiring the lease.`,
+                holderSub: anyErr.leaseHolderSub ?? null,
+                expiresAt: anyErr.leaseExpiresAt ?? null,
+                myRole: getRemoteRole(datasetId) ?? null,
                 serverEtag: anyErr.responseEtag ?? null
               });
             });

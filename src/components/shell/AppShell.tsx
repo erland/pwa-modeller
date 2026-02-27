@@ -6,10 +6,12 @@ import '../../styles/shell.css';
 import { computeModelSignature } from '../../domain';
 import { RemoteDatasetConflictDialog } from './RemoteDatasetConflictDialog';
 import { RemoteDatasetValidationErrorsDialog } from './RemoteDatasetValidationErrorsDialog';
+import { LeaseConflictDialog } from './LeaseConflictDialog';
 import { downloadTextFile, sanitizeFileName, loadOverlayExportMarker, modelStore, useModelStore, useOverlayStore } from '../../store';
-import { openDataset } from '../../store/datasetLifecycle';
-import { flushStorePersistence, setStorePersistencePaused } from '../../store/initStorePersistence';
+import { openDataset, retryAcquireLeaseForDataset } from '../../store/datasetLifecycle';
+import { flushStorePersistence, flushStorePersistenceForce, setStorePersistencePaused } from '../../store/initStorePersistence';
 import { RemoteDatasetBackend } from '../../store/backends/remoteDatasetBackend';
+import { setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from '../../store/remoteDatasetSession';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
 import { useAppInit } from '../../app/init/useAppInit';
@@ -122,6 +124,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const persistenceStatus = useModelStore((s) => s.persistenceStatus);
   const persistenceConflict = useModelStore((s) => s.persistenceConflict);
   const persistenceValidationFailure = useModelStore((s) => s.persistenceValidationFailure);
+  const persistenceLeaseConflict = useModelStore((s) => s.persistenceLeaseConflict);
   const { isDirty, model } = useModelStore((s) => ({
     isDirty: s.isDirty,
     model: s.model
@@ -273,13 +276,55 @@ const onExportLocalConflictSnapshot = () => {
       });
   };
 
+  const onOpenReadOnlyAfterLeaseConflict = () => {
+    const conflict = modelStore.getState().persistenceLeaseConflict;
+    if (!conflict) return;
+    // Keep persistence paused and clear lease information so we stop attempting remote writes.
+    setStorePersistencePaused(true);
+    setLeaseToken(conflict.datasetId, null);
+    setLeaseExpiresAt(conflict.datasetId, null);
+    setLeaseConflict(conflict.datasetId, null);
+    modelStore.clearPersistenceLeaseConflict();
+    modelStore.setPersistenceError('Remote dataset is locked by another user. Opened in read-only mode; auto-save paused.');
+  };
+
+  const onRetryLeaseAfterConflict = async () => {
+    const conflict = modelStore.getState().persistenceLeaseConflict;
+    if (!conflict) return;
+    try {
+      await retryAcquireLeaseForDataset(conflict.datasetId);
+      modelStore.clearPersistenceLeaseConflict();
+      modelStore.setPersistenceOk();
+      setStorePersistencePaused(false);
+      flushStorePersistence();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      modelStore.setPersistenceError(msg);
+    }
+  };
+
+  const onForceSaveAfterLeaseConflict = () => {
+    // One-shot force persist retry; only shown for OWNER (server-enforced).
+    modelStore.clearPersistenceLeaseConflict();
+    setStorePersistencePaused(false);
+    flushStorePersistenceForce();
+  };
+
 
   const showBackdrop = (isSmall && (leftOpen || rightOpen)) || (rightOverlay && rightOpen);
 
   return (
     <div className={['shell', isResizing ? 'isResizing' : null, isNavigatorDragging ? 'isNavigatorDragging' : null].filter(Boolean).join(' ')}>
 
-            <RemoteDatasetValidationErrorsDialog
+      <LeaseConflictDialog
+        isOpen={!!persistenceLeaseConflict}
+        conflict={persistenceLeaseConflict}
+        onOpenReadOnly={onOpenReadOnlyAfterLeaseConflict}
+        onRetry={() => void onRetryLeaseAfterConflict()}
+        onForceSave={onForceSaveAfterLeaseConflict}
+      />
+
+      <RemoteDatasetValidationErrorsDialog
         isOpen={!!persistenceValidationFailure}
         failure={persistenceValidationFailure}
         onExportLocalSnapshot={onExportLocalValidationSnapshot}
@@ -287,7 +332,7 @@ const onExportLocalConflictSnapshot = () => {
         onResumeAutoSave={onResumeAfterValidation}
       />
 
-<RemoteDatasetConflictDialog
+      <RemoteDatasetConflictDialog
         isOpen={!!persistenceConflict}
         conflict={persistenceConflict}
         onReloadFromServer={onReloadFromServerAfterConflict}

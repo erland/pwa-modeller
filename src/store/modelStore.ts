@@ -37,7 +37,8 @@ export class ModelStore {
       isDirty: false,
       persistenceStatus: { status: 'ok', message: null, lastOkAt: 0, lastErrorAt: null },
       persistenceConflict: null,
-      persistenceValidationFailure: null
+      persistenceValidationFailure: null,
+      persistenceLeaseConflict: null
     },
     (state) => this.flush.onNotify(state),
   );
@@ -186,6 +187,49 @@ export class ModelStore {
     this.setState({
       ...this.core.getState(),
       persistenceValidationFailure: null
+    });
+  };
+
+
+  // -------------------------
+  // Lease conflict (Phase 2)
+  // -------------------------
+  setPersistenceLeaseConflict = (
+    conflict: {
+      datasetId: string;
+      message: string;
+      detectedAt?: number;
+      holderSub?: string | null;
+      expiresAt?: string | null;
+      myRole?: 'OWNER' | 'EDITOR' | 'VIEWER' | null;
+      serverEtag?: string | null;
+    },
+    now: number = Date.now(),
+  ): void => {
+    const detectedAt = conflict.detectedAt ?? now;
+    this.setState({
+      ...this.core.getState(),
+      persistenceLeaseConflict: {
+        datasetId: conflict.datasetId as any,
+        message: conflict.message,
+        detectedAt,
+        holderSub: conflict.holderSub ?? null,
+        expiresAt: conflict.expiresAt ?? null,
+        myRole: conflict.myRole ?? null,
+        serverEtag: conflict.serverEtag ?? null
+      }
+    });
+
+    // Also surface in the generic status chip.
+    this.setPersistenceError(conflict.message, now);
+  };
+
+  clearPersistenceLeaseConflict = (): void => {
+    const cur = this.core.getState().persistenceLeaseConflict;
+    if (!cur) return;
+    this.setState({
+      ...this.core.getState(),
+      persistenceLeaseConflict: null
     });
   };
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Dialog } from '../../dialog/Dialog';
 import type { SnapshotHistoryItem } from '../../../store/remoteDatasetApi';
@@ -10,9 +10,10 @@ type Props = {
   loading: boolean;
   error: string | null;
   canRestore: boolean;
+  canForceRestore: boolean;
   onClose: () => void;
   onRefresh: () => void;
-  onRestore: (revision: number, message?: string) => void;
+  onRestore: (revision: number, message?: string, opts?: { force?: boolean }) => void;
 };
 
 function formatMaybeIso(v: string | null | undefined): string {
@@ -28,11 +29,20 @@ export function RemoteDatasetHistoryDialog({
   loading,
   error,
   canRestore,
+  canForceRestore,
   onClose,
   onRefresh,
   onRestore
 }: Props) {
   const [message, setMessage] = useState('');
+  const [forceOverride, setForceOverride] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setForceOverride(false);
+      setMessage('');
+    }
+  }, [isOpen]);
 
   const rows = useMemo(() => {
     return items
@@ -89,6 +99,21 @@ export function RemoteDatasetHistoryDialog({
           />
         </label>
 
+
+        {canForceRestore ? (
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, opacity: 0.9 }}>
+            <input
+              type="checkbox"
+              checked={forceOverride}
+              onChange={(e) => setForceOverride(e.currentTarget.checked)}
+              style={{ marginTop: 2 }}
+            />
+            <span>
+              Owner override: restore even if the dataset is locked (uses <code>force=true</code>). This may overwrite newer work.
+            </span>
+          </label>
+        ) : null}
+
         <div
           style={{
             display: 'grid',
@@ -132,9 +157,9 @@ export function RemoteDatasetHistoryDialog({
                 <button
                   type="button"
                   className="shellButton"
-                  disabled={loading || !canRestore}
-                  title={!canRestore ? 'You need editor/owner role (and an active lease) to restore' : 'Restore this revision'}
-                  onClick={() => onRestore(r.revision, message.trim() || undefined)}
+                  disabled={loading || !(canRestore || (canForceRestore && forceOverride))}
+                  title={!(canRestore || (canForceRestore && forceOverride)) ? 'You need editor/owner role (and an active lease), or owner force override' : 'Restore this revision'}
+                  onClick={() => onRestore(r.revision, message.trim() || undefined, { force: Boolean(canForceRestore && forceOverride) })}
                 >
                   Restore
                 </button>

@@ -297,7 +297,7 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
   }, [baseUrl, historyServerDatasetId]);
 
   const doRestoreRevision = useCallback(
-    async (revision: number, message?: string) => {
+    async (revision: number, message?: string, opts?: { force?: boolean }) => {
       if (!historyServerDatasetId) return;
       setHistoryLoading(true);
       setHistoryError(null);
@@ -306,12 +306,13 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
         const localDatasetId = asRemoteDatasetId(historyServerDatasetId);
         const ifMatch = getLastSeenEtag(localDatasetId) ?? '"0"';
         const leaseToken = getLeaseToken(localDatasetId);
+        const force = Boolean(opts?.force);
 
         await restoreSnapshotRevision(
           historyServerDatasetId,
           revision,
           message ? { message } : undefined,
-          { ifMatch, leaseToken: leaseToken ?? undefined, force: false },
+          { ifMatch, leaseToken: leaseToken ?? undefined, force },
           { baseUrl: normalized }
         );
 
@@ -373,6 +374,11 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
       const role = getRemoteRole(localDatasetId);
       if (!role || role === 'VIEWER') return false;
       return Boolean(getLeaseToken(localDatasetId));
+    })(),
+    canForceRestoreFromHistory: (() => {
+      if (!historyServerDatasetId) return false;
+      const localDatasetId = asRemoteDatasetId(historyServerDatasetId);
+      return getRemoteRole(localDatasetId) === 'OWNER';
     })()
   };
 }

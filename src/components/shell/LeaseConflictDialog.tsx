@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import { Dialog } from '../dialog/Dialog';
 import type { RemoteLeaseConflict } from '../../store/modelStoreTypes';
 
@@ -11,6 +13,12 @@ type Props = {
 
 export function LeaseConflictDialog({ isOpen, conflict, onOpenReadOnly, onRetry, onForceSave }: Props) {
   const showForce = Boolean(conflict?.myRole === 'OWNER' && onForceSave);
+  const [forceConfirmed, setForceConfirmed] = useState(false);
+
+  useEffect(() => {
+    // reset confirmation when conflict changes or dialog opens
+    setForceConfirmed(false);
+  }, [conflict?.serverEtag, conflict?.holderSub, conflict?.expiresAt, isOpen]);
 
   return (
     <Dialog
@@ -26,7 +34,7 @@ export function LeaseConflictDialog({ isOpen, conflict, onOpenReadOnly, onRetry,
             Retry
           </button>
           {showForce ? (
-            <button type="button" className="shellButton isPrimary" onClick={onForceSave}>
+            <button type="button" className="shellButton isPrimary" onClick={onForceSave} disabled={!forceConfirmed}>
               Force save
             </button>
           ) : null}
@@ -50,6 +58,15 @@ export function LeaseConflictDialog({ isOpen, conflict, onOpenReadOnly, onRetry,
               <b>Force save</b> attempts to override the lock (owner-only).
             </div>
           ) : null}
+
+        {showForce ? (
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, opacity: 0.9 }}>
+            <input type="checkbox" checked={forceConfirmed} onChange={(e) => setForceConfirmed(e.currentTarget.checked)} style={{ marginTop: 2 }} />
+            <span>
+              I understand this can overwrite another user’s work. Enable <b>Force save</b>.
+            </span>
+          </label>
+        ) : null}
         </div>
 
         {conflict?.holderSub || conflict?.expiresAt ? (

@@ -271,9 +271,10 @@ export function RemoteDatasetsDialog({ isOpen, onClose }: Props) {
         loading={m.historyLoading}
         error={m.historyError}
         canRestore={m.canRestoreFromHistory}
+        canForceRestore={m.canForceRestoreFromHistory}
         onClose={m.closeHistory}
         onRefresh={() => void m.refreshHistory()}
-        onRestore={(rev, msg) => void m.doRestoreRevision(rev, msg)}
+        onRestore={(rev, msg, opts) => void m.doRestoreRevision(rev, msg, opts)}
       />
     </>
   );

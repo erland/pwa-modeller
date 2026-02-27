@@ -2,8 +2,13 @@ import type { DatasetBackend, PersistedStoreSlice } from '../datasetBackend';
 import type { DatasetId } from '../datasetTypes';
 import { loadDatasetRegistry } from '../datasetRegistry';
 import { loadRemoteDatasetSettings } from '../remoteDatasetSettings';
-import { getLastSeenEtag as getSessionEtag, setLastSeenEtag as setSessionEtag } from '../remoteDatasetSession';
+import {
+  getLastSeenEtag as getSessionEtag,
+  getLeaseToken as getSessionLeaseToken,
+  setLastSeenEtag as setSessionEtag
+} from '../remoteDatasetSession';
 import { getAccessToken } from '../../auth/oidcPkceAuth';
+import type { ApiError, LeaseConflictResponse, SnapshotConflictResponse, ValidationError } from '../remoteDatasetApi';
 
 export type RemoteDatasetRef = {
   baseUrl: string;
@@ -25,7 +30,10 @@ export class RemoteDatasetBackendError extends Error {
     | 'AUTH_FAILED'
     | 'NOT_FOUND'
     | 'CONFLICT'
+    | 'LEASE_CONFLICT'
     | 'PRECONDITION_REQUIRED'
+    | 'LEASE_TOKEN_REQUIRED'
+    | 'VALIDATION_FAILED'
     | 'HTTP_ERROR'
     | 'INVALID_RESPONSE';
 
@@ -35,6 +43,17 @@ export class RemoteDatasetBackendError extends Error {
   public readonly serverSavedAt?: string | null;
   /** Optional conflict UX support data (best-effort). */
   public readonly serverSavedBy?: string | null;
+  /** Optional conflict UX support data (best-effort). */
+  public readonly serverUpdatedAt?: string | null;
+  /** Optional conflict UX support data (best-effort). */
+  public readonly serverUpdatedBy?: string | null;
+  /** Optional lease conflict UX support data (best-effort). */
+  public readonly leaseHolderSub?: string | null;
+  /** Optional lease conflict UX support data (best-effort). */
+  public readonly leaseExpiresAt?: string | null;
+  /** For ApiError bodies. */
+  public readonly apiCode?: string | null;
+  public readonly validationErrors?: ValidationError[] | null;
 
   constructor(
     message: string,
@@ -44,6 +63,12 @@ export class RemoteDatasetBackendError extends Error {
       responseEtag?: string | null;
       serverSavedAt?: string | null;
       serverSavedBy?: string | null;
+      serverUpdatedAt?: string | null;
+      serverUpdatedBy?: string | null;
+      leaseHolderSub?: string | null;
+      leaseExpiresAt?: string | null;
+      apiCode?: string | null;
+      validationErrors?: ValidationError[] | null;
       cause?: unknown;
     }
   ) {
@@ -54,10 +79,44 @@ export class RemoteDatasetBackendError extends Error {
     this.responseEtag = opts?.responseEtag ?? null;
     this.serverSavedAt = opts?.serverSavedAt ?? null;
     this.serverSavedBy = opts?.serverSavedBy ?? null;
+    this.serverUpdatedAt = opts?.serverUpdatedAt ?? null;
+    this.serverUpdatedBy = opts?.serverUpdatedBy ?? null;
+    this.leaseHolderSub = opts?.leaseHolderSub ?? null;
+    this.leaseExpiresAt = opts?.leaseExpiresAt ?? null;
+    this.apiCode = opts?.apiCode ?? null;
+    this.validationErrors = opts?.validationErrors ?? null;
     // Preserve original error where supported.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (this as any).cause = opts?.cause;
   }
+}
+
+async function readJsonIfPossible(res: Response): Promise<unknown | null> {
+  try {
+    const ct = res.headers.get('Content-Type') ?? '';
+    if (!ct.includes('application/json')) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+function isLeaseConflict(body: unknown): body is LeaseConflictResponse {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as any;
+  return typeof b.datasetId === 'string' && typeof b.holderSub === 'string' && typeof b.expiresAt === 'string';
+}
+
+function isSnapshotConflict(body: unknown): body is SnapshotConflictResponse {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as any;
+  return typeof b.datasetId === 'string' && (typeof b.currentRevision === 'number' || typeof b.currentEtag === 'string');
+}
+
+function isApiError(body: unknown): body is ApiError {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as any;
+  return typeof b.status === 'number' && typeof b.code === 'string' && typeof b.message === 'string';
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -170,6 +229,18 @@ export class RemoteDatasetBackend implements DatasetBackend {
   }
 
   async persistState(datasetId: DatasetId, state: PersistedStoreSlice): Promise<void> {
+    await this.persistStateWithOptions(datasetId, state, {});
+  }
+
+  /**
+   * Phase 2: snapshot writes can optionally use the Owner-only force override.
+   * Step 4 implements the request semantics; Step 10 adds the explicit UX.
+   */
+  async persistStateWithOptions(
+    datasetId: DatasetId,
+    state: PersistedStoreSlice,
+    opts: { force?: boolean } = {}
+  ): Promise<void> {
     const remoteRef = getRemoteRefForDataset(datasetId);
     if (!remoteRef) {
       throw new RemoteDatasetBackendError(
@@ -187,21 +258,29 @@ export class RemoteDatasetBackend implements DatasetBackend {
       throw new RemoteDatasetBackendError('Remote server baseUrl is missing.', 'REMOTE_REF_MISSING');
     }
 
-    const url = `${baseUrl}/datasets/${encodeURIComponent(remoteRef.serverDatasetId)}/snapshot`;
+    const url = `${baseUrl}/datasets/${encodeURIComponent(remoteRef.serverDatasetId)}/snapshot${opts.force ? '?force=true' : ''}`;
 
     // Server contract requires a quoted ETag. First write must use "0".
     const last = this.getLastSeenEtag(datasetId) ?? '"0"';
     const ifMatch = ensureQuotedEtag(last);
 
+    // Step 4: include lease token header when we currently hold a lease.
+    // Server requires token only when lease is active *and* held by caller.
+    const leaseToken = (getSessionLeaseToken(datasetId) ?? '').trim();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const headers: any = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'If-Match': ifMatch
+    };
+    if (leaseToken) headers['X-Lease-Token'] = leaseToken;
+
     let res: Response;
     try {
       res = await fetch(url, {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'If-Match': ifMatch
-        },
+        headers,
         // Phase 1 contract: body is the modeller snapshot payload.
         body: JSON.stringify(state.model ?? null)
       });
@@ -216,36 +295,68 @@ export class RemoteDatasetBackend implements DatasetBackend {
       throw new RemoteDatasetBackendError('Remote dataset not found or no access.', 'NOT_FOUND', { status: 404 });
     }
     if (res.status === 428) {
+      const body = await readJsonIfPossible(res);
+      if (isApiError(body) && body.code === 'LEASE_TOKEN_REQUIRED') {
+        throw new RemoteDatasetBackendError(body.message || 'Lease token required.', 'LEASE_TOKEN_REQUIRED', {
+          status: 428,
+          apiCode: body.code,
+          validationErrors: (body as any).validationErrors ?? null
+        });
+      }
       throw new RemoteDatasetBackendError('Remote snapshot save missing If-Match precondition.', 'PRECONDITION_REQUIRED', {
-        status: 428
+        status: 428,
+        apiCode: isApiError(body) ? body.code : null
       });
     }
 
     const etag = res.headers.get('ETag');
 
     if (res.status === 409) {
-      // Conflict: do not overwrite. Capture server ETag (current revision) for UX.
+      // Conflict: could be stale If-Match OR lease held by someone else.
+      // Capture server ETag (current revision) for UX.
       if (etag) setSessionEtag(datasetId, etag);
 
-      // Best-effort: parse conflict payload for UX support fields like savedAt/savedBy.
-      let savedAt: string | null = null;
-      let savedBy: string | null = null;
-      try {
-        const ct = res.headers.get('Content-Type') ?? '';
-        if (ct.includes('application/json')) {
-          const body = (await res.json()) as Partial<RemoteSnapshotResponse> | null;
-          savedAt = (body?.savedAt as string | undefined) ?? null;
-          savedBy = (body?.savedBy as string | undefined) ?? null;
-        }
-      } catch {
-        // Ignore parse failures on conflict.
+      const body = await readJsonIfPossible(res);
+
+      if (isLeaseConflict(body)) {
+        throw new RemoteDatasetBackendError('Remote dataset is locked by another user.', 'LEASE_CONFLICT', {
+          status: 409,
+          responseEtag: etag ?? null,
+          leaseHolderSub: body.holderSub ?? null,
+          leaseExpiresAt: body.expiresAt ?? null
+        });
       }
 
-      throw new RemoteDatasetBackendError('Remote snapshot save conflict (stale revision).', 'CONFLICT', {
+      if (isSnapshotConflict(body)) {
+        throw new RemoteDatasetBackendError('Remote snapshot save conflict (stale revision).', 'CONFLICT', {
+          status: 409,
+          responseEtag: etag ?? null,
+          serverSavedAt: (body as any).savedAt ?? null,
+          serverSavedBy: (body as any).savedBy ?? null,
+          serverUpdatedAt: (body as any).updatedAt ?? null,
+          serverUpdatedBy: (body as any).updatedBy ?? null
+        });
+      }
+
+      // Fallback: unknown 409 body.
+      throw new RemoteDatasetBackendError('Remote snapshot save conflict (409).', 'CONFLICT', {
         status: 409,
-        responseEtag: etag ?? null,
-        serverSavedAt: savedAt,
-        serverSavedBy: savedBy
+        responseEtag: etag ?? null
+      });
+    }
+
+    if (res.status === 400) {
+      const body = await readJsonIfPossible(res);
+      if (isApiError(body) && body.code === 'VALIDATION_FAILED') {
+        throw new RemoteDatasetBackendError(body.message || 'Remote validation failed.', 'VALIDATION_FAILED', {
+          status: 400,
+          apiCode: body.code,
+          validationErrors: (body as any).validationErrors ?? null
+        });
+      }
+      throw new RemoteDatasetBackendError(`Remote snapshot save request failed (${res.status}).`, 'HTTP_ERROR', {
+        status: 400,
+        apiCode: isApiError(body) ? body.code : null
       });
     }
 

@@ -129,6 +129,27 @@ export async function initStorePersistenceAsync(): Promise<void> {
             });
             return;
           }
+          if (anyErr && typeof anyErr === 'object' && anyErr.code === 'LEASE_CONFLICT') {
+            runSoon(() => {
+              setStorePersistencePaused(true);
+              const who = anyErr.leaseHolderSub ? ` (${anyErr.leaseHolderSub})` : '';
+              const until = anyErr.leaseExpiresAt ? ` until ${anyErr.leaseExpiresAt}` : '';
+              modelStore.setPersistenceConflict({
+                datasetId,
+                message: `Remote dataset is locked by another user${who}${until}. You can open it read-only or wait for the lease to expire.`,
+                serverEtag: anyErr.responseEtag ?? null
+              });
+            });
+            return;
+          }
+          if (anyErr && typeof anyErr === 'object' && (anyErr.code === 'LEASE_TOKEN_REQUIRED' || anyErr.code === 'VALIDATION_FAILED')) {
+            runSoon(() => {
+              setStorePersistencePaused(true);
+              const msg = anyErr && typeof anyErr.message === 'string' ? anyErr.message : 'Remote persistence failed.';
+              setPersistenceError(msg);
+            });
+            return;
+          }
           const msg = e instanceof Error ? e.message : String(e);
           setPersistenceError(msg);
         });

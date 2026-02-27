@@ -1,7 +1,7 @@
 import { DATASET_REGISTRY_STORAGE_KEY } from '../datasetRegistry';
 import type { DatasetId } from '../datasetTypes';
 import { RemoteDatasetBackend, RemoteDatasetBackendError } from '../backends/remoteDatasetBackend';
-import { _resetRemoteDatasetSessions } from '../remoteDatasetSession';
+import { _resetRemoteDatasetSessions, setLeaseToken } from '../remoteDatasetSession';
 
 describe('RemoteDatasetBackend.loadPersistedState', () => {
   const dsId = 'remote:ds1' as DatasetId;
@@ -177,6 +177,115 @@ describe('RemoteDatasetBackend.persistState', () => {
 
     await b.persistState(dsId, { model: { hello: 'world' } } as any);
     expect(b.getLastSeenEtag(dsId)).toBe('"8"');
+  });
+
+  test('includes X-Lease-Token header when session has a lease token', async () => {
+    seedRegistry();
+    seedSettings('token123');
+
+    setLeaseToken(dsId, 'lease123');
+
+    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const h = init?.headers as any;
+      expect(h['X-Lease-Token']).toBe('lease123');
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          get: (k: string) => (k.toLowerCase() === 'etag' ? '"2"' : null)
+        },
+        json: async () => ({})
+      } as unknown as Response;
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).fetch = fetchMock;
+
+    const b = new RemoteDatasetBackend();
+    b._setLastSeenEtag(dsId, '"1"');
+    await b.persistState(dsId, { model: { a: 1 } } as any);
+  });
+
+  test('adds ?force=true when persistStateWithOptions is called with force', async () => {
+    seedRegistry();
+    seedSettings('token123');
+
+    const fetchMock = jest.fn(async (url: string) => {
+      expect(url).toContain('?force=true');
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: (k: string) => (k.toLowerCase() === 'etag' ? '"2"' : null) },
+        json: async () => ({})
+      } as unknown as Response;
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).fetch = fetchMock;
+
+    const b = new RemoteDatasetBackend();
+    await b.persistStateWithOptions(dsId, { model: { a: 1 } } as any, { force: true });
+  });
+
+  test('throws LEASE_CONFLICT on 409 with lease conflict body', async () => {
+    seedRegistry();
+    seedSettings('token123');
+
+    const fetchMock = jest.fn(async () => {
+      return {
+        ok: false,
+        status: 409,
+        headers: {
+          get: (k: string) =>
+            k.toLowerCase() === 'content-type'
+              ? 'application/json'
+              : k.toLowerCase() === 'etag'
+                ? '"9"'
+                : null
+        },
+        json: async () => ({ datasetId: 'x', holderSub: 'user1', expiresAt: '2026-02-27T10:00:00Z' })
+      } as unknown as Response;
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).fetch = fetchMock;
+
+    const b = new RemoteDatasetBackend();
+    await expect(b.persistState(dsId, { model: { a: 1 } } as any)).rejects.toMatchObject({
+      code: 'LEASE_CONFLICT',
+      status: 409,
+      leaseHolderSub: 'user1'
+    } satisfies Partial<RemoteDatasetBackendError>);
+  });
+
+  test('throws VALIDATION_FAILED on 400 with ApiError VALIDATION_FAILED body', async () => {
+    seedRegistry();
+    seedSettings('token123');
+
+    const fetchMock = jest.fn(async () => {
+      return {
+        ok: false,
+        status: 400,
+        headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? 'application/json' : null) },
+        json: async () => ({
+          timestamp: '2026-02-27T00:00:00Z',
+          status: 400,
+          code: 'VALIDATION_FAILED',
+          message: 'Validation failed',
+          path: '/datasets/x/snapshot',
+          requestId: 'r1',
+          validationErrors: [{ severity: 'ERROR', rule: 'R1', path: '$', message: 'bad' }]
+        })
+      } as unknown as Response;
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).fetch = fetchMock;
+
+    const b = new RemoteDatasetBackend();
+    await expect(b.persistState(dsId, { model: { a: 1 } } as any)).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+      status: 400,
+      apiCode: 'VALIDATION_FAILED'
+    } satisfies Partial<RemoteDatasetBackendError>);
   });
 
   test('defaults to If-Match "0" when no ETag is known yet', async () => {

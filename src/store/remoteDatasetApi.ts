@@ -15,6 +15,13 @@ import { getAccessToken } from '../auth/oidcPkceAuth';
 export type ValidationPolicy = 'none' | 'basic' | 'strict';
 export type Role = 'VIEWER' | 'EDITOR' | 'OWNER';
 
+export type ValidationError = {
+  severity: string;
+  rule: string;
+  path: string;
+  message: string;
+};
+
 export type ApiError = {
   timestamp?: string;
   status: number;
@@ -23,12 +30,7 @@ export type ApiError = {
   path?: string;
   requestId?: string;
   // Only present for VALIDATION_FAILED today
-  validationErrors?: Array<{
-    severity: string;
-    rule: string;
-    path: string;
-    message: string;
-  }>;
+  validationErrors?: ValidationError[];
 };
 
 export type LeaseConflictResponse = {

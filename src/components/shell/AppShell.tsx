@@ -7,6 +7,7 @@ import { computeModelSignature } from '../../domain';
 import { RemoteDatasetConflictDialog } from './RemoteDatasetConflictDialog';
 import { RemoteDatasetValidationErrorsDialog } from './RemoteDatasetValidationErrorsDialog';
 import { LeaseConflictDialog } from './LeaseConflictDialog';
+import { RemoteChangedDialog } from './RemoteChangedDialog';
 import { downloadTextFile, sanitizeFileName, loadOverlayExportMarker, modelStore, useModelStore, useOverlayStore } from '../../store';
 import { openDataset, retryAcquireLeaseForDataset } from '../../store/datasetLifecycle';
 import { flushStorePersistence, flushStorePersistenceForce, setStorePersistencePaused } from '../../store/initStorePersistence';
@@ -125,6 +126,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const persistenceConflict = useModelStore((s) => s.persistenceConflict);
   const persistenceValidationFailure = useModelStore((s) => s.persistenceValidationFailure);
   const persistenceLeaseConflict = useModelStore((s) => s.persistenceLeaseConflict);
+  const persistenceRemoteChanged = useModelStore((s) => s.persistenceRemoteChanged);
   const { isDirty, model } = useModelStore((s) => ({
     isDirty: s.isDirty,
     model: s.model
@@ -276,7 +278,30 @@ const onExportLocalConflictSnapshot = () => {
       });
   };
 
-  const onOpenReadOnlyAfterLeaseConflict = () => {
+  
+
+const onReloadFromServerAfterRemoteChanged = () => {
+  const st = modelStore.getState();
+  const datasetId = st.activeDatasetId;
+  const backend = new RemoteDatasetBackend();
+  setStorePersistencePaused(true);
+  void openDataset(datasetId, backend)
+    .then(() => {
+      modelStore.clearPersistenceRemoteChanged();
+      modelStore.setPersistenceOk();
+      setStorePersistencePaused(false);
+    })
+    .catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      modelStore.setPersistenceError(msg);
+    });
+};
+
+const onKeepLocalChangesAfterRemoteChanged = () => {
+  modelStore.clearPersistenceRemoteChanged();
+};
+
+const onOpenReadOnlyAfterLeaseConflict = () => {
     const conflict = modelStore.getState().persistenceLeaseConflict;
     if (!conflict) return;
     // Keep persistence paused and clear lease information so we stop attempting remote writes.
@@ -316,7 +341,16 @@ const onExportLocalConflictSnapshot = () => {
   return (
     <div className={['shell', isResizing ? 'isResizing' : null, isNavigatorDragging ? 'isNavigatorDragging' : null].filter(Boolean).join(' ')}>
 
-      <LeaseConflictDialog
+      
+
+<RemoteChangedDialog
+  isOpen={!!persistenceRemoteChanged}
+  change={persistenceRemoteChanged}
+  onReloadFromServer={onReloadFromServerAfterRemoteChanged}
+  onKeepLocalChanges={onKeepLocalChangesAfterRemoteChanged}
+/>
+
+<LeaseConflictDialog
         isOpen={!!persistenceLeaseConflict}
         conflict={persistenceLeaseConflict}
         onOpenReadOnly={onOpenReadOnlyAfterLeaseConflict}

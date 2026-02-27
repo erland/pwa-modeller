@@ -13,8 +13,8 @@ import {
   upsertDatasetEntry,
 } from './datasetRegistry';
 import { modelStore } from './modelStore';
-import { acquireOrRefreshLease, releaseLease, RemoteDatasetApiError, type LeaseConflictResponse } from './remoteDatasetApi';
-import { getLeaseToken, getRemoteRole, setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from './remoteDatasetSession';
+import { acquireOrRefreshLease, getDatasetHead, releaseLease, RemoteDatasetApiError, type LeaseConflictResponse } from './remoteDatasetApi';
+import { getLastSeenEtag, getLastWarnedHeadEtag, getLeaseToken, getRemoteRole, setLastWarnedHeadEtag, setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from './remoteDatasetSession';
 
 /**
  * Dataset lifecycle module.
@@ -47,6 +47,92 @@ function assertBackendMatchesRegistry(datasetId: DatasetId, backend: DatasetBack
   }
 }
 
+
+
+
+/**
+ * Phase 2: head polling (Step 7 in docs/phase2-step-by-step-plan-B.md)
+ *
+ * Polls /datasets/{id}/head to detect remote changes early.
+ */
+const HEAD_POLL_DEFAULT_MS = 20_000;
+const headPollTimers = new Map<DatasetId, ReturnType<typeof setInterval>>();
+const headPollInFlight = new Set<DatasetId>();
+
+function stopHeadPollTimer(datasetId: DatasetId): void {
+  const t = headPollTimers.get(datasetId);
+  if (t) clearInterval(t);
+  headPollTimers.delete(datasetId);
+  headPollInFlight.delete(datasetId);
+}
+
+async function pollHeadOnce(localDatasetId: DatasetId, serverDatasetId: string, deps: DatasetLifecycleDeps): Promise<void> {
+  if (headPollInFlight.has(localDatasetId)) return;
+  headPollInFlight.add(localDatasetId);
+  try {
+    const { head } = await getDatasetHead(serverDatasetId);
+
+    // Dataset may have changed since the request started.
+    if (deps.store.getState().activeDatasetId !== localDatasetId) return;
+
+    const lastSeen = getLastSeenEtag(localDatasetId);
+    const current = head.currentEtag ?? null;
+    if (!current || !lastSeen || current === lastSeen) {
+      // Lease might have expired server-side; clear token and try to reacquire if allowed.
+      if (head.leaseActive === false && getLeaseToken(localDatasetId)) {
+        setLeaseToken(localDatasetId, null);
+        setLeaseExpiresAt(localDatasetId, null);
+        const role = getRemoteRole(localDatasetId);
+        if (role && role !== 'VIEWER') {
+          await acquireOrRefreshLeaseAndStore(localDatasetId, serverDatasetId);
+        }
+      }
+      return;
+    }
+
+    const st = deps.store.getState();
+    if (st.isDirty) {
+      const lastWarned = getLastWarnedHeadEtag(localDatasetId);
+      if (lastWarned !== current) {
+        modelStore.setPersistenceRemoteChanged({
+          datasetId: localDatasetId,
+          message: 'Remote dataset changed while you have local unsaved changes.',
+          detectedAt: Date.now(),
+          serverEtag: current,
+          serverUpdatedBy: head.updatedBy ?? null,
+          serverUpdatedAt: head.updatedAt ?? null,
+          serverRevision: head.currentRevision ?? null
+        });
+        setLastWarnedHeadEtag(localDatasetId, current);
+      }
+      return;
+    }
+
+    // Local is clean -> auto-reload in the background.
+    const backend = deps.getBackend();
+    if (backend.kind !== 'remote') return;
+    const restored = await backend.loadPersistedState(localDatasetId);
+    // Only hydrate if still active and still clean.
+    const after = deps.store.getState();
+    if (after.activeDatasetId === localDatasetId && !after.isDirty && restored) {
+      deps.store.hydrate({ ...restored, activeDatasetId: localDatasetId });
+      modelStore.setPersistenceOk();
+      modelStore.clearPersistenceRemoteChanged();
+    }
+  } catch {
+    // Best-effort: ignore transient failures.
+  } finally {
+    headPollInFlight.delete(localDatasetId);
+  }
+}
+
+function startHeadPollTimer(localDatasetId: DatasetId, serverDatasetId: string, deps: DatasetLifecycleDeps): void {
+  stopHeadPollTimer(localDatasetId);
+  const t = setInterval(() => {
+    void pollHeadOnce(localDatasetId, serverDatasetId, deps);
+  }, HEAD_POLL_DEFAULT_MS);
+  headPollTimers.set(localDatasetId, t);
+}
 
 /**
  * Phase 2: lease lifecycle (Step 3 in docs/phase2-step-by-step-plan-B.md)
@@ -87,6 +173,7 @@ async function bestEffortReleaseLease(localDatasetId: DatasetId): Promise<void> 
   if (!serverDatasetId) return;
 
   stopLeaseRefreshTimer(localDatasetId);
+  stopHeadPollTimer(localDatasetId);
   setLeaseToken(localDatasetId, null);
   setLeaseExpiresAt(localDatasetId, null);
   setLeaseConflict(localDatasetId, null);
@@ -133,6 +220,7 @@ async function acquireOrRefreshLeaseAndStore(localDatasetId: DatasetId, serverDa
         serverEtag: e.etag ?? null
       });
       stopLeaseRefreshTimer(localDatasetId);
+  stopHeadPollTimer(localDatasetId);
       return;
     }
     // Best effort: keep trying on next interval.
@@ -145,6 +233,7 @@ async function acquireOrRefreshLeaseAndStore(localDatasetId: DatasetId, serverDa
 
 function startLeaseRefreshTimer(localDatasetId: DatasetId, serverDatasetId: string): void {
   stopLeaseRefreshTimer(localDatasetId);
+  stopHeadPollTimer(localDatasetId);
   const t = setInterval(() => {
     void acquireOrRefreshLeaseAndStore(localDatasetId, serverDatasetId);
   }, LEASE_REFRESH_DEFAULT_MS);
@@ -208,25 +297,19 @@ export function createDatasetLifecycle(deps: DatasetLifecycleDeps) {
 
       setActiveDataset(datasetId);
 
-      // Phase 2: acquire lease and start refresh timer for remote datasets when role allows editing.
+      // Phase 2: lease lifecycle + head polling for remote datasets.
       if (b.kind === 'remote' && isRemoteDataset(datasetId)) {
         const serverDatasetId = getServerDatasetIdForRemote(datasetId);
         const role = getRemoteRole(datasetId);
-        if (serverDatasetId && role && role !== 'VIEWER') {
-          await acquireOrRefreshLeaseAndStore(datasetId, serverDatasetId);
-          // Refresh periodically (best-effort). On conflict we will stop the timer.
-          startLeaseRefreshTimer(datasetId, serverDatasetId);
-        }
-      }
+        if (serverDatasetId) {
+          // Start head polling for early remote-change detection (VIEWER+).
+          startHeadPollTimer(datasetId, serverDatasetId, deps);
 
-      // Phase 2: acquire lease and start refresh timer for remote datasets when role allows editing.
-      if (b.kind === 'remote' && isRemoteDataset(datasetId)) {
-        const serverDatasetId = getServerDatasetIdForRemote(datasetId);
-        const role = getRemoteRole(datasetId);
-        if (serverDatasetId && role && role !== 'VIEWER') {
-          await acquireOrRefreshLeaseAndStore(datasetId, serverDatasetId);
-          // Only refresh if we actually received a lease token (otherwise we're effectively read-only).
-          startLeaseRefreshTimer(datasetId, serverDatasetId);
+          // Acquire lease + refresh timer only for EDITOR/OWNER.
+          if (role && role !== 'VIEWER') {
+            await acquireOrRefreshLeaseAndStore(datasetId, serverDatasetId);
+            startLeaseRefreshTimer(datasetId, serverDatasetId);
+          }
         }
       }
     },

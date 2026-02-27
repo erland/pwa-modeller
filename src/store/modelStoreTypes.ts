@@ -49,6 +49,22 @@ export type RemoteLeaseConflict = {
   serverEtag: string | null;
 };
 
+
+
+export type RemoteHeadChanged = {
+  datasetId: DatasetId;
+  /** Human-readable message for the user. */
+  message: string;
+  /** When the remote change was detected (ms since epoch). */
+  detectedAt: number;
+  /** Latest server ETag if known (quoted). */
+  serverEtag: string | null;
+  /** Best-effort: server updatedBy / updatedAt from head endpoint. */
+  serverUpdatedBy?: string | null;
+  serverUpdatedAt?: string | null;
+  serverRevision?: number | null;
+};
+
 export type ModelStoreState = {
   /** Identifies which dataset the current in-memory model belongs to. */
   activeDatasetId: DatasetId;
@@ -72,6 +88,9 @@ export type ModelStoreState = {
 
   /** Set when the remote dataset is lease-locked by another user (Phase 2). */
   persistenceLeaseConflict: RemoteLeaseConflict | null;
+
+  /** Set when the server head indicates remote changes while local is dirty (Phase 2). */
+  persistenceRemoteChanged: RemoteHeadChanged | null;
 };
 
 export type StoreListener = () => void;

@@ -38,7 +38,8 @@ export class ModelStore {
       persistenceStatus: { status: 'ok', message: null, lastOkAt: 0, lastErrorAt: null },
       persistenceConflict: null,
       persistenceValidationFailure: null,
-      persistenceLeaseConflict: null
+      persistenceLeaseConflict: null,
+      persistenceRemoteChanged: null
     },
     (state) => this.flush.onNotify(state),
   );
@@ -229,9 +230,32 @@ export class ModelStore {
     if (!cur) return;
     this.setState({
       ...this.core.getState(),
-      persistenceLeaseConflict: null
+      persistenceLeaseConflict: null,
+      persistenceRemoteChanged: null
     });
   };
+
+
+setPersistenceRemoteChanged = (change: import('./modelStoreTypes').RemoteHeadChanged): void => {
+  const now = Date.now();
+  this.setState({
+    ...this.core.getState(),
+    persistenceRemoteChanged: {
+      ...change,
+      detectedAt: change.detectedAt ?? now
+    }
+  });
+};
+
+clearPersistenceRemoteChanged = (): void => {
+  const cur = this.core.getState().persistenceRemoteChanged;
+  if (!cur) return;
+  this.setState({
+    ...this.core.getState(),
+    persistenceRemoteChanged: null
+  });
+};
+
 
 
   /**

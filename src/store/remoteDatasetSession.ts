@@ -24,6 +24,7 @@ export type RemoteDatasetSession = {
   leaseExpiresAt: string | null;
   leaseConflict: LeaseConflictResponse | null;
   role: Role | null;
+  lastWarnedHeadEtag: string | null;
 };
 
 const sessionsByDatasetId = new Map<DatasetId, RemoteDatasetSession>();
@@ -37,7 +38,8 @@ function ensureSession(datasetId: DatasetId): RemoteDatasetSession {
     leaseToken: null,
     leaseExpiresAt: null,
     leaseConflict: null,
-    role: null
+    role: null,
+    lastWarnedHeadEtag: null
   };
   sessionsByDatasetId.set(datasetId, created);
   return created;
@@ -104,6 +106,15 @@ export function getRemoteRole(datasetId: DatasetId): Role | null {
 
 export function setRemoteRole(datasetId: DatasetId, role: Role | null): void {
   patchRemoteDatasetSession(datasetId, { role });
+}
+
+
+export function getLastWarnedHeadEtag(datasetId: DatasetId): string | null {
+  return ensureSession(datasetId).lastWarnedHeadEtag;
+}
+
+export function setLastWarnedHeadEtag(datasetId: DatasetId, etag: string | null): void {
+  patchRemoteDatasetSession(datasetId, { lastWarnedHeadEtag: etag });
 }
 
 /** Test helper: resets all sessions. */

@@ -18,6 +18,7 @@ describe('Navigator CRUD', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await screen.findByTestId('app-header');
     // Create a new model.
     await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));

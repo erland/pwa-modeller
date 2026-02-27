@@ -19,6 +19,7 @@ describe('Model management UI', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await screen.findByTestId('app-header');
     await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), 'My Model');
@@ -33,6 +34,7 @@ describe('Model management UI', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await screen.findByTestId('app-header');
     await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), 'Folder Test Model');
@@ -63,6 +65,7 @@ describe('Model management UI', () => {
   it('opens a model from a JSON file', async () => {
     render(<App />);
 
+    await screen.findByTestId('app-header');
     const model = createEmptyModel({ name: 'Loaded Model' });
     const json = serializeModel(model);
     const file = new File([json], 'loaded-model.json', { type: 'application/json' });
@@ -78,6 +81,7 @@ describe('Model management UI', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await screen.findByTestId('app-header');
     await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));
     await user.type(screen.getByLabelText('Name'), 'Props Model');

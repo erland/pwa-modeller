@@ -22,6 +22,7 @@ describe('Step 11 – Reporting and Export', () => {
 
     render(<App />);
 
+    await screen.findByTestId('app-header');
     await user.click(screen.getByRole('tab', { name: 'Reports' }));
     expect(screen.getByRole('heading', { name: 'Reports' })).toBeInTheDocument();
 
@@ -57,6 +58,7 @@ describe('Step 11 – Reporting and Export', () => {
 
     render(<App />);
 
+    await screen.findByTestId('app-header');
     // Wait for the diagram canvas to show the created view (effect-driven).
     // NOTE: The Diagram UI currently renders two nodes with aria-label="Diagram canvas":
     // - an outer placeholder wrapper

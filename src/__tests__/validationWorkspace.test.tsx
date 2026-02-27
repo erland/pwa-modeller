@@ -19,6 +19,7 @@ describe('Validation UI', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await screen.findByTestId('app-header');
     // Create a model + two elements via UI to avoid act warnings.
     await user.click(screen.getByRole('button', { name: 'Model' }));
     await user.click(screen.getByRole('button', { name: 'New' }));

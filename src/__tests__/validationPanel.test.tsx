@@ -34,6 +34,7 @@ describe('Validation panel (Step 12)', () => {
     const user = userEvent.setup();
     render(<App />);
 
+    await screen.findByTestId('app-header');
     await user.click(screen.getByRole('tab', { name: 'Validation' }));
     await user.click(screen.getByRole('button', { name: /validate model/i }));
 

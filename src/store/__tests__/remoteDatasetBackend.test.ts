@@ -1,6 +1,7 @@
 import { DATASET_REGISTRY_STORAGE_KEY } from '../datasetRegistry';
 import type { DatasetId } from '../datasetTypes';
 import { RemoteDatasetBackend, RemoteDatasetBackendError } from '../backends/remoteDatasetBackend';
+import { _resetRemoteDatasetSessions } from '../remoteDatasetSession';
 
 describe('RemoteDatasetBackend.loadPersistedState', () => {
   const dsId = 'remote:ds1' as DatasetId;
@@ -9,6 +10,7 @@ describe('RemoteDatasetBackend.loadPersistedState', () => {
     jest.resetModules();
     jest.clearAllMocks();
     window.localStorage.clear();
+    _resetRemoteDatasetSessions();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = undefined;
   });
@@ -112,6 +114,7 @@ describe('RemoteDatasetBackend.persistState', () => {
     jest.resetModules();
     jest.clearAllMocks();
     window.localStorage.clear();
+    _resetRemoteDatasetSessions();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = undefined;
   });

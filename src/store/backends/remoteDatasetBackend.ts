@@ -2,6 +2,7 @@ import type { DatasetBackend, PersistedStoreSlice } from '../datasetBackend';
 import type { DatasetId } from '../datasetTypes';
 import { loadDatasetRegistry } from '../datasetRegistry';
 import { loadRemoteDatasetSettings } from '../remoteDatasetSettings';
+import { getLastSeenEtag as getSessionEtag, setLastSeenEtag as setSessionEtag } from '../remoteDatasetSession';
 import { getAccessToken } from '../../auth/oidcPkceAuth';
 
 export type RemoteDatasetRef = {
@@ -95,16 +96,14 @@ function getRemoteRefForDataset(datasetId: DatasetId): RemoteDatasetRef | null {
 export class RemoteDatasetBackend implements DatasetBackend {
   public readonly kind = 'remote' as const;
 
-  private readonly etagsByDatasetId = new Map<string, string>();
-
   /** Returns the last seen ETag (including quotes) for the dataset, if any. */
   public getLastSeenEtag(datasetId: DatasetId): string | null {
-    return this.etagsByDatasetId.get(datasetId) ?? null;
+    return getSessionEtag(datasetId);
   }
 
   /** Allows tests / later steps to set the ETag explicitly. */
   public _setLastSeenEtag(datasetId: DatasetId, etag: string): void {
-    this.etagsByDatasetId.set(datasetId, etag);
+    setSessionEtag(datasetId, etag);
   }
 
   async loadPersistedState(datasetId: DatasetId): Promise<PersistedStoreSlice | null> {
@@ -151,7 +150,7 @@ export class RemoteDatasetBackend implements DatasetBackend {
     }
 
     const etag = res.headers.get('ETag');
-    if (etag) this.etagsByDatasetId.set(datasetId, etag);
+    if (etag) setSessionEtag(datasetId, etag);
 
     let body: unknown;
     try {
@@ -226,7 +225,7 @@ export class RemoteDatasetBackend implements DatasetBackend {
 
     if (res.status === 409) {
       // Conflict: do not overwrite. Capture server ETag (current revision) for UX.
-      if (etag) this.etagsByDatasetId.set(datasetId, etag);
+      if (etag) setSessionEtag(datasetId, etag);
 
       // Best-effort: parse conflict payload for UX support fields like savedAt/savedBy.
       let savedAt: string | null = null;
@@ -259,7 +258,7 @@ export class RemoteDatasetBackend implements DatasetBackend {
     }
 
     // Success: update revision token from response.
-    if (etag) this.etagsByDatasetId.set(datasetId, etag);
+    if (etag) setSessionEtag(datasetId, etag);
 
     // Response body is not required for Phase 1. Read+discard to surface JSON errors in dev.
     // Some servers may return 200 with no JSON; that's fine.

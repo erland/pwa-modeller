@@ -13,6 +13,8 @@ import {
   upsertDatasetEntry,
 } from './datasetRegistry';
 import { modelStore } from './modelStore';
+import { acquireOrRefreshLease, releaseLease, RemoteDatasetApiError, type LeaseConflictResponse } from './remoteDatasetApi';
+import { getRemoteRole, setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from './remoteDatasetSession';
 
 /**
  * Dataset lifecycle module.
@@ -45,6 +47,118 @@ function assertBackendMatchesRegistry(datasetId: DatasetId, backend: DatasetBack
   }
 }
 
+
+/**
+ * Phase 2: lease lifecycle (Step 3 in docs/phase2-step-by-step-plan-B.md)
+ *
+ * We keep lease/session state in the in-memory remoteDatasetSession module.
+ * Lease refresh timers are managed here because this module controls dataset open/close.
+ */
+const LEASE_REFRESH_DEFAULT_MS = 180_000; // default ttl 300s => refresh every 180s
+
+const leaseRefreshTimers = new Map<DatasetId, ReturnType<typeof setInterval>>();
+const leaseRefreshInFlight = new Set<DatasetId>();
+let beforeUnloadHandlerInstalled = false;
+
+function isRemoteDataset(datasetId: DatasetId): boolean {
+  const registry = ensureDatasetRegistryMigrated();
+  const entry = registry.entries.find(e => e.datasetId === datasetId);
+  return (entry?.storageKind ?? 'local') === 'remote';
+}
+
+function getServerDatasetIdForRemote(datasetId: DatasetId): string | null {
+  const registry = ensureDatasetRegistryMigrated();
+  const entry = registry.entries.find(e => e.datasetId === datasetId);
+  if (!entry) return null;
+  if ((entry.storageKind ?? 'local') !== 'remote') return null;
+  return entry.remote?.serverDatasetId ?? null;
+}
+
+function stopLeaseRefreshTimer(datasetId: DatasetId): void {
+  const t = leaseRefreshTimers.get(datasetId);
+  if (t) clearInterval(t);
+  leaseRefreshTimers.delete(datasetId);
+  leaseRefreshInFlight.delete(datasetId);
+}
+
+async function bestEffortReleaseLease(localDatasetId: DatasetId): Promise<void> {
+  if (!isRemoteDataset(localDatasetId)) return;
+  const serverDatasetId = getServerDatasetIdForRemote(localDatasetId);
+  if (!serverDatasetId) return;
+
+  stopLeaseRefreshTimer(localDatasetId);
+  setLeaseToken(localDatasetId, null);
+  setLeaseExpiresAt(localDatasetId, null);
+  setLeaseConflict(localDatasetId, null);
+
+  try {
+    await releaseLease(serverDatasetId);
+  } catch {
+    // Best effort: ignore network failures on release.
+  }
+}
+
+async function acquireOrRefreshLeaseAndStore(localDatasetId: DatasetId, serverDatasetId: string): Promise<void> {
+  // Avoid overlapping refresh calls.
+  if (leaseRefreshInFlight.has(localDatasetId)) return;
+  leaseRefreshInFlight.add(localDatasetId);
+  try {
+    const { lease } = await acquireOrRefreshLease(serverDatasetId);
+
+    if (lease.active && lease.leaseToken) {
+      setLeaseToken(localDatasetId, lease.leaseToken);
+      setLeaseExpiresAt(localDatasetId, lease.expiresAt);
+      setLeaseConflict(localDatasetId, null);
+      return;
+    }
+
+    // If server returns active lease but no token, we can't write; treat as read-only.
+    setLeaseToken(localDatasetId, null);
+    setLeaseExpiresAt(localDatasetId, lease.active ? lease.expiresAt : null);
+  } catch (e) {
+    // Lease conflict: stop refreshing and remember conflict for Step 6 UI.
+    if (e instanceof RemoteDatasetApiError && e.status === 409) {
+      const body = e.body as LeaseConflictResponse | undefined;
+      setLeaseToken(localDatasetId, null);
+      setLeaseExpiresAt(localDatasetId, null);
+      setLeaseConflict(localDatasetId, body ?? null);
+      stopLeaseRefreshTimer(localDatasetId);
+      return;
+    }
+    // Best effort: keep trying on next interval.
+    // eslint-disable-next-line no-console
+    console.warn('Failed to acquire/refresh lease', e);
+  } finally {
+    leaseRefreshInFlight.delete(localDatasetId);
+  }
+}
+
+function startLeaseRefreshTimer(localDatasetId: DatasetId, serverDatasetId: string): void {
+  stopLeaseRefreshTimer(localDatasetId);
+  const t = setInterval(() => {
+    void acquireOrRefreshLeaseAndStore(localDatasetId, serverDatasetId);
+  }, LEASE_REFRESH_DEFAULT_MS);
+  leaseRefreshTimers.set(localDatasetId, t);
+}
+
+function ensureBeforeUnloadHandlerInstalled(deps: DatasetLifecycleDeps): void {
+  if (beforeUnloadHandlerInstalled) return;
+  beforeUnloadHandlerInstalled = true;
+  if (typeof window === 'undefined') return;
+
+  window.addEventListener('beforeunload', () => {
+    try {
+      const active = deps.store.getState().activeDatasetId as DatasetId | undefined;
+      if (!active) return;
+      if (!isRemoteDataset(active)) return;
+      // Best-effort: fire and forget
+      void bestEffortReleaseLease(active);
+    } catch {
+      // ignore
+    }
+  });
+}
+
 export function createDatasetLifecycle(deps: DatasetLifecycleDeps) {
   return {
     async listDatasets(): Promise<ReturnType<typeof listRegistryDatasets>> {
@@ -63,6 +177,14 @@ export function createDatasetLifecycle(deps: DatasetLifecycleDeps) {
       const b = backend ?? deps.getBackend();
       assertBackendMatchesRegistry(datasetId, b);
 
+      ensureBeforeUnloadHandlerInstalled(deps);
+
+      const previousActive = deps.store.getState().activeDatasetId as DatasetId;
+      if (previousActive && previousActive !== datasetId) {
+        await bestEffortReleaseLease(previousActive);
+      }
+
+
       const restored = await b.loadPersistedState(datasetId);
       if (restored) {
         deps.store.hydrate({ ...restored, activeDatasetId: datasetId });
@@ -75,6 +197,28 @@ export function createDatasetLifecycle(deps: DatasetLifecycleDeps) {
       }
 
       setActiveDataset(datasetId);
+
+      // Phase 2: acquire lease and start refresh timer for remote datasets when role allows editing.
+      if (b.kind === 'remote' && isRemoteDataset(datasetId)) {
+        const serverDatasetId = getServerDatasetIdForRemote(datasetId);
+        const role = getRemoteRole(datasetId);
+        if (serverDatasetId && role && role !== 'VIEWER') {
+          await acquireOrRefreshLeaseAndStore(datasetId, serverDatasetId);
+          // Refresh periodically (best-effort). On conflict we will stop the timer.
+          startLeaseRefreshTimer(datasetId, serverDatasetId);
+        }
+      }
+
+      // Phase 2: acquire lease and start refresh timer for remote datasets when role allows editing.
+      if (b.kind === 'remote' && isRemoteDataset(datasetId)) {
+        const serverDatasetId = getServerDatasetIdForRemote(datasetId);
+        const role = getRemoteRole(datasetId);
+        if (serverDatasetId && role && role !== 'VIEWER') {
+          await acquireOrRefreshLeaseAndStore(datasetId, serverDatasetId);
+          // Only refresh if we actually received a lease token (otherwise we're effectively read-only).
+          startLeaseRefreshTimer(datasetId, serverDatasetId);
+        }
+      }
     },
 
     async createDataset(input: CreateDatasetInput, backend?: DatasetBackend): Promise<DatasetId> {

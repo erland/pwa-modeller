@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DatasetId } from '../../../store';
 import { openDataset, upsertDatasetEntry } from '../../../store';
+import { setRemoteRole } from '../../../store/remoteDatasetSession';
 import { createRemoteDataset, listRemoteDatasets, type RemoteDatasetListItem } from '../../../store/remoteDatasetApi';
 import { getRemoteDatasetBackend } from '../../../store/getRemoteDatasetBackend';
 import {
@@ -142,6 +143,11 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     try {
       const normalized = normalizeBaseUrl(baseUrl);
       const ds = await listRemoteDatasets({ baseUrl: normalized });
+      // Capture server-returned role per dataset for later lease decisions.
+      for (const row of ds) {
+        const remoteId = asRemoteDatasetId(row.datasetId);
+        setRemoteRole(remoteId, row.role ?? null);
+      }
       setRows(ds);
       // Remember last-used baseUrl/token.
       persistSettings();

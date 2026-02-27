@@ -484,3 +484,12 @@ All paths are relative to `{baseUrl}` (the server base url stored in remote sett
 - Head polling detects remote updates and warns when local dirty
 - History dialog lists revisions and restore works with optional message
 - Owner can force save/restore with `force=true` (explicit UI)
+
+---
+
+## Step 11 — Client docs + verification notes
+
+Implemented in:
+
+- `docs/phase2-client-implementation-notes.md`
+- `docs/phase2-verification-notes.md`

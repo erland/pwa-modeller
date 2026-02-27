@@ -5,9 +5,10 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import '../../styles/shell.css';
 import { computeModelSignature } from '../../domain';
 import { RemoteDatasetConflictDialog } from './RemoteDatasetConflictDialog';
+import { RemoteDatasetValidationErrorsDialog } from './RemoteDatasetValidationErrorsDialog';
 import { downloadTextFile, sanitizeFileName, loadOverlayExportMarker, modelStore, useModelStore, useOverlayStore } from '../../store';
 import { openDataset } from '../../store/datasetLifecycle';
-import { setStorePersistencePaused } from '../../store/initStorePersistence';
+import { flushStorePersistence, setStorePersistencePaused } from '../../store/initStorePersistence';
 import { RemoteDatasetBackend } from '../../store/backends/remoteDatasetBackend';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
@@ -120,6 +121,7 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const [isNavigatorDragging, setIsNavigatorDragging] = useState(false);
   const persistenceStatus = useModelStore((s) => s.persistenceStatus);
   const persistenceConflict = useModelStore((s) => s.persistenceConflict);
+  const persistenceValidationFailure = useModelStore((s) => s.persistenceValidationFailure);
   const { isDirty, model } = useModelStore((s) => ({
     isDirty: s.isDirty,
     model: s.model
@@ -221,7 +223,26 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
       setRightOpen(false);
     }
   }, [isSmall, isMedium]);
-  const onExportLocalConflictSnapshot = () => {
+    const onExportLocalValidationSnapshot = () => {
+    const st = modelStore.getState();
+    const file = sanitizeFileName(`validation-failed-${st.activeDatasetId}`);
+    const json = JSON.stringify(st.model ?? null, null, 2);
+    downloadTextFile(file, json, 'application/json');
+  };
+
+  const onKeepPausedAfterValidation = () => {
+    modelStore.clearPersistenceValidationFailure();
+    modelStore.setPersistenceError('Remote validation unresolved. Auto-save paused for this session.');
+  };
+
+  const onResumeAfterValidation = () => {
+    modelStore.clearPersistenceValidationFailure();
+    modelStore.setPersistenceOk();
+    setStorePersistencePaused(false);
+    flushStorePersistence();
+  };
+
+const onExportLocalConflictSnapshot = () => {
     const st = modelStore.getState();
     const file = sanitizeFileName(`conflict-${st.activeDatasetId}`);
     const json = JSON.stringify(st.model ?? null, null, 2);
@@ -258,7 +279,15 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   return (
     <div className={['shell', isResizing ? 'isResizing' : null, isNavigatorDragging ? 'isNavigatorDragging' : null].filter(Boolean).join(' ')}>
 
-      <RemoteDatasetConflictDialog
+            <RemoteDatasetValidationErrorsDialog
+        isOpen={!!persistenceValidationFailure}
+        failure={persistenceValidationFailure}
+        onExportLocalSnapshot={onExportLocalValidationSnapshot}
+        onKeepPaused={onKeepPausedAfterValidation}
+        onResumeAutoSave={onResumeAfterValidation}
+      />
+
+<RemoteDatasetConflictDialog
         isOpen={!!persistenceConflict}
         conflict={persistenceConflict}
         onReloadFromServer={onReloadFromServerAfterConflict}

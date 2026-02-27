@@ -142,11 +142,21 @@ export async function initStorePersistenceAsync(): Promise<void> {
             });
             return;
           }
-          if (anyErr && typeof anyErr === 'object' && (anyErr.code === 'LEASE_TOKEN_REQUIRED' || anyErr.code === 'VALIDATION_FAILED')) {
+          if (anyErr && typeof anyErr === 'object' && anyErr.code === 'LEASE_TOKEN_REQUIRED') {
             runSoon(() => {
               setStorePersistencePaused(true);
               const msg = anyErr && typeof anyErr.message === 'string' ? anyErr.message : 'Remote persistence failed.';
               setPersistenceError(msg);
+            });
+            return;
+          }
+          if (anyErr && typeof anyErr === 'object' && anyErr.code === 'VALIDATION_FAILED') {
+            runSoon(() => {
+              setStorePersistencePaused(true);
+              const msg = anyErr && typeof anyErr.message === 'string' ? anyErr.message : 'Remote validation failed.';
+              // Best-effort error list for Step 5 dialog.
+              const errors = Array.isArray(anyErr.validationErrors) ? anyErr.validationErrors : [];
+              modelStore.setPersistenceValidationFailure({ datasetId, message: msg, validationErrors: errors });
             });
             return;
           }

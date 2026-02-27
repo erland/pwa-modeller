@@ -122,7 +122,8 @@ describe('useRemoteDatasetsDialogModel', () => {
     expect(mockCreateRemoteDataset).toHaveBeenCalledWith({
       baseUrl: 'https://server',
       name: 'My dataset',
-      description: 'Desc'
+      description: 'Desc',
+      validationPolicy: 'none'
     });
     expect(mockListRemoteDatasets).toHaveBeenCalled();
     expect(result.current.rows[0]?.id).toBe('ds2');

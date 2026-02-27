@@ -36,7 +36,8 @@ export class ModelStore {
       fileName: null,
       isDirty: false,
       persistenceStatus: { status: 'ok', message: null, lastOkAt: 0, lastErrorAt: null },
-      persistenceConflict: null
+      persistenceConflict: null,
+      persistenceValidationFailure: null
     },
     (state) => this.flush.onNotify(state),
   );
@@ -147,7 +148,44 @@ export class ModelStore {
     if (!cur) return;
     this.setState({
       ...this.core.getState(),
-      persistenceConflict: null
+      persistenceConflict: null,
+      persistenceValidationFailure: null
+    });
+  };
+
+  // -------------------------
+  // Validation failure (Phase 2)
+  // -------------------------
+  setPersistenceValidationFailure = (
+    failure: {
+      datasetId: string;
+      message: string;
+      detectedAt?: number;
+      validationErrors?: Array<{ path: string; message: string; rule?: string | null; severity?: string | null }>;
+    },
+    now: number = Date.now(),
+  ): void => {
+    const detectedAt = failure.detectedAt ?? now;
+    this.setState({
+      ...this.core.getState(),
+      persistenceValidationFailure: {
+        datasetId: failure.datasetId as any,
+        message: failure.message,
+        detectedAt,
+        validationErrors: failure.validationErrors ?? []
+      }
+    });
+
+    // Also surface in the generic status chip.
+    this.setPersistenceError(failure.message, now);
+  };
+
+  clearPersistenceValidationFailure = (): void => {
+    const cur = this.core.getState().persistenceValidationFailure;
+    if (!cur) return;
+    this.setState({
+      ...this.core.getState(),
+      persistenceValidationFailure: null
     });
   };
 

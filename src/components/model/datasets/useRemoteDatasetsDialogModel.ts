@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DatasetId } from '../../../store';
 import { openDataset, upsertDatasetEntry } from '../../../store';
 import { setRemoteRole } from '../../../store/remoteDatasetSession';
-import { createRemoteDataset, listRemoteDatasets, type RemoteDatasetListItem } from '../../../store/remoteDatasetApi';
+import { createRemoteDataset, listRemoteDatasets, type RemoteDatasetListItem, type ValidationPolicy } from '../../../store/remoteDatasetApi';
 import { getRemoteDatasetBackend } from '../../../store/getRemoteDatasetBackend';
 import {
   loadRemoteDatasetSettings,
@@ -40,6 +40,7 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
 
   const [createName, setCreateName] = useState('');
   const [createDesc, setCreateDesc] = useState('');
+  const [createValidationPolicy, setCreateValidationPolicy] = useState<ValidationPolicy>('none');
 
   // Load last-used settings when opening.
   useEffect(() => {
@@ -55,6 +56,8 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     setRows([]);
     setCreateName('');
     setCreateDesc('');
+    setCreateValidationPolicy('none');
+    setCreateValidationPolicy('none');
   }, [isOpen]);
 
 
@@ -135,6 +138,7 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     didAutoRefreshRef.current = false;
     setCreateName('');
     setCreateDesc('');
+    setCreateValidationPolicy('none');
   }, []);
 
   const refresh = useCallback(async () => {
@@ -179,7 +183,12 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     setError(null);
     try {
       const normalized = normalizeBaseUrl(baseUrl);
-      await createRemoteDataset({ baseUrl: normalized, name, description: createDesc.trim() || undefined });
+      await createRemoteDataset({
+        baseUrl: normalized,
+        name,
+        description: createDesc.trim() || undefined,
+        validationPolicy: createValidationPolicy
+      });
       setCreateName('');
       setCreateDesc('');
       await refresh();
@@ -188,7 +197,7 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     } finally {
       setLoading(false);
     }
-  }, [baseUrl, createName, createDesc, refresh]);
+  }, [baseUrl, createName, createDesc, createValidationPolicy, refresh]);
 
   const doOpen = useCallback(
     async (serverDatasetId: string, displayName: string) => {
@@ -248,6 +257,8 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     setCreateName,
     createDesc,
     setCreateDesc,
+    createValidationPolicy,
+    setCreateValidationPolicy,
     persistSettings,
     doSignIn,
     doSignOut,

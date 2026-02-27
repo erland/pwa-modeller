@@ -20,6 +20,22 @@ export type RemotePersistenceConflict = {
   serverSavedAt?: string | null;
 };
 
+
+export type RemotePersistenceValidationFailure = {
+  datasetId: DatasetId;
+  /** Human-readable message for the user. */
+  message: string;
+  /** When the validation failure was detected (ms since epoch). */
+  detectedAt: number;
+  /** Server-provided validation errors, if available. */
+  validationErrors: Array<{
+    path: string;
+    message: string;
+    rule?: string | null;
+    severity?: 'ERROR' | 'WARN' | string | null;
+  }>;
+};
+
 export type ModelStoreState = {
   /** Identifies which dataset the current in-memory model belongs to. */
   activeDatasetId: DatasetId;
@@ -37,6 +53,9 @@ export type ModelStoreState = {
 
   /** Set when remote optimistic concurrency detects a conflict (Phase 1). */
   persistenceConflict: RemotePersistenceConflict | null;
+
+  /** Set when the server rejects the snapshot due to validation errors (Phase 2). */
+  persistenceValidationFailure: RemotePersistenceValidationFailure | null;
 };
 
 export type StoreListener = () => void;

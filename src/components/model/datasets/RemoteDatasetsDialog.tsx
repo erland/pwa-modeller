@@ -206,6 +206,30 @@ export function RemoteDatasetsDialog({ isOpen, onClose }: Props) {
                   color: 'inherit'
                 }}
               />
+              <label style={{ display: 'grid', gap: 4 }}>
+                <div style={{ fontSize: 12, opacity: 0.85 }}>Validation policy</div>
+                <select
+                  value={m.createValidationPolicy}
+                  onChange={(e) => m.setCreateValidationPolicy(e.currentTarget.value as any)}
+                  style={{
+                    width: '100%',
+                    minWidth: 0,
+                    padding: '6px 8px',
+                    borderRadius: 8,
+                    border: '1px solid var(--panelBorder, rgba(255,255,255,0.12))',
+                    background: 'var(--panelBg, rgba(0,0,0,0.15))',
+                    color: 'inherit'
+                  }}
+                >
+                  <option value="none">none (no server validation)</option>
+                  <option value="basic">basic</option>
+                  <option value="strict">strict</option>
+                </select>
+                <div style={{ fontSize: 11, opacity: 0.75, lineHeight: 1.3 }}>
+                  Choose how strictly the server should validate your model on save. Stricter policies may reject invalid data.
+                </div>
+              </label>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <button
                   type="button"

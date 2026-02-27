@@ -46,7 +46,9 @@ export class RemoteDatasetBackendError extends Error {
   /** Optional conflict UX support data (best-effort). */
   public readonly serverUpdatedAt?: string | null;
   /** Optional conflict UX support data (best-effort). */
-  public readonly serverUpdatedBy?: string | null;
+   public readonly serverUpdatedBy?: string | null;
+  /** Optional conflict UX support data: server current revision number (best-effort). */
+  public readonly serverRevision?: number | null;
   /** Optional lease conflict UX support data (best-effort). */
   public readonly leaseHolderSub?: string | null;
   /** Optional lease conflict UX support data (best-effort). */
@@ -65,6 +67,7 @@ export class RemoteDatasetBackendError extends Error {
       serverSavedBy?: string | null;
       serverUpdatedAt?: string | null;
       serverUpdatedBy?: string | null;
+      serverRevision?: number | null;
       leaseHolderSub?: string | null;
       leaseExpiresAt?: string | null;
       apiCode?: string | null;
@@ -81,6 +84,7 @@ export class RemoteDatasetBackendError extends Error {
     this.serverSavedBy = opts?.serverSavedBy ?? null;
     this.serverUpdatedAt = opts?.serverUpdatedAt ?? null;
     this.serverUpdatedBy = opts?.serverUpdatedBy ?? null;
+    this.serverRevision = opts?.serverRevision ?? null;
     this.leaseHolderSub = opts?.leaseHolderSub ?? null;
     this.leaseExpiresAt = opts?.leaseExpiresAt ?? null;
     this.apiCode = opts?.apiCode ?? null;
@@ -328,13 +332,19 @@ export class RemoteDatasetBackend implements DatasetBackend {
       }
 
       if (isSnapshotConflict(body)) {
+        const bodyAny: any = body as any;
+        const currentEtag = (bodyAny.currentEtag ?? null) as (string | null);
+        const rev = (typeof bodyAny.currentRevision === 'number' ? bodyAny.currentRevision : null) as (number | null);
+        const bestEtag = (etag ?? currentEtag) as (string | null);
+        if (bestEtag) setSessionEtag(datasetId, bestEtag);
         throw new RemoteDatasetBackendError('Remote snapshot save conflict (stale revision).', 'CONFLICT', {
           status: 409,
-          responseEtag: etag ?? null,
-          serverSavedAt: (body as any).savedAt ?? null,
-          serverSavedBy: (body as any).savedBy ?? null,
-          serverUpdatedAt: (body as any).updatedAt ?? null,
-          serverUpdatedBy: (body as any).updatedBy ?? null
+          responseEtag: bestEtag ?? null,
+          serverRevision: rev,
+          serverSavedAt: bodyAny.savedAt ?? null,
+          serverSavedBy: bodyAny.savedBy ?? null,
+          serverUpdatedAt: bodyAny.updatedAt ?? null,
+          serverUpdatedBy: bodyAny.updatedBy ?? null
         });
       }
 

@@ -14,9 +14,15 @@ export type RemotePersistenceConflict = {
   detectedAt: number;
   /** Latest server ETag if known (quoted). */
   serverEtag: string | null;
+  /** Best-effort conflict help: server current revision number (if provided). */
+  serverRevision?: number | null;
   /** Best-effort conflict help: who last updated the server snapshot. */
+  serverUpdatedBy?: string | null;
+  /** Best-effort conflict help: when the server snapshot was last updated (ISO string). */
+  serverUpdatedAt?: string | null;
+  /** Best-effort (legacy): who last saved the server snapshot. */
   serverSavedBy?: string | null;
-  /** Best-effort conflict help: when the server snapshot was last saved (ISO string). */
+  /** Best-effort (legacy): when the server snapshot was last saved (ISO string). */
   serverSavedAt?: string | null;
 };
 

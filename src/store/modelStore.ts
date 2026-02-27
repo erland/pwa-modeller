@@ -108,6 +108,9 @@ export class ModelStore {
       message: string;
       detectedAt?: number;
       serverEtag?: string | null;
+      serverRevision?: number | null;
+      serverUpdatedAt?: string | null;
+      serverUpdatedBy?: string | null;
       serverSavedAt?: string | null;
       serverSavedBy?: string | null;
     },
@@ -120,6 +123,9 @@ export class ModelStore {
       message: conflict.message,
       detectedAt,
       serverEtag: conflict.serverEtag ?? null,
+      serverRevision: conflict.serverRevision ?? null,
+      serverUpdatedAt: conflict.serverUpdatedAt ?? null,
+      serverUpdatedBy: conflict.serverUpdatedBy ?? null,
       serverSavedAt: conflict.serverSavedAt ?? null,
       serverSavedBy: conflict.serverSavedBy ?? null
     };
@@ -130,6 +136,9 @@ export class ModelStore {
       cur.datasetId === next.datasetId &&
       cur.message === next.message &&
       cur.serverEtag === next.serverEtag &&
+      (cur.serverRevision ?? null) === (next.serverRevision ?? null) &&
+      (cur.serverUpdatedAt ?? null) === (next.serverUpdatedAt ?? null) &&
+      (cur.serverUpdatedBy ?? null) === (next.serverUpdatedBy ?? null) &&
       (cur.serverSavedAt ?? null) === (next.serverSavedAt ?? null) &&
       (cur.serverSavedBy ?? null) === (next.serverSavedBy ?? null)
     ) {

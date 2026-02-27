@@ -135,6 +135,9 @@ export async function initStorePersistenceAsync(): Promise<void> {
                 datasetId,
                 message: 'Remote dataset changed on the server. Reload from server or export your local snapshot.',
                 serverEtag: anyErr.responseEtag ?? null,
+                serverRevision: anyErr.serverRevision ?? null,
+                serverUpdatedAt: anyErr.serverUpdatedAt ?? null,
+                serverUpdatedBy: anyErr.serverUpdatedBy ?? null,
                 serverSavedAt: anyErr.serverSavedAt ?? null,
                 serverSavedBy: anyErr.serverSavedBy ?? null
               });

@@ -16,6 +16,13 @@ export function RemoteDatasetConflictDialog({
   onExportLocalSnapshot,
   onKeepLocalChanges
 }: Props) {
+  const hasServerMeta =
+    conflict?.serverRevision != null ||
+    !!conflict?.serverUpdatedAt ||
+    !!conflict?.serverUpdatedBy ||
+    !!conflict?.serverSavedAt ||
+    !!conflict?.serverSavedBy;
+
   return (
     <Dialog
       title="Remote dataset conflict"
@@ -58,19 +65,36 @@ export function RemoteDatasetConflictDialog({
           </div>
         ) : null}
 
-        {conflict?.serverSavedAt || conflict?.serverSavedBy ? (
+        {hasServerMeta ? (
           <div style={{ fontSize: 12, opacity: 0.75, lineHeight: 1.4 }}>
             <div>
-              <b>Server last saved</b>
+              <b>Server latest</b>
             </div>
-            {conflict.serverSavedAt ? (
+            {conflict?.serverRevision != null ? (
               <div>
-                At: <code>{conflict.serverSavedAt}</code>
+                Revision: <code>{conflict.serverRevision}</code>
               </div>
             ) : null}
-            {conflict.serverSavedBy ? (
+
+            {conflict?.serverUpdatedAt ? (
               <div>
-                By: <code>{conflict.serverSavedBy}</code>
+                Updated at: <code>{conflict.serverUpdatedAt}</code>
+              </div>
+            ) : null}
+            {conflict?.serverUpdatedBy ? (
+              <div>
+                Updated by: <code>{conflict.serverUpdatedBy}</code>
+              </div>
+            ) : null}
+
+            {!conflict?.serverUpdatedAt && conflict?.serverSavedAt ? (
+              <div>
+                Saved at: <code>{conflict.serverSavedAt}</code>
+              </div>
+            ) : null}
+            {!conflict?.serverUpdatedBy && conflict?.serverSavedBy ? (
+              <div>
+                Saved by: <code>{conflict.serverSavedBy}</code>
               </div>
             ) : null}
           </div>

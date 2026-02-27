@@ -4,9 +4,10 @@ type Props = {
   row: RemoteDatasetListItem;
   busyId: string | null;
   onOpen: (serverDatasetId: string, displayName: string) => void;
+  onHistory: (serverDatasetId: string, displayName: string) => void;
 };
 
-export function RemoteDatasetRow({ row: r, busyId, onOpen }: Props) {
+export function RemoteDatasetRow({ row: r, busyId, onOpen, onHistory }: Props) {
   const isBusy = busyId === r.datasetId;
 
   return (
@@ -32,6 +33,15 @@ export function RemoteDatasetRow({ row: r, busyId, onOpen }: Props) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button
+          type="button"
+          className="shellButton"
+          disabled={isBusy}
+          title="View snapshot history"
+          onClick={() => onHistory(r.datasetId, r.name)}
+        >
+          History
+        </button>
         <button
           type="button"
           className="shellButton"

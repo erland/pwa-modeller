@@ -93,8 +93,13 @@ export type SnapshotResponse = {
 export type SnapshotHistoryItem = {
   revision: number;
   etag: string;
+  // Phase 2 servers may provide either saved* or updated* fields; keep both optional for compatibility.
   savedAt: string | null;
   savedBy: string | null;
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+  // Optional message stored with the snapshot (if server supports it).
+  message?: string | null;
   schemaVersion: number | null;
 };
 

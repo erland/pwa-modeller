@@ -2,8 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DatasetId } from '../../../store';
 import { openDataset, upsertDatasetEntry } from '../../../store';
-import { setRemoteRole } from '../../../store/remoteDatasetSession';
-import { createRemoteDataset, listRemoteDatasets, type RemoteDatasetListItem, type ValidationPolicy } from '../../../store/remoteDatasetApi';
+import { getLastSeenEtag, getLeaseToken, getRemoteRole, setRemoteRole } from '../../../store/remoteDatasetSession';
+import {
+  createRemoteDataset,
+  listRemoteDatasets,
+  listSnapshotHistory,
+  restoreSnapshotRevision,
+  type RemoteDatasetListItem,
+  type SnapshotHistoryItem,
+  type ValidationPolicy
+} from '../../../store/remoteDatasetApi';
 import { getRemoteDatasetBackend } from '../../../store/getRemoteDatasetBackend';
 import {
   loadRemoteDatasetSettings,
@@ -35,6 +43,14 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // Step 9: snapshot history + restore
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyServerDatasetId, setHistoryServerDatasetId] = useState<string | null>(null);
+  const [historyDatasetName, setHistoryDatasetName] = useState<string>('');
+  const [historyItems, setHistoryItems] = useState<SnapshotHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
   const [loggedIn, setLoggedIn] = useState(false);
   const didAutoRefreshRef = useRef(false);
 
@@ -58,6 +74,13 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     setCreateDesc('');
     setCreateValidationPolicy('none');
     setCreateValidationPolicy('none');
+
+    setHistoryOpen(false);
+    setHistoryServerDatasetId(null);
+    setHistoryDatasetName('');
+    setHistoryItems([]);
+    setHistoryLoading(false);
+    setHistoryError(null);
   }, [isOpen]);
 
 
@@ -237,6 +260,74 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     [baseUrl, onClose, persistSettings]
   );
 
+  const openHistory = useCallback(
+    async (serverDatasetId: string, displayName: string) => {
+      setHistoryOpen(true);
+      setHistoryServerDatasetId(serverDatasetId);
+      setHistoryDatasetName(displayName);
+      setHistoryItems([]);
+      setHistoryError(null);
+      setHistoryLoading(true);
+      try {
+        const normalized = normalizeBaseUrl(baseUrl);
+        const { history } = await listSnapshotHistory(serverDatasetId, { limit: 50, offset: 0 }, { baseUrl: normalized });
+        setHistoryItems(history.items ?? []);
+      } catch (e) {
+        setHistoryError(e instanceof Error ? e.message : 'Failed to load history');
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [baseUrl]
+  );
+
+  const refreshHistory = useCallback(async () => {
+    if (!historyServerDatasetId) return;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const normalized = normalizeBaseUrl(baseUrl);
+      const { history } = await listSnapshotHistory(historyServerDatasetId, { limit: 50, offset: 0 }, { baseUrl: normalized });
+      setHistoryItems(history.items ?? []);
+    } catch (e) {
+      setHistoryError(e instanceof Error ? e.message : 'Failed to load history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [baseUrl, historyServerDatasetId]);
+
+  const doRestoreRevision = useCallback(
+    async (revision: number, message?: string) => {
+      if (!historyServerDatasetId) return;
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const normalized = normalizeBaseUrl(baseUrl);
+        const localDatasetId = asRemoteDatasetId(historyServerDatasetId);
+        const ifMatch = getLastSeenEtag(localDatasetId) ?? '"0"';
+        const leaseToken = getLeaseToken(localDatasetId);
+
+        await restoreSnapshotRevision(
+          historyServerDatasetId,
+          revision,
+          message ? { message } : undefined,
+          { ifMatch, leaseToken: leaseToken ?? undefined, force: false },
+          { baseUrl: normalized }
+        );
+
+        // After restore, refresh history and open the dataset to pick up the restored snapshot.
+        await refreshHistory();
+        setHistoryOpen(false);
+        await doOpen(historyServerDatasetId, historyDatasetName || historyServerDatasetId);
+      } catch (e) {
+        setHistoryError(e instanceof Error ? e.message : 'Failed to restore revision');
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [baseUrl, historyDatasetName, historyServerDatasetId, doOpen, refreshHistory]
+  );
+
   return {
     baseUrl,
     setBaseUrl,
@@ -264,6 +355,24 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
     doSignOut,
     refresh,
     doCreate,
-    doOpen
+    doOpen,
+
+    // Step 9
+    historyOpen,
+    historyDatasetName,
+    historyItems,
+    historyLoading,
+    historyError,
+    closeHistory: () => setHistoryOpen(false),
+    openHistory,
+    refreshHistory,
+    doRestoreRevision,
+    canRestoreFromHistory: (() => {
+      if (!historyServerDatasetId) return false;
+      const localDatasetId = asRemoteDatasetId(historyServerDatasetId);
+      const role = getRemoteRole(localDatasetId);
+      if (!role || role === 'VIEWER') return false;
+      return Boolean(getLeaseToken(localDatasetId));
+    })()
   };
 }

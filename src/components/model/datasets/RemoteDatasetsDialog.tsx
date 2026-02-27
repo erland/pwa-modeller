@@ -1,5 +1,6 @@
 import { Dialog } from '../../dialog/Dialog';
 import { RemoteDatasetRow } from './RemoteDatasetRow';
+import { RemoteDatasetHistoryDialog } from './RemoteDatasetHistoryDialog';
 import { useRemoteDatasetsDialogModel } from './useRemoteDatasetsDialogModel';
 
 type Props = {
@@ -11,33 +12,34 @@ export function RemoteDatasetsDialog({ isOpen, onClose }: Props) {
   const m = useRemoteDatasetsDialogModel({ isOpen, onClose });
 
   return (
-    <Dialog
-      title="Remote datasets"
-      isOpen={isOpen}
-      onClose={onClose}
-      footer={
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
-            {m.loading ? 'Loading…' : m.loggedIn ? `${m.rows.length} dataset${m.rows.length === 1 ? '' : 's'}` : 'Signed out'}
+    <>
+      <Dialog
+        title="Remote datasets"
+        isOpen={isOpen}
+        onClose={onClose}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>
+              {m.loading ? 'Loading…' : m.loggedIn ? `${m.rows.length} dataset${m.rows.length === 1 ? '' : 's'}` : 'Signed out'}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="shellButton"
+                onClick={() => void m.refresh()}
+                disabled={m.loading || !m.canConnect}
+                title={!m.canConnect ? 'Set baseUrl and sign in first' : undefined}
+              >
+                Refresh
+              </button>
+              <button type="button" className="shellButton" onClick={onClose}>
+                Close
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              className="shellButton"
-              onClick={() => void m.refresh()}
-              disabled={m.loading || !m.canConnect}
-              title={!m.canConnect ? 'Set baseUrl and sign in first' : undefined}
-            >
-              Refresh
-            </button>
-            <button type="button" className="shellButton" onClick={onClose}>
-              Close
-            </button>
-          </div>
-        </div>
-      }
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div className="crudHint" style={{ marginTop: 0 }}>
           Connect to a server-backed dataset store. Phase 1 uses OIDC (PKCE redirect) for sign-in.
         </div>
@@ -249,6 +251,7 @@ export function RemoteDatasetsDialog({ isOpen, onClose }: Props) {
                   row={r}
                   busyId={m.busyId}
                   onOpen={(id, name) => void m.doOpen(id, name)}
+                  onHistory={(id, name) => void m.openHistory(id, name)}
                 />
               ))}
             </div>
@@ -258,7 +261,20 @@ export function RemoteDatasetsDialog({ isOpen, onClose }: Props) {
             Sign in to list and create remote datasets.
           </div>
         )}
-      </div>
-    </Dialog>
+        </div>
+      </Dialog>
+
+      <RemoteDatasetHistoryDialog
+        isOpen={m.historyOpen}
+        datasetName={m.historyDatasetName}
+        items={m.historyItems}
+        loading={m.historyLoading}
+        error={m.historyError}
+        canRestore={m.canRestoreFromHistory}
+        onClose={m.closeHistory}
+        onRefresh={() => void m.refreshHistory()}
+        onRestore={(rev, msg) => void m.doRestoreRevision(rev, msg)}
+      />
+    </>
   );
 }

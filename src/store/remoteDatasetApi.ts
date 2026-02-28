@@ -627,7 +627,7 @@ export async function getOperationsSince(
   return data;
 }
 
-type OpsStreamHandle = {
+export type OpsStreamHandle = {
   /** Async iterable of OperationEvent payloads from the server stream. */
   events: AsyncIterable<OperationEvent>;
   /** Stop the stream. Safe to call multiple times. */

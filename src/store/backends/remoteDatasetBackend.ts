@@ -5,7 +5,9 @@ import { loadRemoteDatasetSettings } from '../remoteDatasetSettings';
 import {
   getLastSeenEtag as getSessionEtag,
   getLeaseToken as getSessionLeaseToken,
-  setLastSeenEtag as setSessionEtag
+  setLastSeenEtag as setSessionEtag,
+  setLastAppliedRevision,
+  setServerRevision
 } from '../remoteDatasetSession';
 import { getAccessToken } from '../../auth/oidcPkceAuth';
 import type { ApiError, LeaseConflictResponse, SnapshotConflictResponse, ValidationError } from '../remoteDatasetApi';
@@ -222,8 +224,14 @@ export class RemoteDatasetBackend implements DatasetBackend {
       throw new RemoteDatasetBackendError('Remote snapshot response was not valid JSON.', 'INVALID_RESPONSE', { cause: e });
     }
 
+    const resp = body as RemoteSnapshotResponse | null;
     // Step 2 assumption: server wraps the modeller model in { payload }.
-    const payload = (body as RemoteSnapshotResponse | null)?.payload;
+    const payload = resp?.payload;
+    // Phase 3: initialize revision trackers from snapshot.
+    if (typeof resp?.revision === 'number') {
+      setServerRevision(datasetId, resp.revision);
+      setLastAppliedRevision(datasetId, resp.revision);
+    }
 
     return {
       model: (payload as PersistedStoreSlice['model']) ?? null,

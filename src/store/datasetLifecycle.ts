@@ -15,6 +15,8 @@ import {
 import { modelStore } from './modelStore';
 import { acquireOrRefreshLease, getDatasetHead, releaseLease, RemoteDatasetApiError, type LeaseConflictResponse } from './remoteDatasetApi';
 import { getLastSeenEtag, getLastWarnedHeadEtag, getLeaseToken, getRemoteRole, setLastWarnedHeadEtag, setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from './remoteDatasetSession';
+import { isPhase3OpsEnabled } from './remoteDatasetSettings';
+import { remoteOpsSync } from './phase3Sync';
 
 /**
  * Dataset lifecycle module.
@@ -172,6 +174,13 @@ async function bestEffortReleaseLease(localDatasetId: DatasetId): Promise<void> 
   const serverDatasetId = getServerDatasetIdForRemote(localDatasetId);
   if (!serverDatasetId) return;
 
+  // Phase 3: stop any active ops sync stream.
+  try {
+    remoteOpsSync.stop(localDatasetId);
+  } catch {
+    // ignore
+  }
+
   stopLeaseRefreshTimer(localDatasetId);
   stopHeadPollTimer(localDatasetId);
   setLeaseToken(localDatasetId, null);
@@ -309,6 +318,11 @@ export function createDatasetLifecycle(deps: DatasetLifecycleDeps) {
           if (role && role !== 'VIEWER') {
             await acquireOrRefreshLeaseAndStore(datasetId, serverDatasetId);
             startLeaseRefreshTimer(datasetId, serverDatasetId);
+          }
+
+          // Phase 3: operation stream sync (receive + catch-up). Disabled by default.
+          if (isPhase3OpsEnabled()) {
+            remoteOpsSync.start(datasetId, serverDatasetId);
           }
         }
       }

@@ -1,5 +1,5 @@
 import type { DatasetId } from './datasetTypes';
-import type { LeaseConflictResponse, Role } from './remoteDatasetApi';
+import type { LeaseConflictResponse, OperationDto, Role } from './remoteDatasetApi';
 
 /**
  * In-memory per-dataset remote session state.
@@ -25,6 +25,20 @@ export type RemoteDatasetSession = {
   leaseConflict: LeaseConflictResponse | null;
   role: Role | null;
   lastWarnedHeadEtag: string | null;
+
+  // ------------------------
+  // Phase 3 (ops-based sync)
+  // ------------------------
+  /** Latest server revision observed (best-effort). */
+  serverRevision: number | null;
+  /** Latest revision fully applied to the local model. */
+  lastAppliedRevision: number | null;
+  /** Local operations not yet accepted by the server. */
+  pendingOps: OperationDto[];
+  /** Whether the client currently considers the SSE stream connected. */
+  sseConnected: boolean;
+  /** Optional last seen opId for dedupe if needed. */
+  lastSeenOpId: string | null;
 };
 
 const sessionsByDatasetId = new Map<DatasetId, RemoteDatasetSession>();
@@ -39,7 +53,13 @@ function ensureSession(datasetId: DatasetId): RemoteDatasetSession {
     leaseExpiresAt: null,
     leaseConflict: null,
     role: null,
-    lastWarnedHeadEtag: null
+    lastWarnedHeadEtag: null,
+
+    serverRevision: null,
+    lastAppliedRevision: null,
+    pendingOps: [],
+    sseConnected: false,
+    lastSeenOpId: null
   };
   sessionsByDatasetId.set(datasetId, created);
   return created;
@@ -106,6 +126,67 @@ export function getRemoteRole(datasetId: DatasetId): Role | null {
 
 export function setRemoteRole(datasetId: DatasetId, role: Role | null): void {
   patchRemoteDatasetSession(datasetId, { role });
+}
+
+
+export function getServerRevision(datasetId: DatasetId): number | null {
+  return ensureSession(datasetId).serverRevision;
+}
+
+export function setServerRevision(datasetId: DatasetId, serverRevision: number | null): void {
+  patchRemoteDatasetSession(datasetId, { serverRevision });
+}
+
+export function getLastAppliedRevision(datasetId: DatasetId): number | null {
+  return ensureSession(datasetId).lastAppliedRevision;
+}
+
+export function setLastAppliedRevision(datasetId: DatasetId, lastAppliedRevision: number | null): void {
+  patchRemoteDatasetSession(datasetId, { lastAppliedRevision });
+}
+
+export function getPendingOps(datasetId: DatasetId): OperationDto[] {
+  return ensureSession(datasetId).pendingOps;
+}
+
+export function setPendingOps(datasetId: DatasetId, pendingOps: OperationDto[]): void {
+  patchRemoteDatasetSession(datasetId, { pendingOps: [...pendingOps] });
+}
+
+export function enqueuePendingOps(datasetId: DatasetId, ...ops: OperationDto[]): void {
+  const s = ensureSession(datasetId);
+  patchRemoteDatasetSession(datasetId, { pendingOps: [...s.pendingOps, ...ops] });
+}
+
+export function shiftPendingOps(datasetId: DatasetId, count: number): OperationDto[] {
+  const s = ensureSession(datasetId);
+  if (count <= 0) return [];
+  if (s.pendingOps.length === 0) return [];
+
+  const taken = s.pendingOps.slice(0, count);
+  const remaining = s.pendingOps.slice(count);
+  patchRemoteDatasetSession(datasetId, { pendingOps: remaining });
+  return taken;
+}
+
+export function clearPendingOps(datasetId: DatasetId): void {
+  patchRemoteDatasetSession(datasetId, { pendingOps: [] });
+}
+
+export function isSseConnected(datasetId: DatasetId): boolean {
+  return ensureSession(datasetId).sseConnected;
+}
+
+export function setSseConnected(datasetId: DatasetId, sseConnected: boolean): void {
+  patchRemoteDatasetSession(datasetId, { sseConnected });
+}
+
+export function getLastSeenOpId(datasetId: DatasetId): string | null {
+  return ensureSession(datasetId).lastSeenOpId;
+}
+
+export function setLastSeenOpId(datasetId: DatasetId, lastSeenOpId: string | null): void {
+  patchRemoteDatasetSession(datasetId, { lastSeenOpId });
 }
 
 

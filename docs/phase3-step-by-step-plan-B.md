@@ -5,12 +5,16 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
 ## Assumptions
 
 - Phase 2 client functionality (leases, validation dialogs, history/restore, head polling) remains available during migration.
-- Phase 3 server exposes:
-  - `POST /datasets/{id}/ops`
-  - `GET /datasets/{id}/ops?fromRevision=...`
-  - `GET /datasets/{id}/events` (SSE)
-- Client will implement SSE first; WebSocket can follow later if needed.
-- The client can represent edits as deterministic operations by reusing existing mutation actions.
+- Phase 3 server (as implemented in `java-modeller-server-phase3-step11-e2e-demo.zip`) exposes:
+  - `POST /datasets/{id}/ops` (append ops)
+  - `GET /datasets/{id}/ops?fromRevision=…&limit=…` (catch-up)
+  - `GET /datasets/{id}/ops/stream?fromRevision=…&limit=…` (SSE stream of `OperationEvent` JSON)
+- **SSE authentication:** the server expects standard auth (Bearer token / OIDC). The browser's native `EventSource` cannot set headers.
+  - Therefore, the client should implement SSE using a **fetch + ReadableStream** approach (or an EventSource polyfill that supports headers).
+- Phase 3 server currently supports only two operation types for materialization:
+  - `SNAPSHOT_REPLACE` (payload = full snapshot JSON)
+  - `JSON_PATCH` (payload = JSON Patch array subset: add/remove/replace)
+  - Rich domain command types (e.g. ADD_ELEMENT / UPDATE_PROP) can be introduced later, but are **not** accepted by the current server.
 
 ## Definitions
 
@@ -35,11 +39,16 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
 - Extend `src/store/remoteDatasetApi.ts` with:
   - `appendOperations(datasetId, req, { leaseToken?, force? })`
   - `getOperationsSince(datasetId, fromRevision, { limit? })`
-  - `openDatasetEventsSse(datasetId)` helper that returns an `EventSource` (or wraps it)
+  - `openDatasetOpsStream(datasetId, { fromRevision?, limit? })` helper that returns an async iterator (or callback unsubscribe) based on **fetch streaming** (not native `EventSource`), so it can include `Authorization` header.
 
 ### Deliverables
 - Typed DTOs matching server:
   - `AppendOperationsRequest/Response`, `OperationEvent`, `OpsSinceResponse`
+  - Error DTOs used by the client:
+    - `RevisionConflictResponse` (409)
+    - `DuplicateOpIdResponse` (409)
+    - `LeaseConflictResponse` (409)
+    - `ApiError` (notably `errorCode` is present; used for `LEASE_TOKEN_REQUIRED` on 428)
 
 ### Verification
 - `npm test` (typecheck/build) and basic unit tests if added.
@@ -67,12 +76,22 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
 ## Step 3 — Define operation model and mapping from existing mutations
 
 ### Changes
-- Add `src/domain/ops/`:
-  - operation type registry (e.g. `ADD_ELEMENT`, `UPDATE_PROP`, `DELETE_RELATIONSHIP`, etc.)
-  - payload schemas (typed)
-- Add mapping layer:
-  - from existing store mutation calls to op objects
-  - ensure each op is deterministic and serializable
+Implement Phase 3 operations **as the server supports today**, with an incremental path:
+
+**Phase 3A (minimal, quickest to integrate):**
+- Represent a “save” as a single `SNAPSHOT_REPLACE` operation.
+- `payload` is exactly the same JSON body you currently PUT to `/snapshot`.
+
+**Phase 3B (better, more efficient):**
+- Represent edits as `JSON_PATCH` operations.
+- Payload is JSON Patch (subset: `add`, `remove`, `replace`) applied against the latest materialized snapshot.
+- If you already have immutable reducers/mutations, you can generate JSON Patch by diffing before/after (careful with determinism).
+
+Suggested folder:
+- `src/domain/ops/`:
+  - `opsTypes.ts` exporting `SNAPSHOT_REPLACE` and `JSON_PATCH`
+  - helpers to build ops with deterministic `opId`
+  - (optional) JSON Patch builder utilities
 
 ### Deliverables
 - Operation definitions + mapper with tests.
@@ -103,8 +122,8 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
 - Add `src/store/phase3Sync/remoteOpsSync.ts` (or similar) responsible for:
   - Start/stop per dataset
   - Establish SSE subscription
-  - On SSE `op` event:
-    - if op revision > local revision: apply sequentially
+- On each streamed `OperationEvent` JSON message:
+    - apply sequentially (events are ordered by revision)
     - update `serverRevision/lastAppliedRevision`
   - On reconnect:
     - call `getOperationsSince(fromRevision=lastAppliedRevision)`
@@ -123,11 +142,10 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
 ## Step 6 — Route local edits through the op pipeline
 
 ### Changes
-- When user edits the model (existing mutation calls), instead of immediately snapshot-saving:
-  - Create op(s)
-  - Enqueue into `pendingOps`
-  - Optimistically apply locally (optional but recommended for responsiveness)
-  - Send batch via `appendOperations` referencing `baseRevision`
+- When user edits the model, route through ops:
+  - Minimal approach (Phase 3A): on “save” (or debounce), send a single `SNAPSHOT_REPLACE` op.
+  - Better approach (Phase 3B): enqueue `JSON_PATCH` ops per mutation (or per debounce window).
+  - Send a batch via `appendOperations` with `baseRevision = lastAppliedRevision`.
 - On server acceptance:
   - clear pending ops that were accepted
   - advance revision
@@ -158,6 +176,9 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
 - Implement Option A first (simpler, predictable), document.
 - Add UX dialog: “Remote changed — your local edits couldn’t be applied; reload or try reapply”.
 
+Also handle `409 DuplicateOpIdResponse` (idempotency):
+- If you retry an append and the server reports the op already exists at `existingRevision`, treat it as **success** and advance local tracking accordingly.
+
 ### Verification
 - Test: simulate conflict and verify client enters consistent state.
 
@@ -166,10 +187,15 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
 ## Step 8 — Integrate leases (if server requires tokens for ops)
 
 ### Changes
-- If Phase 3 policy still requires lease token:
-  - Add `X-Lease-Token` to `appendOperations`
-  - Reuse existing lease lifecycle (Step 3 from Phase 2) to keep token valid
-  - If `LEASE_TOKEN_REQUIRED`, open lease conflict UX and block sends
+The server implementation from this chat **does require lease interaction** for `POST /ops`:
+- If an active lease exists and is held by someone else → `409 LeaseConflictResponse`
+- If an active lease exists and is held by the caller → requires header `X-Lease-Token`, otherwise `428` with `ApiError.errorCode = LEASE_TOKEN_REQUIRED`
+- Optional: `force=true` can bypass a lease held by someone else for OWNER+ (keep this behind an “admin override” UX).
+
+Client work:
+- Add `X-Lease-Token` header to `appendOperations`.
+- Reuse the existing Phase 2 lease lifecycle to obtain/refresh the token.
+- On `LEASE_TOKEN_REQUIRED`: prompt user to acquire/refresh lease; block sends until lease is present.
 
 ### Deliverables
 - Lease-aware send path.
@@ -200,6 +226,10 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
   - When enabled: use Phase 3 ops pipeline
   - When disabled: keep current snapshot persistence behavior
 - Ensure head polling remains (or becomes optional) when SSE is active.
+
+Compatibility note:
+- Phase 2 endpoints continue to exist; Phase 3 can initially just wrap Phase 2-style saves using `SNAPSHOT_REPLACE` ops.
+- Server responses may include both `code` and `errorCode` in `ApiError` (tests use `errorCode`).
 
 ### Deliverables
 - Clean toggle for incremental rollout.

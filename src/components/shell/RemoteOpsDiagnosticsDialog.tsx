@@ -13,7 +13,6 @@ import {
   getLeaseConflict,
   isSseConnected
 } from '../../store/remoteDatasetSession';
-import { isPhase3OpsEnabled } from '../../store/remoteDatasetSettings';
 import { getDatasetRegistryEntry } from '../../store/datasetRegistry';
 
 type Props = {
@@ -48,7 +47,7 @@ function readSnapshot(datasetId: DatasetId): Snapshot {
   const leaseConflict = getLeaseConflict(datasetId);
   return {
     datasetId,
-    phase3Enabled: isPhase3OpsEnabled(),
+    phase3Enabled: true,
     storageKind: entry?.storageKind ?? null,
     role: getRemoteRole(datasetId),
     sseConnected: isSseConnected(datasetId),

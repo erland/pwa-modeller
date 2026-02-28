@@ -14,7 +14,6 @@ import { openDataset, retryAcquireLeaseForDataset } from '../../store/datasetLif
 import { flushStorePersistence, flushStorePersistenceForce, setStorePersistencePaused } from '../../store/initStorePersistence';
 import { RemoteDatasetBackend } from '../../store/backends/remoteDatasetBackend';
 import { setLeaseConflict, setLeaseExpiresAt, setLeaseToken, getPendingOps, isSseConnected, getLastAppliedRevision, getServerRevision } from '../../store/remoteDatasetSession';
-import { isPhase3OpsEnabled } from '../../store/remoteDatasetSettings';
 import { getDatasetRegistryEntry } from '../../store/datasetRegistry';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
@@ -420,7 +419,7 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
             ) : null}
             {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
 
-            {isPhase3OpsEnabled() && activeDatasetId ? (() => {
+            {activeDatasetId ? (() => {
               const entry = getDatasetRegistryEntry(activeDatasetId);
               if (!entry || entry.storageKind !== 'remote') return null;
               const pending = getPendingOps(activeDatasetId).length;

@@ -24,7 +24,6 @@ import { ModelStoreFlush, type FlushListener } from './modelStoreFlush';
 import { createModelStoreOpsFacade } from './modelStoreOpsFacade';
 import { createModelStoreEntityApi } from './modelStoreEntityApi';
 import { getDatasetRegistryEntry } from './datasetRegistry';
-import { isPhase3OpsEnabled } from './remoteDatasetSettings';
 import { setPendingOps } from './remoteDatasetSession';
 import { snapshotReplaceDtoFromModel } from './phase3Ops/mapToOperationDto';
 
@@ -318,7 +317,6 @@ clearPersistenceRemoteChanged = (): void => {
     const st = this.core.getState();
     if (!st.model) return;
 
-    if (!isPhase3OpsEnabled()) return;
     const entry = getDatasetRegistryEntry(st.activeDatasetId);
     if ((entry?.storageKind ?? 'local') !== 'remote') return;
 

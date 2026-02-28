@@ -25,7 +25,6 @@ const KEY_OIDC_ISSUER = 'remoteDatasets.oidcIssuerUrl';
 const KEY_OIDC_CLIENT_ID = 'remoteDatasets.oidcClientId';
 const KEY_OIDC_SCOPE = 'remoteDatasets.oidcScope';
 const KEY_ACCESS_TOKEN = 'remoteDatasets.accessToken';
-const KEY_PHASE3_OPS_ENABLED = 'remoteDatasets.phase3OpsEnabled';
 
 function safeGet(key: string): string {
   try {
@@ -33,11 +32,6 @@ function safeGet(key: string): string {
   } catch {
     return '';
   }
-}
-
-function safeGetBool(key: string): boolean {
-  const v = safeGet(key).trim().toLowerCase();
-  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }
 
 function safeSet(key: string, value: string): void {
@@ -72,15 +66,3 @@ export function clearRemoteAccessToken(): void {
   safeSet(KEY_ACCESS_TOKEN, '');
 }
 
-/**
- * Phase 3 migration flag. Default: disabled.
- *
- * Stored as string so it can be toggled via DevTools/Application easily.
- */
-export function isPhase3OpsEnabled(): boolean {
-  return safeGetBool(KEY_PHASE3_OPS_ENABLED);
-}
-
-export function setPhase3OpsEnabled(enabled: boolean): void {
-  safeSet(KEY_PHASE3_OPS_ENABLED, enabled ? 'true' : '');
-}

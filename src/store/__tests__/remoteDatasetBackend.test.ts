@@ -1,7 +1,7 @@
 import { DATASET_REGISTRY_STORAGE_KEY } from '../datasetRegistry';
 import type { DatasetId } from '../datasetTypes';
-import { RemoteDatasetBackend, RemoteDatasetBackendError } from '../backends/remoteDatasetBackend';
-import { _resetRemoteDatasetSessions, setLeaseToken } from '../remoteDatasetSession';
+import { RemoteDatasetBackend, type RemoteDatasetBackendError } from '../backends/remoteDatasetBackend';
+import { _resetRemoteDatasetSessions, setLeaseExpiresAt, setLeaseToken } from '../remoteDatasetSession';
 
 describe('RemoteDatasetBackend.loadPersistedState', () => {
   const dsId = 'remote:ds1' as DatasetId;
@@ -109,6 +109,7 @@ describe('RemoteDatasetBackend.loadPersistedState', () => {
 
 describe('RemoteDatasetBackend.persistState', () => {
   const dsId = 'remote:ds1' as DatasetId;
+  const serverId = '11111111-1111-1111-1111-111111111111';
 
   afterEach(() => {
     jest.resetModules();
@@ -129,7 +130,7 @@ describe('RemoteDatasetBackend.persistState', () => {
           storageKind: 'remote',
           remote: {
             baseUrl: 'http://localhost:8081',
-            serverDatasetId: '11111111-1111-1111-1111-111111111111'
+            serverDatasetId: serverId
           },
           name: 'Remote Test',
           createdAt: Date.now(),
@@ -145,66 +146,71 @@ describe('RemoteDatasetBackend.persistState', () => {
     window.localStorage.setItem('remoteDatasets.accessToken', token);
   }
 
-  test('saves snapshot with If-Match and updates ETag on success', async () => {
+  function mockJsonResponse(body: unknown, init?: { status?: number; headers?: Record<string, string> }): Response {
+    const status = init?.status ?? 200;
+    const headers = new Map<string, string>();
+    headers.set('content-type', 'application/json');
+    for (const [k, v] of Object.entries(init?.headers ?? {})) headers.set(k.toLowerCase(), v);
+
+    // Minimal Response-like object for our api wrapper:
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: status === 200 ? 'OK' : String(status),
+      headers: {
+        get: (k: string) => headers.get(k.toLowerCase()) ?? null
+      },
+      text: async () => JSON.stringify(body),
+      json: async () => body
+    } as unknown as Response;
+  }
+
+  test('persists via POST /ops with baseRevision and operations', async () => {
     seedRegistry();
     seedSettings('token123');
 
-    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
-      expect(init?.method).toBe('PUT');
+    const fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe(`http://localhost:8081/datasets/${encodeURIComponent(serverId)}/ops`);
+      expect(init?.method).toBe('POST');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const h = init?.headers as any;
       expect(h.Authorization).toBe('Bearer token123');
-      expect(h['If-Match']).toBe('"7"');
       expect(h['Content-Type']).toBe('application/json');
 
-      expect(init?.body).toBe(JSON.stringify({ hello: 'world' }));
+      const body = JSON.parse(String(init?.body ?? '{}'));
+      expect(body).toMatchObject({
+        baseRevision: 0,
+        operations: expect.any(Array)
+      });
 
-      return {
-        ok: true,
-        status: 200,
-        headers: {
-          get: (k: string) => (k.toLowerCase() === 'etag' ? '"8"' : k.toLowerCase() === 'content-type' ? 'application/json' : null)
-        },
-        json: async () => ({ datasetId: 'x', revision: 8, payload: { hello: 'world' } })
-      } as unknown as Response;
+      return mockJsonResponse({ datasetId: serverId, newRevision: 1 }, { status: 200 });
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
-    b._setLastSeenEtag(dsId, '"7"');
-
-    await b.persistState(dsId, { model: { hello: 'world' } } as any);
-    expect(b.getLastSeenEtag(dsId)).toBe('"8"');
+    await expect(b.persistState(dsId, { model: { a: 1 } } as any)).resolves.toBeUndefined();
   });
 
   test('includes X-Lease-Token header when session has a lease token', async () => {
     seedRegistry();
     seedSettings('token123');
-
-    setLeaseToken(dsId, 'lease123');
+    setLeaseToken(dsId, 'lease-abc');
+    setLeaseExpiresAt(dsId, '2026-02-27T10:00:00Z');
 
     const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const h = init?.headers as any;
-      expect(h['X-Lease-Token']).toBe('lease123');
-      return {
-        ok: true,
-        status: 200,
-        headers: {
-          get: (k: string) => (k.toLowerCase() === 'etag' ? '"2"' : null)
-        },
-        json: async () => ({})
-      } as unknown as Response;
+      expect(h['X-Lease-Token']).toBe('lease-abc');
+      return mockJsonResponse({ datasetId: serverId, newRevision: 2 }, { status: 200 });
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
-    b._setLastSeenEtag(dsId, '"1"');
-    await b.persistState(dsId, { model: { a: 1 } } as any);
+    await expect(b.persistState(dsId, { model: { a: 1 } } as any)).resolves.toBeUndefined();
   });
 
   test('adds ?force=true when persistStateWithOptions is called with force', async () => {
@@ -213,18 +219,14 @@ describe('RemoteDatasetBackend.persistState', () => {
 
     const fetchMock = jest.fn(async (url: string) => {
       expect(url).toContain('?force=true');
-      return {
-        ok: true,
-        status: 200,
-        headers: { get: (k: string) => (k.toLowerCase() === 'etag' ? '"2"' : null) },
-        json: async () => ({})
-      } as unknown as Response;
+      return mockJsonResponse({ datasetId: serverId, newRevision: 2 }, { status: 200 });
     });
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
-    await b.persistStateWithOptions(dsId, { model: { a: 1 } } as any, { force: true });
+    await expect(b.persistStateWithOptions(dsId, { model: { a: 1 } } as any, { force: true })).resolves.toBeUndefined();
   });
 
   test('throws LEASE_CONFLICT on 409 with lease conflict body', async () => {
@@ -232,20 +234,12 @@ describe('RemoteDatasetBackend.persistState', () => {
     seedSettings('token123');
 
     const fetchMock = jest.fn(async () => {
-      return {
-        ok: false,
-        status: 409,
-        headers: {
-          get: (k: string) =>
-            k.toLowerCase() === 'content-type'
-              ? 'application/json'
-              : k.toLowerCase() === 'etag'
-                ? '"9"'
-                : null
-        },
-        json: async () => ({ datasetId: 'x', holderSub: 'user1', expiresAt: '2026-02-27T10:00:00Z' })
-      } as unknown as Response;
+      return mockJsonResponse(
+        { datasetId: serverId, holderSub: 'user1', expiresAt: '2026-02-27T10:00:00Z' },
+        { status: 409 }
+      );
     });
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
@@ -262,21 +256,9 @@ describe('RemoteDatasetBackend.persistState', () => {
     seedSettings('token123');
 
     const fetchMock = jest.fn(async () => {
-      return {
-        ok: false,
-        status: 400,
-        headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? 'application/json' : null) },
-        json: async () => ({
-          timestamp: '2026-02-27T00:00:00Z',
-          status: 400,
-          code: 'VALIDATION_FAILED',
-          message: 'Validation failed',
-          path: '/datasets/x/snapshot',
-          requestId: 'r1',
-          validationErrors: [{ severity: 'ERROR', rule: 'R1', path: '$', message: 'bad' }]
-        })
-      } as unknown as Response;
+      return mockJsonResponse({ errorCode: 'VALIDATION_FAILED', message: 'Bad data' }, { status: 400 });
     });
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
@@ -288,57 +270,32 @@ describe('RemoteDatasetBackend.persistState', () => {
     } satisfies Partial<RemoteDatasetBackendError>);
   });
 
-  test('defaults to If-Match "0" when no ETag is known yet', async () => {
+  test('revision conflict triggers discard + reload snapshot (does not throw)', async () => {
     seedRegistry();
     seedSettings('token123');
 
-    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const h = init?.headers as any;
-      expect(h['If-Match']).toBe('"0"');
-      return {
-        ok: true,
-        status: 200,
-        headers: {
-          get: (k: string) => (k.toLowerCase() === 'etag' ? '"1"' : null)
-        },
-        json: async () => ({})
-      } as unknown as Response;
+    const fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+      const method = (init?.method ?? 'GET').toUpperCase();
+
+      if (method === 'POST' && url.endsWith(`/datasets/${encodeURIComponent(serverId)}/ops`)) {
+        // phase 3 append returns revision conflict
+        return mockJsonResponse({ datasetId: serverId, currentRevision: 11 }, { status: 409 });
+      }
+      if (method === 'GET' && url.includes(`/datasets/${encodeURIComponent(serverId)}/ops?fromRevision=`)) {
+        // best-effort catch-up after conflict
+        return mockJsonResponse({ items: [], nextRevision: 12 }, { status: 200 });
+      }
+      if (method === 'GET' && url.endsWith(`/datasets/${encodeURIComponent(serverId)}/snapshot`)) {
+        return mockJsonResponse({ datasetId: serverId, revision: 11, payload: { hello: 'remote' } }, { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch ${method} ${url}`);
     });
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
-    await b.persistState(dsId, { model: { a: 1 } } as any);
-    expect(b.getLastSeenEtag(dsId)).toBe('"1"');
-  });
-
-  test('throws CONFLICT on 409 and captures server ETag when provided', async () => {
-    seedRegistry();
-    seedSettings('token123');
-
-    const fetchMock = jest.fn(async () => {
-      return {
-        ok: false,
-        status: 409,
-        headers: {
-          get: (k: string) => (k.toLowerCase() === 'etag' ? '"12"' : null)
-        },
-        json: async () => ({})
-      } as unknown as Response;
-    });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (globalThis as any).fetch = fetchMock;
-
-    const b = new RemoteDatasetBackend();
-    b._setLastSeenEtag(dsId, '"11"');
-
-    await expect(b.persistState(dsId, { model: { a: 1 } } as any)).rejects.toMatchObject({
-      name: 'RemoteDatasetBackendError',
-      code: 'CONFLICT',
-      status: 409
-    } satisfies Partial<RemoteDatasetBackendError>);
-
-    expect(b.getLastSeenEtag(dsId)).toBe('"12"');
+    await expect(b.persistState(dsId, { model: { hello: 'local' } } as any)).resolves.toBeUndefined();
   });
 });

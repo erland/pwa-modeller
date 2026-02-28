@@ -15,7 +15,6 @@ import {
 import { modelStore } from './modelStore';
 import { acquireOrRefreshLease, getDatasetHead, releaseLease, RemoteDatasetApiError, type LeaseConflictResponse } from './remoteDatasetApi';
 import { getLastSeenEtag, getLastWarnedHeadEtag, getLeaseToken, getRemoteRole, setLastWarnedHeadEtag, setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from './remoteDatasetSession';
-import { isPhase3OpsEnabled } from './remoteDatasetSettings';
 import { remoteOpsSync } from './phase3Sync';
 
 /**
@@ -321,9 +320,7 @@ export function createDatasetLifecycle(deps: DatasetLifecycleDeps) {
           }
 
           // Phase 3: operation stream sync (receive + catch-up). Disabled by default.
-          if (isPhase3OpsEnabled()) {
-            remoteOpsSync.start(datasetId, serverDatasetId);
-          }
+          remoteOpsSync.start(datasetId, serverDatasetId);
         }
       }
     },

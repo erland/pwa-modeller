@@ -4,7 +4,8 @@ This plan extends the PWA client in this repository from **Phase 2 (snapshot + l
 
 ## Assumptions
 
-- Phase 2 client functionality (leases, validation dialogs, history/restore, head polling) remains available during migration.
+- The client uses **Phase 3 ops** as the only remote write path.
+- Snapshot **read** (`GET /datasets/{id}/snapshot`) remains available for initial load and conflict recovery.
 - Phase 3 server (as implemented in `java-modeller-server-phase3-step11-e2e-demo.zip`) exposes:
   - `POST /datasets/{id}/ops` (append ops)
   - `GET /datasets/{id}/ops?fromRevision=…&limit=…` (catch-up)
@@ -154,7 +155,7 @@ Suggested folder:
   - handle `VALIDATION_FAILED` (reuse Step 5 validation dialog)
 
 ### Deliverables
-- A single “write path” for remote datasets that uses ops, guarded by feature flag.
+- A single “write path” for remote datasets that uses ops.
 
 ### Verification
 - Manual: edit a remote dataset and see POST /ops being called.
@@ -221,21 +222,14 @@ Client work:
 
 ## Step 10 — Keep Phase 2 snapshot pipeline as fallback (feature flag)
 
-### Changes
-- Feature flag (e.g. `remoteOpsSyncEnabled` in config):
-  - When enabled: use Phase 3 ops pipeline
-  - When disabled: keep current snapshot persistence behavior
-- Ensure head polling remains (or becomes optional) when SSE is active.
+### Current state (after cleanup)
+- **Phase 3 ops is the default and only remote write path**.
+- The previous Phase 2 **snapshot PUT** persistence path was removed to reduce complexity.
+- Snapshot **GET** is still used for:
+  - Initial open of a remote dataset (fast materialization)
+  - Conflict recovery (discard + reload) in Step 7
 
-Compatibility note:
-- Phase 2 endpoints continue to exist; Phase 3 can initially just wrap Phase 2-style saves using `SNAPSHOT_REPLACE` ops.
-- Server responses may include both `code` and `errorCode` in `ApiError` (tests use `errorCode`).
-
-### Deliverables
-- Clean toggle for incremental rollout.
-
-### Verification
-- Manual: toggle flag and verify behavior switches.
+If you ever need a rollback path, it should be done server-side (e.g. disable ops endpoints) rather than keeping dual client pipelines.
 
 ---
 

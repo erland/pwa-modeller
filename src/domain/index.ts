@@ -41,3 +41,5 @@ export * from './indexes/containmentPaths';
 export * from './indexes/uiIndexes';
 
 export * from './uml/members';
+
+export * from './ops';

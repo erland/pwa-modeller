@@ -2,6 +2,10 @@
 
 This repo implements **Phase 3 remote datasets** using an **append-only operations log** with **real-time updates via SSE**.
 
+## Base URL note (nginx edge)
+
+If you are running the java-modeller-server demo behind its nginx edge, the PWA should point to a base URL that includes the `/api` prefix (for example `http://localhost:8081/api`). If you expose Quarkus directly without nginx, use the Quarkus base URL (no `/api`).
+
 ## High-level behavior
 
 - **Initial open (remote dataset):**

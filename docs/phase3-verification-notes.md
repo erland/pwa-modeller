@@ -20,6 +20,8 @@ From the repo root:
 ### 1) Smoke: open remote dataset
 
 1. Configure a remote dataset reference (same flow you already use for Phase 2).
+   - If you are pointing at the **nginx edge** from the java-modeller-server demo, the base URL should include `/api` (for example `http://localhost:8081/api`).
+   - If you expose Quarkus directly (no `/api` prefix), use the Quarkus base URL.
 2. Open the remote dataset.
 3. Expected:
    - model loads (snapshot GET)

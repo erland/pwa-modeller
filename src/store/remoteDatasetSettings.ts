@@ -8,7 +8,7 @@
  */
 
 export type RemoteDatasetSettings = {
-  /** Last used server base URL (e.g. http://localhost:8081). */
+  /** Last used server base URL (e.g. http://localhost:8081/api when using the nginx edge; or the Quarkus base URL if exposing it directly). */
   remoteServerBaseUrl: string;
   /** OIDC issuer URL (Keycloak realm URL). */
   oidcIssuerUrl: string;

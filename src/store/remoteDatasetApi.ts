@@ -53,7 +53,8 @@ export type AppendOperationsRequest = {
 };
 
 export type AppendOperationsResponse = {
-  datasetId: string;
+  /** Optional for compatibility with server implementations that do not include it. */
+  datasetId?: string;
   newRevision: number;
   acceptedCount?: number;
   // Some server versions may return additional metadata.

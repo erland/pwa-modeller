@@ -1,14 +1,18 @@
 import type { DatasetBackend, PersistedStoreSlice } from '../datasetBackend';
 import type { DatasetId } from '../datasetTypes';
 import { loadDatasetRegistry } from '../datasetRegistry';
-import { loadRemoteDatasetSettings } from '../remoteDatasetSettings';
+import { isPhase3OpsEnabled, loadRemoteDatasetSettings } from '../remoteDatasetSettings';
 import {
   getLastSeenEtag as getSessionEtag,
   getLeaseToken as getSessionLeaseToken,
+  getPendingOps,
   setLastSeenEtag as setSessionEtag,
+  setPendingOps,
   setLastAppliedRevision,
   setServerRevision
 } from '../remoteDatasetSession';
+import { remoteOpsSync } from '../phase3Sync';
+import { snapshotReplaceDtoFromModel } from '../phase3Ops/mapToOperationDto';
 import { getAccessToken } from '../../auth/oidcPkceAuth';
 import type { ApiError, LeaseConflictResponse, SnapshotConflictResponse, ValidationError } from '../remoteDatasetApi';
 
@@ -268,6 +272,30 @@ export class RemoteDatasetBackend implements DatasetBackend {
     const baseUrl = normalizeBaseUrl(remoteRef.baseUrl);
     if (!baseUrl) {
       throw new RemoteDatasetBackendError('Remote server baseUrl is missing.', 'REMOTE_REF_MISSING');
+    }
+
+    // -----------------------------
+    // Phase 3 (Step 6): ops-based persistence
+    // -----------------------------
+    if (isPhase3OpsEnabled()) {
+      // Ensure we have at least one pending op representing the latest local state.
+      // (Edits routed through ModelStore.updateModel should already do this.)
+      const pending = getPendingOps(datasetId);
+      if (pending.length === 0 && state.model) {
+        setPendingOps(datasetId, [snapshotReplaceDtoFromModel(state.model)]);
+      }
+
+      const leaseToken = (getSessionLeaseToken(datasetId) ?? '').trim();
+      try {
+        await remoteOpsSync.flushPending(datasetId, remoteRef.serverDatasetId, {
+          leaseToken: leaseToken || null,
+          force: opts.force
+        });
+        return;
+      } catch (e) {
+        // Step 7 adds conflict/retry semantics. For now, surface the error.
+        throw e;
+      }
     }
 
     const url = `${baseUrl}/datasets/${encodeURIComponent(remoteRef.serverDatasetId)}/snapshot${opts.force ? '?force=true' : ''}`;

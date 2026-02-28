@@ -23,6 +23,10 @@ import { ModelStoreCore } from './modelStoreCore';
 import { ModelStoreFlush, type FlushListener } from './modelStoreFlush';
 import { createModelStoreOpsFacade } from './modelStoreOpsFacade';
 import { createModelStoreEntityApi } from './modelStoreEntityApi';
+import { getDatasetRegistryEntry } from './datasetRegistry';
+import { isPhase3OpsEnabled } from './remoteDatasetSettings';
+import { setPendingOps } from './remoteDatasetSession';
+import { snapshotReplaceDtoFromModel } from './phase3Ops/mapToOperationDto';
 
 // Re-export for backwards compatibility (many imports use `./modelStore`).
 export type { ModelStoreState } from './modelStoreTypes';
@@ -47,14 +51,14 @@ export class ModelStore {
   private ops = createModelStoreOpsFacade({
     getModel: this.core.getModel,
     getModelOrThrow: this.core.getModelOrThrow,
-    updateModel: this.core.updateModel,
+    updateModel: (mutator, markDirty) => this.updateModel(mutator, markDirty),
     recordTouched: (touched) => this.flush.changeSetRecorder.recordTouched(touched),
   });
 
   // Entity-level API (extracted module)
   private entityApi = createModelStoreEntityApi({
     setState: this.core.setState,
-    updateModel: this.core.updateModel,
+    updateModel: (mutator, markDirty) => this.updateModel(mutator, markDirty),
     changeSetRecorder: this.flush.changeSetRecorder,
   });
 
@@ -301,7 +305,27 @@ clearPersistenceRemoteChanged = (): void => {
     }
   };
 
-  private updateModel = (mutator: (model: Model) => void, markDirty = true): void => this.core.updateModel(mutator, markDirty);
+  /**
+   * Central model update hook.
+   *
+   * Phase 3 (Step 6): when Phase 3 ops are enabled for a remote dataset,
+   * route local edits into the pending-ops pipeline.
+   */
+  private updateModel = (mutator: (model: Model) => void, markDirty = true): void => {
+    this.core.updateModel(mutator, markDirty);
+    if (!markDirty) return;
+
+    const st = this.core.getState();
+    if (!st.model) return;
+
+    if (!isPhase3OpsEnabled()) return;
+    const entry = getDatasetRegistryEntry(st.activeDatasetId);
+    if ((entry?.storageKind ?? 'local') !== 'remote') return;
+
+    // Phase 3A mapping: store a single snapshot-replace op representing the latest local state.
+    // This keeps the pending queue bounded and deterministic.
+    setPendingOps(st.activeDatasetId, [snapshotReplaceDtoFromModel(st.model)]);
+  };
 
   moveElementToParent = (childId: string, parentId: string | null): void => {
     this.runInTransaction(() => this.ops.elementOps.moveElementToParent(childId, parentId));

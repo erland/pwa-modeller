@@ -11,7 +11,6 @@ describe('RemoteDatasetBackend.loadPersistedState', () => {
     jest.clearAllMocks();
     window.localStorage.clear();
     _resetRemoteDatasetSessions();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = undefined;
   });
 
@@ -57,7 +56,6 @@ describe('RemoteDatasetBackend.loadPersistedState', () => {
       } as unknown as Response;
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
@@ -95,7 +93,6 @@ describe('RemoteDatasetBackend.loadPersistedState', () => {
         json: async () => ({})
       } as unknown as Response;
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
@@ -116,7 +113,6 @@ describe('RemoteDatasetBackend.persistState', () => {
     jest.clearAllMocks();
     window.localStorage.clear();
     _resetRemoteDatasetSessions();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = undefined;
   });
 
@@ -172,7 +168,6 @@ describe('RemoteDatasetBackend.persistState', () => {
     const fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe(`http://localhost:8081/datasets/${encodeURIComponent(serverId)}/ops`);
       expect(init?.method).toBe('POST');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const h = init?.headers as any;
       expect(h.Authorization).toBe('Bearer token123');
       expect(h['Content-Type']).toBe('application/json');
@@ -186,7 +181,6 @@ describe('RemoteDatasetBackend.persistState', () => {
       return mockJsonResponse({ datasetId: serverId, newRevision: 1 }, { status: 200 });
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
@@ -200,13 +194,11 @@ describe('RemoteDatasetBackend.persistState', () => {
     setLeaseExpiresAt(dsId, '2026-02-27T10:00:00Z');
 
     const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const h = init?.headers as any;
       expect(h['X-Lease-Token']).toBe('lease-abc');
       return mockJsonResponse({ datasetId: serverId, newRevision: 2 }, { status: 200 });
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
@@ -222,7 +214,6 @@ describe('RemoteDatasetBackend.persistState', () => {
       return mockJsonResponse({ datasetId: serverId, newRevision: 2 }, { status: 200 });
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
@@ -240,7 +231,6 @@ describe('RemoteDatasetBackend.persistState', () => {
       );
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
@@ -259,7 +249,6 @@ describe('RemoteDatasetBackend.persistState', () => {
       return mockJsonResponse({ errorCode: 'VALIDATION_FAILED', message: 'Bad data' }, { status: 400 });
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();
@@ -292,7 +281,6 @@ describe('RemoteDatasetBackend.persistState', () => {
       throw new Error(`Unexpected fetch ${method} ${url}`);
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).fetch = fetchMock;
 
     const b = new RemoteDatasetBackend();

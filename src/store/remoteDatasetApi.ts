@@ -263,7 +263,7 @@ async function requestJson<T>(args: {
       },
       body: args.body !== undefined ? JSON.stringify(args.body) : undefined
     });
-  } catch (e) {
+  } catch {
     throw new RemoteDatasetApiError({
       message: 'Remote request failed (network error).',
       status: 0,

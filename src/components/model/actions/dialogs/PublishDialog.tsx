@@ -317,7 +317,7 @@ export function PublishDialog({
                   if (!publishServerResult.latestUrl) return;
                   try {
                     await navigator.clipboard.writeText(publishServerResult.latestUrl);
-                  } catch (e) {
+                  } catch {
                     // ignore — user can still copy manually
                   }
                 }}
@@ -365,7 +365,7 @@ export function PublishDialog({
         </div>
 
         <div style={{ fontSize: 12, opacity: 0.75 }}>
-          Tip: "Publish to server" will let you upload the same bundle zip directly to a publishing server API (coming
+          Tip: &quot;Publish to server&quot; will let you upload the same bundle zip directly to a publishing server API (coming
           next).
         </div>
       </div>

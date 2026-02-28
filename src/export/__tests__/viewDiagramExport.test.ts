@@ -76,7 +76,7 @@ describe('viewDiagramExport', () => {
     const model = buildTinyGraphModel();
     await downloadViewPng(model, 'v_main', { scale: 3, background: 'transparent' }, { baseName: 'X' });
 
-    const [baseName, _svgText, opts] = (downloadPngFromSvgText as jest.Mock).mock.calls.at(-1);
+    const [baseName, , opts] = (downloadPngFromSvgText as jest.Mock).mock.calls.at(-1);
     expect(baseName).toBe('X');
     expect(opts).toMatchObject({ scale: 3, background: 'transparent' });
   });

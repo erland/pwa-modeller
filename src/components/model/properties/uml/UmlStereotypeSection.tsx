@@ -34,7 +34,7 @@ type Props = {
  * UML stereotype is semantic (element-level), not view-level.
  */
 export function UmlStereotypeSection({ element: el, actions }: Props) {
-  if (typeof el.type !== 'string' || !el.type.startsWith('uml.')) return null;
+  const isUml = typeof el.type === 'string' && el.type.startsWith('uml.');
 
   const raw = el.attrs;
   const base: Record<string, unknown> = isRecord(raw) ? { ...raw } : {};
@@ -70,6 +70,8 @@ export function UmlStereotypeSection({ element: el, actions }: Props) {
     actions.updateElement(el.id, { attrs: hasKeys ? next : undefined });
   };
 
+  if (!isUml) return null;
+
   return (
     <>
       <p className="panelHint">UML</p>
@@ -88,18 +90,29 @@ export function UmlStereotypeSection({ element: el, actions }: Props) {
                 Edit
               </button>
             </div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>Shown as «stereotype». Display uses short names.</div>
+
+            {!!selected.length && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {selected.map((s) => (
+                  <span key={s} className="pill">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </PropertyRow>
       </div>
 
       <StereotypePickerDialog
-        title="Edit stereotypes"
         isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
+        title="UML stereotypes"
         availableStereotypes={availableStereotypes}
         value={selected}
-        onConfirm={(next) => commitList(next)}
+        onClose={() => setIsOpen(false)}
+        onConfirm={(list: string[]) => {
+          commitList(list);
+        }}
       />
     </>
   );

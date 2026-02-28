@@ -53,6 +53,22 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
     return list;
   }, [rel, relKind]);
 
+  const [stereotypeDialogOpen, setStereotypeDialogOpen] = useState(false);
+
+  const availableStereotypes = useMemo(() => {
+    const out: string[] = [];
+    for (const e of Object.values(model.elements)) {
+      if (!e?.attrs) continue;
+      out.push(...readStereotypes(e.attrs));
+    }
+    for (const r of Object.values(model.relationships)) {
+      if (!r?.attrs) continue;
+      out.push(...readStereotypes(r.attrs));
+    }
+    return Array.from(new Set(out));
+  }, [model]);
+
+
   const elementOptions: Element[] = useMemo(() => {
     const elems = Object.values(model.elements)
       .filter(Boolean)
@@ -87,7 +103,6 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
     rel.attrs && typeof rel.attrs === 'object' ? (rel.attrs as Record<string, unknown>) : {};
   const umlStereotypeDisplay = readStereotypeDisplayText(attrsObj) || undefined;
   const selectedStereotypes = readStereotypes(attrsObj);
-  const [stereotypeDialogOpen, setStereotypeDialogOpen] = useState(false);
   const umlSourceRole = typeof attrsObj.sourceRole === 'string' ? (attrsObj.sourceRole as string) : undefined;
   const umlTargetRole = typeof attrsObj.targetRole === 'string' ? (attrsObj.targetRole as string) : undefined;
   const umlSourceMultiplicity =
@@ -103,18 +118,6 @@ export function UmlRelationshipProperties({ model, relationshipId, viewId, actio
     actions.updateRelationship(rel.id, { attrs: pruneAttrs({ ...attrsObj, ...patch }) });
   };
 
-  const availableStereotypes = useMemo(() => {
-    const out: string[] = [];
-    for (const e of Object.values(model.elements)) {
-      if (!e?.attrs) continue;
-      out.push(...readStereotypes(e.attrs));
-    }
-    for (const r of Object.values(model.relationships)) {
-      if (!r?.attrs) continue;
-      out.push(...readStereotypes(r.attrs));
-    }
-    return Array.from(new Set(out));
-  }, [model]);
 
   const typeExtra = relationshipRuleWarning ? (
     <div className="panelHint" style={{ color: '#ffb3b3', opacity: 0.95 }}>

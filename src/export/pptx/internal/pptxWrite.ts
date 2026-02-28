@@ -27,7 +27,6 @@ async function writePptxBytes(pptx: PptxGenJS): Promise<Uint8Array | ArrayBuffer
     // Works in Node and in some browser bundles.
     return await pptx.write('nodebuffer');
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn('[PPTX] pptx.write("nodebuffer") failed; trying browser fallbacks.', e);
   }
 
@@ -40,7 +39,6 @@ async function writePptxBytes(pptx: PptxGenJS): Promise<Uint8Array | ArrayBuffer
     // Some versions return ArrayBuffer, some return Uint8Array.
     return ab instanceof Uint8Array ? ab : (ab as ArrayBuffer);
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn('[PPTX] pptx.write("arraybuffer") failed; trying base64 fallback.', e);
   }
 

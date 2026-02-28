@@ -169,7 +169,7 @@ describe('phase3Sync remoteOpsSync', () => {
       store,
       // @ts-expect-error test api shape
       api,
-      apply: (m, _ops) => m
+      apply: (m, _ops) => { void _ops; return m; }
     });
 
     const { setPendingOps, setLastAppliedRevision, getLastAppliedRevision } = await import('../../remoteDatasetSession');

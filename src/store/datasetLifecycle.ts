@@ -232,7 +232,6 @@ async function acquireOrRefreshLeaseAndStore(localDatasetId: DatasetId, serverDa
       return;
     }
     // Best effort: keep trying on next interval.
-    // eslint-disable-next-line no-console
     console.warn('Failed to acquire/refresh lease', e);
   } finally {
     leaseRefreshInFlight.delete(localDatasetId);

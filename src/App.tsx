@@ -51,7 +51,6 @@ export default function App() {
         await handleRedirectCallbackIfPresent();
       } catch (e) {
         // Keep this non-fatal; the Remote datasets dialog will surface auth problems.
-        // eslint-disable-next-line no-console
         console.warn('OIDC callback handling failed', e);
       } finally {
         setAuthReady(true);

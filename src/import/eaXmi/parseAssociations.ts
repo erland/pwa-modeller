@@ -381,7 +381,7 @@ export function parseEaXmiAssociations(doc: Document, report: ImportReport): Par
       continue;
     }
 
-    let assocBaseId = getXmiId(el) ?? getXmiIdRef(el);
+    const assocBaseId = getXmiId(el) ?? getXmiIdRef(el);
     let id = assocBaseId;
     if (!id) {
       synthCounter++;

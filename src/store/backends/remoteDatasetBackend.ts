@@ -314,7 +314,8 @@ export class RemoteDatasetBackend implements DatasetBackend {
     
   }
 
-  async clearPersistedState(_datasetId: DatasetId): Promise<void> {
+  async clearPersistedState(datasetId: DatasetId): Promise<void> {
+    void datasetId;
     // For remote datasets, clearing local cache is a no-op in Phase 1.
   }
 }

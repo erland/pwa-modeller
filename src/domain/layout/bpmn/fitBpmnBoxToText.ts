@@ -1,4 +1,4 @@
-import type { Element, ViewNodeLayout } from '../../types';
+import type { Element } from '../../types';
 import { measureTextWidthPx } from '../measureText';
 
 function clampMin(n: number, min: number): number {
@@ -18,8 +18,7 @@ function labelFor(el: Element): string {
  * rendered outside or under the symbol).
  */
 export function fitBpmnBoxToText(
-  el: Element,
-  _node: ViewNodeLayout
+  el: Element
 ): { width: number; height: number } | null {
   const t = String(el.type);
   const name = labelFor(el);

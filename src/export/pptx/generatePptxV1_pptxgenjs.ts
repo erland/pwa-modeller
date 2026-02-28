@@ -45,7 +45,7 @@ function tryRenderSandboxSvgAsShapes(
   // Step 3: Route through the PPTX diagram IR + writer.
   const res = sandboxSvgToPptxDiagramIR(svgText, env);
   if (!res.handled || !res.diagram) return { handled: false };
-  renderPptxDiagramIR(slide as any, res.diagram, env);
+  renderPptxDiagramIR(slide as any, res.diagram);
   return { handled: true, meta: res.meta };
 }
 
@@ -118,7 +118,7 @@ export async function generatePptxBlobFromDiagramIR(
   const env: PptxStageEnv = { pptx, pageW, pageH, includeFooter, footerText };
 
   const slide = pptx.addSlide();
-  renderPptxDiagramIR(slide, diagram, { pageW, pageH });
+  renderPptxDiagramIR(slide, diagram);
   addFooter(slide, env);
 
   return writePptxBlob(pptx, meta);

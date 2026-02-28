@@ -62,7 +62,6 @@ function foldKey(s: string): string {
   try {
     return s
       .normalize('NFD')
-      // eslint-disable-next-line no-control-regex
       .replace(/\p{Diacritic}+/gu, '')
       .toLowerCase();
   } catch {

@@ -71,7 +71,7 @@ function renderNode(slide: Slide, node: PptxNodeIR): void {
  *
  * A later step can upgrade connector edges to true shape-attached connectors at the OOXML layer.
  */
-export function renderPptxDiagramIR(slide: Slide, diagram: PptxDiagramIR, _env: PptxWriterEnv): void {
+export function renderPptxDiagramIR(slide: Slide, diagram: PptxDiagramIR): void {
   const nodeById = new Map<string, PptxNodeIR>();
   for (const n of diagram.nodes) nodeById.set(n.id, n);
 

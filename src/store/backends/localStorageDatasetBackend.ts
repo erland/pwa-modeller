@@ -13,15 +13,18 @@ export class LocalStorageDatasetBackend implements DatasetBackend {
 
   // LocalStorage is legacy single-dataset persistence.
   // We ignore datasetId for now but keep it in the contract.
-  async loadPersistedState(_datasetId: DatasetId): Promise<PersistedStoreSlice | null> {
+  async loadPersistedState(datasetId: DatasetId): Promise<PersistedStoreSlice | null> {
+    void datasetId;
     return loadPersistedStoreState();
   }
 
-  async persistState(_datasetId: DatasetId, state: PersistedStoreSlice): Promise<void> {
+  async persistState(datasetId: DatasetId, state: PersistedStoreSlice): Promise<void> {
+    void datasetId;
     persistStoreState(state);
   }
 
-  async clearPersistedState(_datasetId: DatasetId): Promise<void> {
+  async clearPersistedState(datasetId: DatasetId): Promise<void> {
+    void datasetId;
     clearPersistedStoreState();
   }
 }

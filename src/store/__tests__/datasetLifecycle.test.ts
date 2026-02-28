@@ -1,8 +1,6 @@
-import type { DatasetBackend, PersistedStoreSlice } from '../datasetBackend';
 import { createMockBackend } from './helpers/mockBackend';
 import { modelStore } from '../modelStore';
 import { DEFAULT_LOCAL_DATASET_ID } from '../datasetTypes';
-import type { DatasetId } from '../datasetTypes';
 import { createDataset, deleteDataset, openDataset, renameDataset } from '../datasetLifecycle';
 import { loadDatasetRegistry } from '../datasetRegistry';
 import { createEmptyModel } from '../../domain';

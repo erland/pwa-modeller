@@ -122,8 +122,7 @@ export function useExportDialogState(args: ExportDialogControllerArgs): ExportDi
   // Keep "refresh count when opened" behavior without importing report logic into the controller.
   useEffect(() => {
     if (!isOpen) return;
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    (async () => {
+    void (async () => {
       const { loadExportReport } = await import('../../../export');
       setReportCount(loadExportReport().length);
     })();

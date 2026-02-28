@@ -90,11 +90,11 @@ function notifyAuthChanged(): void {
   try {
     // Same-tab listeners
     window.dispatchEvent(new Event('pwaModellerAuthChanged'));
-  } catch {}
+  } catch { /* ignore */ }
   try {
     // Cross-tab listeners via storage event
     localStorage.setItem('oidc.pkce.authChangedAt.v1', String(Date.now()));
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 function saveTokens(tokens: OidcTokens | null): void {

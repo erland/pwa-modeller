@@ -22,6 +22,7 @@ describe('phase3Sync remoteOpsSync', () => {
     };
 
     const api = {
+      acquireOrRefreshLease: jest.fn(),
       getOperationsSince: jest.fn(async () => ({ datasetId: 'srv', fromRevision: 1, items: [ev(2, 'a'), ev(3, 'b')] }) as OpsSinceResponse),
       openDatasetOpsStream: jest.fn(async () => {
         async function* gen() {
@@ -64,6 +65,7 @@ describe('phase3Sync remoteOpsSync', () => {
     };
 
     const api = {
+      acquireOrRefreshLease: jest.fn(),
       getOperationsSince: jest.fn(async () => ({ datasetId: 'srv', fromRevision: 1, items: [ev(2, 'a')] }) as OpsSinceResponse),
       openDatasetOpsStream: jest.fn(async () => {
         async function* gen() {
@@ -100,6 +102,7 @@ describe('phase3Sync remoteOpsSync', () => {
     };
 
     const api = {
+      acquireOrRefreshLease: jest.fn(),
       appendOperations: jest.fn(async () => {
         throw new RemoteDatasetApiError({
           message: '409',
@@ -144,6 +147,7 @@ describe('phase3Sync remoteOpsSync', () => {
     };
 
     const api = {
+      acquireOrRefreshLease: jest.fn(),
       appendOperations: jest.fn(async () => {
         throw new RemoteDatasetApiError({
           message: '409',
@@ -175,5 +179,54 @@ describe('phase3Sync remoteOpsSync', () => {
     const res = await ctrl.flushPending('local:4' as any, 'srv');
     expect(res?.newRevision).toBe(7);
     expect(getLastAppliedRevision('local:4' as any)).toBe(7);
+  });
+
+  test('flushPending retries append after acquiring lease when server requires X-Lease-Token (428)', async () => {
+    const store = {
+      getState: () => ({ activeDatasetId: 'local:5', model: { v: 1 }, fileName: null, isDirty: false }),
+      hydrate: jest.fn(),
+      setPersistenceRemoteChanged: jest.fn()
+    };
+
+    let call = 0;
+    const api = {
+      acquireOrRefreshLease: jest.fn(async () => ({ lease: { datasetId: 'srv', active: true, holderSub: 'me', acquiredAt: '', renewedAt: '', expiresAt: 'x', leaseToken: 'tok' }, etag: null })),
+      appendOperations: jest.fn(async () => {
+        call += 1;
+        if (call === 1) {
+          throw new RemoteDatasetApiError({
+            message: '428',
+            status: 428,
+            statusText: 'PRECONDITION_REQUIRED',
+            url: 'x',
+            body: { status: 428, code: 'LEASE_TOKEN_REQUIRED', message: 'need token' },
+            requestId: null,
+            etag: null
+          });
+        }
+        return { res: { datasetId: 'srv', newRevision: 10, acceptedCount: 1 }, etag: null };
+      }),
+      getOperationsSince: jest.fn(),
+      openDatasetOpsStream: jest.fn(),
+      getCurrentSnapshot: jest.fn()
+    };
+
+    const ctrl = createRemoteOpsSyncController({
+      // @ts-expect-error test store shape
+      store,
+      // @ts-expect-error test api shape
+      api,
+      apply: (model, ops) => ({ ...(model as any), v: ops.length })
+    });
+
+    // Seed pending ops via session helper.
+    const { setPendingOps, setLastAppliedRevision } = await import('../../remoteDatasetSession');
+    setPendingOps('local:5' as any, [op('x')]);
+    setLastAppliedRevision('local:5' as any, 0);
+
+    const res = await ctrl.flushPending('local:5' as any, 'srv');
+    expect(res?.newRevision).toBe(10);
+    expect(api.acquireOrRefreshLease).toHaveBeenCalled();
+    expect(api.appendOperations).toHaveBeenCalledTimes(2);
   });
 });

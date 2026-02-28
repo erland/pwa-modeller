@@ -5,6 +5,9 @@ import { isPhase3OpsEnabled, loadRemoteDatasetSettings } from '../remoteDatasetS
 import {
   getLastSeenEtag as getSessionEtag,
   getLeaseToken as getSessionLeaseToken,
+  setLeaseConflict as setSessionLeaseConflict,
+  setLeaseExpiresAt as setSessionLeaseExpiresAt,
+  setLeaseToken as setSessionLeaseToken,
   getPendingOps,
   setLastSeenEtag as setSessionEtag,
   setPendingOps,
@@ -14,7 +17,14 @@ import {
 import { remoteOpsSync } from '../phase3Sync';
 import { snapshotReplaceDtoFromModel } from '../phase3Ops/mapToOperationDto';
 import { getAccessToken } from '../../auth/oidcPkceAuth';
-import type { ApiError, LeaseConflictResponse, SnapshotConflictResponse, ValidationError } from '../remoteDatasetApi';
+import {
+  acquireOrRefreshLease,
+  RemoteDatasetApiError,
+  type ApiError,
+  type LeaseConflictResponse,
+  type SnapshotConflictResponse,
+  type ValidationError
+} from '../remoteDatasetApi';
 
 export type RemoteDatasetRef = {
   baseUrl: string;
@@ -285,7 +295,29 @@ export class RemoteDatasetBackend implements DatasetBackend {
         setPendingOps(datasetId, [snapshotReplaceDtoFromModel(state.model)]);
       }
 
-      const leaseToken = (getSessionLeaseToken(datasetId) ?? '').trim();
+      let leaseToken = (getSessionLeaseToken(datasetId) ?? '').trim();
+
+      // Step 8: leases may be required for ops writes. If we don't currently have a token,
+      // attempt to acquire/refresh a lease best-effort before flushing.
+      if (!leaseToken) {
+        try {
+          const { lease } = await acquireOrRefreshLease(remoteRef.serverDatasetId);
+          if (lease.active && lease.leaseToken) {
+            setSessionLeaseToken(datasetId, lease.leaseToken);
+            setSessionLeaseExpiresAt(datasetId, lease.expiresAt);
+            setSessionLeaseConflict(datasetId, null);
+            leaseToken = lease.leaseToken;
+          }
+        } catch (e) {
+          if (e instanceof RemoteDatasetApiError && e.status === 409) {
+            const body = e.body as LeaseConflictResponse | undefined;
+            setSessionLeaseToken(datasetId, null);
+            setSessionLeaseExpiresAt(datasetId, null);
+            setSessionLeaseConflict(datasetId, (body as any) ?? null);
+          }
+          // Ignore other failures; flushPending will surface meaningful errors.
+        }
+      }
       try {
         await remoteOpsSync.flushPending(datasetId, remoteRef.serverDatasetId, {
           leaseToken: leaseToken || null,

@@ -3,20 +3,32 @@ import type {
   AppendOperationsResponse,
   CurrentSnapshotResponse,
   DuplicateOpIdResponse,
+  LeaseConflictResponse,
   OperationDto,
   OperationEvent,
   OpsStreamHandle,
   RevisionConflictResponse
 } from '../remoteDatasetApi';
-import { appendOperations, getCurrentSnapshot, getOperationsSince, openDatasetOpsStream, RemoteDatasetApiError } from '../remoteDatasetApi';
+import {
+  acquireOrRefreshLease,
+  appendOperations,
+  getCurrentSnapshot,
+  getOperationsSince,
+  openDatasetOpsStream,
+  RemoteDatasetApiError
+} from '../remoteDatasetApi';
 import { modelStore } from '../modelStore';
 import type { Model } from '../../domain';
 import {
   clearPendingOps,
   getLastAppliedRevision,
+  getLeaseToken,
   getPendingOps,
   getServerRevision,
   setLastAppliedRevision,
+  setLeaseConflict,
+  setLeaseExpiresAt,
+  setLeaseToken,
   setServerRevision,
   setSseConnected
 } from '../remoteDatasetSession';
@@ -25,6 +37,7 @@ import { applyOperationDtosToModel } from '../phase3Ops/applyOperation';
 export type RemoteOpsSyncStore = Pick<typeof modelStore, 'getState' | 'hydrate' | 'setPersistenceRemoteChanged'>;
 
 export type RemoteOpsSyncApi = {
+  acquireOrRefreshLease: typeof acquireOrRefreshLease;
   appendOperations: typeof appendOperations;
   getCurrentSnapshot: typeof getCurrentSnapshot;
   getOperationsSince: typeof getOperationsSince;
@@ -67,6 +80,21 @@ function asDuplicateOpId(body: unknown): DuplicateOpIdResponse | null {
   if (typeof body.existingRevision !== 'number') return null;
   const datasetId = typeof body.datasetId === 'string' ? body.datasetId : '';
   return { datasetId, opId: body.opId, existingRevision: body.existingRevision };
+}
+
+function asLeaseConflict(body: unknown): LeaseConflictResponse | null {
+  if (!isObject(body)) return null;
+  if (typeof body.holderSub !== 'string') return null;
+  if (typeof body.expiresAt !== 'string') return null;
+  const datasetId = typeof body.datasetId === 'string' ? body.datasetId : '';
+  return { datasetId, holderSub: body.holderSub, expiresAt: body.expiresAt };
+}
+
+function isLeaseTokenRequiredError(e: RemoteDatasetApiError): boolean {
+  if (e.status !== 428) return false;
+  const body = e.body as any;
+  const code = (body?.code ?? body?.errorCode ?? '') as string;
+  return code === 'LEASE_TOKEN_REQUIRED' || code === 'LEASE_TOKEN_MISSING' || code === 'LEASE_REQUIRED';
 }
 
 async function reloadSnapshotAfterConflict(
@@ -215,18 +243,57 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
 
     const baseRevision = getLastAppliedRevision(localDatasetId) ?? 0;
 
-    try {
-      const { res } = await deps.api.appendOperations(
+    const initialLeaseToken = (opts?.leaseToken ?? getLeaseToken(localDatasetId) ?? '').trim() || null;
+
+    async function tryAppend(leaseToken: string | null): Promise<{ res: AppendOperationsResponse; etag: string | null }> {
+      return deps.api.appendOperations(
         serverDatasetId,
         { baseRevision, operations: ops },
-        { leaseToken: opts?.leaseToken ?? undefined, force: opts?.force }
+        { leaseToken: leaseToken ?? undefined, force: opts?.force }
       );
+    }
+
+    try {
+      const { res } = await tryAppend(initialLeaseToken);
 
       clearPendingOps(localDatasetId);
       setServerRevision(localDatasetId, res.newRevision);
       setLastAppliedRevision(localDatasetId, res.newRevision);
       return res;
     } catch (e) {
+      // Step 8: integrate leases for ops endpoints.
+      if (e instanceof RemoteDatasetApiError) {
+        // Lease required: acquire/refresh and retry once.
+        if (isLeaseTokenRequiredError(e)) {
+          try {
+            const { lease } = await deps.api.acquireOrRefreshLease(serverDatasetId);
+            if (lease.active && lease.leaseToken) {
+              setLeaseToken(localDatasetId, lease.leaseToken);
+              setLeaseExpiresAt(localDatasetId, lease.expiresAt);
+              setLeaseConflict(localDatasetId, null);
+
+              const { res } = await tryAppend(lease.leaseToken);
+              clearPendingOps(localDatasetId);
+              setServerRevision(localDatasetId, res.newRevision);
+              setLastAppliedRevision(localDatasetId, res.newRevision);
+              return res;
+            }
+          } catch {
+            // fall through to throw the original error
+          }
+        }
+
+        // Lease conflict: store conflict so existing UX can surface it.
+        if (e.status === 409) {
+          const leaseConflict = asLeaseConflict(e.body);
+          if (leaseConflict) {
+            setLeaseToken(localDatasetId, null);
+            setLeaseExpiresAt(localDatasetId, null);
+            setLeaseConflict(localDatasetId, leaseConflict);
+          }
+        }
+      }
+
       // Step 7: conflict and replay strategy.
       if (e instanceof RemoteDatasetApiError && e.status === 409) {
         const revConflict = asRevisionConflict(e.body);
@@ -278,6 +345,6 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
 
 export const remoteOpsSync = createRemoteOpsSyncController({
   store: modelStore,
-  api: { appendOperations, getCurrentSnapshot, getOperationsSince, openDatasetOpsStream },
+  api: { acquireOrRefreshLease, appendOperations, getCurrentSnapshot, getOperationsSince, openDatasetOpsStream },
   apply: (model, ops) => applyOperationDtosToModel(model, ops)
 });

@@ -8,11 +8,14 @@ import { RemoteDatasetConflictDialog } from './RemoteDatasetConflictDialog';
 import { RemoteDatasetValidationErrorsDialog } from './RemoteDatasetValidationErrorsDialog';
 import { LeaseConflictDialog } from './LeaseConflictDialog';
 import { RemoteChangedDialog } from './RemoteChangedDialog';
+import { RemoteOpsDiagnosticsDialog } from './RemoteOpsDiagnosticsDialog';
 import { downloadTextFile, sanitizeFileName, loadOverlayExportMarker, modelStore, useModelStore, useOverlayStore } from '../../store';
 import { openDataset, retryAcquireLeaseForDataset } from '../../store/datasetLifecycle';
 import { flushStorePersistence, flushStorePersistenceForce, setStorePersistencePaused } from '../../store/initStorePersistence';
 import { RemoteDatasetBackend } from '../../store/backends/remoteDatasetBackend';
-import { setLeaseConflict, setLeaseExpiresAt, setLeaseToken } from '../../store/remoteDatasetSession';
+import { setLeaseConflict, setLeaseExpiresAt, setLeaseToken, getPendingOps, isSseConnected, getLastAppliedRevision, getServerRevision } from '../../store/remoteDatasetSession';
+import { isPhase3OpsEnabled } from '../../store/remoteDatasetSettings';
+import { getDatasetRegistryEntry } from '../../store/datasetRegistry';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
 import { useAppInit } from '../../app/init/useAppInit';
@@ -127,13 +130,15 @@ export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, 
   const persistenceValidationFailure = useModelStore((s) => s.persistenceValidationFailure);
   const persistenceLeaseConflict = useModelStore((s) => s.persistenceLeaseConflict);
   const persistenceRemoteChanged = useModelStore((s) => s.persistenceRemoteChanged);
-  const { isDirty, model } = useModelStore((s) => ({
+  const { isDirty, model, activeDatasetId } = useModelStore((s) => ({
     isDirty: s.isDirty,
-    model: s.model
+    model: s.model,
+    activeDatasetId: s.activeDatasetId
   }));
 
   const { overlayCount, overlayVersion } = useOverlayStore((s) => ({ overlayCount: s.size, overlayVersion: s.getVersion() }));
-  const overlaySignature = model ? computeModelSignature(model) : '';
+    const [isRemoteOpsDiagOpen, setIsRemoteOpsDiagOpen] = useState(false);
+const overlaySignature = model ? computeModelSignature(model) : '';
   const overlayExportMarker = overlaySignature ? loadOverlayExportMarker(overlaySignature) : null;
   const overlayExportDirty = overlayCount > 0 && (!overlayExportMarker || overlayExportMarker.version !== overlayVersion);
 
@@ -373,7 +378,8 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
         onExportLocalSnapshot={onExportLocalConflictSnapshot}
         onKeepLocalChanges={onKeepLocalChangesAfterConflict}
       />
-      <header className="shellHeader" data-testid="app-header">
+            <RemoteOpsDiagnosticsDialog isOpen={isRemoteOpsDiagOpen} datasetId={activeDatasetId ?? null} onClose={() => setIsRemoteOpsDiagOpen(false)} />
+<header className="shellHeader" data-testid="app-header">
         <div className="shellBrand" aria-label="Application">
           <div className="shellTitle">{title}</div>
           {subtitle ? <div className="shellSubtitle">{subtitle}</div> : null}
@@ -413,6 +419,34 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
               </span>
             ) : null}
             {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
+
+            {isPhase3OpsEnabled() && activeDatasetId ? (() => {
+              const entry = getDatasetRegistryEntry(activeDatasetId);
+              if (!entry || entry.storageKind !== 'remote') return null;
+              const pending = getPendingOps(activeDatasetId).length;
+              const sse = isSseConnected(activeDatasetId);
+              const lastApplied = getLastAppliedRevision(activeDatasetId);
+              const serverRev = getServerRevision(activeDatasetId);
+              const title = [
+                'Remote ops sync (Phase 3)',
+                `SSE: ${sse ? 'connected' : 'disconnected'}`,
+                `Pending ops: ${pending}`,
+                `Last applied: ${lastApplied ?? '—'}`,
+                `Server revision: ${serverRev ?? '—'}`,
+                'Click for diagnostics'
+              ].join('\n');
+              return (
+                <button
+                  type="button"
+                  className={['shellStatusChip', 'shellStatusChipButton', sse ? null : 'isOffline', pending ? 'isDirty' : null].filter(Boolean).join(' ')}
+                  title={title}
+                  aria-label="Open remote sync diagnostics"
+                  onClick={() => setIsRemoteOpsDiagOpen(true)}
+                >
+                  Sync {sse ? 'Live' : 'Idle'}{pending ? ` +${pending}` : ''}
+                </button>
+              );
+            })() : null}
             {model && isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}
           </div>
           <button type="button"

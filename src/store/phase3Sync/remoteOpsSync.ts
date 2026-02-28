@@ -1,6 +1,14 @@
 import type { DatasetId } from '../datasetTypes';
-import type { AppendOperationsResponse, OperationDto, OperationEvent, OpsStreamHandle } from '../remoteDatasetApi';
-import { appendOperations, getOperationsSince, openDatasetOpsStream } from '../remoteDatasetApi';
+import type {
+  AppendOperationsResponse,
+  CurrentSnapshotResponse,
+  DuplicateOpIdResponse,
+  OperationDto,
+  OperationEvent,
+  OpsStreamHandle,
+  RevisionConflictResponse
+} from '../remoteDatasetApi';
+import { appendOperations, getCurrentSnapshot, getOperationsSince, openDatasetOpsStream, RemoteDatasetApiError } from '../remoteDatasetApi';
 import { modelStore } from '../modelStore';
 import type { Model } from '../../domain';
 import {
@@ -18,6 +26,7 @@ export type RemoteOpsSyncStore = Pick<typeof modelStore, 'getState' | 'hydrate' 
 
 export type RemoteOpsSyncApi = {
   appendOperations: typeof appendOperations;
+  getCurrentSnapshot: typeof getCurrentSnapshot;
   getOperationsSince: typeof getOperationsSince;
   openDatasetOpsStream: typeof openDatasetOpsStream;
 };
@@ -40,6 +49,45 @@ export type RemoteOpsSyncDeps = {
   api: RemoteOpsSyncApi;
   apply: RemoteOpsSyncApply;
 };
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object';
+}
+
+function asRevisionConflict(body: unknown): RevisionConflictResponse | null {
+  if (!isObject(body)) return null;
+  if (typeof body.currentRevision !== 'number') return null;
+  const datasetId = typeof body.datasetId === 'string' ? body.datasetId : '';
+  return { datasetId, currentRevision: body.currentRevision };
+}
+
+function asDuplicateOpId(body: unknown): DuplicateOpIdResponse | null {
+  if (!isObject(body)) return null;
+  if (typeof body.opId !== 'string') return null;
+  if (typeof body.existingRevision !== 'number') return null;
+  const datasetId = typeof body.datasetId === 'string' ? body.datasetId : '';
+  return { datasetId, opId: body.opId, existingRevision: body.existingRevision };
+}
+
+async function reloadSnapshotAfterConflict(
+  deps: RemoteOpsSyncDeps,
+  localDatasetId: DatasetId,
+  serverDatasetId: string
+): Promise<CurrentSnapshotResponse | null> {
+  try {
+    const { snapshot } = await deps.api.getCurrentSnapshot(serverDatasetId);
+    const st = deps.store.getState();
+    if (st.activeDatasetId !== localDatasetId) return null;
+
+    // Snapshot payload is the modeller JSON model.
+    deps.store.hydrate({ ...st, model: (snapshot.payload as any) ?? null, isDirty: false, activeDatasetId: localDatasetId });
+    setServerRevision(localDatasetId, snapshot.revision);
+    setLastAppliedRevision(localDatasetId, snapshot.revision);
+    return snapshot;
+  } catch {
+    return null;
+  }
+}
 
 type Running = {
   serverDatasetId: string;
@@ -166,16 +214,63 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
     if (ops.length === 0) return null;
 
     const baseRevision = getLastAppliedRevision(localDatasetId) ?? 0;
-    const { res } = await deps.api.appendOperations(
-      serverDatasetId,
-      { baseRevision, operations: ops },
-      { leaseToken: opts?.leaseToken ?? undefined, force: opts?.force }
-    );
 
-    clearPendingOps(localDatasetId);
-    setServerRevision(localDatasetId, res.newRevision);
-    setLastAppliedRevision(localDatasetId, res.newRevision);
-    return res;
+    try {
+      const { res } = await deps.api.appendOperations(
+        serverDatasetId,
+        { baseRevision, operations: ops },
+        { leaseToken: opts?.leaseToken ?? undefined, force: opts?.force }
+      );
+
+      clearPendingOps(localDatasetId);
+      setServerRevision(localDatasetId, res.newRevision);
+      setLastAppliedRevision(localDatasetId, res.newRevision);
+      return res;
+    } catch (e) {
+      // Step 7: conflict and replay strategy.
+      if (e instanceof RemoteDatasetApiError && e.status === 409) {
+        const revConflict = asRevisionConflict(e.body);
+        if (revConflict) {
+          // Option A: discard local pending ops and reload the latest remote snapshot.
+          clearPendingOps(localDatasetId);
+
+          // Best-effort: fetch missing ops and apply if we can do it cleanly.
+          try {
+            const from = (getLastAppliedRevision(localDatasetId) ?? 0) + 1;
+            const since = await deps.api.getOperationsSince(serverDatasetId, from);
+            await applyEventsSequentially(deps, localDatasetId, since.items ?? []);
+          } catch {
+            // ignore
+          }
+
+          const snap = await reloadSnapshotAfterConflict(deps, localDatasetId, serverDatasetId);
+
+          deps.store.setPersistenceRemoteChanged({
+            datasetId: localDatasetId,
+            message:
+              'Remote dataset changed before your edits were saved. Your pending local edits were discarded; reload and reapply your changes if needed.',
+            detectedAt: Date.now(),
+            serverRevision: snap?.revision ?? revConflict.currentRevision,
+            serverEtag: null,
+            serverUpdatedAt: snap?.updatedAt ?? null,
+            serverUpdatedBy: snap?.updatedBy ?? null
+          });
+
+          return null;
+        }
+
+        const dup = asDuplicateOpId(e.body);
+        if (dup) {
+          // Treat idempotency conflict as success.
+          clearPendingOps(localDatasetId);
+          setServerRevision(localDatasetId, dup.existingRevision);
+          setLastAppliedRevision(localDatasetId, dup.existingRevision);
+          return { datasetId: serverDatasetId, newRevision: dup.existingRevision, acceptedCount: ops.length };
+        }
+      }
+
+      throw e;
+    }
   }
 
   return { start, stop, flushPending };
@@ -183,6 +278,6 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
 
 export const remoteOpsSync = createRemoteOpsSyncController({
   store: modelStore,
-  api: { appendOperations, getOperationsSince, openDatasetOpsStream },
+  api: { appendOperations, getCurrentSnapshot, getOperationsSince, openDatasetOpsStream },
   apply: (model, ops) => applyOperationDtosToModel(model, ops)
 });

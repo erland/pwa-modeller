@@ -74,6 +74,19 @@ export type OpsSinceResponse = {
   items: OperationEvent[];
 };
 
+/**
+ * Current materialized snapshot (Phase 1/2 endpoint): GET /datasets/{id}/snapshot
+ *
+ * Note: this is distinct from the snapshot history endpoints under /snapshots.
+ */
+export type CurrentSnapshotResponse = {
+  datasetId?: string;
+  revision: number;
+  payload: unknown;
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+};
+
 export type RevisionConflictResponse = {
   datasetId: string;
   currentRevision: number;
@@ -625,6 +638,23 @@ export async function getOperationsSince(
     token
   });
   return data;
+}
+
+/**
+ * Phase 1/2: Fetch the current materialized snapshot.
+ * GET /datasets/{id}/snapshot
+ */
+export async function getCurrentSnapshot(
+  datasetId: string,
+  args?: CommonArgs
+): Promise<{ snapshot: CurrentSnapshotResponse; etag: string | null }> {
+  const { baseUrl, token } = await resolveCommon(args);
+  const { data, etag } = await requestJson<CurrentSnapshotResponse>({
+    url: `${baseUrl}/datasets/${encodeURIComponent(datasetId)}/snapshot`,
+    method: 'GET',
+    token
+  });
+  return { snapshot: data, etag };
 }
 
 export type OpsStreamHandle = {

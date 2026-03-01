@@ -35,6 +35,27 @@ import {
   setSseConnected
 } from '../remoteDatasetSession';
 import { applyOperationDtosToModel } from '../phase3Ops/applyOperation';
+// Tracks operation IDs currently being appended to the server for each dataset.
+// Used to avoid false "Remote dataset changed" prompts when the server echoes
+// back our own operations while there are pending local edits.
+const inFlightOpIdsByDataset = new Map<DatasetId, Set<string>>();
+
+function setInFlightOpIds(datasetId: DatasetId, ops: OperationDto[] | null): void {
+  if (!ops || ops.length === 0) {
+    inFlightOpIdsByDataset.delete(datasetId);
+    return;
+  }
+  inFlightOpIdsByDataset.set(datasetId, new Set(ops.map(o => o.opId)));
+}
+
+function getOutstandingLocalOpIds(datasetId: DatasetId): Set<string> {
+  const ids = new Set<string>();
+  for (const op of getPendingOps(datasetId)) ids.add(op.opId);
+  const inflight = inFlightOpIdsByDataset.get(datasetId);
+  if (inflight) for (const id of inflight) ids.add(id);
+  return ids;
+}
+
 
 export type RemoteOpsSyncStore = Pick<typeof modelStore, 'getState' | 'hydrate' | 'setPersistenceRemoteChanged'>;
 
@@ -184,6 +205,15 @@ async function applyEventsSequentially(deps: RemoteOpsSyncDeps, localDatasetId: 
   // "unsaved" remote state that would need a merge/rebase strategy).
   const pendingCount = getPendingOps(localDatasetId).length;
   if (st.isDirty && pendingCount > 0) {
+    const outstanding = getOutstandingLocalOpIds(localDatasetId);
+    const incomingOpIds = ordered.map(e => e.op?.opId).filter((x): x is string => typeof x === 'string');
+    const isOnlyEcho = incomingOpIds.length > 0 && incomingOpIds.every(id => outstanding.has(id));
+    if (isOnlyEcho) {
+      // Server echoed our own operations while we still have local pending edits.
+      // Treat as an acknowledgement and do not prompt the user.
+      if (latestRevision != null) setLastAppliedRevision(localDatasetId, Math.max(getLastAppliedRevision(localDatasetId) ?? 0, latestRevision));
+      return;
+    }
     deps.store.setPersistenceRemoteChanged({
       datasetId: localDatasetId,
       message: 'Remote dataset changed while you have local unsaved changes.',
@@ -322,6 +352,9 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
     const opsToSend = getPendingOps(localDatasetId);
     if (opsToSend.length === 0) return null;
 
+    // Mark these ops as in-flight so we can recognize server echoes.
+    setInFlightOpIds(localDatasetId, opsToSend);
+
     clearPendingOps(localDatasetId);
 
     const baseRevision = getLastAppliedRevision(localDatasetId) ?? 0;
@@ -420,6 +453,8 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
       if (getPendingOps(localDatasetId).length === 0) {
         setPendingOps(localDatasetId, opsToSend);
       }
+      // The request failed; these ops are no longer in-flight.
+      setInFlightOpIds(localDatasetId, null);
       throw e;
     }
     })();
@@ -429,6 +464,7 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
       return await promise;
     } finally {
       flushInFlight.delete(localDatasetId);
+      setInFlightOpIds(localDatasetId, null);
     }
   }
 

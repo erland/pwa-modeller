@@ -218,45 +218,62 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
 
 
   async function runLoop(localDatasetId: DatasetId, serverDatasetId: string): Promise<void> {
-    // 1) Catch-up on start (best-effort).
-    try {
-      const from = getLastAppliedRevision(localDatasetId) ?? 0;
-      const since = await deps.api.getOperationsSince(serverDatasetId, from);
-      await applyEventsSequentially(deps, localDatasetId, since.items ?? []);
-    } catch {
-      // ignore transient failures
-    }
+    let backoffMs = 1000;
 
-    // 2) Subscribe for live updates.
-    let handle: OpsStreamHandle | null = null;
-    try {
-      const from = getLastAppliedRevision(localDatasetId) ?? 0;
-      handle = await deps.api.openDatasetOpsStream(serverDatasetId, { fromRevision: from });
-      setSseConnected(localDatasetId, true);
-      const entry = running.get(localDatasetId);
-      if (entry) entry.stream = handle;
+    const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-      for await (const ev of handle.events) {
-        const entry2 = running.get(localDatasetId);
-        if (!entry2 || entry2.stopRequested) break;
-        await applyEventsSequentially(deps, localDatasetId, [ev]);
+    while (true) {
+      const entry0 = running.get(localDatasetId);
+      if (!entry0 || entry0.stopRequested) break;
+
+      // 1) Catch-up (best-effort).
+      try {
+        const from = getLastAppliedRevision(localDatasetId) ?? 0;
+        const since = await deps.api.getOperationsSince(serverDatasetId, from);
+        await applyEventsSequentially(deps, localDatasetId, since.items ?? []);
+      } catch {
+        // ignore transient failures
       }
-    } catch {
-      // ignore transient failures
-    } finally {
-      setSseConnected(localDatasetId, false);
-      if (handle) {
-        try {
-          handle.close();
-        } catch {
-          // ignore
+
+      // 2) Subscribe for live updates.
+      let handle: OpsStreamHandle | null = null;
+      try {
+        const from = getLastAppliedRevision(localDatasetId) ?? 0;
+        handle = await deps.api.openDatasetOpsStream(serverDatasetId, { fromRevision: from });
+        setSseConnected(localDatasetId, true);
+        const entry = running.get(localDatasetId);
+        if (entry) entry.stream = handle;
+
+        // Reset backoff after a successful connect.
+        backoffMs = 1000;
+
+        for await (const ev of handle.events) {
+          const entry2 = running.get(localDatasetId);
+          if (!entry2 || entry2.stopRequested) break;
+          await applyEventsSequentially(deps, localDatasetId, [ev]);
         }
+      } catch {
+        // ignore transient failures (we will retry)
+      } finally {
+        setSseConnected(localDatasetId, false);
+        if (handle) {
+          try {
+            handle.close();
+          } catch {
+            // ignore
+          }
+        }
+        const entry = running.get(localDatasetId);
+        if (entry) entry.stream = null;
       }
-      const entry = running.get(localDatasetId);
-      if (entry) entry.stream = null;
+
+      const entry3 = running.get(localDatasetId);
+      if (!entry3 || entry3.stopRequested) break;
+
+      await sleep(backoffMs);
+      backoffMs = Math.min(backoffMs * 2, 30_000);
     }
   }
-
   function start(localDatasetId: DatasetId, serverDatasetId: string): void {
     if (running.has(localDatasetId)) return;
     const entry: Running = {
@@ -367,7 +384,7 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
 
           // Best-effort: fetch missing ops and apply if we can do it cleanly.
           try {
-            const from = getLastAppliedRevision(localDatasetId) ?? 0;
+            const from = (getLastAppliedRevision(localDatasetId) ?? 0);
             const since = await deps.api.getOperationsSince(serverDatasetId, from);
             await applyEventsSequentially(deps, localDatasetId, since.items ?? []);
           } catch {

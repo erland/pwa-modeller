@@ -1,5 +1,6 @@
 import type { DatasetBackend } from './datasetBackend';
 import { getDefaultDatasetBackend } from './getDefaultDatasetBackend';
+import { getRemoteDatasetBackend } from './getRemoteDatasetBackend';
 import type { DatasetId } from './datasetTypes';
 import { DEFAULT_LOCAL_DATASET_ID } from './datasetTypes';
 import type { DatasetSnapshot } from './datasetTypes';
@@ -372,7 +373,14 @@ export function createDatasetLifecycle(deps: DatasetLifecycleDeps) {
     },
 
     async deleteDataset(datasetId: DatasetId, backend?: DatasetBackend): Promise<void> {
-      const b = backend ?? deps.getBackend();
+      // Pick backend based on registry entry when not explicitly provided.
+      // Reason: the default lifecycle uses the local backend, but registry may contain remote entries
+      // created by opening a remote dataset. Those should still be removable from the registry.
+      const registryBefore = ensureDatasetRegistryMigrated();
+      const entry = registryBefore.entries.find(e => e.datasetId === datasetId);
+      const storageKind = entry?.storageKind ?? 'local';
+
+      const b = backend ?? (storageKind === 'remote' ? getRemoteDatasetBackend() : deps.getBackend());
       assertBackendMatchesRegistry(datasetId, b);
 
       await b.clearPersistedState(datasetId);

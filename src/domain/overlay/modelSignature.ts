@@ -14,15 +14,23 @@ function fnv1a32(str: string): string {
 function stableExternalKeysForModel(model: Model): string[] {
   const out: string[] = [];
 
-  for (const el of Object.values(model.elements)) {
-    for (const r of dedupeExternalIds(el.externalIds ?? [])) {
+  // Defensive: during failed loads or partial migrations, model can be malformed.
+  const elements: Record<string, any> =
+    (model as any)?.elements && typeof (model as any).elements === 'object' ? (model as any).elements : {};
+  const relationships: Record<string, any> =
+    (model as any)?.relationships && typeof (model as any).relationships === 'object'
+      ? (model as any).relationships
+      : {};
+
+  for (const el of Object.values(elements)) {
+    for (const r of dedupeExternalIds(el?.externalIds ?? [])) {
       const k = externalKey(r);
       if (k) out.push(k);
     }
   }
 
-  for (const rel of Object.values(model.relationships)) {
-    for (const r of dedupeExternalIds(rel.externalIds ?? [])) {
+  for (const rel of Object.values(relationships)) {
+    for (const r of dedupeExternalIds(rel?.externalIds ?? [])) {
       const k = externalKey(r);
       if (k) out.push(k);
     }
@@ -46,8 +54,15 @@ export function computeModelSignature(model: Model): string {
     return `ext-${fnv1a32(raw)}`;
   }
 
-  const elIds = Object.keys(model.elements).slice().sort((a, b) => a.localeCompare(b));
-  const relIds = Object.keys(model.relationships).slice().sort((a, b) => a.localeCompare(b));
+  const elements: Record<string, any> =
+    (model as any)?.elements && typeof (model as any).elements === 'object' ? (model as any).elements : {};
+  const relationships: Record<string, any> =
+    (model as any)?.relationships && typeof (model as any).relationships === 'object'
+      ? (model as any).relationships
+      : {};
+
+  const elIds = Object.keys(elements).slice().sort((a, b) => a.localeCompare(b));
+  const relIds = Object.keys(relationships).slice().sort((a, b) => a.localeCompare(b));
   const raw = `basis=internalIds\nE=${elIds.join(',')}\nR=${relIds.join(',')}`;
   return `int-${fnv1a32(raw)}`;
 }

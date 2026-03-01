@@ -69,6 +69,50 @@ export type OperationEvent = {
   createdBy?: string | null;
 };
 
+// Some server versions (including java-modeller-server Phase 3) send the op fields
+// at top-level instead of nesting them under `op`.
+type OperationEventFlat = {
+  datasetId: string;
+  revision: number;
+  opId: string;
+  type: OperationType;
+  payload: unknown;
+  createdAt?: string | null;
+  createdBy?: string | null;
+};
+
+function normalizeOperationEvent(raw: unknown): OperationEvent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r: any = raw as any;
+
+  // Preferred shape: { datasetId, revision, op: { opId, type, payload }, … }
+  if (r.op && typeof r.op === 'object') {
+    const op: any = r.op;
+    if (typeof op.opId !== 'string' || typeof op.type !== 'string') return null;
+    return {
+      datasetId: String(r.datasetId ?? ''),
+      revision: Number(r.revision ?? 0),
+      op: { opId: op.opId, type: op.type, payload: op.payload },
+      createdAt: r.createdAt ?? null,
+      createdBy: r.createdBy ?? null
+    };
+  }
+
+  // Flat shape: { datasetId, revision, opId, type, payload, … }
+  if (typeof r.opId === 'string' && typeof r.type === 'string') {
+    const flat = r as OperationEventFlat;
+    return {
+      datasetId: String(flat.datasetId ?? ''),
+      revision: Number(flat.revision ?? 0),
+      op: { opId: flat.opId, type: flat.type, payload: flat.payload },
+      createdAt: (flat as any).createdAt ?? null,
+      createdBy: (flat as any).createdBy ?? null
+    };
+  }
+
+  return null;
+}
+
 export type OpsSinceResponse = {
   datasetId: string;
   fromRevision: number;
@@ -244,6 +288,14 @@ function tryParseJson(text: string): unknown {
   }
 }
 
+function isRemoteOpsDebugEnabled(): boolean {
+  try {
+    return localStorage.getItem('DEBUG_REMOTE_OPS_SYNC') === '1';
+  } catch {
+    return false;
+  }
+}
+
 async function requestJson<T>(args: {
   url: string;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -252,7 +304,15 @@ async function requestJson<T>(args: {
   body?: unknown;
 }): Promise<{ data: T; etag: string | null }> {
   let res: Response;
+  const t0 = performance.now();
+  const dbg = isRemoteOpsDebugEnabled();
+  const isOpsCall = args.url.includes('/ops');
   try {
+    if (dbg && isOpsCall) {
+      const bodyBytes = args.body === undefined ? 0 : new TextEncoder().encode(JSON.stringify(args.body)).length;
+      // Note: keep comments free of three ASCII dots.
+      console.log('[remoteApi] →', args.method, args.url, { bodyBytes });
+    }
     res = await fetch(args.url, {
       method: args.method,
       headers: {
@@ -264,6 +324,10 @@ async function requestJson<T>(args: {
       body: args.body !== undefined ? JSON.stringify(args.body) : undefined
     });
   } catch {
+    if (dbg && isOpsCall) {
+      const dt = Math.round(performance.now() - t0);
+      console.warn('[remoteApi] ✖ network error', args.method, args.url, { ms: dt });
+    }
     throw new RemoteDatasetApiError({
       message: 'Remote request failed (network error).',
       status: 0,
@@ -287,6 +351,10 @@ async function requestJson<T>(args: {
         ? `${res.status} ${res.statusText}: ${body}`
         : `${res.status} ${res.statusText}`;
 
+    if (dbg && isOpsCall) {
+      const dt = Math.round(performance.now() - t0);
+      console.warn('[remoteApi] ✖', args.method, args.url, { status: res.status, ms: dt, requestId, etag, body });
+    }
     throw new RemoteDatasetApiError({
       message: msg,
       status: res.status,
@@ -296,6 +364,11 @@ async function requestJson<T>(args: {
       requestId,
       etag
     });
+  }
+
+  if (dbg && isOpsCall) {
+    const dt = Math.round(performance.now() - t0);
+    console.log('[remoteApi] ✔', args.method, args.url, { status: res.status, ms: dt, requestId, etag });
   }
 
   const data = (tryParseJson(txt) as T) ?? (null as any as T);
@@ -638,7 +711,15 @@ export async function getOperationsSince(
     method: 'GET',
     token
   });
-  return data;
+
+  // Normalize OperationEvent shape for compatibility with servers that emit flat events.
+  const itemsRaw: unknown[] = Array.isArray((data as any)?.items) ? ((data as any).items as unknown[]) : [];
+  const items: OperationEvent[] = [];
+  for (const it of itemsRaw) {
+    const norm = normalizeOperationEvent(it);
+    if (norm) items.push(norm);
+  }
+  return { ...(data as any), items } as OpsSinceResponse;
 }
 
 /**
@@ -767,10 +848,8 @@ export async function openDatasetOpsStream(
       for (const block of parsed.events) {
         const json = sseDataToJson(block);
         if (!json) continue;
-        // Trust but verify minimal shape.
-        if (typeof json === 'object' && json) {
-          yield json as OperationEvent;
-        }
+        const norm = normalizeOperationEvent(json);
+        if (norm) yield norm;
       }
     }
   }

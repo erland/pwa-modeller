@@ -10,13 +10,12 @@ import {
   setLeaseToken as setSessionLeaseToken,
   getPendingOps,
   setLastSeenEtag as setSessionEtag,
-  setPendingOps,
-  setLastAppliedRevision,
+    setLastAppliedRevision,
   setServerRevision
 } from '../remoteDatasetSession';
 import { remoteOpsSync } from '../phase3Sync';
-import { snapshotReplaceDtoFromModel } from '../phase3Ops/mapToOperationDto';
 import { getAccessToken } from '../../auth/oidcPkceAuth';
+import { createEmptyModel } from '../../domain/factories';
 import {
   acquireOrRefreshLease,
   RemoteDatasetApiError,
@@ -27,6 +26,36 @@ import {
 function normalizeBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim();
   return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+}
+
+function extractModelFromSnapshotPayload(payload: unknown): unknown {
+  // Server snapshot payload is a JSON object that typically looks like:
+  // { schemaVersion: number, model: { …actual modeller model… } }
+  // However, defensive handling is needed because some flows may wrap further.
+  if (!payload || typeof payload !== 'object') return payload;
+  const p: any = payload as any;
+  if (p.model && typeof p.model === 'object') {
+    // Defensive: sometimes 'model' is a persisted store slice: { model: <Model>, fileName, isDirty }
+    if (p.model.model && typeof p.model.model === 'object') return p.model.model;
+    return p.model;
+  }
+  return payload;
+}
+
+function isModelLike(v: unknown): v is PersistedStoreSlice['model'] {
+  if (!v || typeof v !== 'object') return false;
+  const o: any = v as any;
+  return (
+    o.metadata &&
+    typeof o.metadata === 'object' &&
+    typeof o.metadata.name === 'string' &&
+    o.elements &&
+    typeof o.elements === 'object' &&
+    o.folders &&
+    typeof o.folders === 'object' &&
+    o.views &&
+    typeof o.views === 'object'
+  );
 }
 
 export type RemoteDatasetRef = {
@@ -204,6 +233,15 @@ export class RemoteDatasetBackend implements DatasetBackend {
     const resp = body as RemoteSnapshotResponse | null;
     // Step 2 assumption: server wraps the modeller model in { payload }.
     const payload = resp?.payload;
+    const modelPayload = extractModelFromSnapshotPayload(payload);
+    const registry = loadDatasetRegistry();
+    const entry = registry?.entries?.find((e) => e.datasetId === datasetId) ?? null;
+    const ensuredModel =
+      isModelLike(modelPayload)
+        ? modelPayload
+        : createEmptyModel({
+            name: entry?.remote?.displayName?.trim() || entry?.name?.trim() || 'Remote model'
+          });
     // Phase 3: initialize revision trackers from snapshot.
     if (typeof resp?.revision === 'number') {
       setServerRevision(datasetId, resp.revision);
@@ -211,7 +249,7 @@ export class RemoteDatasetBackend implements DatasetBackend {
     }
 
     return {
-      model: (payload as PersistedStoreSlice['model']) ?? null,
+      model: ensuredModel ?? null,
       fileName: null,
       isDirty: false
     };
@@ -227,10 +265,12 @@ export class RemoteDatasetBackend implements DatasetBackend {
    */
   async persistStateWithOptions(
     datasetId: DatasetId,
-    state: PersistedStoreSlice,
+    _state: PersistedStoreSlice,
     opts: { force?: boolean } = {}
   ): Promise<void> {
-    const remoteRef = getRemoteRefForDataset(datasetId);
+    
+    void _state;
+const remoteRef = getRemoteRefForDataset(datasetId);
     if (!remoteRef) {
       throw new RemoteDatasetBackendError(
         `Remote dataset reference missing for datasetId '${datasetId}'.`,
@@ -249,11 +289,13 @@ export class RemoteDatasetBackend implements DatasetBackend {
 
     // -----------------------------
     // Ops-based persistence (Phase 3)
-        // Ensure we have at least one pending op representing the latest local state.
-        // (Edits routed through ModelStore.updateModel should already do this.)
+        // Only persist when there is something to persist.
+        // NOTE: `state.isDirty` in the UI can remain true even after a successful remote append,
+        // so the authoritative signal for "local ops to send" is the pending-ops queue.
         const pending = getPendingOps(datasetId);
-        if (pending.length === 0 && state.model) {
-          setPendingOps(datasetId, [snapshotReplaceDtoFromModel(state.model)]);
+        if (pending.length === 0) {
+          // Nothing to persist.
+          return;
         }
     
         let leaseToken = (getSessionLeaseToken(datasetId) ?? '').trim();

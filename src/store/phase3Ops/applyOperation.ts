@@ -3,6 +3,34 @@ import type { OperationDto, OperationType } from '../remoteDatasetApi';
 import { deserializeModel } from '../persistence/deserialize';
 import type { JsonPatchOp } from '../../domain/ops';
 
+function isModelLike(v: unknown): v is Model {
+  if (!v || typeof v !== 'object') return false;
+  const anyV = v as any;
+  return !!anyV.metadata && typeof anyV.metadata === 'object';
+}
+
+/**
+ * Some servers/clients wrap the modeller model in a container (for example { schemaVersion, model: {…} }).
+ * In older/experimental flows the payload may even be a persisted store slice.
+ *
+ * This helper makes SNAPSHOT_REPLACE tolerant to these variants.
+ */
+function extractModelPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object') return payload;
+  const p: any = payload as any;
+
+  // Already looks like a model.
+  if (isModelLike(p)) return payload;
+
+  // Common wrapper: { schemaVersion, model: <Model> }
+  if (p.model && isModelLike(p.model)) return p.model;
+
+  // Defensive: sometimes 'model' is a persisted slice: { model: <Model>, fileName, isDirty }
+  if (p.model && p.model.model && isModelLike(p.model.model)) return p.model.model;
+
+  return payload;
+}
+
 /**
  * Apply a Phase 3 OperationDto to the local model deterministically.
  *
@@ -31,7 +59,7 @@ export function applyOperationDtoToModel(model: Model, op: OperationDto): Model 
 function normalizeModel(payload: unknown): Model {
   // Keep normalization consistent with existing load pipeline.
   // Using serialize->deserialize ensures sanitizers/migrations/invariants run.
-  const json = JSON.stringify(payload);
+  const json = JSON.stringify(extractModelPayload(payload));
   return deserializeModel(json);
 }
 

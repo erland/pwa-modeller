@@ -1,8 +1,9 @@
 import { modelStore } from './modelStore';
 import { getDefaultDatasetBackend } from './getDefaultDatasetBackend';
-import { ensureDatasetRegistryMigrated, getDatasetRegistryEntry } from './datasetRegistry';
+import { ensureDatasetRegistryMigrated, getDatasetRegistryEntry, setActiveDataset } from './datasetRegistry';
 import { openDataset } from './datasetLifecycle';
 import type { DatasetId } from './datasetTypes';
+import { DEFAULT_LOCAL_DATASET_ID } from './datasetTypes';
 import type { PersistedSlice, StoreFlushEvent } from './storeFlushEvent';
 import { emptyChangeSet } from './changeSet';
 import { getRemoteDatasetBackend } from './getRemoteDatasetBackend';
@@ -70,6 +71,15 @@ function setPersistenceOk(): void {
   modelStore.setPersistenceOk();
 }
 
+function isAuthMissingError(e: unknown): boolean {
+  // Remote backend throws RemoteDatasetBackendError with code 'AUTH_MISSING'
+  // but we avoid importing the class here to keep init minimal.
+  const anyE = e as any;
+  const code = anyE?.code;
+  const msg = anyE?.message;
+  return code === 'AUTH_MISSING' || (typeof msg === 'string' && msg.includes('no access token'));
+}
+
 /**
  * Restores the last in-memory model from localStorage on refresh, and
  * continuously persists changes.
@@ -95,11 +105,33 @@ export async function initStorePersistenceAsync(): Promise<void> {
     return kind === 'remote' ? remoteBackend : localBackend;
   };
 
-  await openDataset(registry.activeDatasetId, backendFor(registry.activeDatasetId), { createIfMissing: false });
+  const activeId = registry.activeDatasetId;
+  const activeEntry = getDatasetRegistryEntry(activeId);
+  const activeKind = activeEntry?.storageKind ?? 'local';
+
+  try {
+    await openDataset(activeId, backendFor(activeId), { createIfMissing: false });
+  } catch (e) {
+    // Avoid black screen on startup when a remote dataset is the last active dataset but the user is not signed in yet.
+    if (activeKind === 'remote' && isAuthMissingError(e)) {
+      setPersistenceError('Not signed in. Please sign in to open the remote dataset. Falling back to a local dataset.');
+      setActiveDataset(DEFAULT_LOCAL_DATASET_ID);
+      await openDataset(DEFAULT_LOCAL_DATASET_ID, localBackend, { createIfMissing: true });
+    } else {
+      // Keep the app usable even if the last dataset cannot be opened.
+      setPersistenceError((e as any)?.message ? String((e as any).message) : 'Failed to open last active dataset.');
+      setActiveDataset(DEFAULT_LOCAL_DATASET_ID);
+      await openDataset(DEFAULT_LOCAL_DATASET_ID, localBackend, { createIfMissing: true });
+    }
+  }
 
   // We debounce persistence using a per-dataset pending map so rapid flushes coalesce.
+  // For remote datasets we also auto-save (and clear dirty) quickly to reduce "remote changed while dirty" prompts.
   let pending = false;
-  const pendingByDataset = new Map<DatasetId, PersistedSlice>();
+  let pendingTimer: ReturnType<typeof globalThis.setTimeout> | number | null = null;
+  const pendingByDataset = new Map<DatasetId, { slice: PersistedSlice; timestamp: number }>();
+  const latestFlushTsByDataset = new Map<DatasetId, number>();
+  const cooldownUntilByDataset = new Map<DatasetId, number>();
 
   const persistNow = () => {
     if (__persistencePaused) {
@@ -112,7 +144,25 @@ export async function initStorePersistenceAsync(): Promise<void> {
     const entries = Array.from(pendingByDataset.entries());
     pendingByDataset.clear();
 
-    for (const [datasetId, slice] of entries) {
+    for (const [datasetId, entry] of entries) {
+      const slice = entry.slice;
+      const flushedAt = entry.timestamp;
+
+      const now = Date.now();
+      const cooldownUntil = cooldownUntilByDataset.get(datasetId) ?? 0;
+      if (now < cooldownUntil) {
+        // Re-queue and retry after cooldown (avoid tight retry loops on 409 conflicts).
+        pendingByDataset.set(datasetId, entry);
+        pending = false;
+        if (pendingTimer == null) {
+          pendingTimer = globalThis.setTimeout(() => {
+            pendingTimer = null;
+            persistNow();
+          }, cooldownUntil - now);
+        }
+        continue;
+      }
+
       const backend = backendFor(datasetId);
       const force = __forceNextPersist;
       __forceNextPersist = false;
@@ -121,11 +171,40 @@ export async function initStorePersistenceAsync(): Promise<void> {
         ? backendAny.persistStateWithOptions(datasetId, slice, { force: true })
         : backend.persistState(datasetId, slice);
       void persistPromise
-        .then(() => setPersistenceOk())
+        .then(() => {
+          setPersistenceOk();
+          // If nothing newer has flushed for this dataset, mark it clean after successful auto-save.
+          // This is especially important for remote datasets where we treat persistence as "saved".
+          const latestTs = latestFlushTsByDataset.get(datasetId) ?? 0;
+          const active = modelStore.getState().activeDatasetId;
+          const isRemote = getDatasetRegistryEntry(datasetId)?.storageKind === 'remote';
+          if (isRemote && active === datasetId && latestTs === flushedAt) {
+            const st = modelStore.getState();
+            if (st.isDirty) {
+              modelStore.markSaved();
+            }
+          }
+        })
         .catch((e: unknown) => {
           // Avoid relying on instanceof across Jest module boundaries; use a structural check instead.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const anyErr: any = e;
+
+          // Phase 3: avoid tight retry loops on 409 (revision/lease conflicts, etc.).
+          if (anyErr && typeof anyErr === 'object' && anyErr.status === 409) {
+            cooldownUntilByDataset.set(datasetId, Date.now() + 1500);
+            setPersistenceError('Remote dataset is out of date (409). Will retry after a short delay.');
+            // Re-queue this slice for a later retry.
+            pendingByDataset.set(datasetId, { slice, timestamp: Date.now() });
+            // Allow scheduling again.
+            pending = false;
+            schedulePersist();
+            return;
+          }
+
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          
           if (anyErr && typeof anyErr === 'object' && anyErr.code === 'CONFLICT') {
             // Phase 1: pause auto-persistence and ask the user how to proceed.
             // Use a macrotask so unit tests using fake timers can observe the state change deterministically.
@@ -188,11 +267,40 @@ export async function initStorePersistenceAsync(): Promise<void> {
     if (__persistencePaused) return;
     if (pending) return;
     pending = true;
+    // Remote datasets should auto-save quickly to keep the store mostly "clean".
+    // We still coalesce rapid flushes to avoid overloading the server.
+    if (pendingTimer != null) {
+      globalThis.clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+    const active = modelStore.getState().activeDatasetId;
+    const activeKind = getDatasetRegistryEntry(active)?.storageKind ?? 'local';
+    if (activeKind === 'remote') {
+      pendingTimer = globalThis.setTimeout(() => {
+        pendingTimer = null;
+        persistNow();
+      }, 600);
+      return;
+    }
     scheduleIdle(persistNow);
   };
 
   const schedulePersistFromFlush = (evt: StoreFlushEvent) => {
-    pendingByDataset.set(evt.datasetId, evt.persisted);
+    // Avoid persistence loops: flush events can be emitted for state changes that do not
+    // modify the persisted model (e.g. persistence status updates). If nothing changed
+    // and the model isn't dirty, we can skip scheduling persistence.
+    const cs = evt.changeSet;
+    const hasChanges = !!cs && (
+      cs.modelMetadataChanged ||
+      cs.elementUpserts.length || cs.elementDeletes.length ||
+      cs.relationshipUpserts.length || cs.relationshipDeletes.length ||
+      cs.connectorUpserts.length || cs.connectorDeletes.length ||
+      cs.viewUpserts.length || cs.viewDeletes.length ||
+      cs.folderUpserts.length || cs.folderDeletes.length
+    );
+    if (!hasChanges && !evt.persisted.isDirty) return;
+    latestFlushTsByDataset.set(evt.datasetId, evt.timestamp);
+    pendingByDataset.set(evt.datasetId, { slice: evt.persisted, timestamp: evt.timestamp });
     schedulePersist();
   };
   __schedulePersist = schedulePersist;

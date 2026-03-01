@@ -19,6 +19,7 @@ import {
 } from '../remoteDatasetApi';
 import { modelStore } from '../modelStore';
 import type { Model } from '../../domain';
+import { createEmptyModel } from '../../domain/factories';
 import {
   clearPendingOps,
   getLastAppliedRevision,
@@ -29,6 +30,7 @@ import {
   setLeaseConflict,
   setLeaseExpiresAt,
   setLeaseToken,
+  setPendingOps,
   setServerRevision,
   setSseConnected
 } from '../remoteDatasetSession';
@@ -57,7 +59,43 @@ export type RemoteOpsSyncController = {
   ) => Promise<AppendOperationsResponse | null>;
 };
 
-export type RemoteOpsSyncDeps = {
+export function extractModelFromSnapshotPayload(payload: unknown): unknown {
+  // Server snapshot payload is often wrapped, but some flows may wrap further.
+  // We want to end up with the modeller Model object.
+  if (!payload || typeof payload !== 'object') return payload;
+  const p: any = payload as any;
+
+  // Most common: { schemaVersion, model: <Model> }
+  if (p.model && typeof p.model === 'object') {
+    // Defensive: some flows stored a persisted slice as 'model'.
+    if (p.model.model && typeof p.model.model === 'object') return p.model.model;
+    return p.model;
+  }
+
+  return payload;
+}
+
+function isModelLike(v: unknown): v is Model {
+  if (!v || typeof v !== 'object') return false;
+  const o: any = v as any;
+  return (
+    o.metadata &&
+    typeof o.metadata === 'object' &&
+    typeof o.metadata.name === 'string' &&
+    o.elements &&
+    typeof o.elements === 'object' &&
+    o.folders &&
+    typeof o.folders === 'object' &&
+    o.views &&
+    typeof o.views === 'object'
+  );
+}
+
+function ensureModel(v: unknown): Model {
+  return isModelLike(v) ? v : createEmptyModel({ name: 'Remote model' });
+}
+
+type RemoteOpsSyncDeps = {
   store: RemoteOpsSyncStore;
   api: RemoteOpsSyncApi;
   apply: RemoteOpsSyncApply;
@@ -108,7 +146,12 @@ async function reloadSnapshotAfterConflict(
     if (st.activeDatasetId !== localDatasetId) return null;
 
     // Snapshot payload is the modeller JSON model.
-    deps.store.hydrate({ ...st, model: (snapshot.payload as any) ?? null, isDirty: false, activeDatasetId: localDatasetId });
+    deps.store.hydrate({
+      ...st,
+      model: ensureModel(extractModelFromSnapshotPayload(snapshot.payload)),
+      isDirty: false,
+      activeDatasetId: localDatasetId
+    });
     setServerRevision(localDatasetId, snapshot.revision);
     setLastAppliedRevision(localDatasetId, snapshot.revision);
     return snapshot;
@@ -134,7 +177,13 @@ async function applyEventsSequentially(deps: RemoteOpsSyncDeps, localDatasetId: 
   const latestRevision = ordered[ordered.length - 1]?.revision ?? null;
   if (latestRevision != null) setServerRevision(localDatasetId, latestRevision);
 
-  if (st.isDirty) {
+  // NOTE: the store's isDirty flag is not a reliable indicator of whether there
+  // are unsent remote changes. For remote datasets we persist via ops and clear
+  // the pending ops queue on success, but isDirty may remain true.
+  // We only block auto-apply when there are pending local ops (i.e. a true
+  // "unsaved" remote state that would need a merge/rebase strategy).
+  const pendingCount = getPendingOps(localDatasetId).length;
+  if (st.isDirty && pendingCount > 0) {
     deps.store.setPersistenceRemoteChanged({
       datasetId: localDatasetId,
       message: 'Remote dataset changed while you have local unsaved changes.',
@@ -156,7 +205,7 @@ async function applyEventsSequentially(deps: RemoteOpsSyncDeps, localDatasetId: 
 
   if (!st.model) return;
   const nextModel = deps.apply(st.model, toApply);
-  deps.store.hydrate({ ...st, model: nextModel, isDirty: false, activeDatasetId: localDatasetId });
+  deps.store.hydrate({ ...st, model: ensureModel(nextModel), isDirty: false, activeDatasetId: localDatasetId });
 
   const lastRev = ordered[ordered.length - 1]!.revision;
   setLastAppliedRevision(localDatasetId, lastRev);
@@ -165,11 +214,13 @@ async function applyEventsSequentially(deps: RemoteOpsSyncDeps, localDatasetId: 
 
 export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOpsSyncController {
   const running = new Map<DatasetId, Running>();
+  const flushInFlight = new Map<DatasetId, Promise<AppendOperationsResponse | null>>();
+
 
   async function runLoop(localDatasetId: DatasetId, serverDatasetId: string): Promise<void> {
     // 1) Catch-up on start (best-effort).
     try {
-      const from = (getLastAppliedRevision(localDatasetId) ?? 0) + 1;
+      const from = getLastAppliedRevision(localDatasetId) ?? 0;
       const since = await deps.api.getOperationsSince(serverDatasetId, from);
       await applyEventsSequentially(deps, localDatasetId, since.items ?? []);
     } catch {
@@ -179,7 +230,7 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
     // 2) Subscribe for live updates.
     let handle: OpsStreamHandle | null = null;
     try {
-      const from = (getLastAppliedRevision(localDatasetId) ?? 0) + 1;
+      const from = getLastAppliedRevision(localDatasetId) ?? 0;
       handle = await deps.api.openDatasetOpsStream(serverDatasetId, { fromRevision: from });
       setSseConnected(localDatasetId, true);
       const entry = running.get(localDatasetId);
@@ -238,8 +289,23 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
     serverDatasetId: string,
     opts?: { leaseToken?: string | null; force?: boolean }
   ): Promise<AppendOperationsResponse | null> {
-    const ops = getPendingOps(localDatasetId);
-    if (ops.length === 0) return null;
+    const inFlight = flushInFlight.get(localDatasetId);
+    if (inFlight) return inFlight;
+
+    const promise = (async () => {
+    // The server broadcasts appended ops back to subscribers (including the
+    // sender) via SSE. If we keep pending ops queued while the append request
+    // is in-flight, we can receive our own op event while
+    // `st.isDirty && pendingOps.length > 0` and incorrectly show the
+    // "Remote dataset changed" dialog.
+    //
+    // To avoid this, we take a snapshot of the current pending ops and clear
+    // the queue before sending. If the request fails, we restore the ops only
+    // if no newer local edits were queued in the meantime.
+    const opsToSend = getPendingOps(localDatasetId);
+    if (opsToSend.length === 0) return null;
+
+    clearPendingOps(localDatasetId);
 
     const baseRevision = getLastAppliedRevision(localDatasetId) ?? 0;
 
@@ -248,7 +314,7 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
     async function tryAppend(leaseToken: string | null): Promise<{ res: AppendOperationsResponse; etag: string | null }> {
       return deps.api.appendOperations(
         serverDatasetId,
-        { baseRevision, operations: ops },
+        { baseRevision, operations: opsToSend },
         { leaseToken: leaseToken ?? undefined, force: opts?.force }
       );
     }
@@ -256,7 +322,6 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
     try {
       const { res } = await tryAppend(initialLeaseToken);
 
-      clearPendingOps(localDatasetId);
       setServerRevision(localDatasetId, res.newRevision);
       setLastAppliedRevision(localDatasetId, res.newRevision);
       return res;
@@ -273,7 +338,6 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
               setLeaseConflict(localDatasetId, null);
 
               const { res } = await tryAppend(lease.leaseToken);
-              clearPendingOps(localDatasetId);
               setServerRevision(localDatasetId, res.newRevision);
               setLastAppliedRevision(localDatasetId, res.newRevision);
               return res;
@@ -299,11 +363,11 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
         const revConflict = asRevisionConflict(e.body);
         if (revConflict) {
           // Option A: discard local pending ops and reload the latest remote snapshot.
-          clearPendingOps(localDatasetId);
+          // (We already cleared before sending; ensure we don't restore.)
 
           // Best-effort: fetch missing ops and apply if we can do it cleanly.
           try {
-            const from = (getLastAppliedRevision(localDatasetId) ?? 0) + 1;
+            const from = getLastAppliedRevision(localDatasetId) ?? 0;
             const since = await deps.api.getOperationsSince(serverDatasetId, from);
             await applyEventsSequentially(deps, localDatasetId, since.items ?? []);
           } catch {
@@ -329,14 +393,25 @@ export function createRemoteOpsSyncController(deps: RemoteOpsSyncDeps): RemoteOp
         const dup = asDuplicateOpId(e.body);
         if (dup) {
           // Treat idempotency conflict as success.
-          clearPendingOps(localDatasetId);
           setServerRevision(localDatasetId, dup.existingRevision);
           setLastAppliedRevision(localDatasetId, dup.existingRevision);
-          return { datasetId: serverDatasetId, newRevision: dup.existingRevision, acceptedCount: ops.length };
+          return { datasetId: serverDatasetId, newRevision: dup.existingRevision, acceptedCount: opsToSend.length };
         }
       }
 
+      // Restore ops if the send failed and no newer local edits were queued.
+      if (getPendingOps(localDatasetId).length === 0) {
+        setPendingOps(localDatasetId, opsToSend);
+      }
       throw e;
+    }
+    })();
+
+    flushInFlight.set(localDatasetId, promise);
+    try {
+      return await promise;
+    } finally {
+      flushInFlight.delete(localDatasetId);
     }
   }
 

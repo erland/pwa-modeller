@@ -1,23 +1,22 @@
-import { ReactNode, useEffect, useRef, useState } from 'react';
+import { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
 import '../../styles/shell.css';
-import { computeModelSignature } from '../../domain';
 import { RemoteDatasetConflictDialog } from './RemoteDatasetConflictDialog';
 import { RemoteDatasetValidationErrorsDialog } from './RemoteDatasetValidationErrorsDialog';
 import { LeaseConflictDialog } from './LeaseConflictDialog';
 import { RemoteChangedDialog } from './RemoteChangedDialog';
 import { RemoteOpsDiagnosticsDialog } from './RemoteOpsDiagnosticsDialog';
-import { downloadTextFile, sanitizeFileName, loadOverlayExportMarker, modelStore, useModelStore, useOverlayStore } from '../../store';
-import { openDataset, retryAcquireLeaseForDataset } from '../../store/datasetLifecycle';
-import { flushStorePersistence, flushStorePersistenceForce, setStorePersistencePaused } from '../../store/initStorePersistence';
-import { RemoteDatasetBackend } from '../../store/backends/remoteDatasetBackend';
-import { setLeaseConflict, setLeaseExpiresAt, setLeaseToken, getPendingOps, isSseConnected, getLastAppliedRevision, getServerRevision } from '../../store/remoteDatasetSession';
+
 import { getDatasetRegistryEntry } from '../../store/datasetRegistry';
+import { getLastAppliedRevision, getPendingOps, getServerRevision, isSseConnected } from '../../store/remoteDatasetSession';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useTheme } from '../../hooks/useTheme';
 import { useAppInit } from '../../app/init/useAppInit';
+
+import { usePersistenceDialogsController } from './usePersistenceDialogsController';
+import { useShellLayoutController } from './useShellLayoutController';
 
 type AppShellProps = {
   title: string;
@@ -42,343 +41,65 @@ function TopNavLink({ to, label, className }: { to: string; label: string; class
   );
 }
 
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia(query).matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mql = window.matchMedia(query);
-    const onChange = () => setMatches(mql.matches);
-    onChange();
-
-    // NOTE: TypeScript's DOM lib assumes `addEventListener` exists on MediaQueryList,
-    // which makes feature checks like `'addEventListener' in mql` narrow the else
-    // Compatibility: older Safari/iOS versions only support addListener/removeListener.
-    type MqlCompat = MediaQueryList & {
-      addEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
-      removeEventListener?: (type: 'change', listener: (ev: MediaQueryListEvent) => void) => void;
-      addListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
-      removeListener?: (listener: (ev: MediaQueryListEvent) => void) => void;
-    };
-
-    const mqlCompat = mql as MqlCompat;
-    if (typeof mqlCompat.addEventListener === 'function') {
-      mqlCompat.addEventListener('change', onChange);
-      return () => mqlCompat.removeEventListener?.('change', onChange);
-    }
-
-    // Safari < 14
-    if (typeof mqlCompat.addListener === 'function') {
-      mqlCompat.addListener(onChange);
-      return () => mqlCompat.removeListener?.(onChange);
-    }
-
-    return;
-  }, [query]);
-
-  return matches;
-}
-
 export function AppShell({ title, subtitle, actions, leftSidebar, rightSidebar, children }: AppShellProps) {
   const navigate = useNavigate();
   const hasLeft = Boolean(leftSidebar);
   const hasRight = Boolean(rightSidebar);
 
-  const isSmall = useMediaQuery('(max-width: 720px)');
-  const isMedium = useMediaQuery('(max-width: 1100px)');
-  const rightOverlay = !isSmall && isMedium;
-
-  // Sidebar widths are driven by CSS variables in shell.css. We override them here so the user
-  // can resize the docked sidebars. Values are persisted in localStorage.
-  const DEFAULT_LEFT_WIDTH = 260;
-  const DEFAULT_RIGHT_WIDTH = 320;
-  const MIN_LEFT_WIDTH = 200;
-  const MIN_RIGHT_WIDTH = 240;
-  const MIN_MAIN_WIDTH = 360;
-
-  const [leftWidth, setLeftWidth] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_LEFT_WIDTH;
-    const n = Number(window.localStorage.getItem('shellLeftWidthPx'));
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_LEFT_WIDTH;
-  });
-
-  const [rightWidth, setRightWidth] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_RIGHT_WIDTH;
-    const n = Number(window.localStorage.getItem('shellRightWidthPx'));
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_RIGHT_WIDTH;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('shellLeftWidthPx', String(Math.round(leftWidth)));
-  }, [leftWidth]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('shellRightWidthPx', String(Math.round(rightWidth)));
-  }, [rightWidth]);
-
-  const shellBodyRef = useRef<HTMLDivElement | null>(null);
-  const [isResizing, setIsResizing] = useState<null | 'left' | 'right'>(null);
-  const [isNavigatorDragging, setIsNavigatorDragging] = useState(false);
-  const persistenceStatus = useModelStore((s) => s.persistenceStatus);
-  const persistenceConflict = useModelStore((s) => s.persistenceConflict);
-  const persistenceValidationFailure = useModelStore((s) => s.persistenceValidationFailure);
-  const persistenceLeaseConflict = useModelStore((s) => s.persistenceLeaseConflict);
-  const persistenceRemoteChanged = useModelStore((s) => s.persistenceRemoteChanged);
-  const { isDirty, model, activeDatasetId } = useModelStore((s) => ({
-    isDirty: s.isDirty,
-    model: s.model,
-    activeDatasetId: s.activeDatasetId
-  }));
-
-  const { overlayCount, overlayVersion } = useOverlayStore((s) => ({ overlayCount: s.size, overlayVersion: s.getVersion() }));
-    const [isRemoteOpsDiagOpen, setIsRemoteOpsDiagOpen] = useState(false);
-const overlaySignature = model ? computeModelSignature(model) : '';
-  const overlayExportMarker = overlaySignature ? loadOverlayExportMarker(overlaySignature) : null;
-  const overlayExportDirty = overlayCount > 0 && (!overlayExportMarker || overlayExportMarker.version !== overlayVersion);
+  const layout = useShellLayoutController({ hasLeft, hasRight });
+  const dialogs = usePersistenceDialogsController();
 
   useAppInit();
 
   const online = useOnlineStatus();
   const { theme, toggleTheme } = useTheme();
 
-  const [leftOpen, setLeftOpen] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth > 720;
-  });
-  const [rightOpen, setRightOpen] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const w = window.innerWidth;
-    return w > 1100;
-  });
-
-  const leftDocked = hasLeft && leftOpen && !isSmall;
-  const rightDocked = hasRight && rightOpen && !isSmall && !isMedium;
-
-  useEffect(() => {
-    if (!isResizing) return;
-
-    const onMove = (ev: PointerEvent) => {
-      const el = shellBodyRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-
-      const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-
-      if (isResizing === 'left') {
-        const rightW = rightDocked ? rightWidth : 0;
-        const maxLeft = Math.max(MIN_LEFT_WIDTH, rect.width - rightW - MIN_MAIN_WIDTH);
-        const next = clamp(ev.clientX - rect.left, MIN_LEFT_WIDTH, maxLeft);
-        setLeftWidth(next);
-      } else {
-        const leftW = leftDocked ? leftWidth : 0;
-        const maxRight = Math.max(MIN_RIGHT_WIDTH, rect.width - leftW - MIN_MAIN_WIDTH);
-        const next = clamp(rect.right - ev.clientX, MIN_RIGHT_WIDTH, maxRight);
-        setRightWidth(next);
-      }
-    };
-
-    const onUp = () => setIsResizing(null);
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp, { once: true });
-
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-  }, [isResizing, leftDocked, rightDocked, leftWidth, rightWidth]);
-
-  // When entering small screens, close overlays by default.
-  useEffect(() => {
-    if (isSmall) {
-      setLeftOpen(false);
-      setRightOpen(false);
-    }
-  }, [isSmall]);
-
-  // While dragging from the navigator on touch devices, temporarily relax overlay hit-testing
-  // so the canvas can receive drop/pointer events.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const onStart: EventListener = () => setIsNavigatorDragging(true);
-    const onEnd: EventListener = () => setIsNavigatorDragging(false);
-
-    window.addEventListener('modelNavigator:dragstart', onStart);
-    window.addEventListener('modelNavigator:dragend', onEnd);
-
-    // Safety: ensure we always clear the dragging flag.
-    window.addEventListener('dragend', onEnd, true);
-    window.addEventListener('drop', onEnd, true);
-
-    return () => {
-      window.removeEventListener('modelNavigator:dragstart', onStart);
-      window.removeEventListener('modelNavigator:dragend', onEnd);
-      window.removeEventListener('dragend', onEnd, true);
-      window.removeEventListener('drop', onEnd, true);
-    };
-  }, []);
-
-  // Persistence robustness: status chip is driven by store-backed state.
-
-  // On medium screens, prefer hiding the properties panel by default.
-  useEffect(() => {
-    if (!isSmall && isMedium) {
-      setRightOpen(false);
-    }
-  }, [isSmall, isMedium]);
-    const onExportLocalValidationSnapshot = () => {
-    const st = modelStore.getState();
-    const file = sanitizeFileName(`validation-failed-${st.activeDatasetId}`);
-    const json = JSON.stringify(st.model ?? null, null, 2);
-    downloadTextFile(file, json, 'application/json');
-  };
-
-  const onKeepPausedAfterValidation = () => {
-    modelStore.clearPersistenceValidationFailure();
-    modelStore.setPersistenceError('Remote validation unresolved. Auto-save paused for this session.');
-  };
-
-  const onResumeAfterValidation = () => {
-    modelStore.clearPersistenceValidationFailure();
-    modelStore.setPersistenceOk();
-    setStorePersistencePaused(false);
-    flushStorePersistence();
-  };
-
-const onExportLocalConflictSnapshot = () => {
-    const st = modelStore.getState();
-    const file = sanitizeFileName(`conflict-${st.activeDatasetId}`);
-    const json = JSON.stringify(st.model ?? null, null, 2);
-    downloadTextFile(file, json, 'application/json');
-  };
-
-  const onKeepLocalChangesAfterConflict = () => {
-    // Keep auto-save paused for this session. User can re-enable by reloading from server later.
-    modelStore.clearPersistenceConflict();
-    modelStore.setPersistenceError('Remote conflict unresolved. Auto-save paused for this session.');
-  };
-
-  const onReloadFromServerAfterConflict = () => {
-    const st = modelStore.getState();
-    const datasetId = st.activeDatasetId;
-    // Reload the dataset from the remote server, discarding local changes.
-    const backend = new RemoteDatasetBackend();
-    setStorePersistencePaused(true);
-    void openDataset(datasetId, backend)
-      .then(() => {
-        modelStore.clearPersistenceConflict();
-        modelStore.setPersistenceOk();
-        setStorePersistencePaused(false);
-      })
-      .catch((e) => {
-        const msg = e instanceof Error ? e.message : String(e);
-        modelStore.setPersistenceError(msg);
-      });
-  };
-
-  
-
-const onReloadFromServerAfterRemoteChanged = () => {
-  const st = modelStore.getState();
-  const datasetId = st.activeDatasetId;
-  const backend = new RemoteDatasetBackend();
-  setStorePersistencePaused(true);
-  void openDataset(datasetId, backend)
-    .then(() => {
-      modelStore.clearPersistenceRemoteChanged();
-      modelStore.setPersistenceOk();
-      setStorePersistencePaused(false);
-    })
-    .catch((e) => {
-      const msg = e instanceof Error ? e.message : String(e);
-      modelStore.setPersistenceError(msg);
-    });
-};
-
-const onKeepLocalChangesAfterRemoteChanged = () => {
-  modelStore.clearPersistenceRemoteChanged();
-};
-
-const onOpenReadOnlyAfterLeaseConflict = () => {
-    const conflict = modelStore.getState().persistenceLeaseConflict;
-    if (!conflict) return;
-    // Keep persistence paused and clear lease information so we stop attempting remote writes.
-    setStorePersistencePaused(true);
-    setLeaseToken(conflict.datasetId, null);
-    setLeaseExpiresAt(conflict.datasetId, null);
-    setLeaseConflict(conflict.datasetId, null);
-    modelStore.clearPersistenceLeaseConflict();
-    modelStore.setPersistenceError('Remote dataset is locked by another user. Opened in read-only mode; auto-save paused.');
-  };
-
-  const onRetryLeaseAfterConflict = async () => {
-    const conflict = modelStore.getState().persistenceLeaseConflict;
-    if (!conflict) return;
-    try {
-      await retryAcquireLeaseForDataset(conflict.datasetId);
-      modelStore.clearPersistenceLeaseConflict();
-      modelStore.setPersistenceOk();
-      setStorePersistencePaused(false);
-      flushStorePersistence();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      modelStore.setPersistenceError(msg);
-    }
-  };
-
-  const onForceSaveAfterLeaseConflict = () => {
-    // One-shot force persist retry; only shown for OWNER (server-enforced).
-    modelStore.clearPersistenceLeaseConflict();
-    setStorePersistencePaused(false);
-    flushStorePersistenceForce();
-  };
-
-
-  const showBackdrop = (isSmall && (leftOpen || rightOpen)) || (rightOverlay && rightOpen);
-
   return (
-    <div className={['shell', isResizing ? 'isResizing' : null, isNavigatorDragging ? 'isNavigatorDragging' : null].filter(Boolean).join(' ')}>
+    <div
+      className={
+        ['shell', layout.isResizing ? 'isResizing' : null, layout.isNavigatorDragging ? 'isNavigatorDragging' : null]
+          .filter(Boolean)
+          .join(' ')
+      }
+    >
+      <RemoteChangedDialog
+        isOpen={!!dialogs.persistenceRemoteChanged}
+        change={dialogs.persistenceRemoteChanged}
+        onReloadFromServer={dialogs.onReloadFromServerAfterRemoteChanged}
+        onKeepLocalChanges={dialogs.onKeepLocalChangesAfterRemoteChanged}
+      />
 
-      
-
-<RemoteChangedDialog
-  isOpen={!!persistenceRemoteChanged}
-  change={persistenceRemoteChanged}
-  onReloadFromServer={onReloadFromServerAfterRemoteChanged}
-  onKeepLocalChanges={onKeepLocalChangesAfterRemoteChanged}
-/>
-
-<LeaseConflictDialog
-        isOpen={!!persistenceLeaseConflict}
-        conflict={persistenceLeaseConflict}
-        onOpenReadOnly={onOpenReadOnlyAfterLeaseConflict}
-        onRetry={() => void onRetryLeaseAfterConflict()}
-        onForceSave={onForceSaveAfterLeaseConflict}
+      <LeaseConflictDialog
+        isOpen={!!dialogs.persistenceLeaseConflict}
+        conflict={dialogs.persistenceLeaseConflict}
+        onOpenReadOnly={dialogs.onOpenReadOnlyAfterLeaseConflict}
+        onRetry={() => void dialogs.onRetryLeaseAfterConflict()}
+        onForceSave={dialogs.onForceSaveAfterLeaseConflict}
       />
 
       <RemoteDatasetValidationErrorsDialog
-        isOpen={!!persistenceValidationFailure}
-        failure={persistenceValidationFailure}
-        onExportLocalSnapshot={onExportLocalValidationSnapshot}
-        onKeepPaused={onKeepPausedAfterValidation}
-        onResumeAutoSave={onResumeAfterValidation}
+        isOpen={!!dialogs.persistenceValidationFailure}
+        failure={dialogs.persistenceValidationFailure}
+        onExportLocalSnapshot={dialogs.onExportLocalValidationSnapshot}
+        onKeepPaused={dialogs.onKeepPausedAfterValidation}
+        onResumeAutoSave={dialogs.onResumeAfterValidation}
       />
 
       <RemoteDatasetConflictDialog
-        isOpen={!!persistenceConflict}
-        conflict={persistenceConflict}
-        onReloadFromServer={onReloadFromServerAfterConflict}
-        onExportLocalSnapshot={onExportLocalConflictSnapshot}
-        onKeepLocalChanges={onKeepLocalChangesAfterConflict}
+        isOpen={!!dialogs.persistenceConflict}
+        conflict={dialogs.persistenceConflict}
+        onReloadFromServer={dialogs.onReloadFromServerAfterConflict}
+        onExportLocalSnapshot={dialogs.onExportLocalConflictSnapshot}
+        onKeepLocalChanges={dialogs.onKeepLocalChangesAfterConflict}
       />
-            <RemoteOpsDiagnosticsDialog isOpen={isRemoteOpsDiagOpen} datasetId={activeDatasetId ?? null} onClose={() => setIsRemoteOpsDiagOpen(false)} />
-<header className="shellHeader" data-testid="app-header">
+
+      <RemoteOpsDiagnosticsDialog
+        isOpen={dialogs.isRemoteOpsDiagOpen}
+        datasetId={dialogs.activeDatasetId ?? null}
+        onClose={() => dialogs.setIsRemoteOpsDiagOpen(false)}
+      />
+
+      <header className="shellHeader" data-testid="app-header">
         <div className="shellBrand" aria-label="Application">
           <div className="shellTitle">{title}</div>
           {subtitle ? <div className="shellSubtitle">{subtitle}</div> : null}
@@ -393,63 +114,83 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
 
         <div className="shellActions" aria-label="Actions">
           <div className="shellStatus" aria-label="Status">
-            {model ? (
+            {dialogs.model ? (
               <button
                 type="button"
-                className={["shellStatusChip", "shellStatusChipButton", overlayCount ? 'isOverlayActive' : null, overlayExportDirty ? 'isDirty' : null]
-                  .filter(Boolean)
-                  .join(' ')}
+                className={
+                  [
+                    'shellStatusChip',
+                    'shellStatusChipButton',
+                    dialogs.overlayCount ? 'isOverlayActive' : null,
+                    dialogs.overlayExportDirty ? 'isDirty' : null
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                }
                 aria-label="Open Overlay workspace"
                 title={
-                  overlayCount
-                    ? overlayExportMarker
-                      ? `Overlay entries: ${overlayCount}. Last exported: ${overlayExportMarker.exportedAt}. Click to open Overlay workspace.`
-                      : `Overlay entries: ${overlayCount}. Not exported as a file yet. Click to open Overlay workspace.`
+                  dialogs.overlayCount
+                    ? dialogs.overlayExportMarker
+                      ? `Overlay entries: ${dialogs.overlayCount}. Last exported: ${dialogs.overlayExportMarker.exportedAt}. Click to open Overlay workspace.`
+                      : `Overlay entries: ${dialogs.overlayCount}. Not exported as a file yet. Click to open Overlay workspace.`
                     : 'No overlay entries. Click to open Overlay workspace.'
                 }
                 onClick={() => navigate('/overlay')}
               >
-                Overlay{overlayCount ? ` ${overlayCount}` : ''}{overlayExportDirty ? ' *' : ''}
+                Overlay{dialogs.overlayCount ? ` ${dialogs.overlayCount}` : ''}
+                {dialogs.overlayExportDirty ? ' *' : ''}
               </button>
             ) : null}
-            {persistenceStatus.status === 'error' ? (
-              <span className="shellStatusChip isDirty" title={persistenceStatus.message}>
+
+            {dialogs.persistenceStatus.status === 'error' ? (
+              <span className="shellStatusChip isDirty" title={dialogs.persistenceStatus.message}>
                 Storage error
               </span>
             ) : null}
+
             {!online ? <span className="shellStatusChip isOffline">Offline</span> : null}
 
-            {activeDatasetId ? (() => {
-              const entry = getDatasetRegistryEntry(activeDatasetId);
-              const isRemote = (entry?.storageKind === 'remote') || String(activeDatasetId).startsWith('remote:');
-              if (!isRemote) return null;
-              const pending = getPendingOps(activeDatasetId).length;
-              const sse = isSseConnected(activeDatasetId);
-              const lastApplied = getLastAppliedRevision(activeDatasetId);
-              const serverRev = getServerRevision(activeDatasetId);
-              const title = [
-                'Remote ops sync (Phase 3)',
-                `SSE: ${sse ? 'connected' : 'disconnected'}`,
-                `Pending ops: ${pending}`,
-                `Last applied: ${lastApplied ?? '—'}`,
-                `Server revision: ${serverRev ?? '—'}`,
-                'Click for diagnostics'
-              ].join('\n');
-              return (
-                <button
-                  type="button"
-                  className={['shellStatusChip', 'shellStatusChipButton', sse ? null : 'isOffline', pending ? 'isDirty' : null].filter(Boolean).join(' ')}
-                  title={title}
-                  aria-label="Open remote sync diagnostics"
-                  onClick={() => setIsRemoteOpsDiagOpen(true)}
-                >
-                  Sync {sse ? 'Live' : 'Idle'}{pending ? ` +${pending}` : ''}
-                </button>
-              );
-            })() : null}
-            {model && isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}
+            {dialogs.activeDatasetId
+              ? (() => {
+                  const entry = getDatasetRegistryEntry(dialogs.activeDatasetId);
+                  const isRemote = entry?.storageKind === 'remote' || String(dialogs.activeDatasetId).startsWith('remote:');
+                  if (!isRemote) return null;
+                  const pending = getPendingOps(dialogs.activeDatasetId).length;
+                  const sse = isSseConnected(dialogs.activeDatasetId);
+                  const lastApplied = getLastAppliedRevision(dialogs.activeDatasetId);
+                  const serverRev = getServerRevision(dialogs.activeDatasetId);
+                  const title = [
+                    'Remote ops sync (Phase 3)',
+                    `SSE: ${sse ? 'connected' : 'disconnected'}`,
+                    `Pending ops: ${pending}`,
+                    `Last applied: ${lastApplied ?? '—'}`,
+                    `Server revision: ${serverRev ?? '—'}`,
+                    'Click for diagnostics'
+                  ].join('\n');
+                  return (
+                    <button
+                      type="button"
+                      className={
+                        ['shellStatusChip', 'shellStatusChipButton', sse ? null : 'isOffline', pending ? 'isDirty' : null]
+                          .filter(Boolean)
+                          .join(' ')
+                      }
+                      title={title}
+                      aria-label="Open remote sync diagnostics"
+                      onClick={() => dialogs.setIsRemoteOpsDiagOpen(true)}
+                    >
+                      Sync {sse ? 'Live' : 'Idle'}
+                      {pending ? ` +${pending}` : ''}
+                    </button>
+                  );
+                })()
+              : null}
+
+            {dialogs.model && dialogs.isDirty ? <span className="shellStatusChip isDirty">Unsaved</span> : null}
           </div>
-          <button type="button"
+
+          <button
+            type="button"
             className="shellIconButton"
             aria-label="Toggle theme"
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -457,6 +198,7 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
           >
             {theme === 'dark' ? '🌙' : '☀️'}
           </button>
+
           {actions ?? (
             <>
               <button type="button" className="shellButton" disabled title="Coming in later steps">
@@ -477,8 +219,8 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
               className="shellIconButton"
               aria-label="Toggle model navigator"
               onClick={() => {
-                setLeftOpen((v) => !v);
-                if (isSmall) setRightOpen(false);
+                layout.setLeftOpen((v) => !v);
+                if (layout.isSmall) layout.setRightOpen(false);
               }}
             >
               ☰
@@ -491,8 +233,8 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
               className="shellIconButton"
               aria-label="Toggle properties panel"
               onClick={() => {
-                setRightOpen((v) => !v);
-                if (isSmall) setLeftOpen(false);
+                layout.setRightOpen((v) => !v);
+                if (layout.isSmall) layout.setLeftOpen(false);
               }}
             >
               ⚙
@@ -502,30 +244,26 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
       </header>
 
       <div
-        ref={shellBodyRef}
+        ref={layout.shellBodyRef}
         style={
           {
-            '--shellLeftWidth': `${Math.round(leftWidth)}px`,
-            '--shellRightWidth': `${Math.round(rightWidth)}px`
+            '--shellLeftWidth': `${Math.round(layout.leftWidth)}px`,
+            '--shellRightWidth': `${Math.round(layout.rightWidth)}px`
           } as CSSProperties
         }
-        className={[
-          'shellBody',
-          hasLeft && leftOpen && !isSmall ? 'isLeftDockedOpen' : null,
-          hasRight && rightOpen && !isSmall && !isMedium ? 'isRightDockedOpen' : null
-        ]
-          .filter(Boolean)
-          .join(' ')}
+        className={
+          [
+            'shellBody',
+            hasLeft && layout.leftOpen && !layout.isSmall ? 'isLeftDockedOpen' : null,
+            hasRight && layout.rightOpen && !layout.isSmall && !layout.isMedium ? 'isRightDockedOpen' : null
+          ]
+            .filter(Boolean)
+            .join(' ')
+        }
       >
         {hasLeft ? (
           <aside
-            className={[
-              'shellSidebar',
-              'shellSidebarLeft',
-              leftOpen ? 'isOpen' : null
-            ]
-              .filter(Boolean)
-              .join(' ')}
+            className={['shellSidebar', 'shellSidebarLeft', layout.leftOpen ? 'isOpen' : null].filter(Boolean).join(' ')}
             data-testid="left-sidebar"
             aria-label="Model navigator"
           >
@@ -535,24 +273,24 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
                 type="button"
                 className="shellIconButton"
                 aria-label="Close model navigator"
-                onClick={() => setLeftOpen(false)}
+                onClick={() => layout.setLeftOpen(false)}
               >
                 ✕
               </button>
             </div>
-                        <div className="shellSidebarContent">{leftSidebar}</div>
-            {leftDocked ? (
+            <div className="shellSidebarContent">{leftSidebar}</div>
+            {layout.leftDocked ? (
               <div
                 className="shellResizer shellResizerLeft"
                 role="separator"
                 aria-label="Resize model navigator"
                 title="Drag to resize (double-click to reset)"
-                onDoubleClick={() => setLeftWidth(DEFAULT_LEFT_WIDTH)}
+                onDoubleClick={() => layout.setLeftWidth(layout.DEFAULT_LEFT_WIDTH)}
                 onPointerDown={(e) => {
                   if (e.button !== 0) return;
                   e.preventDefault();
                   e.currentTarget.setPointerCapture?.(e.pointerId);
-                  setIsResizing('left');
+                  layout.setIsResizing('left');
                 }}
               />
             ) : null}
@@ -565,9 +303,7 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
 
         {hasRight ? (
           <aside
-            className={['shellSidebar', 'shellSidebarRight', rightOpen ? 'isOpen' : null]
-              .filter(Boolean)
-              .join(' ')}
+            className={['shellSidebar', 'shellSidebarRight', layout.rightOpen ? 'isOpen' : null].filter(Boolean).join(' ')}
             data-testid="right-sidebar"
             aria-label="Properties panel"
           >
@@ -577,43 +313,43 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
                 type="button"
                 className="shellIconButton"
                 aria-label="Close properties panel"
-                onClick={() => setRightOpen(false)}
+                onClick={() => layout.setRightOpen(false)}
               >
                 ✕
               </button>
             </div>
-                        <div className="shellSidebarContent">{rightSidebar}</div>
-            {rightDocked ? (
+            <div className="shellSidebarContent">{rightSidebar}</div>
+            {layout.rightDocked ? (
               <div
                 className="shellResizer shellResizerRight"
                 role="separator"
                 aria-label="Resize properties panel"
                 title="Drag to resize (double-click to reset)"
-                onDoubleClick={() => setRightWidth(DEFAULT_RIGHT_WIDTH)}
+                onDoubleClick={() => layout.setRightWidth(layout.DEFAULT_RIGHT_WIDTH)}
                 onPointerDown={(e) => {
                   if (e.button !== 0) return;
                   e.preventDefault();
                   e.currentTarget.setPointerCapture?.(e.pointerId);
-                  setIsResizing('right');
+                  layout.setIsResizing('right');
                 }}
               />
             ) : null}
           </aside>
         ) : null}
 
-        {showBackdrop && !isNavigatorDragging ? (
+        {layout.showBackdrop && !layout.isNavigatorDragging ? (
           <div
             className="shellBackdrop"
             aria-hidden="true"
             onClick={() => {
-              if (isSmall) {
-                setLeftOpen(false);
-                setRightOpen(false);
+              if (layout.isSmall) {
+                layout.setLeftOpen(false);
+                layout.setRightOpen(false);
                 return;
               }
               // Medium screens: backdrop is used for the right overlay panel only.
-              if (rightOverlay) {
-                setRightOpen(false);
+              if (layout.rightOverlay) {
+                layout.setRightOpen(false);
               }
             }}
           />

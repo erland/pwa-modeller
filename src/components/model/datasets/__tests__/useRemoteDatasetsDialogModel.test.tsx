@@ -129,26 +129,15 @@ describe('useRemoteDatasetsDialogModel', () => {
     expect(result.current.rows[0]?.id).toBe('ds2');
   });
 
-  test('doOpen upserts entry, opens via remote backend, persists settings and closes', async () => {
+  test('doOpen opens via remote backend, persists settings and closes', async () => {
     const onClose = jest.fn();
     const { result } = renderHook(() => useRemoteDatasetsDialogModel({ isOpen: true, onClose }));
 
     await act(async () => {
-      await result.current.doOpen('ds1', 'Dataset 1');
+      await result.current.doOpen('ds1');
     });
 
-    expect(mockUpsertDatasetEntry).toHaveBeenCalledWith(
-      expect.objectContaining({
-        datasetId: 'remote:ds1',
-        storageKind: 'remote',
-        name: 'Dataset 1',
-        remote: expect.objectContaining({
-          baseUrl: 'https://server',
-          serverDatasetId: 'ds1',
-          displayName: 'Dataset 1'
-        })
-      })
-    );
+    expect(mockUpsertDatasetEntry).not.toHaveBeenCalled();
     expect(mockOpenDataset).toHaveBeenCalledWith('remote:ds1', { kind: 'remote' });
     expect(mockSaveSettings).toHaveBeenCalledWith(
       expect.objectContaining({ remoteServerBaseUrl: 'https://server' })

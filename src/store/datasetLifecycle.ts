@@ -43,11 +43,25 @@ function createLocalDatasetId(): DatasetId {
 function assertBackendMatchesRegistry(datasetId: DatasetId, backend: DatasetBackend): void {
   const registry = ensureDatasetRegistryMigrated();
   const entry = registry.entries.find(e => e.datasetId === datasetId);
-  const storageKind = entry?.storageKind ?? 'local';
+
+  // Remote datasets are intentionally NOT persisted in the local dataset registry.
+  // If an entry does not exist, allow opening remote:<id> only with the remote backend.
+  if (!entry) {
+    if (isRemoteDataset(datasetId)) {
+      if (backend.kind !== 'remote') {
+        throw new Error(`Dataset backend kind mismatch for ${datasetId}: registry=remote, backend=${backend.kind}`);
+      }
+      return;
+    }
+    return; // local dataset without explicit registry entry is allowed
+  }
+
+  const storageKind = entry.storageKind ?? 'local';
   if (storageKind !== backend.kind) {
     throw new Error(`Dataset backend kind mismatch for ${datasetId}: registry=${storageKind}, backend=${backend.kind}`);
   }
 }
+
 
 
 
@@ -85,7 +99,7 @@ async function pollHeadOnce(localDatasetId: DatasetId, serverDatasetId: string, 
         setLeaseToken(localDatasetId, null);
         setLeaseExpiresAt(localDatasetId, null);
         const role = getRemoteRole(localDatasetId);
-        if (role && role !== 'VIEWER') {
+        if (role !== 'VIEWER') {
           await acquireOrRefreshLeaseAndStore(localDatasetId, serverDatasetId);
         }
       }
@@ -149,19 +163,29 @@ const leaseRefreshInFlight = new Set<DatasetId>();
 let beforeUnloadHandlerInstalled = false;
 
 function isRemoteDataset(datasetId: DatasetId): boolean {
+  // Preferred: datasetId prefix (works even when remote datasets are not persisted in the local registry).
+  if (typeof datasetId === 'string' && datasetId.startsWith('remote:')) return true;
+
+  // Legacy: registry entry indicates remote storage.
   const registry = ensureDatasetRegistryMigrated();
   const entry = registry.entries.find(e => e.datasetId === datasetId);
   return (entry?.storageKind ?? 'local') === 'remote';
 }
 
 function getServerDatasetIdForRemote(datasetId: DatasetId): string | null {
+  // Preferred: derive from datasetId ("remote:<serverDatasetId>")
+  if (typeof datasetId === 'string' && datasetId.startsWith('remote:')) {
+    const sid = datasetId.slice('remote:'.length);
+    return sid || null;
+  }
+
+  // Legacy: registry mapping
   const registry = ensureDatasetRegistryMigrated();
   const entry = registry.entries.find(e => e.datasetId === datasetId);
   if (!entry) return null;
   if ((entry.storageKind ?? 'local') !== 'remote') return null;
   return entry.remote?.serverDatasetId ?? null;
 }
-
 function stopLeaseRefreshTimer(datasetId: DatasetId): void {
   const t = leaseRefreshTimers.get(datasetId);
   if (t) clearInterval(t);

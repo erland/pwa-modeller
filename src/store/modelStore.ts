@@ -318,7 +318,11 @@ clearPersistenceRemoteChanged = (): void => {
     if (!st.model) return;
 
     const entry = getDatasetRegistryEntry(st.activeDatasetId);
-    if ((entry?.storageKind ?? 'local') !== 'remote') return;
+    // Remote datasets may not have a persisted registry entry (by design).
+    // Prefer datasetId prefix, fall back to registry when available.
+    const isRemote = (entry?.storageKind === 'remote') ||
+      (typeof st.activeDatasetId === 'string' && st.activeDatasetId.startsWith('remote:'));
+    if (!isRemote) return;
 
     // Phase 3A mapping: store a single snapshot-replace op representing the latest local state.
     // This keeps the pending queue bounded and deterministic.

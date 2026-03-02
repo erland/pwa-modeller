@@ -250,7 +250,7 @@ export function RemoteDatasetsDialog({ isOpen, onClose }: Props) {
                   key={r.datasetId}
                   row={r}
                   busyId={m.busyId}
-                  onOpen={(id, name) => void m.doOpen(id, name)}
+                  onOpen={(id) => void m.doOpen(id)}
                   onHistory={(id, name) => void m.openHistory(id, name)}
                 />
               ))}

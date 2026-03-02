@@ -92,6 +92,10 @@ export function initStorePersistence(): void {
 export async function initStorePersistenceAsync(): Promise<void> {
   if (isTestEnv()) return;
 
+  // Remote datasets are identified by datasetId prefix in the current UX.
+  // Remote dataset references are intentionally NOT persisted in the local dataset registry.
+  const isRemoteDatasetId = (datasetId: DatasetId): boolean => String(datasetId).startsWith('remote:');
+
   // Step 3: ensure we have a dataset registry (one-time migration from legacy single-model storage).
   const registry = ensureDatasetRegistryMigrated();
 
@@ -101,13 +105,13 @@ export async function initStorePersistenceAsync(): Promise<void> {
 
   const backendFor = (datasetId: DatasetId) => {
     const entry = getDatasetRegistryEntry(datasetId);
-    const kind = entry?.storageKind ?? 'local';
+    const kind = entry?.storageKind ?? (isRemoteDatasetId(datasetId) ? 'remote' : 'local');
     return kind === 'remote' ? remoteBackend : localBackend;
   };
 
   const activeId = registry.activeDatasetId;
   const activeEntry = getDatasetRegistryEntry(activeId);
-  const activeKind = activeEntry?.storageKind ?? 'local';
+  const activeKind = activeEntry?.storageKind ?? (isRemoteDatasetId(activeId) ? 'remote' : 'local');
 
   try {
     await openDataset(activeId, backendFor(activeId), { createIfMissing: false });
@@ -177,7 +181,7 @@ export async function initStorePersistenceAsync(): Promise<void> {
           // This is especially important for remote datasets where we treat persistence as "saved".
           const latestTs = latestFlushTsByDataset.get(datasetId) ?? 0;
           const active = modelStore.getState().activeDatasetId;
-          const isRemote = getDatasetRegistryEntry(datasetId)?.storageKind === 'remote';
+          const isRemote = (getDatasetRegistryEntry(datasetId)?.storageKind === 'remote') || isRemoteDatasetId(datasetId);
           if (isRemote && active === datasetId && latestTs === flushedAt) {
             const st = modelStore.getState();
             if (st.isDirty) {
@@ -276,7 +280,7 @@ export async function initStorePersistenceAsync(): Promise<void> {
       pendingTimer = null;
     }
     const active = modelStore.getState().activeDatasetId;
-    const activeKind = getDatasetRegistryEntry(active)?.storageKind ?? 'local';
+    const activeKind = getDatasetRegistryEntry(active)?.storageKind ?? (isRemoteDatasetId(active) ? 'remote' : 'local');
     if (activeKind === 'remote') {
       pendingTimer = globalThis.setTimeout(() => {
         pendingTimer = null;
@@ -303,7 +307,7 @@ export async function initStorePersistenceAsync(): Promise<void> {
       (cs.viewUpserts?.length ?? 0) > 0 || (cs.viewDeletes?.length ?? 0) > 0 ||
       (cs.folderUpserts?.length ?? 0) > 0 || (cs.folderDeletes?.length ?? 0) > 0
     );
-    const kind = getDatasetRegistryEntry(evt.datasetId)?.storageKind ?? 'local';
+    const kind = getDatasetRegistryEntry(evt.datasetId)?.storageKind ?? (isRemoteDatasetId(evt.datasetId) ? 'remote' : 'local');
     if (kind === 'remote' && !hasChanges && !evt.persisted.isDirty) return;
     latestFlushTsByDataset.set(evt.datasetId, evt.timestamp);
     pendingByDataset.set(evt.datasetId, { slice: evt.persisted, timestamp: evt.timestamp });

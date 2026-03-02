@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DatasetId } from '../../../store';
-import { openDataset, upsertDatasetEntry } from '../../../store';
+import { openDataset } from '../../../store';
 import { getLastSeenEtag, getLeaseToken, getRemoteRole, setRemoteRole } from '../../../store/remoteDatasetSession';
 import {
   createRemoteDataset,
@@ -223,28 +223,11 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
   }, [baseUrl, createName, createDesc, createValidationPolicy, refresh]);
 
   const doOpen = useCallback(
-    async (serverDatasetId: string, displayName: string) => {
+    async (serverDatasetId: string) => {
       setBusyId(serverDatasetId);
       setError(null);
       try {
-        const normalized = normalizeBaseUrl(baseUrl);
         const datasetId = asRemoteDatasetId(serverDatasetId);
-
-        // Create or update the local user-scoped reference.
-        const now = Date.now();
-        upsertDatasetEntry({
-          datasetId,
-          storageKind: 'remote',
-          remote: {
-            baseUrl: normalized,
-            serverDatasetId,
-            displayName
-          },
-          name: displayName,
-          createdAt: now,
-          updatedAt: now,
-          lastOpenedAt: now
-        });
 
         // Open via the remote backend.
         await openDataset(datasetId, getRemoteDatasetBackend());
@@ -319,7 +302,7 @@ export function useRemoteDatasetsDialogModel({ isOpen, onClose }: UseRemoteDatas
         // After restore, refresh history and open the dataset to pick up the restored snapshot.
         await refreshHistory();
         setHistoryOpen(false);
-        await doOpen(historyServerDatasetId, historyDatasetName || historyServerDatasetId);
+        await doOpen(historyServerDatasetId);
       } catch (e) {
         setHistoryError(e instanceof Error ? e.message : 'Failed to restore revision');
       } finally {

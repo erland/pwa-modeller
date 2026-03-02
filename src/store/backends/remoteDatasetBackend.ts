@@ -146,14 +146,27 @@ export class RemoteDatasetBackendError extends Error {
 
 
 function getRemoteRefForDataset(datasetId: DatasetId): RemoteDatasetRef | null {
+  // Primary: registry entry (legacy behavior).
   const reg = loadDatasetRegistry();
   const entry = reg?.entries?.find(e => e.datasetId === datasetId);
-  if (!entry || entry.storageKind !== 'remote') return null;
-  if (!entry.remote?.baseUrl || !entry.remote?.serverDatasetId) return null;
-  return {
-    baseUrl: entry.remote.baseUrl,
-    serverDatasetId: entry.remote.serverDatasetId
-  };
+  if (entry && entry.storageKind === 'remote' && entry.remote?.baseUrl && entry.remote?.serverDatasetId) {
+    return {
+      baseUrl: entry.remote.baseUrl,
+      serverDatasetId: entry.remote.serverDatasetId
+    };
+  }
+
+  // Fallback: derive serverDatasetId from datasetId ("remote:<serverDatasetId>") and use the last configured baseUrl.
+  // This supports opening remote datasets without polluting the local dataset registry.
+  if (typeof datasetId === 'string' && datasetId.startsWith('remote:')) {
+    const serverDatasetId = datasetId.slice('remote:'.length);
+    const baseUrl = loadRemoteDatasetSettings().remoteServerBaseUrl;
+    if (serverDatasetId && baseUrl.trim()) {
+      return { baseUrl, serverDatasetId };
+    }
+  }
+
+  return null;
 }
 
 /**

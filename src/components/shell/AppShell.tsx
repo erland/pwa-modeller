@@ -421,7 +421,8 @@ const onOpenReadOnlyAfterLeaseConflict = () => {
 
             {activeDatasetId ? (() => {
               const entry = getDatasetRegistryEntry(activeDatasetId);
-              if (!entry || entry.storageKind !== 'remote') return null;
+              const isRemote = (entry?.storageKind === 'remote') || String(activeDatasetId).startsWith('remote:');
+              if (!isRemote) return null;
               const pending = getPendingOps(activeDatasetId).length;
               const sse = isSseConnected(activeDatasetId);
               const lastApplied = getLastAppliedRevision(activeDatasetId);

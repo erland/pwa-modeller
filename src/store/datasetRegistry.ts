@@ -2,6 +2,10 @@ import type { DatasetId, DatasetStorageKind } from './datasetTypes';
 import { DEFAULT_LOCAL_DATASET_ID } from './datasetTypes';
 import { loadPersistedStoreState, STORAGE_KEY as LEGACY_STORE_STORAGE_KEY } from './storePersistence';
 
+function isRemoteDatasetId(datasetId: DatasetId): boolean {
+  return String(datasetId).startsWith('remote:');
+}
+
 export const DATASET_REGISTRY_STORAGE_KEY = 'pwa-modeller:datasetRegistry:v1';
 
 /**
@@ -215,8 +219,9 @@ export function setActiveDataset(datasetId: DatasetId): DatasetRegistry {
     return { ...e, updatedAt: now, lastOpenedAt: now };
   });
 
-  // If datasetId isn't present, add a minimal entry.
-  if (!entries.some(e => e.datasetId === datasetId)) {
+  // If datasetId isn't present, add a minimal entry (local only).
+  // Remote datasets are intentionally NOT stored in the local registry; they belong in a “recently used” concept instead.
+  if (!entries.some(e => e.datasetId === datasetId) && !isRemoteDatasetId(datasetId)) {
     entries.push({
       datasetId,
       storageKind: 'local',

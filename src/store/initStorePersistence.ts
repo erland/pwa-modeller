@@ -190,17 +190,6 @@ export async function initStorePersistenceAsync(): Promise<void> {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const anyErr: any = e;
 
-          // Phase 3: avoid tight retry loops on 409 (revision/lease conflicts, etc.).
-          if (anyErr && typeof anyErr === 'object' && anyErr.status === 409) {
-            cooldownUntilByDataset.set(datasetId, Date.now() + 1500);
-            setPersistenceError('Remote dataset is out of date (409). Will retry after a short delay.');
-            // Re-queue this slice for a later retry.
-            pendingByDataset.set(datasetId, { slice, timestamp: Date.now() });
-            // Allow scheduling again.
-            pending = false;
-            schedulePersist();
-            return;
-          }
 
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -257,6 +246,19 @@ export async function initStorePersistenceAsync(): Promise<void> {
             });
             return;
           }
+
+          // Phase 3: avoid tight retry loops on 409 (revision/lease conflicts, etc.).
+          if (anyErr && typeof anyErr === 'object' && anyErr.status === 409) {
+            cooldownUntilByDataset.set(datasetId, Date.now() + 1500);
+            setPersistenceError('Remote dataset is out of date (409). Will retry after a short delay.');
+            // Re-queue this slice for a later retry.
+            pendingByDataset.set(datasetId, { slice, timestamp: Date.now() });
+            // Allow scheduling again.
+            pending = false;
+            schedulePersist();
+            return;
+          }
+
           const msg = e instanceof Error ? e.message : String(e);
           setPersistenceError(msg);
         });
@@ -287,18 +289,22 @@ export async function initStorePersistenceAsync(): Promise<void> {
 
   const schedulePersistFromFlush = (evt: StoreFlushEvent) => {
     // Avoid persistence loops: flush events can be emitted for state changes that do not
-    // modify the persisted model (e.g. persistence status updates). If nothing changed
-    // and the model isn't dirty, we can skip scheduling persistence.
-    const cs = evt.changeSet;
+    // modify the persisted model (e.g. persistence status updates).
+    //
+    // For *remote* datasets, scheduling persistence when nothing actually changed can cause
+    // ops-based feedback loops (apply remote ops -> flush -> persist -> new ops -> …).
+    // For *local* datasets, we still persist on startup even if not dirty.
+    const cs = evt.changeSet as any;
     const hasChanges = !!cs && (
-      cs.modelMetadataChanged ||
-      cs.elementUpserts.length || cs.elementDeletes.length ||
-      cs.relationshipUpserts.length || cs.relationshipDeletes.length ||
-      cs.connectorUpserts.length || cs.connectorDeletes.length ||
-      cs.viewUpserts.length || cs.viewDeletes.length ||
-      cs.folderUpserts.length || cs.folderDeletes.length
+      !!cs.modelMetadataChanged ||
+      (cs.elementUpserts?.length ?? 0) > 0 || (cs.elementDeletes?.length ?? 0) > 0 ||
+      (cs.relationshipUpserts?.length ?? 0) > 0 || (cs.relationshipDeletes?.length ?? 0) > 0 ||
+      (cs.connectorUpserts?.length ?? 0) > 0 || (cs.connectorDeletes?.length ?? 0) > 0 ||
+      (cs.viewUpserts?.length ?? 0) > 0 || (cs.viewDeletes?.length ?? 0) > 0 ||
+      (cs.folderUpserts?.length ?? 0) > 0 || (cs.folderDeletes?.length ?? 0) > 0
     );
-    if (!hasChanges && !evt.persisted.isDirty) return;
+    const kind = getDatasetRegistryEntry(evt.datasetId)?.storageKind ?? 'local';
+    if (kind === 'remote' && !hasChanges && !evt.persisted.isDirty) return;
     latestFlushTsByDataset.set(evt.datasetId, evt.timestamp);
     pendingByDataset.set(evt.datasetId, { slice: evt.persisted, timestamp: evt.timestamp });
     schedulePersist();

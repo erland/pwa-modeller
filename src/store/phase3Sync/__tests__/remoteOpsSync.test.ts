@@ -1,6 +1,7 @@
 import { createRemoteOpsSyncController } from '../remoteOpsSync';
 import { RemoteDatasetApiError } from '../../remoteDatasetApi';
 import type { OperationEvent, OpsSinceResponse, OperationDto } from '../../remoteDatasetApi';
+import { _resetRemoteDatasetSessions, setPendingOps } from '../../remoteDatasetSession';
 
 function op(id: string): OperationDto {
   return { opId: id, type: 'SNAPSHOT_REPLACE', payload: { id } };
@@ -34,6 +35,9 @@ describe('phase3Sync remoteOpsSync', () => {
       getCurrentSnapshot: jest.fn(async () => ({ snapshot: { revision: 5, payload: { v: 99 } }, etag: '"x"' })),
       appendOperations: jest.fn()
     };
+
+    _resetRemoteDatasetSessions();
+    setPendingOps('local:2' as any, [op('pending')]);
 
     const ctrl = createRemoteOpsSyncController({
       // @ts-expect-error test store shape
@@ -76,6 +80,9 @@ describe('phase3Sync remoteOpsSync', () => {
       getCurrentSnapshot: jest.fn(async () => ({ snapshot: { revision: 3, payload: { v: 99 } }, etag: '"x"' })),
       appendOperations: jest.fn()
     };
+
+    _resetRemoteDatasetSessions();
+    setPendingOps('local:2' as any, [op('pending')]);
 
     const ctrl = createRemoteOpsSyncController({
       // @ts-expect-error test store shape

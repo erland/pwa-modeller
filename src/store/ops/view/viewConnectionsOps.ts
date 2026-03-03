@@ -32,8 +32,8 @@ export const createViewConnectionsOps = (deps: ViewOpsDeps) => {
       }
 
       model.views[viewId] = { ...view, connections: nextConnections };
-    })
-    recordTouched(touch.viewUpserts(viewId));;
+    });
+    recordTouched(touch.viewUpserts(viewId));
   };
 
   const setViewConnectionRoute = (viewId: string, connectionId: string, kind: ViewConnectionRouteKind): void => {
@@ -51,8 +51,8 @@ export const createViewConnectionsOps = (deps: ViewOpsDeps) => {
       const nextConnections = [...view.connections];
       nextConnections[idx] = nextConn;
       model.views[viewId] = { ...view, connections: nextConnections };
-    })
-    recordTouched(touch.viewUpserts(viewId));;
+    });
+    recordTouched(touch.viewUpserts(viewId));
   };
 
   const setViewConnectionEndpointAnchors = (
@@ -77,8 +77,8 @@ export const createViewConnectionsOps = (deps: ViewOpsDeps) => {
       const nextConnections = [...view.connections];
       nextConnections[idx] = nextConn;
       model.views[viewId] = { ...view, connections: nextConnections };
-    })
-    recordTouched(touch.viewUpserts(viewId));;
+    });
+    recordTouched(touch.viewUpserts(viewId));
   };
 
   return {

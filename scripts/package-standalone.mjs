@@ -19,7 +19,7 @@ for (const m of scripts) {
   if (!/^\.\/assets\/[\w.-]+\.js$/.test(src)) throw new Error('Unexpected external script: ' + src);
   const js = await readFile(join(buildDir, src), 'utf8');
   // Avoid terminating an inline script in HTML and preserve module semantics.
-  html = html.replace(m[0], '<script type="module">\n' + js.replace(/<\/script/gi, '<\\/script') + '\n</script>');
+  html = html.replace(m[0], () => '<script type="module">\n' + js.replace(/<\/script/gi, '<\\/script') + '\n</script>');
   seen.js++;
 }
 const styles = [...html.matchAll(/<link\b[^>]*rel=["']stylesheet["'][^>]*>/gi)];
@@ -27,7 +27,7 @@ for (const m of styles) {
   const href = m[0].match(/\bhref=["']([^"']+)["']/i)?.[1];
   if (!href || !/^\.\/assets\/[\w.-]+\.css$/.test(href)) throw new Error('Unexpected stylesheet: ' + href);
   const css = await readFile(join(buildDir, href), 'utf8');
-  html = html.replace(m[0], '<style>\n' + css.replace(/<\/style/gi, '<\\/style') + '\n</style>');
+  html = html.replace(m[0], () => '<style>\n' + css.replace(/<\/style/gi, '<\\/style') + '\n</style>');
   seen.css++;
 }
 if (seen.js !== 1 || seen.css < 1) throw new Error('Expected one JS bundle and at least one stylesheet: ' + JSON.stringify(seen));

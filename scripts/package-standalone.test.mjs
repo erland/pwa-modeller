@@ -66,3 +66,16 @@ test('rejects unknown external JavaScript sources', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('ignores generated asset-looking strings inside embedded JavaScript', async () => {
+  const dir = await fixture(document, {
+    'app.js': 'const sample = \'<script src="./assets/example.js"></script>\'; console.log(sample);',
+    'app.css': 'body { color: red; }',
+  });
+  try {
+    const run = spawnSync(process.execPath, [packager], { cwd: dir, encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

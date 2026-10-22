@@ -1,24 +1,24 @@
-name: Deploy to GitHub Pages
+name: Release GitHub Pages and standalone HTML
 
 on:
-  push:
-    branches: [ "main" ]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout release revision
         uses: actions/checkout@v4
 
       - name: Setup Node
@@ -30,13 +30,35 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Build
+      - name: Test
+        run: npm test -- --runInBand
+
+      - name: Build PWA
         run: npm run build
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+      - name: Build standalone HTML
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || 'dev' }}
+        run: npm run build:standalone
+
+      - name: Upload standalone build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-html
+          path: release/*.html
+          if-no-files-found: error
+
+      - name: Attach HTML to published GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" release/*.html --clobber
 
   deploy:
     needs: build

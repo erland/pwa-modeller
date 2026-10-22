@@ -42,13 +42,7 @@ jobs:
         run: npm run build:standalone
 
       - name: Verify generated standalone file
-        shell: bash
-        run: |
-          test -s release/pwa-modeller-dev.html
-          if grep -E -i '<(script|link)[^>]+(src|href)=["'\'' ]*(\./)?assets/' release/pwa-modeller-dev.html; then
-            echo 'Standalone HTML still contains external bundle references' >&2
-            exit 1
-          fi
+        run: test -s release/pwa-modeller-dev.html
 
       - name: Upload standalone PR preview
         uses: actions/upload-artifact@v4

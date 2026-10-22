@@ -1,0 +1,58 @@
+name: Verify pull request
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests
+        run: npm test -- --runInBand
+
+      - name: Package verification tests
+        run: node --test scripts/package-standalone.test.mjs
+
+      - name: Build GitHub Pages PWA
+        run: npm run build
+
+      - name: Build standalone HTML
+        run: npm run build:standalone
+
+      - name: Verify generated standalone file
+        shell: bash
+        run: |
+          test -s release/pwa-modeller-dev.html
+          if grep -E -i '<(script|link)[^>]+(src|href)=["'\'' ]*(\./)?assets/' release/pwa-modeller-dev.html; then
+            echo 'Standalone HTML still contains external bundle references' >&2
+            exit 1
+          fi
+
+      - name: Upload standalone PR preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-html-pr
+          path: release/pwa-modeller-dev.html
+          if-no-files-found: error

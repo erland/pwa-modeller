@@ -1,4 +1,5 @@
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { Buffer } from 'node:buffer';
 import { join, resolve } from 'node:path';
 
 const buildDir = resolve('dist-standalone');

@@ -6,6 +6,8 @@
  */
 export function registerServiceWorker() {
   if (typeof window === 'undefined') return;
+  // file:// documents cannot register service workers; standalone output has none.
+  if (window.location.protocol === 'file:') return;
   if (!('serviceWorker' in navigator)) return;
 
   // In local dev, a service worker is more likely to cause confusing "stale module"

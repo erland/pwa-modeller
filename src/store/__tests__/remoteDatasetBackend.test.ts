@@ -1,4 +1,4 @@
-import { RemoteDatasetBackend, RemoteDatasetBackendError } from '../backends/remoteDatasetBackend';
+import { RemoteDatasetBackend } from '../backends/remoteDatasetBackend';
 import { _resetRemoteDatasetSessions, setPendingOps } from '../remoteDatasetSession';
 import { RemoteDatasetApiError, type OperationDto } from '../remoteDatasetApi';
 

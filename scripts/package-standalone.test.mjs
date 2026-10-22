@@ -79,3 +79,27 @@ test('ignores generated asset-looking strings inside embedded JavaScript', async
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('preserves dollar replacement tokens in inlined JS and CSS verbatim', async () => {
+  const js = 'const replacements = ["$&", "$' + String.fromCharCode(39) + '", "$' + String.fromCharCode(96) + '", "$' + '{p}"]; console.log(replacements);';
+  const css = 'body::before { content: "$&"; }';
+  const dir = await fixture(document, {
+    'app.js': js,
+    'app.css': css,
+  });
+  try {
+    const run = spawnSync(process.execPath, [packager], { cwd: dir, encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+    const output = await readFile(join(dir, 'release', 'pwa-modeller-dev.html'), 'utf8');
+    assert.ok(output.includes(js), 'The full JavaScript payload must remain byte-for-byte unchanged');
+    assert.ok(output.includes(css), 'The full CSS payload must remain unchanged');
+    assert.doesNotMatch(output, /<script\b[^>]*src=/i);
+    assert.doesNotMatch(output, /<link\b[^>]*rel="stylesheet"/i);
+    const inlineJs = output.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
+    assert.ok(inlineJs, 'Expected one inline module');
+    const parse = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: inlineJs, encoding: 'utf8' });
+    assert.equal(parse.status, 0, parse.stderr);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

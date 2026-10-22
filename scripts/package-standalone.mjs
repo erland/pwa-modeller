@@ -31,10 +31,14 @@ for (const m of styles) {
   seen.css++;
 }
 if (seen.js !== 1 || seen.css < 1) throw new Error('Expected one JS bundle and at least one stylesheet: ' + JSON.stringify(seen));
-if (/<(?:script|link)\b[^>]*(?:src|href)=["'](?:\.\/)?assets\//i.test(html)) {
+// Only examine markup, not source-code strings inside the inlined bundles.
+const markup = html
+  .replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, '')
+  .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, '');
+if (/<(?:script|link)\\b[^>]*(?:src|href)=["'](?:\\.\\/)?assets\\//i.test(markup)) {
   throw new Error('Standalone HTML still references generated assets');
 }
-if (/\b(?:src|href)=["'](?:\/|\.\/)(?:icons\/|manifest\.webmanifest)/i.test(html)) {
+if (/\\b(?:src|href)=["'](?:\\/|\\.\\/)(?:icons\\/|manifest\\.webmanifest)/i.test(markup)) {
   throw new Error('Standalone HTML still references PWA assets');
 }
 const remaining = (await readdir(join(buildDir, 'assets'))).filter(x => !/\.(js|css)$/.test(x));
